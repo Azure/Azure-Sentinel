@@ -101,6 +101,10 @@ function New-ParametersForConnectorInstuctions($instructions) {
             if (![bool]($templateParameter.PSobject.Properties.name -match "AuthorizationCode")) {
                 $templateParameter | Add-Member -MemberType NoteProperty -Name "AuthorizationCode" -Value $newParameter
             }
+
+            if (![bool]($templateParameter.PSobject.Properties.name -match "redirectUri" -and [bool]$instruction.parameters.sendRedirectUri)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name "redirectUri" -Value $newParameter
+            }
         }
         elseif ($instruction.type -eq "ContextPane") {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
