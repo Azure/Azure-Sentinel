@@ -246,10 +246,10 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
 
 function Get-ArmResource($name, $type, $kind, $properties) {
     [hashtable]$apiVersion = @{
-        "Microsoft.SecurityInsights/dataConnectors"           = "2023-02-01-preview";
-        "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2022-09-01-preview";
-        "Microsoft.OperationalInsights/workspaces/tables"     = "2022-10-01";
-        "Microsoft.Insights/dataCollectionRules"              = "2022-06-01";
+        "Microsoft.SecurityInsights/dataConnectors"           = "2025-09-01";
+        "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2025-09-01";
+        "Microsoft.OperationalInsights/workspaces/tables"     = "2025-07-01";
+        "Microsoft.Insights/dataCollectionRules"              = "2024-03-11";
     }
 
     return [PSCustomObject]@{
@@ -637,6 +637,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     elseif ($armResource.kind.ToLower() -eq 'restapipoller' -or $armResource.kind.ToLower() -eq 'websocket') {
                         CreateRestApiPollerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
                     }
+                    elseif ($armResource.kind.ToLower() -eq 'purviewaudit') {
+                        CreatePurviewAuditResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                    }
                     elseif ($armResource.kind.ToLower() -eq 'push' ) {
 
                         $templateContentConnections.properties.mainTemplate = Add-NewObjectParameter `
@@ -917,8 +920,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 
                 $global:baseCreateUiDefinition.parameters.steps += $baseDataConnectorStep
             }
-
-            $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            # log the title to the console            
+            $title = $ccpItem.title ?? $solutionName
+            $connectorDescriptionText = "This Solution installs the data connector for $title. You can get $title data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
 
             $baseDataConnectorTextElement = [PSCustomObject] @{
                 name    = "dataconnectors$global:connectorCounter-text";
@@ -1128,8 +1132,35 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # AccessKeyId 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessKeyId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken')
+    {
+        # Check for userName.value format OR UserToken format
+        $hasUserName = $armResource.properties.auth.userName -and $armResource.properties.auth.userName.value
+        $hasPassword = $armResource.properties.auth.password -and $armResource.properties.auth.password.value
+        $hasUserToken = $armResource.properties.auth.UserToken
+
+        if ($hasUserName -and $hasPassword) {
+            Write-Host "Processing userName+password format for JwtToken auth."
+            # Process userName.value format
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.userName -propertyName 'value' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.password -propertyName 'value' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+
+        }
+        elseif ($hasUserToken) {
+            Write-Host "Processing UserToken format for JwtToken auth."
+            # Process UserToken format
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'UserToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+        }
+        else {
+            Write-Host "Error: For kind $kindType with JwtToken auth, either 'userName.value' + 'password.value' or 'UserToken' is required." -BackgroundColor Red
+            exit 1;
+        }
+
+        # TokenEndpoint is required for both formats
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+    }
     else {
-        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1' or 'APIKey'." -BackgroundColor Red
+        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1', 'APIKey' or 'JwtToken'." -BackgroundColor Red
         exit 1;
     }
 
@@ -1165,11 +1196,29 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         else {
             Write-Host "Warning: 'stepInfo' object is missing 'nextSteps' array."
         }
+    }
 
-        if ($stepIds.Count -gt 0) {
-            $stepIdsString = $stepIds -join ', '
-            Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
+    # Also collect stepIds from nested stepCollectorConfigs
+    $hasStepCollectorConfigs = [bool]($armResource.properties.PSobject.Properties.name -match "stepCollectorConfigs")
+    if ($hasStepCollectorConfigs) {
+        foreach ($stepConfig in $armResource.properties.stepCollectorConfigs.PSObject.Properties) {
+            $stepConfigName = $stepConfig.Name
+            $stepConfigValue = $stepConfig.Value
+
+            # Check if this step has nested nextSteps
+            if ($stepConfigValue.stepInfo -and $stepConfigValue.stepInfo.nextSteps) {
+                foreach ($nestedStep in $stepConfigValue.stepInfo.nextSteps) {
+                    if ($stepIds -notcontains $nestedStep.stepId) {
+                        $stepIds += $nestedStep.stepId
+                    }
+                }
+            }
         }
+    }
+
+    if ($stepIds.Count -gt 0) {
+        $stepIdsString = $stepIds -join ', '
+        Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
     }
 
     # stepCollectorConfigs placeholder
@@ -1363,4 +1412,98 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
             }
         }
     }
+}
+
+function CreatePurviewAuditResourceProperties($armResource, $templateContentConnections, $fileType) {
+    Write-Host "Processing PurviewAudit connector..."
+    
+    # The PurviewAudit connector uses a simpler structure without auth
+    # It processes connectorDefinitionName, dcrConfig, request, TenantId, SourceType, and DataTypes properties
+    
+    # Handle connectorDefinitionName placeholder
+    if ($armResource.properties.connectorDefinitionName -and $armResource.properties.connectorDefinitionName.Contains("{{")) {
+        $connectorDefName = $armResource.properties.connectorDefinitionName
+        $armResource.properties.connectorDefinitionName = Convert-ToParameterFormat -propValue $connectorDefName
+    }
+    
+    # Handle TenantId - process placeholder if present, otherwise add default
+    if ($armResource.properties.TenantId) {
+        if ($armResource.properties.TenantId.Contains("{{")) {
+            Write-Host "Processing TenantId placeholder..."
+            if ($armResource.properties.TenantId.Contains("{{")) {
+                $armResource.properties.TenantId = "[[subscription().tenantId]"
+            }
+            else {
+                $tenantIdValue = $armResource.properties.TenantId
+                $armResource.properties.TenantId = Convert-ToParameterFormat -propValue $tenantIdValue
+            }
+        }
+        else {
+            Write-Host "TenantId preset to: $($armResource.properties.TenantId)"
+        }
+    }
+    else {
+        Write-Host "Adding default TenantId parameter..."
+        $armResource.properties | Add-Member -MemberType NoteProperty -Name "TenantId" -Value "[[subscription().tenantId]"
+    }
+    
+    # Handle SourceType - process placeholder if present, otherwise keep preset value or add default
+    if ($armResource.properties.SourceType) {
+        if ($armResource.properties.SourceType.Contains("{{")) {
+            Write-Host "Processing SourceType placeholder..."
+            $sourceTypeValue = $armResource.properties.SourceType
+            $armResource.properties.SourceType = Convert-ToParameterFormat -propValue $sourceTypeValue
+        }
+        else {
+            Write-Host "SourceType preset to: $($armResource.properties.SourceType)"
+        }
+    }
+    else {
+        Write-Host "Adding default SourceType..."
+        $armResource.properties | Add-Member -MemberType NoteProperty -Name "SourceType" -Value "CopilotGeneral"
+    }
+    
+    # Handle DataTypes - process placeholders if present, otherwise keep preset values or add defaults
+    if ($armResource.properties.DataTypes) {
+        Write-Host "DataTypes object found in configuration..."
+        if ($armResource.properties.DataTypes.Logs -and $armResource.properties.DataTypes.Logs.state) {
+            if ($armResource.properties.DataTypes.Logs.state.Contains("{{")) {
+                Write-Host "Processing DataTypes.Logs.state placeholder..."
+                $logsStateValue = $armResource.properties.DataTypes.Logs.state
+                $armResource.properties.DataTypes.Logs.state = Convert-ToParameterFormat -propValue $logsStateValue
+            }
+            else {
+                Write-Host "DataTypes.Logs.state preset to: $($armResource.properties.DataTypes.Logs.state)"
+            }
+        }
+    }
+    else {
+        Write-Host "Adding default DataTypes structure..."
+        $dataTypes = [PSCustomObject]@{
+            Logs = [PSCustomObject]@{
+                state = "Enabled"
+            }
+        }
+        $armResource.properties | Add-Member -MemberType NoteProperty -Name "DataTypes" -Value $dataTypes
+    }
+    
+    # Handle request object if present
+    if ($armResource.properties.request) {
+        Write-Host "Processing request object..."
+        # Process any placeholders in request properties
+        foreach ($requestProperty in $armResource.properties.request.PSObject.Properties) {
+            $propertyName = $requestProperty.Name
+            $propertyValue = $requestProperty.Value
+            
+            if ($propertyValue -is [string] -and $propertyValue.Contains("{{")) {
+                Write-Host "Processing request.$propertyName placeholder..."
+                $armResource.properties.request.$propertyName = Convert-ToParameterFormat -propValue $propertyValue
+            }
+            else {
+                Write-Host "request.$propertyName preset to: $propertyValue"
+            }
+        }
+    }
+    
+    Write-Host "Successfully processed PurviewAudit connector properties"
 }

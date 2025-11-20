@@ -50,14 +50,16 @@ $ContentKindDict.Add("SummaryRule", "sr")
 
 function ReadFileContent($filePath) {
     try {
-        if (!(Test-Path -Path "$filePath")) {
-            return $null;
+        # Case-insensitive file existence check
+        $parentDir = Split-Path -Path $filePath -Parent
+        $fileName = [System.IO.Path]::GetFileName($filePath)
+        $actualFile = Get-ChildItem -Path $parentDir -Filter "*" | Where-Object { $_.Name -ieq $fileName }
+        if ($null -eq $actualFile) {
+            Write-Host "filePath $filePath (not found, case-insensitive check)"
+            return $null
         }
-
-        $stream = New-Object System.IO.StreamReader -Arg "$filePath";
-        $content = $stream.ReadToEnd();
-        $stream.Close();
-
+        $filePath = $actualFile.FullName
+        $content = Get-Content -Raw -Path $filePath
         if ($null -eq $content) {
             Write-Host "Error in reading file $filePath"
             return $null;
@@ -1926,6 +1928,15 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         if ($templateSpecConnectorData.id -and $templateSpecConnectorData.title) {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$global:connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_uiConfigId$global:connectorCounter" -NotePropertyValue "[variables('uiConfigId$global:connectorCounter')]"
+                        } else {
+                            if (-not $templateSpecConnectorData.id) {
+                                Write-Host "Error: Missing required field 'id' in connector data for file: $file" -ForegroundColor Red
+                            }
+                            if (-not $templateSpecConnectorData.title) {
+                                Write-Host "Error: Missing required field 'title' in connector data for file: $file" -ForegroundColor Red
+                            }
+
+                            exit 1;
                         }
                         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorContentId$global:connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
                         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$global:connectorCounter" -NotePropertyValue "[variables('dataConnectorContentId$global:connectorCounter')]"

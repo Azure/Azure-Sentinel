@@ -9,7 +9,7 @@ from ..SharedCode.mimecast_exception import MimecastException, MimecastTimeoutEx
 from ..SharedCode.logger import applogger
 from ..SharedCode.state_manager import StateManager
 from ..SharedCode.utils import Utils
-from ..SharedCode.sentinel import post_data
+from ..SharedCode.sentinel import send_data_to_sentinel
 from tenacity import RetryError
 
 
@@ -22,8 +22,6 @@ class MimecastDLPToSentinel(Utils):
         self.check_environment_var_exist(
             [
                 {"Base_Url": consts.BASE_URL},
-                {"WorkspaceID": consts.WORKSPACE_ID},
-                {"WorkspaceKey": consts.WORKSPACE_KEY},
                 {"Mimecast_Client_ID": consts.MIMECAST_CLIENT_ID},
                 {"Mimecast_Client_Secret": consts.MIMECAST_CLIENT_SECRET},
             ]
@@ -302,7 +300,7 @@ class MimecastDLPToSentinel(Utils):
                     )
                 )
                 if len(data_to_ingest) > 0:
-                    post_data(json.dumps(data_to_ingest), consts.TABLE_NAME["SEG_DLP"])
+                    send_data_to_sentinel(data_to_ingest, consts.TABLE_NAME["SEG_DLP"])
 
                 checkpoint_data_to_post.update({"page_token": page_token})
                 if not page_token:

@@ -6,10 +6,10 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: DNS
     dataTypes:
       - DnsEvents
@@ -33,7 +33,7 @@ requiredDataConnectors:
       - Cisco_Umbrella_dns_CL
   - connectorId: MicrosoftDefenderThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: Corelight
     dataTypes: 
       - Corelight_CL
@@ -62,6 +62,7 @@ query: |
   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
   | extend NetworkSourceIP = ObservableValue
   | extend IoC = NetworkSourceIP
+  | extend IndicatorId = tostring(split(Id, "--")[2])
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
   | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
   IP_TI
@@ -78,7 +79,9 @@ query: |
   | where imDns_mintime < ValidUntil
   | extend Description = tostring(parse_json(Data).description)
   | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-  | project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, Id, LatestIndicatorTime, ValidUntil, Confidence, SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName
+  | extend ThreatType = tostring(Data.indicator_types[0])
+  | project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, LatestIndicatorTime, ValidUntil, Confidence, 
+  SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName, Type
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -97,7 +100,7 @@ customDetails:
   Description: Description
   ActivityGroupNames: ActivityGroupNames
   IndicatorId: IndicatorId
-  ThreatType: Type
+  ThreatType: ThreatType
   ExpirationDateTime: ValidUntil
   ConfidenceScore: Confidence
   DNSRequestTime: imDns_mintime
@@ -105,6 +108,6 @@ customDetails:
   DnsQuery: DnsQuery
 alertDetailsOverride:
   alertDisplayNameFormat: The response {{IoC}} to DNS query matched an IoC 
-  alertDescriptionFormat: The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{Type}}. Consult the threat intelligence blade for more information on the indicator.
-version: 1.2.6
+  alertDescriptionFormat: The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.
+version: 1.2.10
 kind: Scheduled
