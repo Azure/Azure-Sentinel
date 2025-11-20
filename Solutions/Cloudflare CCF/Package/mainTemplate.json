@@ -1,0 +1,4799 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Cloudflare - support@cloudflare.com",
+    "comments": "Solution template for Cloudflare CCF"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@cloudflare.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Cloudflare CCF",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "cloudflare.azure-sentinel-solution-cloudflare-ccf",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "CloudflareDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "CloudflareDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "CloudflareDefinition",
+                  "title": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": " The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/)for more information.",
+                  "graphQueriesTableName": "CloudflareV2_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Cloudflare logs",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Cloudflare Logs",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Create a storage account and a container",
+                        "description": "Before setting up logpush in Cloudflare, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to know more about Container and Blob. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
+                      },
+                      {
+                        "name": "Generate a Blob SAS URL",
+                        "description": "Create and Write permissions are required. Refer the [documentation](https://learn.microsoft.com/en-us/azure/ai-services/translator/document-translation/how-to-guides/create-sas-tokens?tabs=Containers) to know more about Blob SAS token and url."
+                      },
+                      {
+                        "name": "Collecting logs from Cloudflare to your Blob container",
+                        "description": "Follow the steps in the [documentation](https://developers.cloudflare.com/logs/get-started/enable-destinations/azure/) for collecting logs from Cloudflare to your Blob container."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect Cloudflare Logs to Microsoft Sentinel",
+                      "description": "To enable Cloudflare logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "tenantId": "[subscription().tenantId]",
+                            "name": "principalId",
+                            "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                          },
+                          "type": "ServicePrincipalIDTextBox_test"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's URL you want to collect data from",
+                            "type": "text",
+                            "name": "blobContainerUri",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's storage account resource group name",
+                            "type": "text",
+                            "name": "StorageAccountResourceGroupName",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's storage account location",
+                            "type": "text",
+                            "name": "StorageAccountLocation",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The Blob container's storage account subscription id",
+                            "type": "text",
+                            "name": "StorageAccountSubscription",
+                            "validations": {
+                              "required": true
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "The event grid topic name of the blob container's storage account if exist. else keep empty.",
+                            "description": "The data flow using event grid to send 'blob-created event' notifications. There could be only one event grid topic for each storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, please provide it's name. Else, keep the text box empty.",
+                            "type": "text",
+                            "name": "EGSystemTopicName",
+                            "validations": {
+                              "required": false
+                            }
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ]
+                    }
+                  ],
+                  "isConnectivityCriteriasMatchSome": false
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cloudflare",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cloudflare",
+                  "email": "support@cloudflare.com",
+                  "tier": "Partner",
+                  "link": "https://support.cloudflare.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CloudflareDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-Cloudflare": {
+                    "columns": [
+                      {
+                        "name": "AccountID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BytesReceived",
+                        "type": "int"
+                      },
+                      {
+                        "name": "BytesSent",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientTCPHandshakeDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientTLSCipher",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientTLSHandshakeDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientTLSVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ConnectionCloseReason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ConnectionReuse",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "DestinationTunnelID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DetectedProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DeviceID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DeviceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EgressColoName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EgressIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EgressPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EgressRuleID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EgressRuleName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Email",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IngressColoName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Offramp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginTLSCertificateIssuer",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTLSCertificateValidationResult",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTLSCipher",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTLSHandshakeDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginTLSVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Protocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RegistrationID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleEvaluationDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SessionEndTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "SessionID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SessionStartTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "SourceIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceInternalIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourcePort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "UserID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CPUTimeMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DispatchNamespace",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Entrypoint",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Event",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EventTimestampMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EventType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Exceptions",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Logs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Outcome",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ScriptName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ScriptTags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ScriptVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "WallTimeMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Error",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PTY",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Payload",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProgramFinishDatetime",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProgramID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProgramStartDatetime",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProgramType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ServerAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SessionFinishDatetime",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SessionStartDatetime",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TargetID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UserEmail",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Username",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Body",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BodyLength",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DestAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Headers",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Host",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Method",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Password",
+                        "type": "string"
+                      },
+                      {
+                        "name": "R2Path",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Referrer",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SinkholeID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcAddr",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Timestamp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "URI",
+                        "type": "string"
+                      },
+                      {
+                        "name": "URL",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UserAgent",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AttackCampaignID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AttackID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AttackVector",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ColoCity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ColoCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ColoCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ColoGeoHash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ColoName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Datetime",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationASN",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DestinationASNName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationGeoHash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Direction",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GREChecksum",
+                        "type": "int"
+                      },
+                      {
+                        "name": "GREEtherType",
+                        "type": "int"
+                      },
+                      {
+                        "name": "GREHeaderLength",
+                        "type": "int"
+                      },
+                      {
+                        "name": "GREKey",
+                        "type": "int"
+                      },
+                      {
+                        "name": "GRESequenceNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "GREVersion",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ICMPChecksum",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ICMPCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ICMPType",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPDestinationAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPDestinationSubnet",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPFragmentOffset",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPHeaderLength",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPMoreFragments",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPProtocol",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPProtocolName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPSourceAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPSourceSubnet",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPTTL",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPTTLBuckets",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPTotalLength",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPTotalLengthBuckets",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv4Checksum",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv4DSCP",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv4DontFragment",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv4ECN",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv4Identification",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv4Options",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPv6DSCP",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv6ECN",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv6ExtensionHeaders",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPv6FlowLabel",
+                        "type": "int"
+                      },
+                      {
+                        "name": "IPv6Identification",
+                        "type": "int"
+                      },
+                      {
+                        "name": "MitigationReason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MitigationScope",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MitigationSystem",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProtocolState",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RuleName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RulesetID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RulesetOverrideID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SampleInterval",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SourceASN",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SourceASNName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceGeoHash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TCPAcknowledgementNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPChecksum",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPDataOffset",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPFlags",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPFlagsString",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TCPMSS",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPOptions",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TCPSACKBlocks",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TCPSACKPermitted",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPSequenceNumber",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPTimestampECR",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPTimestampValue",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPUrgentPointer",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPWindowScale",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TCPWindowSize",
+                        "type": "int"
+                      },
+                      {
+                        "name": "UDPChecksum",
+                        "type": "int"
+                      },
+                      {
+                        "name": "UDPPayloadLength",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Verdict",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SignatureID",
+                        "type": "int"
+                      },
+                      {
+                        "name": "SignatureMessage",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SignatureRevision",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ApplicationIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ApplicationNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "CategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationIPContinentCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DestinationIPCountryCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OverrideIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OverridePort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "PolicyID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PolicyName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProxyEndpoint",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SNI",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceIPContinentCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceIPCountryCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TransportProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "VirtualNetworkID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "VirtualNetworkName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BlockedFileHash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BlockedFileName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BlockedFileReason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BlockedFileSize",
+                        "type": "int"
+                      },
+                      {
+                        "name": "BlockedFileType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DownloadMatchedDlpProfileEntries",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DownloadMatchedDlpProfiles",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DownloadedFileNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FileInfo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ForensicCopyStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HTTPHost",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HTTPMethod",
+                        "type": "string"
+                      },
+                      {
+                        "name": "HTTPStatusCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "HTTPVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IsIsolated",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "PrivateAppAUD",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Quarantined",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "RedirectTargetURI",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Referer",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UntrustedCertificateAction",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UploadMatchedDlpProfileEntries",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UploadMatchedDlpProfiles",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UploadedFileNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AuthoritativeNameServerIPs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CNAMECategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "CNAMECategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CNAMEs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CNAMEsReversed",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ColoID",
+                        "type": "int"
+                      },
+                      {
+                        "name": "CustomResolveDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "CustomResolverAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CustomResolverPolicyID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CustomResolverPolicyName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CustomResolverResponse",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DoHSubdomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DoTSubdomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DstPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EDEErrors",
+                        "type": "int"
+                      },
+                      {
+                        "name": "InitialCategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "InitialCategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "InitialResolvedIPs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "InternalDNSFallbackStrategy",
+                        "type": "string"
+                      },
+                      {
+                        "name": "InternalDNSRCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "InternalDNSViewID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "InternalDNSZoneID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IsResponseCached",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "Location",
+                        "type": "string"
+                      },
+                      {
+                        "name": "LocationID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MatchedCategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "MatchedCategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MatchedIndicatorFeedIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "MatchedIndicatorFeedNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "QueryCategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "QueryCategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "QueryID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "QueryIndicatorFeedIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "QueryIndicatorFeedNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "QueryName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "QueryNameReversed",
+                        "type": "string"
+                      },
+                      {
+                        "name": "QuerySize",
+                        "type": "int"
+                      },
+                      {
+                        "name": "QueryType",
+                        "type": "int"
+                      },
+                      {
+                        "name": "QueryTypeName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "RData",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestContextCategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "RequestContextCategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResolvedIPCategoryIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ResolvedIPCategoryNames",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResolvedIPContinentCodes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResolvedIPCountryCodes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResolverDecision",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceRecords",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceRecordsJSON",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcIPContinentCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcIPCountryCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SrcPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "TimeZone",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TimeZoneInferredMethod",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AlertID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AlertReasons",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Attachments",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CC",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CCName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FinalDisposition",
+                        "type": "string"
+                      },
+                      {
+                        "name": "From",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FromName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Links",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MessageDeliveryMode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MessageID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Origin",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginalSender",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ReplyTo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ReplyToName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPEnvelopeFrom",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPEnvelopeTo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPHeloServerIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPHeloServerIPAsName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPHeloServerIPAsNumber",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPHeloServerIPGeo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SMTPHeloServerName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Subject",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatCategories",
+                        "type": "string"
+                      },
+                      {
+                        "name": "To",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ToName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientResponseCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClusterID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EDNSSubnet",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EDNSSubnetLength",
+                        "type": "int"
+                      },
+                      {
+                        "name": "QueryDO",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "QueryRD",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "QueryTCP",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ResponseCached",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ResponseCachedStale",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ResponseReason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UpstreamIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UpstreamResponseCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "UpstreamResponseTimeMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ForensicCopyID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GatewayRequestID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Phase",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TriggeredRuleID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DeviceManufacturer",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DeviceModel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DeviceSerialNumber",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DeviceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OSVersion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PostureCheckName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PostureCheckType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PostureEvaluatedResult",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "PostureExpectedJSON",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PostureReceivedJSON",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UserUID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetDisplayName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetExternalID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetLink",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetMetadata",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DetectedTimestamp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FindingTypeDisplayName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FindingTypeID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "FindingTypeSeverity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "InstanceID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IntegrationDisplayName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IntegrationID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IntegrationPolicyVendor",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Decision",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DomainName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActionResult",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ActionType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorEmail",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ActorType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Interface",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Metadata",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NewValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OldValue",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OwnerID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "When",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Allowed",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "AppDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AppUUID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Connection",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Country",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CreatedAt",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PurposeJustificationPrompt",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PurposeJustificationResponse",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RayID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TemporaryAccessApprovers",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TemporaryAccessDuration",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientASN",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientASNDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientIPClass",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRefererHost",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRefererPath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRefererQuery",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRefererScheme",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestHost",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestMethod",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestPath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestQuery",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestScheme",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestUserAgent",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ContentScanObjResults",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ContentScanObjSizes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ContentScanObjTypes",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeColoCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeResponseStatus",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Kind",
+                        "type": "string"
+                      },
+                      {
+                        "name": "LeakedCredentialCheckResult",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MatchIndex",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginResponseStatus",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginatorRayID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Ref",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Source",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BotDetectionIDs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "BotDetectionTags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BotScore",
+                        "type": "int"
+                      },
+                      {
+                        "name": "BotScoreSrc",
+                        "type": "string"
+                      },
+                      {
+                        "name": "BotTags",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CacheCacheStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CacheReserveUsed",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "CacheResponseBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "CacheResponseStatus",
+                        "type": "int"
+                      },
+                      {
+                        "name": "CacheTieredFill",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ClientCity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientDeviceType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientLatitude",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientLongitude",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientMTLSAuthCertFingerprint",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientMTLSAuthStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRegionCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientRequestReferer",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestSource",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientRequestURI",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientSSLCipher",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientSSLProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientSrcPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientTCPRTTMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientXRequestedWith",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Cookies",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeCFConnectingO2O",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "EdgeColoID",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EdgeEndTimestamp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgePathingOp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgePathingSrc",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgePathingStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeRequestHost",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeResponseBodyBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EdgeResponseBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EdgeResponseCompressionRatio",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeResponseContentType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeServerIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeStartTimestamp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "EdgeTimeToFirstByteMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "JA3Hash",
+                        "type": "string"
+                      },
+                      {
+                        "name": "JA4",
+                        "type": "string"
+                      },
+                      {
+                        "name": "JA4Signals",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginDNSResponseTimeMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginRequestHeaderSendDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginResponseBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginResponseDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginResponseHTTPExpires",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginResponseHTTPLastModified",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginResponseHeaderReceiveDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginSSLProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTCPHandshakeDurationMs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ParentRayID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestHeaders",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResponseHeaders",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SecurityAction",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SecurityActions",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SecurityRuleDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SecurityRuleID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SecurityRuleIDs",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SecuritySources",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SmartRouteColoID",
+                        "type": "int"
+                      },
+                      {
+                        "name": "UpperTierColoID",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WAFAttackScore",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WAFRCEAttackScore",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WAFSQLiAttackScore",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WAFXSSAttackScore",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WorkerCPUTime",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WorkerScriptName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "WorkerStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "WorkerSubrequest",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "WorkerSubrequestCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "WorkerWallTimeUs",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ZoneName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientIPASN",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientIPASNDescription",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientIPCountry",
+                        "type": "string"
+                      },
+                      {
+                        "name": "LastKnownGoodColoCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CSPDirective",
+                        "type": "string"
+                      },
+                      {
+                        "name": "PageURL",
+                        "type": "string"
+                      },
+                      {
+                        "name": "URLContainsCDNCGIPath",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "URLHost",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Application",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientMatchedIpFirewall",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientPort",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientProto",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientTcpRtt",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ClientTlsClientHelloServerName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientTlsProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClientTlsStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ConnectTimestamp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DisconnectTimestamp",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IpFirewall",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "OriginBytes",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginProto",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTcpRtt",
+                        "type": "int"
+                      },
+                      {
+                        "name": "OriginTlsFingerprint",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTlsMode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTlsProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "OriginTlsStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ProxyProtocol",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Status",
+                        "type": "int"
+                      },
+                      {
+                        "name": "EventDetails",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "IP",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-Cloudflare"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = now(), LogType = tostring(Type) | project TimeGenerated, AccountID, BytesReceived, BytesSent, ClientTCPHandshakeDurationMs, ClientTLSCipher, ClientTLSHandshakeDurationMs, ClientTLSVersion, ConnectionCloseReason, ConnectionReuse, DestinationTunnelID, DetectedProtocol, DeviceID, DeviceName, EgressColoName, EgressIP, EgressPort, EgressRuleID, EgressRuleName, Email, IngressColoName, Offramp, OriginIP, OriginPort, OriginTLSCertificateIssuer, OriginTLSCertificateValidationResult, OriginTLSCipher, OriginTLSVersion, Protocol, RegistrationID, RuleEvaluationDurationMs, SessionEndTime, SessionID, SessionStartTime, SourceIP, SourceInternalIP, SourcePort, UserID, CPUTimeMs, DispatchNamespace, Entrypoint, Event, EventTimestampMs, EventType, Exceptions, Logs, Outcome, ScriptName, ScriptTags, ScriptVersion, WallTimeMs, ClientAddress, Error, PTY, Payload, ProgramFinishDatetime, ProgramID, ProgramStartDatetime, ProgramType, ServerAddress, SessionFinishDatetime, SessionStartDatetime, TargetID, UserEmail, Username, Body, BodyLength, DestAddr, Headers, Host, Method, Password, R2Path, Referrer, SinkholeID, SrcAddr, Timestamp, URI, URL, UserAgent, AttackCampaignID, AttackID, AttackVector, ColoCity, ColoCode, ColoCountry, ColoGeoHash, ColoName, Datetime, DestinationASN, DestinationASNName, DestinationCountry, DestinationGeoHash, DestinationPort, Direction, GREChecksum, GREEtherType, GREHeaderLength, GREKey, GRESequenceNumber, GREVersion, ICMPChecksum, ICMPCode, ICMPType, IPDestinationAddress, IPDestinationSubnet, IPFragmentOffset, IPHeaderLength, IPMoreFragments, IPProtocol, IPProtocolName, IPSourceAddress, IPSourceSubnet, IPTTL, IPTTLBuckets, IPTotalLength, IPTotalLengthBuckets, IPv4Checksum, IPv4DSCP, IPv4DontFragment, IPv4ECN, IPv4Identification, IPv4Options, IPv6DSCP, IPv6ECN, IPv6ExtensionHeaders, IPv6FlowLabel, IPv6Identification, MitigationReason, MitigationScope, MitigationSystem, ProtocolState, RuleID, RuleName, RulesetID, RulesetOverrideID, SampleInterval, SourceASN, SourceASNName, SourceCountry, SourceGeoHash, TCPAcknowledgementNumber, TCPChecksum, TCPDataOffset, TCPFlags, TCPFlagsString, TCPMSS, TCPOptions, TCPSACKBlocks, TCPSACKPermitted, TCPSequenceNumber, TCPTimestampECR, TCPTimestampValue, TCPUrgentPointer, TCPWindowScale, TCPWindowSize, UDPChecksum, UDPPayloadLength, Verdict, Action, DestinationIP, SignatureID, SignatureMessage, SignatureRevision, ApplicationIDs, ApplicationNames, CategoryIDs, CategoryNames, DestinationIPContinentCode, DestinationIPCountryCode, OverrideIP, OverridePort, PolicyID, PolicyName, ProxyEndpoint, SNI, SourceIPContinentCode, SourceIPCountryCode, TransportProtocol, VirtualNetworkID, VirtualNetworkName, BlockedFileHash, BlockedFileName, BlockedFileReason, BlockedFileSize, BlockedFileType, DownloadMatchedDlpProfileEntries, DownloadMatchedDlpProfiles, DownloadedFileNames, FileInfo, ForensicCopyStatus, HTTPHost, HTTPMethod, HTTPStatusCode, HTTPVersion, IsIsolated, PrivateAppAUD, Quarantined, RedirectTargetURI, Referer, RequestID, UntrustedCertificateAction, UploadMatchedDlpProfileEntries, UploadMatchedDlpProfiles, UploadedFileNames, AuthoritativeNameServerIPs, CNAMECategoryIDs, CNAMECategoryNames, CNAMEs, CNAMEsReversed, ColoID, CustomResolveDurationMs, CustomResolverAddress, CustomResolverPolicyID, CustomResolverPolicyName, CustomResolverResponse, DoHSubdomain, DoTSubdomain, DstIP, DstPort, EDEErrors, InitialCategoryIDs, InitialCategoryNames, InitialResolvedIPs, InternalDNSFallbackStrategy, InternalDNSRCode, InternalDNSViewID, InternalDNSZoneID, IsResponseCached, Location, LocationID, MatchedCategoryIDs, MatchedCategoryNames, MatchedIndicatorFeedIDs, MatchedIndicatorFeedNames, QueryCategoryIDs, QueryCategoryNames, QueryID, QueryIndicatorFeedIDs, QueryIndicatorFeedNames, QueryName, QueryNameReversed, QuerySize, QueryType, QueryTypeName, RCode, RData, RequestContextCategoryIDs, RequestContextCategoryNames, ResolvedIPCategoryIDs, ResolvedIPCategoryNames, ResolvedIPContinentCodes, ResolvedIPCountryCodes, ResolverDecision, ResourceRecords, ResourceRecordsJSON, SrcIP, SrcIPContinentCode, SrcIPCountryCode, SrcPort, TimeZone, TimeZoneInferredMethod, AlertID, AlertReasons, Attachments, CC, CCName, FinalDisposition, From, FromName, Links, MessageDeliveryMode, MessageID, Origin, OriginalSender, ReplyTo, ReplyToName, SMTPEnvelopeFrom, SMTPEnvelopeTo, SMTPHeloServerIP, SMTPHeloServerIPAsName, SMTPHeloServerIPAsNumber, SMTPHeloServerIPGeo, SMTPHeloServerName, Subject, ThreatCategories, To, ToName, ClientResponseCode, ClusterID, EDNSSubnet, EDNSSubnetLength, QueryDO, QueryRD, QueryTCP, ResponseCached, ResponseCachedStale, ResponseReason, UpstreamIP, UpstreamResponseCode, UpstreamResponseTimeMs, ForensicCopyID, GatewayRequestID, Phase, TriggeredRuleID, ClientVersion, DeviceManufacturer, DeviceModel, DeviceSerialNumber, DeviceType, OSVersion, PostureCheckName, PostureCheckType, PostureEvaluatedResult, PostureExpectedJSON, PostureReceivedJSON, UserUID, AssetDisplayName, AssetExternalID, AssetLink, AssetMetadata, DetectedTimestamp, FindingTypeDisplayName, FindingTypeID, FindingTypeSeverity, InstanceID, IntegrationDisplayName, IntegrationID, IntegrationPolicyVendor, Decision, DomainName, ActionResult, ActionType, ActorEmail, ActorID, ActorIP, ActorType, ID, Interface, Metadata, NewValue, OldValue, OwnerID, ResourceID, ResourceType, When, Allowed, AppDomain, AppUUID, Connection, Country, CreatedAt, IPAddress, PurposeJustificationPrompt, PurposeJustificationResponse, RayID, TemporaryAccessApprovers, TemporaryAccessDuration, ClientASN, ClientASNDescription, ClientCountry, ClientIP, ClientIPClass, ClientRefererHost, ClientRefererPath, ClientRefererQuery, ClientRefererScheme, ClientRequestHost, ClientRequestMethod, ClientRequestPath, ClientRequestProtocol, ClientRequestQuery, ClientRequestScheme, ClientRequestUserAgent, ContentScanObjResults, ContentScanObjSizes, ContentScanObjTypes, Description, EdgeColoCode, EdgeResponseStatus, Kind, LeakedCredentialCheckResult, MatchIndex, OriginResponseStatus, OriginatorRayID, Ref, BotDetectionIDs, BotDetectionTags, BotScore, BotScoreSrc, BotTags, CacheCacheStatus, CacheReserveUsed, CacheResponseBytes, CacheResponseStatus, CacheTieredFill, ClientCity, ClientDeviceType, ClientLatitude, ClientLongitude, ClientMTLSAuthCertFingerprint, ClientMTLSAuthStatus, ClientRegionCode, ClientRequestBytes, ClientRequestReferer, ClientRequestSource, ClientRequestURI, ClientSSLCipher, ClientSSLProtocol, ClientSrcPort, ClientTCPRTTMs, ClientXRequestedWith, Cookies, EdgeCFConnectingO2O, EdgeColoID, EdgeEndTimestamp, EdgePathingOp, EdgePathingSrc, EdgePathingStatus, EdgeRequestHost, EdgeResponseBodyBytes, EdgeResponseBytes, EdgeResponseCompressionRatio, EdgeResponseContentType, EdgeServerIP, EdgeStartTimestamp, EdgeTimeToFirstByteMs, JA3Hash, JA4, JA4Signals, OriginDNSResponseTimeMs, OriginRequestHeaderSendDurationMs, OriginResponseBytes, OriginResponseDurationMs, OriginResponseHTTPExpires, OriginResponseHTTPLastModified, OriginResponseHeaderReceiveDurationMs, OriginSSLProtocol, OriginTCPHandshakeDurationMs, OriginTLSHandshakeDurationMs, ParentRayID, RequestHeaders, ResponseHeaders, SecurityAction, SecurityRuleDescription, SecurityRuleID, SecuritySources, SmartRouteColoID, UpperTierColoID, WAFAttackScore, WAFRCEAttackScore, WAFSQLiAttackScore, WAFXSSAttackScore, WorkerCPUTime, WorkerScriptName, WorkerStatus, WorkerSubrequest, WorkerSubrequestCount, WorkerWallTimeUs, ZoneName, ClientIPASN, ClientIPASNDescription, ClientIPCountry, LastKnownGoodColoCode, CSPDirective, PageURL, URLContainsCDNCGIPath, URLHost, Application, ClientBytes, ClientMatchedIpFirewall, ClientPort, ClientProto, ClientTcpRtt, ClientTlsClientHelloServerName, ClientTlsProtocol, ClientTlsStatus, ConnectTimestamp, DisconnectTimestamp, IpFirewall, OriginBytes, OriginProto, OriginTcpRtt, OriginTlsFingerprint, OriginTlsMode, OriginTlsProtocol, OriginTlsStatus, ProxyProtocol, Status, EventDetails, IP, LogType, Source, SecurityActions, SecurityRuleIDs",
+                    "outputStream": "Custom-CloudflareV2_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "CloudflareV2_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "CloudflareV2_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AccountID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BytesReceived",
+                      "type": "int"
+                    },
+                    {
+                      "name": "BytesSent",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientTCPHandshakeDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientTLSCipher",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientTLSHandshakeDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientTLSVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ConnectionCloseReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ConnectionReuse",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "DestinationTunnelID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DetectedProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EgressColoName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EgressIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EgressPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EgressRuleID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EgressRuleName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Email",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IngressColoName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Offramp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginTLSCertificateIssuer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTLSCertificateValidationResult",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTLSCipher",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTLSHandshakeDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginTLSVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Protocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RegistrationID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RuleEvaluationDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SessionEndTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SessionID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SessionStartTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SourceIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceInternalIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourcePort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "UserID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CPUTimeMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "DispatchNamespace",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Entrypoint",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Event",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventTimestampMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Exceptions",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Logs",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Outcome",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ScriptName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ScriptTags",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ScriptVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "WallTimeMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Error",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PTY",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Payload",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProgramFinishDatetime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProgramID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProgramStartDatetime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProgramType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ServerAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SessionFinishDatetime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SessionStartDatetime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserEmail",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Username",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Body",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BodyLength",
+                      "type": "int"
+                    },
+                    {
+                      "name": "DestAddr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Headers",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Host",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Method",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Password",
+                      "type": "string"
+                    },
+                    {
+                      "name": "R2Path",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Referrer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SinkholeID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcAddr",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Timestamp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "URI",
+                      "type": "string"
+                    },
+                    {
+                      "name": "URL",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserAgent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AttackCampaignID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AttackID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AttackVector",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ColoCity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ColoCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ColoCountry",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ColoGeoHash",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ColoName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Datetime",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationASN",
+                      "type": "int"
+                    },
+                    {
+                      "name": "DestinationASNName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationCountry",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationGeoHash",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Direction",
+                      "type": "string"
+                    },
+                    {
+                      "name": "GREChecksum",
+                      "type": "int"
+                    },
+                    {
+                      "name": "GREEtherType",
+                      "type": "int"
+                    },
+                    {
+                      "name": "GREHeaderLength",
+                      "type": "int"
+                    },
+                    {
+                      "name": "GREKey",
+                      "type": "int"
+                    },
+                    {
+                      "name": "GRESequenceNumber",
+                      "type": "int"
+                    },
+                    {
+                      "name": "GREVersion",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ICMPChecksum",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ICMPCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ICMPType",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPDestinationAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPDestinationSubnet",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPFragmentOffset",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPHeaderLength",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPMoreFragments",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPProtocol",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPProtocolName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPSourceAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPSourceSubnet",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPTTL",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPTTLBuckets",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPTotalLength",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPTotalLengthBuckets",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv4Checksum",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv4DSCP",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv4DontFragment",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv4ECN",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv4Identification",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv4Options",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPv6DSCP",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv6ECN",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv6ExtensionHeaders",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPv6FlowLabel",
+                      "type": "int"
+                    },
+                    {
+                      "name": "IPv6Identification",
+                      "type": "int"
+                    },
+                    {
+                      "name": "MitigationReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitigationScope",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MitigationSystem",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProtocolState",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RuleID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RuleName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RulesetID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RulesetOverrideID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SampleInterval",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SourceASN",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SourceASNName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceCountry",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceGeoHash",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TCPAcknowledgementNumber",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPChecksum",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPDataOffset",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPFlags",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPFlagsString",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TCPMSS",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPOptions",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TCPSACKBlocks",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TCPSACKPermitted",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPSequenceNumber",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPTimestampECR",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPTimestampValue",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPUrgentPointer",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPWindowScale",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TCPWindowSize",
+                      "type": "int"
+                    },
+                    {
+                      "name": "UDPChecksum",
+                      "type": "int"
+                    },
+                    {
+                      "name": "UDPPayloadLength",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Verdict",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SignatureID",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SignatureMessage",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SignatureRevision",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ApplicationIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ApplicationNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "CategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationIPContinentCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestinationIPCountryCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OverrideIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OverridePort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "PolicyID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PolicyName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProxyEndpoint",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SNI",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceIPContinentCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SourceIPCountryCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TransportProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "VirtualNetworkID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "VirtualNetworkName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BlockedFileHash",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BlockedFileName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BlockedFileReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BlockedFileSize",
+                      "type": "int"
+                    },
+                    {
+                      "name": "BlockedFileType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DownloadMatchedDlpProfileEntries",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DownloadMatchedDlpProfiles",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DownloadedFileNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FileInfo",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ForensicCopyStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HTTPHost",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HTTPMethod",
+                      "type": "string"
+                    },
+                    {
+                      "name": "HTTPStatusCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "HTTPVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IsIsolated",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "PrivateAppAUD",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Quarantined",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "RedirectTargetURI",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Referer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UntrustedCertificateAction",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UploadMatchedDlpProfileEntries",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UploadMatchedDlpProfiles",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UploadedFileNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AuthoritativeNameServerIPs",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CNAMECategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "CNAMECategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CNAMEs",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CNAMEsReversed",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ColoID",
+                      "type": "int"
+                    },
+                    {
+                      "name": "CustomResolveDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "CustomResolverAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CustomResolverPolicyID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CustomResolverPolicyName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CustomResolverResponse",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DoHSubdomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DoTSubdomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DstIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DstPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EDEErrors",
+                      "type": "int"
+                    },
+                    {
+                      "name": "InitialCategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "InitialCategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InitialResolvedIPs",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InternalDNSFallbackStrategy",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InternalDNSRCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "InternalDNSViewID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InternalDNSZoneID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IsResponseCached",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "Location",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LocationID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MatchedCategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "MatchedCategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MatchedIndicatorFeedIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "MatchedIndicatorFeedNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "QueryCategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "QueryCategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "QueryID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "QueryIndicatorFeedIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "QueryIndicatorFeedNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "QueryName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "QueryNameReversed",
+                      "type": "string"
+                    },
+                    {
+                      "name": "QuerySize",
+                      "type": "int"
+                    },
+                    {
+                      "name": "QueryType",
+                      "type": "int"
+                    },
+                    {
+                      "name": "QueryTypeName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "RData",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestContextCategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "RequestContextCategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResolvedIPCategoryIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ResolvedIPCategoryNames",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResolvedIPContinentCodes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResolvedIPCountryCodes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResolverDecision",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceRecords",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceRecordsJSON",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcIPContinentCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcIPCountryCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "TimeZone",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TimeZoneInferredMethod",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AlertReasons",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Attachments",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CC",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CCName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FinalDisposition",
+                      "type": "string"
+                    },
+                    {
+                      "name": "From",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FromName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Links",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MessageDeliveryMode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MessageID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Origin",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginalSender",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ReplyTo",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ReplyToName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPEnvelopeFrom",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPEnvelopeTo",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPHeloServerIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPHeloServerIPAsName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPHeloServerIPAsNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPHeloServerIPGeo",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SMTPHeloServerName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Subject",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ThreatCategories",
+                      "type": "string"
+                    },
+                    {
+                      "name": "To",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ToName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientResponseCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClusterID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EDNSSubnet",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EDNSSubnetLength",
+                      "type": "int"
+                    },
+                    {
+                      "name": "QueryDO",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "QueryRD",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "QueryTCP",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "ResponseCached",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "ResponseCachedStale",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "ResponseReason",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UpstreamIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UpstreamResponseCode",
+                      "type": "int"
+                    },
+                    {
+                      "name": "UpstreamResponseTimeMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ForensicCopyID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "GatewayRequestID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Phase",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TriggeredRuleID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceManufacturer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceModel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceSerialNumber",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DeviceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OSVersion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PostureCheckName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PostureCheckType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PostureEvaluatedResult",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "PostureExpectedJSON",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PostureReceivedJSON",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserUID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetDisplayName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetExternalID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetLink",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetMetadata",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DetectedTimestamp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FindingTypeDisplayName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FindingTypeID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "FindingTypeSeverity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InstanceID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IntegrationDisplayName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IntegrationID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IntegrationPolicyVendor",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Decision",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DomainName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LogType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActionResult",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "ActionType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActorEmail",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActorID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActorIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ActorType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Interface",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Metadata",
+                      "type": "string"
+                    },
+                    {
+                      "name": "NewValue",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OldValue",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OwnerID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "When",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Allowed",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "AppDomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AppUUID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Connection",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Country",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CreatedAt",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PurposeJustificationPrompt",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PurposeJustificationResponse",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RayID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TemporaryAccessApprovers",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TemporaryAccessDuration",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientASN",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientASNDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientCountry",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientIPClass",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRefererHost",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRefererPath",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRefererQuery",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRefererScheme",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestHost",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestMethod",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestPath",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestQuery",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestScheme",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestUserAgent",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ContentScanObjResults",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ContentScanObjSizes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ContentScanObjTypes",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Description",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeColoCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeResponseStatus",
+                      "type": "int"
+                    },
+                    {
+                      "name": "Kind",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LeakedCredentialCheckResult",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MatchIndex",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginResponseStatus",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginatorRayID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Ref",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Source",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BotDetectionIDs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "BotDetectionTags",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BotScore",
+                      "type": "int"
+                    },
+                    {
+                      "name": "BotScoreSrc",
+                      "type": "string"
+                    },
+                    {
+                      "name": "BotTags",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CacheCacheStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CacheReserveUsed",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "CacheResponseBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "CacheResponseStatus",
+                      "type": "int"
+                    },
+                    {
+                      "name": "CacheTieredFill",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "ClientCity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientDeviceType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientLatitude",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientLongitude",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientMTLSAuthCertFingerprint",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientMTLSAuthStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRegionCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientRequestReferer",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestSource",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientRequestURI",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientSSLCipher",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientSSLProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientSrcPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientTCPRTTMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientXRequestedWith",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Cookies",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeCFConnectingO2O",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "EdgeColoID",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EdgeEndTimestamp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgePathingOp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgePathingSrc",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgePathingStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeRequestHost",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeResponseBodyBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EdgeResponseBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EdgeResponseCompressionRatio",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeResponseContentType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeServerIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeStartTimestamp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EdgeTimeToFirstByteMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "JA3Hash",
+                      "type": "string"
+                    },
+                    {
+                      "name": "JA4",
+                      "type": "string"
+                    },
+                    {
+                      "name": "JA4Signals",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginDNSResponseTimeMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginRequestHeaderSendDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginResponseBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginResponseDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginResponseHTTPExpires",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginResponseHTTPLastModified",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginResponseHeaderReceiveDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginSSLProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTCPHandshakeDurationMs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ParentRayID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestHeaders",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResponseHeaders",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecurityAction",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecurityActions",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecurityRuleDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecurityRuleID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecurityRuleIDs",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SecuritySources",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SmartRouteColoID",
+                      "type": "int"
+                    },
+                    {
+                      "name": "UpperTierColoID",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WAFAttackScore",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WAFRCEAttackScore",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WAFSQLiAttackScore",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WAFXSSAttackScore",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WorkerCPUTime",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WorkerScriptName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "WorkerStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "WorkerSubrequest",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "WorkerSubrequestCount",
+                      "type": "int"
+                    },
+                    {
+                      "name": "WorkerWallTimeUs",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ZoneName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientIPASN",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientIPASNDescription",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientIPCountry",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LastKnownGoodColoCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CSPDirective",
+                      "type": "string"
+                    },
+                    {
+                      "name": "PageURL",
+                      "type": "string"
+                    },
+                    {
+                      "name": "URLContainsCDNCGIPath",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "URLHost",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Application",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientMatchedIpFirewall",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientProto",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientTcpRtt",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ClientTlsClientHelloServerName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientTlsProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClientTlsStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ConnectTimestamp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DisconnectTimestamp",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IpFirewall",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "OriginBytes",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginProto",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTcpRtt",
+                      "type": "int"
+                    },
+                    {
+                      "name": "OriginTlsFingerprint",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTlsMode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTlsProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "OriginTlsStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ProxyProtocol",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Status",
+                      "type": "int"
+                    },
+                    {
+                      "name": "EventDetails",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "IP",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CloudflareDefinition",
+          "title": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": " The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/)for more information.",
+          "graphQueriesTableName": "CloudflareV2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Cloudflare logs",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Cloudflare Logs",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Create a storage account and a container",
+                "description": "Before setting up logpush in Cloudflare, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to know more about Container and Blob. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
+              },
+              {
+                "name": "Generate a Blob SAS URL",
+                "description": "Create and Write permissions are required. Refer the [documentation](https://learn.microsoft.com/en-us/azure/ai-services/translator/document-translation/how-to-guides/create-sas-tokens?tabs=Containers) to know more about Blob SAS token and url."
+              },
+              {
+                "name": "Collecting logs from Cloudflare to your Blob container",
+                "description": "Follow the steps in the [documentation](https://developers.cloudflare.com/logs/get-started/enable-destinations/azure/) for collecting logs from Cloudflare to your Blob container."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect Cloudflare Logs to Microsoft Sentinel",
+              "description": "To enable Cloudflare logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+              "instructions": [
+                {
+                  "parameters": {
+                    "tenantId": "[subscription().tenantId]",
+                    "name": "principalId",
+                    "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                  },
+                  "type": "ServicePrincipalIDTextBox_test"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's URL you want to collect data from",
+                    "type": "text",
+                    "name": "blobContainerUri",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's storage account resource group name",
+                    "type": "text",
+                    "name": "StorageAccountResourceGroupName",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's storage account location",
+                    "type": "text",
+                    "name": "StorageAccountLocation",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The Blob container's storage account subscription id",
+                    "type": "text",
+                    "name": "StorageAccountSubscription",
+                    "validations": {
+                      "required": true
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "The event grid topic name of the blob container's storage account if exist. else keep empty.",
+                    "description": "The data flow using event grid to send 'blob-created event' notifications. There could be only one event grid topic for each storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, please provide it's name. Else, keep the text box empty.",
+                    "type": "text",
+                    "name": "EGSystemTopicName",
+                    "validations": {
+                      "required": false
+                    }
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ]
+            }
+          ],
+          "isConnectivityCriteriasMatchSome": false
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Cloudflare",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Cloudflare",
+          "email": "support@cloudflare.com",
+          "tier": "Partner",
+          "link": "https://support.cloudflare.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "principalId": {
+              "defaultValue": "principalId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "blobContainerUri": {
+              "defaultValue": "blobContainerUri",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "StorageAccountResourceGroupName": {
+              "defaultValue": "StorageAccountResourceGroupName",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "StorageAccountLocation": {
+              "defaultValue": "StorageAccountLocation",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "StorageAccountSubscription": {
+              "defaultValue": "StorageAccountSubscription",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "EGSystemTopicName": {
+              "defaultValue": "",
+              "type": "securestring"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]",
+            "connectorName": "sentinel-connector",
+            "blobContainerUriPart": "[concat('.blob.core', '.windows.net')]",
+            "storageAccountName": "[[split(split(parameters('blobContainerUri'), 'https://')[1], variables('blobContainerUriPart'))[0]]",
+            "blobContainerName": "[[split(split(parameters('blobContainerUri'), concat(variables('blobContainerUriPart'), '/'))[1], '/')[0]]",
+            "queueName": "[[concat(variables('connectorName'), '-notification')]",
+            "dlqName": "[[concat(variables('connectorName'), '-dlq')]",
+            "storageAccountId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "notificationQueueResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]",
+            "dlqResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('dlqName'))]",
+            "EGSystemTopicDefaultName": "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('innerWorkspace'))]",
+            "EGSystemTopicName": "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]",
+            "EGTopicResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics', variables('EGSystemTopicName'))]",
+            "EgSubscriptionName": "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]",
+            "EgSubscriptionResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics/eventSubscriptions', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
+            "storageBlobContributorRoleId": "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+            "storageQueueContributorRoleId": "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+            "blobRaGuid": "[[guid(variables('storageAccountName'), variables('blobContainerName'))]",
+            "notificationQueueRaGuid": "[[guid(variables('storageAccountName'), variables('queueName'))]",
+            "dlqRaGuid": "[[guid(variables('storageAccountName'), variables('dlqName'))]",
+            "blobRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments', variables('storageAccountName'), 'default', variables('blobContainerName'), 'Microsoft.Authorization', variables('blobRaGuid'))]",
+            "notificationQueueRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('queueName'), 'Microsoft.Authorization', variables('notificationQueueRaGuid'))]",
+            "dlqRoleAssignmentResourceId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments', variables('storageAccountName'), 'default', variables('dlqName'), 'Microsoft.Authorization', variables('dlqRaGuid'))]",
+            "nestedDeploymentName": "CreateDataFlowResources",
+            "nestedDeploymentId": "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.Resources/deployments', variables('nestedDeploymentName'))]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Cloudflare",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cloudflare",
+                  "email": "support@cloudflare.com",
+                  "tier": "Partner",
+                  "link": "https://support.cloudflare.com"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2021-04-01",
+              "name": "[[variables('nestedDeploymentName')]",
+              "properties": {
+                "mode": "Incremental",
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "resources": [
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+                      "apiVersion": "2021-04-01",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('queueName'))]",
+                      "dependsOn": [],
+                      "properties": {}
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+                      "apiVersion": "2021-04-01",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'))]",
+                      "dependsOn": [],
+                      "properties": {}
+                    },
+                    {
+                      "type": "Microsoft.EventGrid/systemTopics",
+                      "apiVersion": "2022-06-15",
+                      "name": "[[variables('EGSystemTopicName')]",
+                      "location": "[[parameters('StorageAccountLocation')]",
+                      "properties": {
+                        "source": "[[variables('storageAccountId')]",
+                        "topicType": "microsoft.storage.storageaccounts"
+                      },
+                      "condition": "[[empty(parameters('EGSystemTopicName'))]"
+                    },
+                    {
+                      "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
+                      "apiVersion": "2023-12-15-preview",
+                      "name": "[[format('{0}/{1}', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
+                      "dependsOn": [
+                        "[[format('Microsoft.EventGrid/systemTopics/{0}', variables('EGSystemTopicName'))]"
+                      ],
+                      "properties": {
+                        "destination": {
+                          "endpointType": "StorageQueue",
+                          "properties": {
+                            "queueName": "[[variables('queueName')]",
+                            "resourceId": "[[variables('storageAccountId')]"
+                          }
+                        },
+                        "filter": {
+                          "includedEventTypes": [
+                            "Microsoft.Storage.BlobCreated"
+                          ],
+                          "subjectBeginsWith": "[[format('{0}/{1}', '/blobServices/default/containers', variables('blobContainerName'))]"
+                        }
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments",
+                      "apiVersion": "2018-01-01-preview",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('blobContainerName'), '/Microsoft.Authorization/', variables('blobRaGuid'))]",
+                      "properties": {
+                        "roleDefinitionId": "[[variables('storageBlobContributorRoleId')]",
+                        "principalId": "[[parameters('principalId')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments",
+                      "apiVersion": "2018-01-01-preview",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('queueName'), '/Microsoft.Authorization/',  variables('notificationQueueRaGuid'))]",
+                      "dependsOn": [
+                        "[[variables('notificationQueueResourceId')]"
+                      ],
+                      "properties": {
+                        "roleDefinitionId": "[[variables('storageQueueContributorRoleId')]",
+                        "principalId": "[[parameters('principalId')]"
+                      }
+                    },
+                    {
+                      "type": "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments",
+                      "apiVersion": "2018-01-01-preview",
+                      "name": "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'), '/Microsoft.Authorization/', variables('dlqRaGuid'))]",
+                      "dependsOn": [
+                        "[[variables('dlqResourceId')]"
+                      ],
+                      "properties": {
+                        "roleDefinitionId": "[[variables('storageQueueContributorRoleId')]",
+                        "principalId": "[[parameters('principalId')]"
+                      }
+                    }
+                  ]
+                }
+              },
+              "subscriptionId": "[[parameters('StorageAccountSubscription')]",
+              "resourceGroup": "[[parameters('StorageAccountResourceGroupName')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CloudflareUsingBlob', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "StorageAccountBlobContainer",
+              "properties": {
+                "connectorDefinitionName": "CloudflareDefinition",
+                "dataType": "CloudflareV2_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-Cloudflare"
+                },
+                "auth": {
+                  "type": "ServicePrincipal"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ],
+                  "format": "json",
+                  "isGzipCompressed": true
+                },
+                "request": {
+                  "QueueUri": "[[uri(concat('https://', variables('storageAccountName'), '.queue.core', '.windows.net', '/'), variables('queueName'))]",
+                  "DlqUri": "[[uri(concat('https://', variables('storageAccountName'), '.queue.core', '.windows.net', '/'), variables('dlqName'))]"
+                }
+              },
+              "dependsOn": [
+                "[[variables('nestedDeploymentId')]"
+              ]
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Cloudflare CCF",
+        "publisherDisplayName": "Cloudflare",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cloudflare%20CCF/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.cloudflare.com/\">Cloudflare</a> solution provides the capability to ingest <a href=\"https://developers.cloudflare.com/logs/\">Cloudflare logs</a> into Microsoft Sentinel using the Codeless Connector Framework (CCF) and Azure Blob Storage. Refer to <a href=\"https://developers.cloudflare.com/logs/about/\">Cloudflare documentation</a> for more information.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a> (for reference, legacy support)</p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\"height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cloudflare CCF",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Cloudflare",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Cloudflare",
+          "email": "support@cloudflare.com",
+          "tier": "Partner",
+          "link": "https://support.cloudflare.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-09-30",
+        "providers": [
+          "Cloudflare"
+        ],
+        "categories": {
+          "domains": [
+            "Networking",
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -13,9 +13,9 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 ### Prerequisites
 
-1. Login to Cisco Umbrella dashboard and navigating to Admin-->API Keys. Create New API Key if not already created and select the appropriate "Key Scope" with Read/Write permission. Store "Api Key" and "Key Secret" to a safe place. This "Api Key" is a "Client Id" and "Key Secret" is a "Secret" used for this Playbook.
+1. Login to Cisco Cloud Security dashboard and navigating to Admin-->API Keys. Create New API Key if not already created and select the appropriate "Key Scope" with Read/Write permission. Store "Api Key" and "Key Secret" to a safe place. This "Api Key" is a "Client Id" and "Key Secret" is a "Secret" used for this Playbook.
 2. Store the "Api Key" and "Key Secret" from previous step to Key vault Secrets. 
-3. To obtain the Organization ID and Policy ID, press F12 or right-click on the page and select 'Inspect' in your browser on the Cisco Umbrella dashboard page. Then, navigate to the 'Policies' section and click on the 'All Policies' tab. Now open the 'Network' tab and search with 'policy'. Open the 'Response' tab of the request to get the Policy ID and Organization ID as shown in the screenshot below.
+3. To obtain the Organization ID and Policy ID, press F12 or right-click on the page and select 'Inspect' in your browser on the Cisco Cloud Security dashboard page. Then, navigate to the 'Policies' section and click on the 'All Policies' tab. Now open the 'Network' tab and search with 'policy'. Open the 'Response' tab of the request to get the Policy ID and Organization ID as shown in the screenshot below.
 
     > **NOTE:** The **ID** and **OrganizationID** values in the screenshot below are for illustration purposes only and are not intended for actual use.
 
@@ -26,12 +26,12 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here.
-    * Cisco Umbrella Organization Id: Organization id in Cisco Umbrella.
-    * Cisco Umbrella Policy Id: ID of the DNS or web policy to act upon.
+    * Cisco Cloud Security Organization Id: Organization id in Cisco Cloud Security.
+    * Cisco Cloud Security Policy Id: ID of the DNS or web policy to act upon.
     * Keyvault name: Name of the key vault where secrets are stored.
-    * Umbrella API Client Id Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "API Key" value is stored.
-    * Umbrella API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Umbrella "Key Secret" value is stored.
-    * Host End Point: Default is "api.umbrella.com" and is used for any API call to Cisco Umbrella REST API's.
+    * Cloud Security API Client Id Key Name: Name of the Secrets field from Keyvault where Cisco Cloud Security "API Key" value is stored.
+    * Cloud Security API Secret Key Name: Name of the Secrets field from Keyvault where Cisco Cloud Security "Key Secret" value is stored.
+    * Host End Point: Default is "api.umbrella.com" and is used for any API call to Cisco Cloud Security REST API's.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooksk%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoUmbrella%2FPlaybooks%2FCiscoUmbrellaPlaybooks%2FCiscoUmbrella-AssignPolicyToIdentity%2Fazuredeploy.json)
 
@@ -46,11 +46,11 @@ Once deployment is complete, authorize each connection.
 3. Click Authorize
 4. Sign in
 5. Click Save
-6. Repeat steps for Cisco Umbrella Network Device Management connector API Connection. Provide your key and the secret for authorizing.
+6. Repeat steps for Cisco Cloud Security Network Device Management connector API Connection. Provide your key and the secret for authorizing.
 
 #### b. Configurations in Sentinel
 
-1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *originId* custom entity. OriginId is an Umbrella-wide unique identifier for this traffic source (origin). It can be obtained from the corresponding field in Cisco Umbrella logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
+1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *originId* custom entity. OriginId is an Umbrella-wide unique identifier for this traffic source (origin). It can be obtained from the corresponding field in Cisco Cloud Security logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.
 2. Configure the automation rules to trigger the playbook.
 
 #### c. Assign Playbook Microsoft Sentinel Responder Role
@@ -76,5 +76,5 @@ Once deployment is complete, authorize each connection.
 8. Click Create
 
 #  References
- - [Cisco Umbrella API Documentation](https://developer.cisco.com/docs/cloud-security/authentication/#authentication)
+ - [Cisco Cloud Security API Documentation](https://developer.cisco.com/docs/cloud-security/authentication/#authentication)
  - [Rest API Request And Response Sample](https://developer.cisco.com/docs/cloud-security/policies/#add-identity-to-policy)
