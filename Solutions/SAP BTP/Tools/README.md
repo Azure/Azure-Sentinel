@@ -6,7 +6,9 @@ This directory contains PowerShell script blue prints to handle Microsoft Sentin
 
 - `provision-audit-to-subaccount.ps1`: Script to provision auditlog management service in SAP BTP subaccounts. It reads subaccount details from a CSV file and provisions the service using the CloudFoundry CLI.
 - `connect-sentinel-to-btp.ps1`: Main script to connect Microsoft Sentinel Solution for SAP BTP to SAP BTP subaccounts. It reads subaccount details from a CSV file, reads the SAP BTP service keys, and creates connections in the Sentinel SAP BTP data connector.
-- `BtpHelpers.ps1`: Helper functions used by the main script for tasks such as logging, authentication, and API interactions.
+- `rotate-service-keys.ps1`: Script to rotate SAP BTP service keys and update the corresponding authentication objects in Microsoft Sentinel for SAP BTP data connector connections.
+- `export-subaccounts.ps1`: Script to enumerate SAP BTP subaccounts and export them to a CSV file for use with other scripts.
+- `BtpHelpers.ps1`: Helper functions used by the main scripts for tasks such as logging, authentication, and API interactions.
 
 ## Getting Started
 
@@ -45,6 +47,10 @@ This directory contains PowerShell script blue prints to handle Microsoft Sentin
      $securePassword = Read-Host "Enter CF Password" -AsSecureString
      .\connect-sentinel-to-btp.ps1 -SubscriptionId "<azure-sentinel-sub-id>" -ResourceGroupName "<rg-name-sentinel-workspace>" -WorkspaceName "<sentinel-workspace-name>" -CfUsername "<cf-username>" -CfPassword $securePassword
      ```
+
+## Lifecycle Management
+
+It is recommend to rotate service keys for security best practices. Consider Azure Key Vault integration for managing secrets. Expiry events can be acted upon from Azure Logic Apps or Azure Functions to trigger the rotation process. See "[Rotate the BTP client secret](https://learn.microsoft.com/azure/sentinel/sap/deploy-sap-btp-solution#rotate-the-btp-client-secret)" section on Microsoft Learn for more details.
 
 ## Contributing
 

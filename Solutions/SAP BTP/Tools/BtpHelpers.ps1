@@ -79,25 +79,6 @@ function Get-AzureAccessToken {
     }
 }
 
-# Function to convert password to SecureString if needed
-function ConvertTo-SecurePassword {
-    param([object]$Password)
-    
-    if ($null -eq $Password) {
-        return $null
-    }
-    
-    if ($Password -is [SecureString]) {
-        return $Password
-    }
-    
-    if ($Password -is [string]) {
-        return ConvertTo-SecureString -String $Password -AsPlainText -Force
-    }
-    
-    return $null
-}
-
 # Function to validate and prompt for CF credentials
 function Get-CfCredentials {
     param(
