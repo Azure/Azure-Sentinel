@@ -330,7 +330,7 @@ function Get-AnalysisDefenderData {
 
     $totalControlsTemp = 0
     $passedControlsTemp = 0
-    $apiVersion = "2025-07-01"
+    $apiVersion = "2025-02-01"
     foreach ($table in $defenderTables) {
         $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/tables/${table}?api-version=$apiVersion"
         $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $header
@@ -364,42 +364,20 @@ function Get-AnalyticsAnalysis {
     $passedControlsTemp = 0
 
     ## FUSION ENGINE
-    $apiVersion = "2025-09-01"
-    $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/providers/Microsoft.SecurityInsights/alertRules?api-version=$apiVersion"
+    $apiVersion = "2025-06-01"
+    $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/providers/Microsoft.SecurityInsights/alertRules/BuiltInFusion?api-version=$apiVersion"
 
     try {
         $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $header -ErrorAction Stop
-
-        # Find Fusion rules by checking the 'kind' property
-        $fusionRules = $response.value | Where-Object { $_.kind -eq "Fusion" }
-
         $totalControlsTemp++
 
-        if ($fusionRules) {
-            $fusionEnabled = $false
-            foreach ($rule in $fusionRules) {
-                if ($rule.properties.enabled -eq $true) {
-                    $fusionEnabled = $true
-                    break
-                }
-            }
-
-            if ($fusionEnabled) {
-                Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " Fusion rules will be automatically disabled after Microsoft Sentinel is onboarded in Defender"
-                if ($reportRequested) {
-                    $HtmlBuilder.AddWarningMessage("Fusion rules will be automatically disabled after Microsoft Sentinel is onboarded in Defender")
-                }
-            }
-            else {
-                Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The Fusion engine is not enabled"
-                $passedControlsTemp++
-                if ($reportRequested) {
-                    $HtmlBuilder.AddOkMessage("The Fusion engine is not enabled")
-                }
+        if ($response.properties.enabled) {
+            Write-Host "[WARNING]" -ForegroundColor DarkYellow -NoNewline; Write-Host " Fusion rules will be automatically disabled after Microsoft Sentinel is onboarded in Defender"
+            if ($reportRequested) {
+                $HtmlBuilder.AddWarningMessage("Fusion rules will be automatically disabled after Microsoft Sentinel is onboarded in Defender")
             }
         }
         else {
-            # No Fusion rules found - this is OK
             Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The Fusion engine is not enabled"
             $passedControlsTemp++
             if ($reportRequested) {
@@ -408,17 +386,17 @@ function Get-AnalyticsAnalysis {
         }
     }
     catch {
-        # Error accessing alert rules - assume Fusion is not enabled
+        # Fusion rule doesn't exist (404 NotFound) - this is OK
         $totalControlsTemp++
         $passedControlsTemp++
-        Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The Fusion engine is not enabled (could not access alert rules)"
+        Write-Host "[OK]" -ForegroundColor Green -NoNewline; Write-Host " The Fusion engine is not enabled"
         if ($reportRequested) {
-            $HtmlBuilder.AddOkMessage("The Fusion engine is not enabled (could not access alert rules)")
+            $HtmlBuilder.AddOkMessage("The Fusion engine is not enabled")
         }
     }
 
     ## ALERT VISIBILITY
-    $apiVersion = "2025-09-01"
+    $apiVersion = "2025-06-01"
     $uri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$workspaceName/providers/Microsoft.SecurityInsights/alertRules?api-version=$apiVersion"
     $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $header
     foreach ($rule in $response.value) {
@@ -728,6 +706,15 @@ function Add-IntroToReport {
 
 $reportRequested = $PSBoundParameters.ContainsKey('FileName')
 
+# If no filename provided, generate default with date suffix
+if ([string]::IsNullOrWhiteSpace($FileName)) {
+    $dateStamp = Get-Date -Format "yyyy-MM-dd"
+    $FileName = "sentinel-report_$dateStamp"
+    $reportRequested = $true
+    Write-Host "No filename specified. Will generate: $FileName.html" -ForegroundColor Cyan
+    Write-Host ""
+}
+
 Write-Host "DEFENDER ADOPTION HELPER (Linux-Compatible)" -ForegroundColor Green
 Write-Host "This script assists with Defender and Sentinel adoption by checking table retention, analytics rules, and automation rules of your environments."  -ForegroundColor Green
 Write-Host ""
@@ -970,6 +957,7 @@ foreach ($env in $environments) {
     }
 
     Show-HeaderInShell -Message "DEFENDER DATA ANALYSIS"
+    $apiVersion = "2025-02-01"
     $totalControlsTemp, $passedControlsTemp = Get-AnalysisDefenderData -defenderTables $defenderTables -HtmlBuilder $htmlBuilder
     $totalControls = $totalControls + $totalControlsTemp
     $totalPassedControls = $totalPassedControls + $passedControlsTemp
