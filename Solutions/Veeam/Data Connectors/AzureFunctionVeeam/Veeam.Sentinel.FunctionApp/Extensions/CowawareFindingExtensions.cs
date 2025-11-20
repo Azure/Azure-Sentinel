@@ -5,7 +5,7 @@ namespace Sentinel.Extensions
 {
     public static class CovewareFindingExtensions
     {
-        public static CovewareFindingDTO ToDTO(this CovewareFinding finding, string covewareHostName)
+        public static CovewareFindingDTO ToDTO(this CovewareFinding finding, string covewareHostName, string eventId)
         {
             return new CovewareFindingDTO
             {
@@ -25,7 +25,8 @@ namespace Sentinel.Extensions
                 MachineId = finding.MachineId,
                 RiskLevel = finding.RiskLevel,
                 ScanTime = finding.ScanTime,
-                Username = finding.Username
+                Username = finding.Username,
+                EventId = eventId
             };
         }
     }

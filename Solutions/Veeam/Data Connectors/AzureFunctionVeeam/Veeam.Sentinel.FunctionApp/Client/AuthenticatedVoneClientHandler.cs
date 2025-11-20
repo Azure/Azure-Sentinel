@@ -52,7 +52,7 @@ namespace Sentinel.Client
                 RefreshToken = "string"
             };
 
-            VoneTokenModel response = await _loginApi.CreateTokenAsync(spec);
+            var response = await _loginApi.CreateTokenAsync(spec);
             _voneConfig.AccessToken = response.AccessToken;
 
             var tokens = new Tokens(response.AccessToken, response.RefreshToken);
@@ -64,7 +64,7 @@ namespace Sentinel.Client
         protected override async Task RefreshTokenInternalAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation($"Try to update tokens using refresh_token for \"{_clientId}\"");
-            Tokens oldTokens = await _secretsManager.GetTokensAsync(_clientId);
+            var oldTokens = await _secretsManager.GetTokensAsync(_clientId);
 
             var spec = new TokenLoginSpec
             {
