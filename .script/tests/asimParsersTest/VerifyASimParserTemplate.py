@@ -1,7 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 import requests
 import yaml
 import re
-import os
 import subprocess
 import csv
 from datetime import datetime
@@ -125,6 +134,10 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     if match:
         event_product = match.group(1)
         results.append((event_product, '"EventProduct" field is mapped in parser', 'Pass'))
+    # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_product = 'NativeTable'
+        results.append((event_product, '"EventProduct" field is not required since this is a native table parser. Static value will be used for "EventProduct".', 'Pass'))
     # If 'EventProduct' was not found in the KQL query, add to results
     else:
         results.append((f'{RED}EventProduct{RESET}', f'{RED}"EventProduct" field not mapped in parser. Please map it in parser query.{RESET}', f'{RED}Fail{RESET}'))
@@ -136,6 +149,10 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     if match:
         event_vendor = match.group(1)
         results.append((event_vendor, '"EventVendor" field is mapped in parser', 'Pass'))
+    # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_vendor = 'Microsoft'
+        results.append((event_vendor, '"EventVendor" field is not required since this is a native table parser. Static value will be used for "EventVendor".', 'Pass'))
     # If 'EventVendor' was not found in the KQL query, add to results
     else:
         results.append((f'{RED}EventVendor{RESET}', f'{RED}"EventVendor" field not mapped in parser. Please map it in parser query.{RESET}', f'{RED}Fail{RESET}'))

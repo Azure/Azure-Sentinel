@@ -37,6 +37,42 @@
             "value": {
               "durationMs": 86400000
             }
+          },
+          {
+            "id": "264cba08-bf9e-44d6-9473-5f03e9aa9375",
+            "version": "KqlParameterItem/1.0",
+            "name": "Illumio_PCE",
+            "label": "Illumio PCE",
+            "type": 2,
+            "description": "Select the Illumio PCE from which you want to see events for",
+            "isRequired": true,
+            "isGlobal": true,
+            "query": "Illumio_Auditable_Events_CL\n| project pce_fqdn , table = \"Illumio_Auditable_Events_CL\"\n| union ( IllumioSyslogAuditEvents    \n            | project pce_fqdn , table = \"IllumioSyslogAuditEvents\"\n        )\n| union (\n      print pce_fqdn = 'No PCE', table = 'Illumio_Auditable_Events_CL'\n)\n| distinct table, pce_fqdn ",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "IllumioSyslogAuditEvents"
+          },
+          {
+            "id": "1b35142b-4e83-4645-83d3-29edd556ee3d",
+            "version": "KqlParameterItem/1.0",
+            "name": "TableToSearchFrom",
+            "type": 1,
+            "description": "use Illumio_PCE to define what table to fetch events from",
+            "isGlobal": true,
+            "isHiddenWhenLocked": true,
+            "criteriaData": [
+              {
+                "criteriaContext": {
+                  "operator": "Default",
+                  "resultValType": "static",
+                  "resultVal": "{Illumio_PCE:value}"
+                }
+              }
+            ]
           }
         ],
         "style": "above",
@@ -55,7 +91,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Illumio_Auditable_Events_CL\n| summarize count()",
+              "query": "let table_to_search_from = '{TableToSearchFrom}';\ntable(table_to_search_from)\n| summarize dcount(href)",
               "size": 4,
               "title": "Audit Events",
               "noDataMessage": "0",
@@ -77,7 +113,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "table('Illumio_Auditable_Events_CL')\n| where event_type has 'tampering'\n| summarize count()",
+              "query": "let table_to_search_from = '{TableToSearchFrom}';\ntable(table_to_search_from)\n| where event_type has 'tampering'\n| summarize dcount(href)\n",
               "size": 4,
               "title": "Tampering Events",
               "timeContextFromParameter": "Time",
@@ -96,27 +132,6 @@
             "styleSettings": {
               "maxWidth": "30"
             }
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "table('Illumio_Auditable_Events_CL')\n| where event_type has 'port_scan'\n| summarize count()",
-              "size": 4,
-              "title": "Port Scan Events",
-              "timeContextFromParameter": "Time",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "card",
-              "textSettings": {
-                "style": "bignumber"
-              }
-            },
-            "customWidth": "30",
-            "name": "Port Scan Events",
-            "styleSettings": {
-              "maxWidth": "30"
-            }
           }
         ]
       },
@@ -126,7 +141,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Illumio_Auditable_Events_CL\n| summarize distinct_count = dcount(href) by event_type\n| order by distinct_count \n| top 10 by distinct_count",
+        "query": "let table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| summarize distinct_count = dcount(href) by event_type\n| order by distinct_count \n| top 10 by distinct_count",
         "size": 0,
         "title": "Top Auditable events",
         "timeContextFromParameter": "Time",
@@ -147,7 +162,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Illumio_Auditable_Events_CL\n| summarize arg_max(TimeGenerated, *) by href\n| where event_type == 'sec_policy.create' \n| mv-expand resource_change = resource_changes\n| project TimeGenerated,\n            workloads_affected_after_change = resource_change.changes.workloads_affected.after,\n           policy_version = resource_change.resource.sec_policy.version,\n           commit_message = resource_change.resource.sec_policy.commit_message,\n           modified_objects = resource_change.resource.sec_policy.modified_objects,\n           change_type = resource_change.change_type\n",
+              "query": "let table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| summarize arg_max(TimeGenerated, *) by href\n| where event_type == 'sec_policy.create' \n| mv-expand resource_change = resource_changes\n| project TimeGenerated,\n            workloads_affected_after_change = resource_change.changes.workloads_affected.after,\n           policy_version = resource_change.resource.sec_policy.version,\n           commit_message = resource_change.resource.sec_policy.commit_message,\n           modified_objects = resource_change.resource.sec_policy.modified_objects,\n           change_type = resource_change.change_type\n",
               "size": 0,
               "title": "Workloads affected by policy changes",
               "noDataMessage": "No workloads were affected by policy changes",
@@ -175,7 +190,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Illumio_Auditable_Events_CL\n| where resource_changes != '[]' and isnotempty(resource_changes) // ensure resource changes are not empty\n| summarize arg_max(TimeGenerated, *) by href\n| mv-expand  parse_json(resource_changes)\n| project resource_type = tostring(bag_keys(resource_changes.resource)[0])\n| summarize Count=count() by resource_type",
+              "query": "let table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| where resource_changes != '[]' and isnotempty(resource_changes) // ensure resource changes are not empty\n| summarize arg_max(TimeGenerated, *) by href\n| mv-expand  parse_json(resource_changes)\n| project resource_type = tostring(bag_keys(resource_changes.resource)[0])\n| summarize Count=count() by resource_type",
               "size": 0,
               "title": "Changes by Resource Type",
               "noDataMessage": "No changes by resource type",
@@ -207,7 +222,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Illumio_Auditable_Events_CL\n| where resource_changes != '[]' and isnotempty(resource_changes) and not(event_type matches regex '^user.*') and (event_type has '.create' or event_type has '.update' or event_type has '.delete') and (created_by !has \"agent\" and created_by !has \"ven\" and created_by !has \"container\")\n| extend User = tostring(parse_json(created_by)['user']['username'])\n| summarize Count = count() by User",
+              "query": "let table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| where resource_changes != '[]' and isnotempty(resource_changes) and not(event_type matches regex '^user.*') and (event_type has '.create' or event_type has '.update' or event_type has '.delete') and (created_by !has \"agent\" and created_by !has \"ven\" and created_by !has \"container\")\n| extend User = tostring(parse_json(created_by)['user']['username'])\n| summarize Count = count() by User",
               "size": 0,
               "title": "Changes by User",
               "timeContextFromParameter": "Time",
@@ -224,7 +239,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "Illumio_Auditable_Events_CL\n| where created_by has \"agent\" or created_by has \"ven\"\n| project user = tostring(parse_json(created_by)['agent']['hostname'])\n| summarize count() by user",
+              "query": "let table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| where created_by has \"agent\" or created_by has \"ven\"\n| project user = tostring(parse_json(created_by)['agent']['hostname'])\n| summarize count() by user",
               "size": 0,
               "title": "Events generated by agents",
               "noDataMessage": "Agents have not generated any events",
@@ -248,7 +263,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Illumio_Auditable_Events_CL\n| summarize arg_max(TimeGenerated, *) by href // try to filter what event_type to prioritize in bar chart\n| make-series events = count() default = 0 on TimeGenerated from {Time:start} to {Time:end} step 1h by event_type //from ago(1d) to now() step 1h by event_type ",
+        "query": "let table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| summarize arg_max(TimeGenerated, *) by href // try to filter what event_type to prioritize in bar chart\n| make-series events = count() default = 0 on TimeGenerated from {Time:start} to {Time:end} step 1h by event_type //from ago(1d) to now() step 1h by event_type ",
         "size": 0,
         "title": "PCE events breakdown - every hour",
         "timeContextFromParameter": "Time",
@@ -319,7 +334,6 @@
             "quote": "'",
             "delimiter": ",",
             "typeSettings": {
-              "additionalResourceOptions": [],
               "showDefault": false
             },
             "jsonData": "[\n    { \"value\":\"user.logout\", \"label\":\"User logout\" },\n    { \"value\":\"user.sign_in\", \"label\":\"User signin\" },\n    { \"value\":\"user.sign_out\", \"label\":\"User signout\" },\n    { \"value\":\"user.login\", \"label\":\"User login\"},\n    { \"value\":\"user.pce_session_terminated\", \"label\":\"User session terminated\"},\n    { \"value\":\"request.authentication_failed\", \"label\":\"Authentication failed\"},\n    { \"value\":\"user.authenticate\", \"label\":\"User Authentication\"},\n    { \"value\":\"user.create_session\", \"label\":\"User create session\"},\n    { \"value\":\"None\", \"label\":\"None\", \"selected\": true}\n]",
@@ -393,7 +407,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let included_event_types = iif(\"*\" in ({EventType}), dynamic(['user.login','user.logout', 'user.sign_in', 'user.sign_out', 'user.authenticate','user.create_session','user.pce_session_terminated']), dynamic([{EventType}]) );\nIllumio_Auditable_Events_CL\n| where event_type in (included_event_types)\n| where  \"*\" in ({Status}) or status in ({Status}) and \"*\" in ({Severity}) or severity in ({Severity})\n| where not(event_type in ({ExcludeEventType}))\n| project TimeGenerated, pce_fqdn, event_type, status, notification_type = parse_json(notifications)[0].notification_type,severity, created_by_username = iif(created_by == '{\"system\":{}}', parse_json(notifications)[0].info.user.username, parse_json(created_by).user.username)",
+        "query": "let included_event_types = iif(\"*\" in ({EventType}), dynamic(['user.login','user.logout', 'user.sign_in', 'user.sign_out', 'user.authenticate','user.create_session','user.pce_session_terminated']), dynamic([{EventType}]) );\nlet table_to_search_from = '{TableToSearchFrom}';\n\ntable(table_to_search_from)\n| where event_type in (included_event_types)\n| where  \"*\" in ({Status}) or status in ({Status}) and \"*\" in ({Severity}) or severity in ({Severity})\n| where not(event_type in ({ExcludeEventType}))\n| project TimeGenerated, pce_fqdn, event_type, status, notification_type = parse_json(notifications)[0].notification_type,severity, created_by_username = iif(created_by == '{\"system\":{}}', parse_json(notifications)[0].info.user.username, parse_json(created_by).user.username)",
         "size": 0,
         "title": "PCE Authentication Events",
         "timeContextFromParameter": "Time",

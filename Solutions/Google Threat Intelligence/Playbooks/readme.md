@@ -18,6 +18,10 @@ Google Threat Intelligence solution provides the following playbooks.
   
 * **Incident trigger - GoogleThreatIntelligence-IOCEnrichmentIncident**: Iterate over all entities associated with the incident, adding enrichment comments to the incident.
 
+### Google Threat Intelligence Threat Intelligence Ingestion
+
+* **Recurrence trigger**: Add Google Threat Intelligence in a specific category to the Threat Intelligence dashboard/tables every x minutes.
+
 ## Deployment
 
 ### Custom Connector
@@ -30,8 +34,8 @@ A GTI account: Follow the steps on https://developers.virustotal.com/v3.0/refere
 
 #### Deploy
 
-<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FCustomConnectors%2FGTICustomConnector%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
-<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FCustomConnectors%2FGTICustomConnector%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FCustomConnector%2FGTICustomConnector%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FCustomConnector%2FGTICustomConnector%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 Once you have deployed your Google Threat Intelligence Custom Connector, you can configure your API Connection with the API key previously mentioned.
 

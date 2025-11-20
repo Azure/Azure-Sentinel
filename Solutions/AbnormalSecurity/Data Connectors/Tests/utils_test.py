@@ -11,6 +11,7 @@ from SentinelFunctionsOrchestrator.utils import (
 )
 from pydantic import ValidationError
 from uuid import uuid4
+import random 
 
 
 class TestTryStrToDateTime(unittest.TestCase):
@@ -27,24 +28,65 @@ class TestTryStrToDateTime(unittest.TestCase):
         expected = datetime.strptime(time_str, TIME_FORMAT_WITHMS)
         result = try_str_to_datetime(time_str)
         self.assertEqual(result, expected)
+    
+    def test_format_with_ns(self):
+        # Test case for format with milliseconds
+        time_str_ns = "2024-10-01T12:34:56.123456789Z"
+        time_str_ms = "2024-10-01T12:34:56.123456Z"
+        expected = datetime.strptime(time_str_ms, TIME_FORMAT_WITHMS)
+        result = try_str_to_datetime(time_str_ns)
+        self.assertEqual(result, expected)
+
+    def test_format_with_ns_2(self):
+        # Test case for format with milliseconds
+        time_str_ns = "2024-10-01T12:34:56.12345678913Z"
+        result = try_str_to_datetime(time_str_ns)
+        self.assertIsNotNone(result)
+    
+    def test_format_with_ns_3(self):
+        # Test case for format with milliseconds
+        f = ""
+        for i in range(100):
+            f +=  random.choice("1234567890")
+            time_str_ns = f"2024-10-01T12:34:56.{f}Z"
+            result = try_str_to_datetime(time_str_ns)
+            self.assertIsNotNone(result)
 
     def test_invalid_format(self):
         # Test case for invalid format
         time_str = "2024-10-01 12:34:56"
-        with self.assertRaises(ValueError):
-            try_str_to_datetime(time_str)
+        # This is now a valid ISO format for fromisoformat, so check correct parsing
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
 
     def test_incomplete_date(self):
         # Test case for incomplete date
         time_str = "2024-10-01T12:34"
-        with self.assertRaises(ValueError):
-            try_str_to_datetime(time_str)
+        # This is now a valid ISO format for fromisoformat, so check correct parsing
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
 
     def test_empty_string(self):
         # Test case for empty string
         time_str = ""
         with self.assertRaises(ValueError):
             try_str_to_datetime(time_str)
+
+    def test_fromisoformat(self):
+        # Test case for ISO format without Z (fromisoformat)
+        time_str = "2024-10-01T12:34:56.123456"
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
+
+    def test_fromisoformat_no_fraction(self):
+        # Test case for ISO format without fractional seconds
+        time_str = "2024-10-01T12:34:56"
+        expected = datetime.fromisoformat(time_str)
+        result = try_str_to_datetime(time_str)
+        self.assertEqual(result, expected)
 
 
 class TestTimeRange(unittest.TestCase):

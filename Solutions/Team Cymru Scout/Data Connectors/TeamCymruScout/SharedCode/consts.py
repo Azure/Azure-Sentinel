@@ -20,13 +20,14 @@ API_TYPE = os.environ.get("APIType")
 AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
 AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
 AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
-WORKSPACE_ID = os.environ.get("WorkspaceID")
-WORKSPACE_KEY = os.environ.get("WorkspaceKey")
 IP_TABLE_NAME = os.environ.get("IPTableName")
 DOMAIN_TABLE_NAME = os.environ.get("DomainTableName")
 ACCOUNT_USAGE_TABLE_NAME = os.environ.get("AccountUsageTableName")
 LOG_LEVEL = os.environ.get("LogLevel")
 CONN_STRING = os.environ.get("AzureWebJobsStorage")
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ.get("AZURE_DATA_COLLECTION_ENDPOINT")
+AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES = os.environ.get("AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES")
+AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES = os.environ.get("AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES")
 
 # regex
 DOMAIN_REGEX = r"^(?:[a-zA-Z0-9-]+(?:\[\.\]|\.))+[a-zA-Z]{2,}(?:\s*,\s*(?:[a-zA-Z0-9-]+(?:\[\.\]|\.))+[a-zA-Z]{2,})*$"

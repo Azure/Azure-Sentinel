@@ -1,7 +1,16 @@
+import sys
+import os
+
+# Get the directory of this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Remove the script's directory from sys.path to avoid importing local malicious modules
+if script_dir in sys.path:
+    sys.path.remove(script_dir)
+
 import requests
 import yaml
 import re
-import os
 import subprocess
 import csv
 import json
@@ -9,7 +18,6 @@ from azure.monitor.ingestion import LogsIngestionClient
 from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import HttpResponseError
 import time
-import sys
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
@@ -179,7 +187,7 @@ def create_dcr(schema,table,table_type):
     #suffic_num = str(random.randint(100,999))
     dcrname=table+"_DCR"+str(prnumber)
     request_object={ 
-            "location": "eastus", 			
+            "location": "eastus2euap", 			
             "properties": {
                 "streamDeclarations": {
                     "Custom-dcringest"+str(prnumber): {
@@ -259,12 +267,18 @@ def extract_event_vendor_product(parser_query,parser_file):
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
         event_vendor = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventVendor' as 'Microsoft'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_vendor = 'Microsoft'
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
         event_product = match.group(1)
+    # if equivalent_built_in_parser end with Native, then use 'EventProduct' as SchemaName + 'NativeTable'
+    elif equivalent_built_in_parser.endswith('_Native'):
+        event_product = 'NativeTable'
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
@@ -293,17 +307,17 @@ def convert_data_type(schema_result, data_result):
 
 #main starting point of script
 
-workspace_id = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
-workspaceName = "ASIM-SchemaDataTester-GithubShared"
-resourceGroupName = "asim-schemadatatester-githubshared"
-subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
-dataCollectionEndpointname = "asim-schemadatatester-githubshared"
-endpoint_uri = "https://asim-schemadatatester-githubshared-uetl.eastus-1.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
+workspace_id = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+workspaceName = "ASIM-SchemaDataTester-GithubShared-Canary"
+resourceGroupName = "asim-schemadatatester-githubshared-canary"
+subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
+dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
+endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
 SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 dcr_directory=[]
 
-lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation']
+lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics']
 reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
@@ -332,6 +346,7 @@ for file in parser_yaml_files:
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
     schema = normalization.get('Schema')
+    equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'

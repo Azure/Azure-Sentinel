@@ -1,9 +1,9 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import * as logger from "./utils/logger";
-import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker";
-import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import * as logger from "./utils/logger.js";
+import { isValidLogoImage } from "./utils/LogoChecker/logoImageChecker.js";
+import { isValidLogoImageSVGContent } from "./utils/LogoChecker/logoImageSVGChecker.js";
 
 export async function IsValidLogo(FileName: string): Promise<ExitCode> {
   if(FileName.includes("Logos") || FileName.includes("Data Connectors/Logo") 

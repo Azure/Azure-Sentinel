@@ -1,0 +1,41 @@
+id: 90305294-242b-4568-8878-8fc65204f47a
+Function:
+  Title: Dragos Push Notifications Sentinel Incidents
+  Version: '1.0.0'
+  LastUpdated: '2024-08-25'
+Category: Microsoft Sentinel Parser
+FunctionName: DragosPushNotificationsToSentinel
+FunctionAlias: DragosPushNotificationsToSentinel
+FunctionQuery: |
+  // Format IP addresses into the proper Sentinel Entity format
+  let IpAddresses = CommonSecurityLog
+  | where DeviceVendor == 'Dragos' and DeviceProduct == 'Platform' and DeviceVersion == '2'
+  | extend IpAddresses = set_difference(array_concat(split(SourceIP, ','), split(DestinationIP, ',')), dynamic([""]))
+  | mv-apply IpAddress = IpAddresses on (
+      extend SentinelIpAddress = pack("Type", "IP", "Address", IpAddress)
+  )
+  | summarize SentinelIpAddresses = make_list(SentinelIpAddress, 250), IpAddresses = make_list(IpAddress, 250) by ExtID;
+  // Format Hosts into the proper Sentinel format
+  let Hosts = CommonSecurityLog
+  | where DeviceVendor == 'Dragos' and DeviceProduct == 'Platform' and DeviceVersion == '2'
+  | extend Hosts = set_difference(array_concat(split(SourceHostName, ','), split(DestinationHostName, ',')), dynamic([""]))
+  | mv-apply Host = Hosts on (
+      extend SentinelHost = pack("Type", "Host", "HostName", Host)
+  )
+  | summarize SentinelHosts = make_list(SentinelHost, 250), Hosts = make_list(Host, 250) by ExtID;
+  CommonSecurityLog
+  | where DeviceVendor == 'Dragos' and DeviceProduct == 'Platform' and DeviceVersion == '2'
+  | join kind=leftouter (IpAddresses) on ExtID
+  | join kind=leftouter (Hosts) on ExtID
+  | extend SentinelEntities=array_concat(SentinelIpAddresses, SentinelHosts)
+  | extend MacAddresses = set_difference(array_concat(split(SourceMACAddress, ','), split(DestinationMACAddress, ',')), dynamic([""]))
+  | extend id=toint(ExtID), summary=Activity, content=Message, severity=toint(LogSeverity), detectionQuads=DeviceCustomString3, occurredAt=todatetime(DeviceCustomDate1), createdAt=todatetime(DeviceCustomDate2), AlertProductName="Dragos"
+  | extend MSSentinelSeverity = DragosSeverityToSentinelSeverity(severity)
+  | extend DragosConnectorSource="DragosCefViaAma"
+  // Populate MitreInfo
+  | extend MitreTactics = case(DeviceCustomString1 has "N/A", "",
+                               DeviceCustomString1 has "None", "", 
+                               replace_string(DeviceCustomString1, " ", ""))
+  | extend MitreTechniques = dynamic([])
+  // Default values that are not present in the data sent via syslog
+  | extend state="", threatInfo=strcat(''), firstSeenAt=datetime(null), lastSeenAt=datetime(null), source=""

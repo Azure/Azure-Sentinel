@@ -4,7 +4,18 @@
     {
       "type": 1,
       "content": {
-        "json": "## Enriched Microsoft 365 logs Workbook (Preview)\n---\n\nThe enriched Microsoft 365 logs provide information about Microsoft 365 workloads, so you can review network data and security events relevant to Microsoft 365 apps."
+        "json": "Please select the Log Analytics Workspace with 'NetworkAccessTrafficLogs' enabled in the Microsoft Entra ID 'Diagnostic settings'",
+        "style": "info"
+      },
+      "name": "text - 14",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Enriched Microsoft 365 logs Workbook\n---\n\nThe enriched Microsoft 365 logs provide information about Microsoft 365 workloads, so you can review network data and security events relevant to Microsoft 365 apps."
       },
       "name": "text - 2"
     },
@@ -24,6 +35,9 @@
             "type": 5,
             "description": "The Log Analytic Workspace In Which To Execute The Queries",
             "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
             "query": "resources\r\n| where type == \"microsoft.operationalinsights/workspaces\"\r\n| project id",
             "crossComponentResources": [
               "value::all"
@@ -32,15 +46,18 @@
               "resourceTypeFilter": {
                 "microsoft.operationalinsights/workspaces": true
               },
-              "additionalResourceOptions": [],
+              "additionalResourceOptions": [
+                "value::1",
+                "value::all"
+              ],
               "showDefault": false
             },
             "timeContext": {
               "durationMs": 86400000
             },
+            "defaultValue": "value::all",
             "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources",
-            "value": null
+            "resourceType": "microsoft.resourcegraph/resources"
           },
           {
             "id": "f15f34d8-8e2d-4c39-8dee-be2f979c86a8",
@@ -97,7 +114,7 @@
               "durationMs": 86400000
             },
             "value": {
-              "durationMs": 2592000000
+              "durationMs": 3600000
             }
           },
           {
@@ -191,7 +208,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where Workload in (\"Exchange\")\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| summarize Count = count() by City, State, Country\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where OfficeWorkload in (\"Exchange\")\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| summarize Count = count() by City, State, Country\r\n",
               "size": 0,
               "title": "Access By Location",
               "timeContextFromParameter": "TimeRange",
@@ -226,7 +243,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where Workload in (\"Exchange\")\r\n| summarize [\"Count\"] = count() by [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem\r\n| order by [\"Count\"] desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where OfficeWorkload in (\"Exchange\")\r\n| summarize [\"Count\"] = count() by [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem\r\n| order by [\"Count\"] desc\r\n",
               "size": 0,
               "title": "Access By Location And OS",
               "timeContextFromParameter": "TimeRange",
@@ -243,7 +260,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Operation in (\"Set-AdminAuditLogConfig\", \"Set-OrganizationConfig\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where Operation in (\"Set-AdminAuditLogConfig\", \"Set-OrganizationConfig\")\r\n| project TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Audit Of Critical Configuration Changes",
               "timeContextFromParameter": "TimeRange",
@@ -251,7 +268,18 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{LogAnalyticWorkspace}"
-              ]
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  }
+                ]
+              }
             },
             "customWidth": "50",
             "name": "query - 2"
@@ -260,7 +288,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Operation in (\"Set-TransportRule\", \"Set-AtpPolicyForO365\", \"Set-MalwareFilterRule\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where Operation in (\"Set-TransportRule\", \"Set-AtpPolicyForO365\", \"Set-MalwareFilterRule\")\r\n| project TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Changes In Email Security Policies",
               "timeContextFromParameter": "TimeRange",
@@ -268,7 +296,18 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{LogAnalyticWorkspace}"
-              ]
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  }
+                ]
+              }
             },
             "customWidth": "50",
             "name": "query - 3"
@@ -277,7 +316,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Operation in (\"Add-RoleGroupMember\", \"Remove-ManagementRoleAssignment\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where Operation in (\"Add-RoleGroupMember\", \"Remove-ManagementRoleAssignment\")\r\n| project TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Monitoring Role Group Membership Changes",
               "timeContextFromParameter": "TimeRange",
@@ -285,7 +324,18 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{LogAnalyticWorkspace}"
-              ]
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  }
+                ]
+              }
             },
             "customWidth": "50",
             "name": "query - 4"
@@ -294,7 +344,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Operation in (\"New-TenantAllowBlockListSpoofitems\", \"Remove-TenantAllowBlockListSpoofitems\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where Operation in (\"New-TenantAllowBlockListSpoofitems\", \"Remove-TenantAllowBlockListSpoofitems\")\r\n| project TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Spoofing Settings Management Activities",
               "timeContextFromParameter": "TimeRange",
@@ -302,7 +352,18 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{LogAnalyticWorkspace}"
-              ]
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  }
+                ]
+              }
             },
             "customWidth": "50",
             "name": "query - 5"
@@ -311,7 +372,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Operation in (\"New-SafeAttachmentPolicy\", \"Set-SafeAttachmentPolicy\", \"Set-SafeAttachmentRule\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where Operation in (\"New-SafeAttachmentPolicy\", \"Set-SafeAttachmentPolicy\", \"Set-SafeAttachmentRule\")\r\n| project TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Safe Attachments Policy Changes",
               "timeContextFromParameter": "TimeRange",
@@ -319,7 +380,18 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{LogAnalyticWorkspace}"
-              ]
+              ],
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  }
+                ]
+              }
             },
             "customWidth": "50",
             "name": "query - 6"
@@ -337,7 +409,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "EnrichedMicrosoft365AuditLogs | where Workload == \"Exchange\" | where Operation in (\"Add-MailboxFolderPermission\", \"Add-RoleGroupMember\", \"New-TransportRule\", \"Remove-ManagementRoleAssignment\", \"Set-TransportRule\") | summarize Count = count(), Users = makeset(UserId) by Operation | order by Count desc",
+        "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName\r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId | where OfficeWorkload == \"Exchange\" | where Operation in (\"Add-MailboxFolderPermission\", \"Add-RoleGroupMember\", \"New-TransportRule\", \"Remove-ManagementRoleAssignment\", \"Set-TransportRule\") | summarize Count = count(), Users = makeset(UserPrincipalName) by Operation | order by Count desc",
         "size": 0,
         "title": "Permission changes and security policy updates",
         "timeContext": {
@@ -366,7 +438,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where Workload in (\"Teams\")\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| summarize Count = count() by City, State, Country\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where OfficeWorkload in (\"Teams\")\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| summarize Count = count() by City, State, Country\r\n",
               "size": 0,
               "title": "Access By Location",
               "timeContextFromParameter": "TimeRange",
@@ -401,7 +473,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where Workload in (\"Teams\")\r\n| summarize [\"Count\"] = count() by [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem\r\n| order by [\"Count\"] desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where OfficeWorkload in (\"Teams\")\r\n| summarize [\"Count\"] = count() by [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem\r\n| order by [\"Count\"] desc\r\n",
               "size": 0,
               "title": "Access By Location And OS",
               "timeContextFromParameter": "TimeRange",
@@ -433,7 +505,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where Workload in (\"OneDrive\", \"SharePoint\",\"SPO/OneDrive\")\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| summarize Count = count() by City, State, Country\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where OfficeWorkload in (\"OneDrive\", \"SharePoint\",\"SPO/OneDrive\")\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| summarize Count = count() by City, State, Country\r\n",
               "size": 0,
               "title": "Access By Location",
               "timeContextFromParameter": "TimeRange",
@@ -474,7 +546,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where Workload in (\"OneDrive\", \"SharePoint\", \"SPO/OneDrive\")\r\n| summarize [\"Event Count\"] = count() by [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem\r\n| order by [\"Event Count\"] desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where OfficeWorkload in (\"OneDrive\", \"SharePoint\", \"SPO/OneDrive\")\r\n| summarize [\"Event Count\"] = count() by [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem\r\n| order by [\"Event Count\"] desc\r\n",
               "size": 2,
               "title": "Access By Location And OS",
               "timeContextFromParameter": "TimeRange",
@@ -506,7 +578,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "EnrichedMicrosoft365AuditLogs\r\n| where Workload == \"Teams\"\r\n| where Operation in (\"MemberAdded\", \"MemberRemoved\", \"TeamDeleted\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+        "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where OfficeWorkload == \"Teams\"\r\n| where Operation in (\"MemberAdded\", \"MemberRemoved\", \"TeamDeleted\")\r\n| project TimeGenerated, [\"User ID\"] = UserId, UserPrincipalName, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"],UserPrincipalName, [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User\"] = UserPrincipalName, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
         "size": 0,
         "title": "Changes In Team Memberships",
         "timeContextFromParameter": "TimeRange",
@@ -514,7 +586,18 @@
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
           "{LogAnalyticWorkspace}"
-        ]
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6,
+              "dateFormat": {
+                "formatName": "shortDateTimeNoMsPattern"
+              }
+            }
+          ]
+        }
       },
       "conditionalVisibility": {
         "parameterName": "selTab",
@@ -534,7 +617,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let RiskyExtensions = dynamic([\"exe\", \"msi\", \"bat\", \"cmd\", \"com\", \"scr\", \"pif\", \"ps1\", \"vbs\", \"js\", \"jse\", \"wsf\", \"docm\", \"xlsm\", \"pptm\", \"dll\", \"ocx\", \"cpl\", \"app\", \"vb\", \"reg\", \"inf\", \"hta\"]);\r\n\r\nEnrichedMicrosoft365AuditLogs\r\n| where Workload in (\"SPO/OneDrive\")\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| extend [\"File Extension\"] = tostring(parse_json(AdditionalProperties).SourceFileExtension)\r\n| where [\"File Extension\"] in (RiskyExtensions)\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, [\"File Extension\"], Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], [\"File Extension\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], [\"File Extension\"], Operation, Count\r\n",
+              "query": "let RiskyExtensions = dynamic([\"exe\", \"msi\", \"bat\", \"cmd\", \"com\", \"scr\", \"pif\", \"ps1\", \"vbs\", \"js\", \"jse\", \"wsf\", \"docm\", \"xlsm\", \"pptm\", \"dll\", \"ocx\", \"cpl\", \"app\", \"vb\", \"reg\", \"inf\", \"hta\"]);\r\n\r\nNetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName\r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where OfficeWorkload in (\"SPO/OneDrive\")\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where SourceFileExtension in (RiskyExtensions)\r\n| project TimeGenerated, [\"User ID\"] = UserId, UserPrincipalName, [\"Client IP\"] = SourceIp, SourceFileExtension, Operation\r\n| summarize Count = count() by TimeGenerated, [\"User ID\"], UserPrincipalName, [\"Client IP\"], SourceFileExtension, Operation\r\n| project TimeGenerated, [\"User\"] = UserPrincipalName, [\"Client IP\"], SourceFileExtension, Operation, Count\r\n",
               "size": 0,
               "title": "Risky File Operations",
               "timeContextFromParameter": "TimeRange",
@@ -550,6 +633,13 @@
                     "formatter": 4,
                     "formatOptions": {
                       "palette": "blue"
+                    }
+                  },
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
                     }
                   }
                 ]
@@ -567,7 +657,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Workload in (\"OneDrive\", \"SharePoint\", \"SPO/OneDrive\")\r\n| where Operation in (\"FileRecycled\", \"FileDownloaded\", \"FileUploaded\", \"FileCreated\", \"File Modified\")\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by Timestamp, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName\r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where OfficeWorkload in (\"OneDrive\", \"SharePoint\", \"SPO/OneDrive\")\r\n| where Operation in (\"FileRecycled\", \"FileDownloaded\", \"FileUploaded\", \"FileCreated\", \"File Modified\")\r\n| project TimeGenerated, UserPrincipalName, [\"User ID\"] = UserId, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by TimeGenerated, UserPrincipalName, [\"User ID\"], [\"Client IP\"], Operation\r\n| project TimeGenerated, [\"User\"] = UserPrincipalName, [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Bulk File Events",
               "timeContextFromParameter": "TimeRange",
@@ -578,6 +668,13 @@
               ],
               "gridSettings": {
                 "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  },
                   {
                     "columnMatch": "OperationCount",
                     "formatter": 4,
@@ -600,7 +697,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where Workload in (\"SPO/OneDrive\")\r\n| where Operation == \"FileDeletedFirstStageRecycleBin\"\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by bin(Timestamp, 1h), [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n| where Count > 1\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where OfficeWorkload in (\"SPO/OneDrive\")\r\n| where Operation == \"FileDeletedFirstStageRecycleBin\"\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, UserPrincipalName, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by bin(Timestamp, 1h), [\"User ID\"], UserPrincipalName, [\"Client IP\"], Operation\r\n| project Timestamp, [\"User\"] = UserPrincipalName, [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n| where Count > 1\r\n",
               "size": 0,
               "title": " Bulk File Deletion Operations",
               "timeContextFromParameter": "TimeRange",
@@ -611,6 +708,13 @@
               ],
               "gridSettings": {
                 "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  },
                   {
                     "columnMatch": "FileDeletions",
                     "formatter": 8,
@@ -633,7 +737,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let baselinePeriod = 30d;\r\nlet detectionWindow = 1h;\r\nlet downloadThreshold = 5; // Threshold of downloads indicating potential exfiltration\r\n\r\nEnrichedMicrosoft365AuditLogs\r\n| where TimeGenerated >= ago(baselinePeriod)\r\n| where Workload in (\"OneDrive\", \"SharePoint\", \"SPO/OneDrive\")\r\n| where Operation == \"FileDownloaded\"\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, [\"Client IP\"] = ClientIp, Operation\r\n| summarize Count = count() by bin(Timestamp, detectionWindow), [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User ID\"], [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
+              "query": "let baselinePeriod = 30d;\r\nlet detectionWindow = 1h;\r\nlet downloadThreshold = 5; // Threshold of downloads indicating potential exfiltration\r\n\r\nNetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId ,UserPrincipalName\r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where TimeGenerated >= ago(baselinePeriod)\r\n| where OfficeWorkload in (\"OneDrive\", \"SharePoint\", \"SPO/OneDrive\")\r\n| where Operation == \"FileDownloaded\"\r\n| project Timestamp = TimeGenerated, [\"User ID\"] = UserId, UserPrincipalName, [\"Client IP\"] = SourceIp, Operation\r\n| summarize Count = count() by bin(Timestamp, detectionWindow), UserPrincipalName, [\"User ID\"], [\"Client IP\"], Operation\r\n| project Timestamp, [\"User\"] = UserPrincipalName, [\"Client IP\"], Operation, Count\r\n| order by Count desc\r\n",
               "size": 0,
               "title": "Bulk File Download",
               "timeContextFromParameter": "TimeRange",
@@ -644,6 +748,13 @@
               ],
               "gridSettings": {
                 "formatters": [
+                  {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  },
                   {
                     "columnMatch": "DownloadCount",
                     "formatter": 8,
@@ -676,7 +787,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n      | where tostring(Country) != \"\"\r\n| summarize Count = count() by City, State, Country\r\n\r\n\r\n",
+              "query": "NetworkAccessTraffic\r\n| where TrafficType == 'microsoft365'\r\n| where UniqueTokenId != \"\"\r\n| project\r\n    UniqueTokenId,\r\n    SourceIp,\r\n    DeviceId,\r\n    DeviceOperatingSystem,\r\n    DeviceOperatingSystemVersion,\r\n    InitiatingProcessName,\r\n    AgentVersion,\r\n    UserId \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\n    on UniqueTokenId\r\n| where UserId in ('*') or '*' in ('*')\r\n| extend GeoInfo = geo_info_from_ip_address(SourceIp) // Assuming a function exists to pull geo info\r\n| extend \r\n    Country = tostring(GeoInfo.country), \r\n    State = tostring(GeoInfo.state), \r\n    City = tostring(GeoInfo.city), \r\n    Latitude = tostring(GeoInfo.latitude), \r\n    Longitude = tostring(GeoInfo.longitude)\r\n| project \r\n    UserId, \r\n    Location = strcat(City, ', ', State, ', ', Country), // Constructing a full location string\r\n    Latitude, \r\n    Longitude, \r\n    City, \r\n    State, \r\n    Country\r\n| where tostring(Country) != \"\"\r\n| summarize Count = count() by City, State, Country\r\n",
               "size": 0,
               "title": "Access By Location",
               "timeContextFromParameter": "TimeRange",
@@ -718,7 +829,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| summarize [\"Event Count\"] = count() by [\"Time Generated\"] = TimeGenerated, [\"User\"] = UserId, [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem, [\"Workload\"] = Workload\r\n| order by [\"Time Generated\"] desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| summarize [\"Event Count\"] = count() by [\"Time Generated\"] = TimeGenerated, [\"User\"] = UserPrincipalName, [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem, [\"Workload\"] = OfficeWorkload\r\n| order by [\"Time Generated\"] desc\r\n",
               "size": 0,
               "title": "Access By Location And OS",
               "timeContextFromParameter": "TimeRange",
@@ -728,6 +839,16 @@
                 "{LogAnalyticWorkspace}"
               ],
               "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Time Generated",
+                    "formatter": 6,
+                    "dateFormat": {
+                      "showUtcTime": null,
+                      "formatName": "shortDateTimeNoMsPattern"
+                    }
+                  }
+                ],
                 "rowLimit": 1000,
                 "filter": true
               }
@@ -748,7 +869,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let data = EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| project \r\n    Operation, \r\n    UserId, \r\n    Workload, \r\n    SourceIp, \r\n    DeviceId, \r\n    TimeGenerated, \r\n    Details = pack_all(),\r\n    OS = tostring(DeviceOperatingSystem)\r\n| extend Workload = tostring(Workload)\r\n| extend WorkloadStatus = case(\r\n    Workload == \"Exchange\", \"Exchange\",\r\n    Workload == \"Teams\", \"Teams\",\r\n    Workload == \"SharePoint\", \"SharePoint\",\r\n    \"Other\"\r\n);\r\n\r\nlet appData = data\r\n| summarize \r\n    TotalCount = count(), \r\n    ExchangeCount = countif(Workload == \"Exchange\"), \r\n    TeamsCount = countif(Workload == \"Teams\"), \r\n    SharePointCount = countif(Workload == \"SharePoint\"), \r\n    OtherCount = countif(Workload == \"Other\") \r\n    by UserId\r\n| where UserId != ''\r\n| join kind=inner (\r\n    data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by UserId\r\n    | project-away TimeGenerated\r\n  ) on UserId\r\n| order by TotalCount desc, UserId asc\r\n| project UserId, TotalCount, ExchangeCount, TeamsCount, SharePointCount, OtherCount, Trend\r\n| serialize Id = row_number();\r\n\r\ndata\r\n| summarize \r\n    TotalCount = count(), \r\n    ExchangeCount = countif(Workload == \"Exchange\"), \r\n    TeamsCount = countif(Workload == \"Teams\"), \r\n    SharePointCount = countif(Workload == \"SharePoint\"), \r\n    OtherCount = countif(Workload == \"Other\") \r\n    by UserId, SourceIp = tostring(SourceIp)\r\n| join kind=inner (\r\n    data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by UserId, SourceIp\r\n    | project-away TimeGenerated\r\n  ) on UserId, SourceIp\r\n| order by TotalCount desc, UserId asc\r\n| project UserId, SourceIp, TotalCount, ExchangeCount, TeamsCount, SharePointCount, OtherCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on UserId\r\n| project Id, Name = SourceIp, Type = 'Client IP', ['Events Count'] = TotalCount, Trend, ['Exchange Events'] = ExchangeCount, ['Teams Events'] = TeamsCount, ['SharePoint Events'] = SharePointCount, ['Other Count'] = OtherCount, ParentId = Id1\r\n| union (\r\n    appData \r\n    | project Id, Name = UserId, Type = 'Operating System', ['Events Count'] = TotalCount, Trend, ['Exchange Events'] = ExchangeCount, ['Teams Events'] = TeamsCount, ['SharePoint Events'] = SharePointCount, ['Other Count'] = OtherCount, ParentId = -1\r\n  )\r\n| order by ['Events Count'] desc, Name asc\r\n",
+        "query": "let data = NetworkAccessTraffic\r\n    | where TrafficType == 'microsoft365'\r\n    | where UniqueTokenId != \"\"\r\n    | project\r\n        UniqueTokenId,\r\n        SourceIp,\r\n        DeviceId,\r\n        DeviceOperatingSystem,\r\n        DeviceOperatingSystemVersion,\r\n        InitiatingProcessName,\r\n        AgentVersion,\r\n        UserId,\r\n        UserPrincipalName \r\n    | join kind=inner (\r\n        OfficeActivity \r\n        | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n        | where UniqueTokenId != \"\")\r\n        on UniqueTokenId\r\n    | where UserId in ('*') or '*' in ('*')\r\n    | project \r\n        Operation, \r\n        UserId,\r\n        UserPrincipalName, \r\n        Workload = OfficeWorkload, \r\n        SourceIp, \r\n        DeviceId, \r\n        TimeGenerated, \r\n        Details = pack_all(),\r\n        OS = tostring(DeviceOperatingSystem)\r\n    | extend Workload = tostring(Workload)\r\n    | extend WorkloadStatus = case(\r\n                                  Workload == \"Exchange\",\r\n                                  \"Exchange\",\r\n                                  Workload == \"Teams\",\r\n                                  \"Teams\",\r\n                                  Workload == \"SharePoint\",\r\n                                  \"SharePoint\",\r\n                                  \"Other\"\r\n                              );\r\nlet appData = data\r\n    | summarize \r\n        TotalCount = count(), \r\n        ExchangeCount = countif(Workload == \"Exchange\"), \r\n        TeamsCount = countif(Workload == \"Teams\"), \r\n        SharePointCount = countif(Workload == \"SharePoint\"), \r\n        OtherCount = countif(Workload == \"Other\") \r\n        by UserId, UserPrincipalName\r\n    | where UserId != ''\r\n    | join kind=inner (\r\n        data\r\n        | make-series Trend = count() default = 0 on TimeGenerated in range(ago(15m), now(), 1m) by UserId, UserPrincipalName\r\n        | project-away TimeGenerated\r\n        )\r\n        on UserId\r\n    | order by TotalCount desc, UserId asc\r\n    | project\r\n        UserPrincipalName,\r\n        UserId,\r\n        TotalCount,\r\n        ExchangeCount,\r\n        TeamsCount,\r\n        SharePointCount,\r\n        OtherCount,\r\n        Trend\r\n    | serialize Id = row_number();\r\ndata\r\n| summarize \r\n    TotalCount = count(), \r\n    ExchangeCount = countif(Workload == \"Exchange\"), \r\n    TeamsCount = countif(Workload == \"Teams\"), \r\n    SharePointCount = countif(Workload == \"SharePoint\"), \r\n    OtherCount = countif(Workload == \"Other\") \r\n    by UserId, UserPrincipalName, SourceIp = tostring(SourceIp)\r\n| join kind=inner (\r\n    data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range(ago(15m), now(), 1m) by UserId, SourceIp\r\n    | project-away TimeGenerated\r\n    )\r\n    on UserId, SourceIp\r\n| order by TotalCount desc, UserId asc\r\n| project\r\n    UserId,\r\n    UserPrincipalName,\r\n    SourceIp,\r\n    TotalCount,\r\n    ExchangeCount,\r\n    TeamsCount,\r\n    SharePointCount,\r\n    OtherCount,\r\n    Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on UserId\r\n| project\r\n    Id,\r\n    Name = SourceIp,\r\n    Type = 'Client IP',\r\n    ['Events Count'] = TotalCount,\r\n    Trend,\r\n    ['Exchange Events'] = ExchangeCount,\r\n    ['Teams Events'] = TeamsCount,\r\n    ['SharePoint Events'] = SharePointCount,\r\n    ['Other Count'] = OtherCount,\r\n    ParentId = Id1\r\n| union (\r\n    appData \r\n    | project\r\n        Id,\r\n        Name = UserPrincipalName,\r\n        Type = 'Operating System',\r\n        ['Events Count'] = TotalCount,\r\n        Trend,\r\n        ['Exchange Events'] = ExchangeCount,\r\n        ['Teams Events'] = TeamsCount,\r\n        ['SharePoint Events'] = SharePointCount,\r\n        ['Other Count'] = OtherCount,\r\n        ParentId = -1\r\n    )\r\n| order by ['Events Count'] desc, Name asc\r\n",
         "size": 2,
         "title": "Activity Log",
         "timeContextFromParameter": "TimeRange",
@@ -863,7 +984,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| extend \r\n    OS = coalesce(DeviceOperatingSystem, \"Unknown OS\"),\r\n    OSVersion = coalesce(tostring(DeviceOperatingSystemVersion), \"Unknown Version\")\r\n| summarize DeviceCount = count() by OS, OSVersion\r\n| order by DeviceCount desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| extend \r\n    OS = coalesce(DeviceOperatingSystem, \"Unknown OS\"),\r\n    OSVersion = coalesce(tostring(DeviceOperatingSystemVersion), \"Unknown Version\")\r\n| summarize DeviceCount = count() by OS, OSVersion\r\n| order by DeviceCount desc\r\n",
               "size": 3,
               "title": "Devices Accessing M365",
               "timeContextFromParameter": "TimeRange",
@@ -887,30 +1008,14 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "EnrichedMicrosoft365AuditLogs\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| extend \r\n    [\"Operating System\"] = coalesce(DeviceOperatingSystem, \"Unknown OS\"),\r\n    [\"OS Version\"] = coalesce(tostring(DeviceOperatingSystemVersion), \"Unknown Version\"),\r\n    [\"Device ID\"] = coalesce(tostring(DeviceId), \"Unknown DeviceId\")\r\n| where [\"Operating System\"] == dynamic({Parampie}).label\r\n| summarize [\"Device Count\"] = count() by [\"Operating System\"], [\"OS Version\"], [\"Device ID\"]\r\n| order by [\"Device Count\"] desc\r\n",
+              "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName \r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| extend \r\n    [\"Operating System\"] = coalesce(DeviceOperatingSystem, \"Unknown OS\"),\r\n    [\"OS Version\"] = coalesce(tostring(DeviceOperatingSystemVersion), \"Unknown Version\"),\r\n    [\"Device ID\"] = coalesce(tostring(DeviceId), \"Unknown DeviceId\")\r\n| where [\"Operating System\"] == dynamic({Parampie}).label\r\n| summarize [\"Transaction Count\"] = count() by [\"Operating System\"], [\"OS Version\"], [\"Device ID\"]\r\n| order by [\"Transaction Count\"] desc\r\n",
               "size": 2,
               "timeContextFromParameter": "TimeRange",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{LogAnalyticWorkspace}"
-              ],
-              "gridSettings": {
-                "formatters": [
-                  {
-                    "columnMatch": "$gen_group",
-                    "formatter": 1
-                  }
-                ],
-                "hierarchySettings": {
-                  "treeType": 1,
-                  "groupBy": [
-                    "OperatingSystem",
-                    "OSVersion"
-                  ],
-                  "expandTopLevel": false
-                }
-              }
+              ]
             },
             "customWidth": "50",
             "conditionalVisibilities": [
@@ -934,15 +1039,39 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let BusinessHoursStart = 8; // 8 AM\r\nlet BusinessHoursEnd = 18; // 6 PM\r\n\r\nEnrichedMicrosoft365AuditLogs \r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| extend HourOfDay = hourofday(TimeGenerated)\r\n| where HourOfDay < BusinessHoursStart or HourOfDay > BusinessHoursEnd\r\n| summarize [\"Off-Hour Activities\"] = count() by [\"User ID\"] = UserId, [\"Date\"] = bin(TimeGenerated, 1d), [\"Operation\"]\r\n| order by [\"Off-Hour Activities\"] desc\r\n",
+        "query": "let BusinessHoursStart = 8; // 8 AM\r\nlet BusinessHoursEnd = 18; // 6 PM\r\n\r\nNetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName\r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| extend HourOfDay = hourofday(TimeGenerated)\r\n| where HourOfDay < BusinessHoursStart or HourOfDay > BusinessHoursEnd\r\n| summarize [\"Off-Hour Activities\"] = count() by [\"User Principal Name\"] = UserPrincipalName, [\"User ID\"] = UserId, [\"Date\"] = bin(TimeGenerated, 1d), [\"Operation\"]\r\n| project  [\"Off-Hour Activities\"], [\"User Principal Name\"], [\"User ID\"], [\"Date\"]\r\n| order by [\"Off-Hour Activities\"] desc\r\n",
         "size": 0,
         "title": "Activity Outside Standard Working Hours (8:00 - 18:00)",
         "timeContextFromParameter": "TimeRange",
+        "exportedParameters": [
+          {
+            "fieldName": "Date",
+            "parameterName": "Date",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "User ID",
+            "parameterName": "UserId",
+            "parameterType": 1
+          }
+        ],
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "crossComponentResources": [
           "{LogAnalyticWorkspace}"
-        ]
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Date",
+              "formatter": 6,
+              "dateFormat": {
+                "showUtcTime": null,
+                "formatName": "shortDateTimeNoMsPattern"
+              }
+            }
+          ]
+        }
       },
       "conditionalVisibility": {
         "parameterName": "selTab",
@@ -955,7 +1084,60 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "EnrichedMicrosoft365AuditLogs\n| summarize Count = count() by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc\n",
+        "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\r\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId, UserPrincipalName\r\n| join kind=inner (\r\n    OfficeActivity \r\n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\r\n    | where UniqueTokenId != \"\")\r\non UniqueTokenId\r\n| where UserId in ({Users}) or '*' in ({Users})\r\n| where UserId == '{UserId}'\r\n| where TimeGenerated >= datetime('{Date}')\r\n| project [\"Time Generated\"] = TimeGenerated, [\"User\"] = UserPrincipalName, [\"Source IP\"] = SourceIp, [\"Device Operating System\"] = DeviceOperatingSystem, [\"Device Operating System Version\"] = DeviceOperatingSystemVersion, [\"Device Id\"] = DeviceId,[\"Workload\"] = OfficeWorkload, [\"Unique Token Id\"] = UniqueTokenId, [\"Initiating Process Name\"] = InitiatingProcessName, [\"Agent Version\"] = AgentVersion, [\"Record Type\"] = RecordType, Operation, [\"Item Type\"] = ItemType, [\"Site URL\"] = Site_Url, [\"Source File Name\"] = SourceFileName_",
+        "size": 0,
+        "title": "Activity Outside Standard Working Hours Drill Down",
+        "timeContextFromParameter": "TimeRange",
+        "exportedParameters": [
+          {
+            "fieldName": "Date",
+            "parameterName": "Date",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "User",
+            "parameterName": "UserId",
+            "parameterType": 1
+          }
+        ],
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{LogAnalyticWorkspace}"
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Time Generated",
+              "formatter": 6,
+              "dateFormat": {
+                "showUtcTime": null,
+                "formatName": "shortDateTimeNoMsPattern"
+              }
+            },
+            {
+              "columnMatch": "Date",
+              "formatter": 6,
+              "dateFormat": {
+                "showUtcTime": null,
+                "formatName": "shortDateTimeNoMsPattern"
+              }
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selTab",
+        "comparison": "isEqualTo",
+        "value": "Overview"
+      },
+      "name": "query - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetworkAccessTraffic | where TrafficType == 'microsoft365' | where UniqueTokenId != \"\"\n| project UniqueTokenId, SourceIp, DeviceId, DeviceOperatingSystem, DeviceOperatingSystemVersion, InitiatingProcessName, AgentVersion, UserId \n| join kind=inner (\n    OfficeActivity \n    | extend UniqueTokenId = tostring(AppAccessContext.UniqueTokenId)\n    | where UniqueTokenId != \"\")\non UniqueTokenId\n| summarize Count = count() by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc\n",
         "size": 0,
         "title": "Microsoft 365 Transactions",
         "timeContextFromParameter": "TimeRange",

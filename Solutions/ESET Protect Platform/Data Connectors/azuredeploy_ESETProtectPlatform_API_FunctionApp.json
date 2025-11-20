@@ -8,12 +8,26 @@
                 "description": "The name of the Log Analytics workspace associated with Microsoft Sentinel."
             }
         },
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region of the Log Analytics workspace associated with Microsoft Sentinel. This is the location where new resources will be created."
+            }
+        },
         "tableName": {
             "type": "string",
             "metadata": {
-                "description": "The name of the custom Log Analytics table to be created."
+                "description": "The name of the custom Log Analytics table to be created. This table stores detections data."
             },
             "defaultValue": "IntegrationTable_CL",
+            "minLength": 3
+        },
+        "tableNameIncidents": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the custom Log Analytics table to be created. This table stores incidents data."
+            },
+            "defaultValue": "IntegrationTableIncidents_CL",
             "minLength": 3
         },
         "dataCollectionEndpointName": {
@@ -87,6 +101,30 @@
                 "description": "The ESET Connect API user account password."
             }
         },
+        "ESET PROTECT instance": {
+            "type": "string",
+            "defaultValue": "yes",
+            "allowedValues": ["yes", "no"],
+            "metadata": {
+                "description": "The ESET product from which detections are pulled. Set to 'yes' to pull ESET PROTECT detections. It is allowed to pick more than one ESET product if they are located in the same region."
+            }
+        },
+        "ESET Inspect instance": {
+            "type": "string",
+            "defaultValue": "no",
+            "allowedValues": ["yes", "no"],
+            "metadata": {
+                "description": "The ESET product from which detections are pulled. Set to 'yes' to pull ESET Inspect detections. It is allowed to pick more than one ESET product if they are located in the same region."
+            }
+        },
+        "ESET Cloud Office Security instance": {
+            "type": "string",
+            "defaultValue": "no",
+            "allowedValues": ["yes", "no"],
+            "metadata": {
+                "description": "The ESET product from which detections are pulled. Set to 'yes' to pull ESET Cloud Office Security detections. It is allowed to pick more than one ESET product if they are located in the same region."
+            }
+        },
         "instanceRegion": {
             "type": "string",
             "defaultValue": "eu",
@@ -98,7 +136,7 @@
                 "de"
             ],
             "metadata": {
-                "description": "The region where your ESET Protect/Inspect/ECOS instance is running."
+                "description": "The region where your ESET PROTECT/Inspect/ECOS instance is running."
             }
         },
         "keyBase": {
@@ -113,14 +151,16 @@
     },
 	"variables": {
         "tableNameCL": "[if(endsWith(parameters('tableName'), '_CL'), parameters('tableName'), concat(parameters('tableName'), '_CL'))]",
+        "tableNameIncidentsCL": "[if(endsWith(parameters('tableNameIncidents'), '_CL'), parameters('tableNameIncidents'), concat(parameters('tableNameIncidents'), '_CL'))]",
 		"customTableName": "[concat('Custom-', variables('tableNameCL'))]",
+		"customTableNameIncidents": "[concat('Custom-', variables('tableNameIncidentsCL'))]",
 		"applicationName": "[concat(parameters('applicationName'), uniquestring(resourceGroup().id))]",
         "dataCollectionEndpointId":"[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
 		"dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]",
-        "location": "[resourceGroup().location]",
+        "location": "[parameters('location')]",
         "hostingPlanName": "[variables('applicationName')]",
         "contentShare": "[variables('applicationName')]",
-        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunction')]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfun')]",
 		"workspaces_integration_log_analytics_workspace_externalid":"[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
         "keyBase64": "[base64(substring(parameters('keyBase'), 0, 32))]"
 
@@ -131,7 +171,8 @@
             "name": "[parameters('dataCollectionEndpointName')]",
             "location": "[variables('location')]",
             "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]"
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameIncidentsCL'))]"
             ],
             "apiVersion": "2021-04-01",
             "properties": {
@@ -270,12 +311,86 @@
             }
         },
         {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspaceName'), '/', variables('tableNameIncidentsCL'))]",
+            "location": "[variables('location')]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('tableNameIncidentsCL')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "uuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "displayName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "assigneeUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "triageDuration",
+                            "type": "string"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "detectionUuids",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "createTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "updateTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "deviceUuids",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "resolveReason",
+                            "type": "string"
+                        },
+                        {
+                            "name": "metrics",
+                            "type": "dynamic"
+                        }
+                    ]
+                }
+            }
+        },
+        {
             "type": "Microsoft.Insights/dataCollectionRules",
             "apiVersion": "2023-03-11",
             "name": "[parameters('dataCollectionRuleName')]",
             "location": "[variables('location')]",
             "dependsOn": [
                 "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameCL'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('tableNameIncidentsCL'))]",
                 "[variables('dataCollectionEndpointId')]"
             ],
             "properties": {
@@ -400,6 +515,70 @@
                                 "type": "dynamic"
                             }
                         ]
+                    },
+                    "[variables('customTableNameIncidents')]": {
+                    "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "uuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "displayName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "assigneeUuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "triageDuration",
+                                "type": "string"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "detectionUuids",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "createTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "updateTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "deviceUuids",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "resolveReason",
+                                "type": "string"
+                            },
+                            {
+                                "name": "metrics",
+                                "type": "dynamic"
+                            }
+                        ]
                     }
                 },
                 "dataSources": {},
@@ -421,6 +600,16 @@
                         ],
                         "transformKql": "source",
                         "outputStream": "[variables('customTableName')]"
+                    },
+                    {
+                        "streams": [
+                            "[variables('customTableNameIncidents')]"
+                        ],
+                        "destinations": [
+                            "[parameters('workspaceName')]"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "[variables('customTableNameIncidents')]"
                     }
                 ]
             }
@@ -436,13 +625,13 @@
 				"principalType": "ServicePrincipal"
 			},
             "dependsOn": ["[variables('dataCollectionRuleId')]"]
-        }, 
+        },
         {
             "apiVersion": "2022-03-01",
             "name": "[variables('applicationName')]",
             "type": "Microsoft.Web/sites",
             "kind": "functionapp,linux",
-            "location": "[resourceGroup().location]",
+            "location": "[variables('location')]",
             "tags": {},
             "dependsOn": [
                 "[concat('Microsoft.Web/serverfarms/', variables('hostingPlanName'))]",
@@ -477,23 +666,27 @@
                         {
                             "name": "WEBSITE_CONTENTSHARE",
                             "value": "[toLower(variables('contentShare'))]"
-                        }, 
+                        },
                         {
                             "name": "WEBSITE_RUN_FROM_PACKAGE",
                             "value": "https://aka.ms/sentinel-EsetProtectionPlatform-FunctionApp"
-                        }, 
+                        },
                         {
                             "name": "ENDPOINT_URI",
                             "value": "[reference(variables('dataCollectionEndpointId'), '2021-04-01').logsIngestion.endpoint]"
-                        }, 
+                        },
                         {
                             "name": "DCR_IMMUTABLEID",
                             "value": "[reference(variables('dataCollectionRuleId'), '2023-03-11').immutableId]"
-                        }, 
+                        },
                         {
                             "name": "STREAM_NAME",
                             "value": "[variables('customTableName')]"
-                        }, 
+                        },
+                        {
+                            "name": "STREAM_NAME_INCIDENTS",
+                            "value": "[variables('customTableNameIncidents')]"
+                        },
                         {
                             "name": "AZURE_CLIENT_ID",
                             "value": "[parameters('azureClientID')]"
@@ -501,11 +694,11 @@
                         {
                             "name": "AZURE_CLIENT_SECRET",
                             "value": "[parameters('azureClientSecret')]"
-                        }, 
+                        },
                         {
                             "name": "AZURE_TENANT_ID",
                             "value": "[parameters('azureTenantID')]"
-                        }, 
+                        },
                                                 {
                             "name": "PASSWORD_INTEGRATION",
                             "value": "[parameters('password')]"
@@ -515,13 +708,25 @@
                             "value": "[parameters('login')]"
                         },
                         {
+                            "name": "EP_INSTANCE",
+                            "value": "[parameters('ESET PROTECT instance')]"
+                        },
+                        {
+                            "name": "EI_INSTANCE",
+                            "value": "[parameters('ESET Inspect instance')]"
+                        },
+                        {
+                            "name": "ECOS_INSTANCE",
+                            "value": "[parameters('ESET Cloud Office Security instance')]"
+                        },
+                        {
                             "name": "INTERVAL",
                             "value": "[parameters('applicationRunInterval')]"
                         },
                         {
                             "name": "PYTHONPATH",
                             "value": "/home/site/wwwroot/.python_packages/lib/site-packages,/home/site/wwwroot"
-                        }, 
+                        },
                         {
                             "name": "PYTHON_ISOLATE_WORKER_DEPENDENCIES",
                             "value": "1"
@@ -579,7 +784,7 @@
             "apiVersion": "2022-03-01",
             "name": "[variables('hostingPlanName')]",
             "type": "Microsoft.Web/serverfarms",
-            "location": "[resourceGroup().location]",
+            "location": "[variables('location')]",
             "kind": "linux",
             "tags": {},
             "dependsOn": [],
@@ -599,7 +804,7 @@
             "apiVersion": "2020-02-02",
             "name": "[variables('applicationName')]",
             "type": "microsoft.insights/components",
-            "location": "westeurope",
+            "location": "[variables('location')]",
             "tags": {},
             "dependsOn": [],
             "properties": {
@@ -614,7 +819,7 @@
             "apiVersion": "2022-05-01",
             "type": "Microsoft.Storage/storageAccounts",
             "name": "[variables('storageAccountName')]",
-            "location": "[resourceGroup().location]",
+            "location": "[variables('location')]",
             "tags": {},
             "sku": {
                 "name": "Standard_LRS"
