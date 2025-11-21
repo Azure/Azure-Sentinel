@@ -1,0 +1,234 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Azure Firewall
+  Version: '0.1.0'
+  LastUpdated: Nov 19, 2025
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM filtering parser supports filtering and normalizing Azure Firewall logs to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionAZFW
+EquivalentBuiltInParser: _Im_NetworkSession_AZFW
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime                 = datetime(null)
+    , endtime:datetime                 = datetime(null)
+    , srcipaddr_has_any_prefix:dynamic = dynamic([])
+    , dstipaddr_has_any_prefix:dynamic = dynamic([])
+    , ipaddr_has_any_prefix:dynamic    = dynamic([])
+    , dstportnumber:int                = int(null)
+    , hostname_has_any:dynamic         = dynamic([])
+    , dvcaction:dynamic                = dynamic([])
+    , eventresult:string               = '*'
+    , disabled:bool                    = false
+   )
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    // AZFWIdpsSignature provides a numerical severity value
+    let NumericalEventSeverityLookup = datatable (Severity:int, NumericalEventSeverity:string)
+    [
+        1, "High",
+        2, "Medium",
+        3, "Low",
+        4, "Informational"
+    ];
+    let DvcActionLookup = datatable (UpperAction:string, DvcAction:string, EventResult: string, ActionEventSeverity: string)
+    [
+        "ALLOW", "Allow", "Success", "Informational",
+        "",      "Allow", "Success", "Informational", // AZFWNatRule does not have Action, always indicates success
+        "ALERT", "",      "NA",      "Medium", // No corresponding DvcAction to alert
+        "DENY",  "Deny",  "Failure", "Low",
+        "DROP",  "Drop",  "Failure", "Low"
+    ];
+    AZFWNetworkRule
+    | union AZFWNatRule
+    | union AZFWIdpsSignature
+    | union AZFWThreatIntel
+    | where not(disabled)
+    // Pre-filter time
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    // Pre-filter Action
+    | extend UpperAction = toupper(Action)
+    | lookup DvcActionLookup on UpperAction
+    | where array_length(dvcaction) == 0 or DvcAction has_any (dvcaction)
+    // Pre-filter IPs
+    | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIp, src_or_any), temp_DstMatch = has_any_ipv4_prefix(DestinationIp, dst_or_any)
+    | extend ASimMatchingIpAddr = case(
+        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+        temp_SrcMatch and temp_DstMatch, "Both",
+        temp_SrcMatch, "SrcIpAddr",
+        temp_DstMatch, "DstIpAddr",
+        "No match"
+    )
+    | where ASimMatchingIpAddr != "No match"
+    // Pre-filter Destination port
+    | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
+    // Pre-filter by Hostname
+    | extend
+      temp_SrcHostMatch = SourceIp has_any(hostname_has_any),
+      temp_DstHostMatch = DestinationIp has_any(hostname_has_any)
+    | extend ASimMatchingHostname = case(
+      array_length(hostname_has_any) == 0, "-",
+      temp_SrcHostMatch and temp_DstHostMatch, "Both",
+      temp_SrcHostMatch, "SrcDomain",
+      temp_DstHostMatch, "DstDomain",
+      "No match"
+    )
+    | where ASimMatchingHostname != "No match" 
+    // Pre-filter Event result
+    | where eventresult == "*" or eventresult == EventResult
+    // Extract Network Information
+    | extend NetworkProtocol = iff(Protocol startswith "ICMP", "ICMP", Protocol)
+    | extend NetworkIcmpCode = iff(NetworkProtocol == "ICMP", toint(extract(@"Type=(\d+)", 1, Protocol)), int(null))
+    | extend NetworkIcmpType = iff(isnotnull(NetworkIcmpCode), _ASIM_LookupICMPType(NetworkIcmpCode), "")
+    // Determine Event Severity
+    | lookup NumericalEventSeverityLookup on Severity
+    | extend EventSeverity = iff(Type=="AZFWThreatIntel", "Medium", coalesce(NumericalEventSeverity, ActionEventSeverity))
+    | project-rename
+        EventUid = _ItemId,
+        EventOriginalResultDetails = ActionReason,
+        Src = SourceIp,
+        SrcPortNumber = SourcePort,
+        Dst = DestinationIp,
+        DstPortNumber = DestinationPort,
+        DstFQDN = Fqdn,
+        DvcOriginalAction = Action,
+        ThreatId = SignatureId,
+        ThreatCategory = Category,
+        EventReportUrl = TargetUrl
+    | extend
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventType = "NetworkSession",
+        EventSchema = "NetworkSession",
+        EventSchemaVersion = "0.2.6",
+        EventVendor = "Microsoft",
+        EventProduct = "Azure Firewall",
+        EventCount = toint(1),
+        EventOriginalUid = EventUid,
+        DvcIdType = "AzureResourceId",
+        SrcIpAddr = Src,
+        SrcHostname = Src,
+        DstIpAddr = Dst, 
+        DstHostname = Dst,
+        Dvc = _ResourceId,
+        DvcId = _ResourceId,
+        DvcScopeId = _SubscriptionId,
+        Hostname = Dst,
+        IpAddr = Src,
+        NetworkRuleName = Rule,
+        DstNatIpAddr = TranslatedIp,
+        DstNatPortNumber = TranslatedPort,
+        ThreatName = coalesce(Description, ThreatDescription),
+        AdditionalFields = bag_pack(
+            "Policy", Policy,
+            "RuleCollection", RuleCollection, 
+            "RuleCollectionGroup", RuleCollectionGroup,
+            "SourceSystem", SourceSystem,
+            "IsTlsInspected", IsTlsInspected
+        )
+    | project
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventSchema,
+        EventSchemaVersion,
+        EventVendor,
+        EventProduct,
+        EventCount,
+        EventOriginalResultDetails,
+        EventOriginalUid,
+        EventUid,
+        EventResult,
+        EventSeverity,
+        EventReportUrl,
+        Type,
+        Src,
+        SrcIpAddr,
+        SrcPortNumber,
+        SrcHostname,
+        Dst,
+        DstIpAddr, 
+        DstPortNumber,
+        DstHostname,
+        DstNatIpAddr,
+        DstNatPortNumber,
+        DstFQDN,
+        NetworkRuleName,
+        Rule,
+        ASimMatchingIpAddr,
+        ASimMatchingHostname,
+        NetworkProtocol,
+        NetworkIcmpCode,
+        NetworkIcmpType,
+        Dvc,
+        DvcId,
+        DvcIdType,
+        DvcScopeId,
+        DvcAction,
+        DvcOriginalAction,
+        Hostname,
+        IpAddr,
+        ThreatId,
+        ThreatName,
+        ThreatCategory,
+        TimeGenerated,
+        AdditionalFields,
+        _BilledSize,
+        _IsBillable,
+        _ResourceId,
+        _SubscriptionId,
+        TenantId
+  };
+  parser (
+    starttime                  = starttime
+    , endtime                  = endtime
+    , srcipaddr_has_any_prefix = srcipaddr_has_any_prefix
+    , dstipaddr_has_any_prefix = dstipaddr_has_any_prefix
+    , ipaddr_has_any_prefix    = ipaddr_has_any_prefix
+    , dstportnumber            = dstportnumber
+    , hostname_has_any         = hostname_has_any
+    , dvcaction                = dvcaction
+    , eventresult              = eventresult
+    , disabled                 = disabled
+  )

@@ -1,0 +1,150 @@
+Parser:
+  Title: Network Session ASIM parser for Azure Firewall
+  Version: "0.1.0"
+  LastUpdated: Nov 19, 2025
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: NetworkSession
+  Version: "0.2.6"
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Azure Firewall logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionAZFW
+EquivalentBuiltInParser: _ASim_NetworkSession_AZFW
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false) {
+    // AZFWIdpsSignature provides a numerical severity value
+    let NumericalEventSeverityLookup = datatable (Severity:int, NumericalEventSeverity:string)
+    [
+        1, "High",
+        2, "Medium",
+        3, "Low",
+        4, "Informational"
+    ];
+    let DvcActionLookup = datatable (UpperAction:string, DvcAction:string, EventResult: string, ActionEventSeverity: string)
+    [
+        "ALLOW", "Allow", "Success", "Informational",
+        "",      "Allow", "Success", "Informational", // AZFWNatRule does not have Action, always indicates success
+        "ALERT", "",      "NA",      "Medium", // No corresponding DvcAction to alert
+        "DENY",  "Deny",  "Failure", "Low",
+        "DROP",  "Drop",  "Failure", "Low"
+    ];
+    AZFWNetworkRule
+    | union AZFWNatRule
+    | union AZFWIdpsSignature
+    | union AZFWThreatIntel
+    | where not(disabled)
+    // Lookup action based fields
+    | extend UpperAction = toupper(Action)
+    | lookup DvcActionLookup on UpperAction
+    // Extract Network Information
+    | extend NetworkProtocol = iff(Protocol startswith "ICMP", "ICMP", Protocol)
+    | extend NetworkIcmpCode = iff(NetworkProtocol == "ICMP", toint(extract(@"Type=(\d+)", 1, Protocol)), int(null))
+    | extend NetworkIcmpType = iff(isnotnull(NetworkIcmpCode), _ASIM_LookupICMPType(NetworkIcmpCode), "")
+    // Determine Event Severity
+    | lookup NumericalEventSeverityLookup on Severity
+    | extend EventSeverity = iff(Type=="AZFWThreatIntel", "Medium", coalesce(NumericalEventSeverity, ActionEventSeverity))
+    | project-rename
+        EventUid = _ItemId,
+        EventOriginalResultDetails = ActionReason,
+        Src = SourceIp,
+        SrcPortNumber = SourcePort,
+        Dst = DestinationIp,
+        DstPortNumber = DestinationPort,
+        DstFQDN = Fqdn,
+        DvcOriginalAction = Action,
+        ThreatId = SignatureId,
+        ThreatCategory = Category,
+        EventReportUrl = TargetUrl
+    | extend
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventType = "NetworkSession",
+        EventSchema = "NetworkSession",
+        EventSchemaVersion = "0.2.6",
+        EventVendor = "Microsoft",
+        EventProduct = "Azure Firewall",
+        EventCount = toint(1),
+        EventOriginalUid = EventUid,
+        DvcIdType = "AzureResourceId",
+        SrcIpAddr = Src,
+        SrcHostname = Src,
+        DstIpAddr = Dst, 
+        DstHostname = Dst,
+        Dvc = _ResourceId,
+        DvcId = _ResourceId,
+        DvcScopeId = _SubscriptionId,
+        Hostname = Dst,
+        IpAddr = Src,
+        NetworkRuleName = Rule,
+        DstNatIpAddr = TranslatedIp,
+        DstNatPortNumber = TranslatedPort,
+        ThreatName = coalesce(Description, ThreatDescription),
+        AdditionalFields = bag_pack(
+            "Policy", Policy,
+            "RuleCollection", RuleCollection, 
+            "RuleCollectionGroup", RuleCollectionGroup,
+            "SourceSystem", SourceSystem,
+            "IsTlsInspected", IsTlsInspected
+        )
+    | project
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventSchema,
+        EventSchemaVersion,
+        EventVendor,
+        EventProduct,
+        EventCount,
+        EventOriginalResultDetails,
+        EventOriginalUid,
+        EventUid,
+        EventResult,
+        EventSeverity,
+        EventReportUrl,
+        Type,
+        Src,
+        SrcIpAddr,
+        SrcPortNumber,
+        SrcHostname,
+        Dst,
+        DstIpAddr, 
+        DstPortNumber,
+        DstHostname,
+        DstNatIpAddr,
+        DstNatPortNumber,
+        DstFQDN,
+        NetworkRuleName,
+        Rule,
+        NetworkProtocol,
+        NetworkIcmpCode,
+        NetworkIcmpType,
+        Dvc,
+        DvcId,
+        DvcIdType,
+        DvcScopeId,
+        DvcAction,
+        DvcOriginalAction,
+        Hostname,
+        IpAddr,
+        ThreatId,
+        ThreatName,
+        ThreatCategory,
+        TimeGenerated,
+        AdditionalFields,
+        _BilledSize,
+        _IsBillable,
+        _ResourceId,
+        _SubscriptionId,
+        TenantId
+  };
+  parser (disabled = disabled)
