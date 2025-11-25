@@ -1,0 +1,54 @@
+id: 41B8A72D-7C7A-442D-924C-7AD58569C8E6
+name: Google Threat Intelligence - Threat Hunting Domain
+description: |
+  'Google Threat Intelligence domain correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1566
+  - T1568
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{Domain}} from the {{Type}} table.\n'
+query: |
+  let ioc_lookBack = 1d;
+  _Im_Dns
+  | where isnotempty(DnsQuery)
+  | extend lowerDomain=tolower(DnsQuery)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == 'domain-name:value'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where Active == true and isnotnull(ValidUntil) and ValidUntil > now()
+  | extend lowerDomain=tolower(ObservableValue)
+  ) on lowerDomain
+  | project Domain=ObservableValue, Description, Type, TimeGenerated
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+version: 1.0.0
+kind: Scheduled

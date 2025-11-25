@@ -1,0 +1,52 @@
+id: 0FF1C09A-C757-4EE8-8AE9-CDBBD3E6E830
+name: Google Threat Intelligence - Threat Hunting IP
+description: |
+  'Google Threat Intelligence IP correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1041
+  - T1568
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{NetworkIP}} from the {{Type}} table.\n'
+query: |
+  let ioc_lookBack = 1d;
+  _Im_NetworkSession
+  | where isnotempty(DstIpAddr)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == 'ipv4-addr:value'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where Active == true and isnotnull(ValidUntil) and ValidUntil > now()
+  ) on $left.DstIpAddr == $right.ObservableValue
+  | project NetworkIP=ObservableValue, Description, Type, TimeGenerated
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkIP
+version: 1.0.0
+kind: Scheduled

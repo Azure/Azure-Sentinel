@@ -1,0 +1,58 @@
+id: B4F02D61-DD98-414D-9881-6E205CF8C503
+name: Google Threat Intelligence - Threat Hunting Hash
+description: |
+  'Google Threat Intelligence hash correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1189
+  - T1059
+  - T1554
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{Hash}} from the {{Type}} table.\n'
+query: |
+  let ioc_lookBack = 1d;
+  imFileEvent
+  | where isnotempty(Hash)
+  | extend lowerHash=tolower(Hash)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey contains 'file:hashes'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where Active == true and isnotnull(ValidUntil) and ValidUntil > now()
+  | extend lowerHash=tolower(ObservableValue)
+  ) on lowerHash
+  | project Hash=ObservableValue, HashType=extract("file:hashes.('[^']*')", 1, ObservableKey), Description, Type, TimeGenerated
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash
+      - identifier: Algorithm
+        columnName: HashType
+version: 1.0.0
+kind: Scheduled
