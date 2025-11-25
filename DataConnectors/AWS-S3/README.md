@@ -54,6 +54,10 @@ When the script(s) complete, you must complete the Azure Sentinel data connector
 
 By default, a log is created in the directory where the script is executed.
 
+## Attack Disruption advance option Setup
+
+The `awsScriptBash.zip` file contains a bash script for setting up AWS attack disruption capabilities. This script can be used in AWS CloudShell as an alternative to manual configuration for enhanced security response permissions.
+
 ## Advanced usage
 
 The `ConfigAwsConnector.ps1` script has two parameters:

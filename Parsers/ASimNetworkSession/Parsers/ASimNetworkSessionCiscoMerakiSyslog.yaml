@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Cisco Meraki
-  Version: '1.2.1'
-  LastUpdated: Jul 19, 2024
+  Version: '1.2.2'
+  LastUpdated: Nov 23, 2025
 Product:
   Name: Cisco Meraki
 Normalization:
@@ -157,14 +157,20 @@ ParserQuery: |
                 | project-rename LogMessage =  SyslogMessage
                 );
         let PreFilteredData = allData
-            | where not(disabled) and (LogMessage has_any("flows", "firewall", "ids-alerts") or LogMessage has_all("security_event", "ids-alerted") or (LogMessage has "events" and (LogMessage has_any ("Blocked DHCP server response", "association") or (LogMessage has "VRRP packet" and not(LogMessage has_any ("VRRP passive", "VRRP active"))) or (LogMessage has "disassociation" and not(LogMessage has_any ("auth_neg_failed", "dhcp"))))) or (LogMessage has "airmarshal_events" and LogMessage has_any("ssid_spoofing_detected", "rogue_ssid_detected")))
+            | where not(disabled) and (
+                LogMessage has_any("flows", "firewall", "ids-alerts", "cellular_firewall", "vpn_firewall", "ip_flow_start", "ip_flow_end") 
+                or LogMessage has_all("security_event", "ids-alerted") 
+                or LogMessage has_all("security_event", "ids_alerted")
+                or (LogMessage has "events" and (LogMessage has_any ("Blocked DHCP server response", "association") or (LogMessage has "VRRP packet" and not(LogMessage has_any ("VRRP passive", "VRRP active"))) or (LogMessage has "disassociation" and not(LogMessage has_any ("auth_neg_failed", "dhcp"))))) 
+                or (LogMessage has "airmarshal_events" and LogMessage has_any("ssid_spoofing_detected", "rogue_ssid_detected"))
+            )
             | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
             | extend
                 LogType = tostring(Parser[2]),
                 Substring = tostring(Parser[3]);
         let FlowsFirewallData = PreFilteredData
-            | where LogType in ("flows", "firewall", "cellular_firewall", "vpn_firewall")
-            | parse-kv Substring as(src: string, dst: string, mac: string, sport: string, dport: string, protocol: string, type: int) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+            | where LogType in ("flows", "firewall", "cellular_firewall", "vpn_firewall", "ip_flow_start", "ip_flow_end")
+            | parse-kv Substring as(src: string, dst: string, mac: string, sport: string, dport: string, protocol: string, type: int, translated_dst_ip: string, translated_port: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
             | parse Substring with pattern1: string " src=" temp_restmessage: string
             | parse Substring with * "pattern: " pattern2: string " " temp_restmessage: string
             | extend NetworkIcmpCode_lookup = iff(protocol == 'icmp6', type, int(null))
@@ -182,7 +188,7 @@ ParserQuery: |
         let IDSAlertData = PreFilteredData
             | where LogType in ("ids-alerts", "security_event")
             | parse LogMessage with * "security_event " LogSubType: string " " * "message: " message: string 
-            | where LogType == "security_event" and LogSubType == "ids-alerted" or LogType == "ids-alerts"
+            | where LogType == "security_event" and (LogSubType == "ids-alerted" or LogSubType == "ids_alerted") or LogType == "ids-alerts"
             | parse-kv Substring as(priority: string, timestamp: string, direction: string, protocol: string, src: string, dst: string, signature: string, dhost: string, shost: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
             | extend EventResult = "Success"
             | extend
@@ -285,11 +291,11 @@ ParserQuery: |
                         )
         | extend SrcPortNumber = iff(isempty(SrcPortNumber), toint(coalesce(sport, temp_srcport)), SrcPortNumber)
         | extend SrcPortNumber = toint(iff(isempty(SrcPortNumber) and SrcIpAddr has ".", split(temp_srcipport, ":")[1], SrcPortNumber))
-        | extend temp_dstipport = coalesce(dst, dns_server)
+        | extend temp_dstipport = coalesce(dst, dns_server, translated_dst_ip)
         | extend temp_dstipport =  trim('"', temp_dstipport)
         | parse temp_dstipport with * "[" temp_dstip "]:" temp_dstport
         | extend DstIpAddr = iff(temp_dstipport has ".", split(temp_dstipport, ":")[0], coalesce(temp_dstip, temp_dstipport))
-        | extend DstPortNumber = toint(coalesce(dport, temp_dstport))
+        | extend DstPortNumber = toint(coalesce(dport, temp_dstport, translated_port))
         | extend DstPortNumber = toint(iff(isempty(DstPortNumber) and DstIpAddr has ".", split(temp_dstipport, ":")[1], DstPortNumber))
         | extend SrcIpAddr = iff(SrcIpAddr == SrcMacAddr, "", SrcIpAddr)
         | extend DstIpAddr = iff(DstIpAddr == DstMacAddr, "", DstIpAddr)
@@ -348,6 +354,8 @@ ParserQuery: |
             dns_server,
             sport,
             dport,
+            translated_dst_ip,
+            translated_port,
             *_lookup,
             type*,
             pattern*,
@@ -384,3 +392,4 @@ ParserQuery: |
             ProcessName,CollectorHostName,NetworkProtocolNumber
     };
     parser(disabled=disabled)
+    
