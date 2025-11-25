@@ -3140,7 +3140,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         if ($isPipelineRun -eq $false)
         {
             #downloading and running arm-ttk on generated solution
-            $armTtkFolder = "$PSScriptRoot/../arm-ttk"
+            $armTtkFolder = [System.IO.Path]::GetFullPath("$PSScriptRoot/../arm-ttk")
             if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
                 Write-Output "Missing arm-ttk validations. Downloading module..."
                 Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"

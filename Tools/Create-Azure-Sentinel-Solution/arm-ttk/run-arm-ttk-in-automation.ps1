@@ -6,12 +6,19 @@
 # Paths
 $repoRoot = $(git rev-parse --show-toplevel)
 $root="$repoRoot/Solutions"
-$tmp="$PSScriptRoot/tmp"
+$tmp=[System.IO.Path]::GetFullPath("$PSScriptRoot/../tmp")
 $solutionName=$args[0]
 
-if(!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)){
-    Import-Module "$tmp/arm-ttk/arm-ttk.psd1"
+# Download ARM-TTK if not present
+if (-not (Test-Path "$tmp/arm-ttk/arm-ttk.psd1")) {
+    & "$PSScriptRoot/download-arm-ttk.ps1"
 }
+
+# Import ARM-TTK module
+if (Get-Module -Name arm-ttk) {
+    Remove-Module arm-ttk -Force
+}
+Import-Module "$tmp/arm-ttk/arm-ttk.psd1" -Force
 
 # Run 'Test-AzTemplate' from the arm-ttk for given solution package
 $solutions = Get-ChildItem $root -Directory
