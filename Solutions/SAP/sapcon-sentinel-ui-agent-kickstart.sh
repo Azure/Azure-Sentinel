@@ -171,6 +171,20 @@ if [ -z "$UI_AGENT" ] ||
 		exit 1
 fi
 
+# Deprecation Warning
+log ''
+log '************************************************************'
+log '*** ATTENTION: The Sentinel SAP Agent is now deprecated and will no longer ingest logs in September 2026.'
+log '*** Customers must now use the Agentless connector for continued support.'
+log '************************************************************'
+log ''
+read -r -p 'Do you wish to proceed? (Yes/No): ' PROCEED_RESPONSE
+if [ "${PROCEED_RESPONSE,,}" != "yes" ]; then
+	log 'Installation cancelled.'
+	exit 0
+fi
+log ''
+
 if [ -n "$SAPCRYPTOLIBPATH" ]; then
 	if [ ! -d "$SAPCRYPTOLIBPATH" ] || [ ! -f "$SAPCRYPTOLIBPATH/libsapcrypto.so" ] || [ ! -f "$SAPCRYPTOLIBPATH/sapgenpse" ]; then
 		log 'Invalid SAP Crypto Lib path. Either target folder does not exist, or it does not contain libsapcrypto.so or sapgenpse'
