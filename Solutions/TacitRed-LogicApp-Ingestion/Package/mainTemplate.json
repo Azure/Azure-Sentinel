@@ -1,0 +1,428 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "TacitRed - support@tacitred.com",
+    "comments": "Solution template for TacitRed-LogicApp-Ingestion"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@tacitred.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "TacitRed-LogicApp-Ingestion",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "tacitred.azure-sentinel-solution-tacitred-logicapp-ingestion",
+    "_solutionId": "[variables('solutionId')]",
+    "Playbooks": "Playbooks",
+    "_Playbooks": "[variables('Playbooks')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Playbooks",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Playbooks Playbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "logicAppName": {
+              "type": "string",
+              "defaultValue": "logic-tacitred-ingestion",
+              "metadata": {
+                "description": "Logic App name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "tacitRedApiKey": {
+              "type": "securestring",
+              "metadata": {
+                "description": "TacitRed API key"
+              }
+            },
+            "tacitRedApiUrl": {
+              "type": "string",
+              "defaultValue": "https://app.tacitred.com/api/v1",
+              "metadata": {
+                "description": "TacitRed API base URL"
+              }
+            },
+            "dcrImmutableId": {
+              "type": "string",
+              "metadata": {
+                "description": "DCR Immutable ID"
+              }
+            },
+            "dceEndpoint": {
+              "type": "string",
+              "metadata": {
+                "description": "DCE Ingestion Endpoint"
+              }
+            },
+            "dcrResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "DCR resource ID for RBAC assignment"
+              }
+            },
+            "dceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "DCE resource ID for RBAC assignment"
+              }
+            },
+            "streamName": {
+              "type": "string",
+              "defaultValue": "Custom-TacitRed_Findings_Raw",
+              "metadata": {
+                "description": "Stream name for ingestion"
+              }
+            },
+            "pollingIntervalMinutes": {
+              "type": "int",
+              "defaultValue": 15,
+              "metadata": {
+                "description": "Polling interval in minutes"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {
+                "Solution": "TacitRed-Sentinel-Integration",
+                "ManagedBy": "Bicep"
+              },
+              "metadata": {
+                "description": "Tags for the resource"
+              }
+            }
+          },
+          "variables": {
+            "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[[parameters('logicAppName')]",
+              "location": "[[parameters('location')]",
+              "tags": "[[parameters('tags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "tacitRedApiKey": {
+                      "type": "securestring",
+                      "defaultValue": "[[parameters('tacitRedApiKey')]"
+                    },
+                    "tacitRedApiUrl": {
+                      "type": "string",
+                      "defaultValue": "[[parameters('tacitRedApiUrl')]"
+                    },
+                    "dcrImmutableId": {
+                      "type": "string",
+                      "defaultValue": "[[parameters('dcrImmutableId')]"
+                    },
+                    "dceEndpoint": {
+                      "type": "string",
+                      "defaultValue": "[[parameters('dceEndpoint')]"
+                    },
+                    "streamName": {
+                      "type": "string",
+                      "defaultValue": "[[parameters('streamName')]"
+                    }
+                  },
+                  "triggers": {
+                    "Recurrence": {
+                      "type": "Recurrence",
+                      "recurrence": {
+                        "frequency": "Minute",
+                        "interval": "[[parameters('pollingIntervalMinutes')]"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Initialize_Query_Window": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "queryWindowMinutes",
+                            "type": "integer",
+                            "value": 302
+                          }
+                        ]
+                      }
+                    },
+                    "Calculate_From_Time": {
+                      "type": "Compose",
+                      "inputs": "2025-10-26T14:00:00Z",
+                      "runAfter": {
+                        "Initialize_Query_Window": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Calculate_Until_Time": {
+                      "type": "Compose",
+                      "inputs": "2025-10-26T20:00:00Z",
+                      "runAfter": {
+                        "Calculate_From_Time": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Call_TacitRed_API": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{parameters('tacitRedApiUrl')}/findings?from=@{outputs('Calculate_From_Time')}&until=@{outputs('Calculate_Until_Time')}&page_size=100",
+                        "headers": {
+                          "Authorization": "@parameters('tacitRedApiKey')",
+                          "Accept": "application/json",
+                          "User-Agent": "LogicApp-Sentinel-TacitRed-Ingestion/1.0"
+                        }
+                      },
+                      "runAfter": {
+                        "Calculate_Until_Time": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Flatten_TacitRed_Data": {
+                      "type": "Select",
+                      "inputs": {
+                        "from": "@body('Call_TacitRed_API')?['results']",
+                        "select": {
+                          "email": "@item()?['finding']?['supporting_data']?['credential']",
+                          "domain": "@item()?['finding']?['supporting_data']?['domain']",
+                          "findingType": "@first(item()?['finding']?['types'])",
+                          "confidence": "@item()?['severity']",
+                          "firstSeen": "@item()?['finding']?['supporting_data']?['date_compromised']",
+                          "lastSeen": "@item()?['time']",
+                          "notes": "@item()?['finding']?['title']",
+                          "source": "@item()?['finding']?['supporting_data']?['stealer']",
+                          "severity": "@item()?['severity']",
+                          "status": "@string(item()?['state_id'])",
+                          "campaign_id": "@item()?['finding']?['supporting_data']?['machine_id']",
+                          "user_id": "@item()?['finding']?['uid']",
+                          "username": "@item()?['finding']?['supporting_data']?['machine_name']",
+                          "detection_ts": "@item()?['time']",
+                          "metadata": "@string(item()?['finding']?['supporting_data'])"
+                        }
+                      },
+                      "runAfter": {
+                        "Call_TacitRed_API": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Send_to_DCE": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('dceEndpoint')}/dataCollectionRules/@{parameters('dcrImmutableId')}/streams/@{parameters('streamName')}?api-version=2023-01-01",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": "@body('Flatten_TacitRed_Data')",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://monitor.azure.com/"
+                        },
+                        "retryPolicy": {
+                          "type": "Exponential",
+                          "interval": "PT30S",
+                          "minimumInterval": "PT30S",
+                          "maximumInterval": "PT5M",
+                          "count": 30
+                        },
+                        "timeout": "PT30M"
+                      },
+                      "runAfter": {
+                        "Flatten_TacitRed_Data": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Log_Result": {
+                      "type": "Compose",
+                      "inputs": {
+                        "status": "completed",
+                        "timestamp": "@utcNow()",
+                        "recordCount": "@length(body('Call_TacitRed_API')?['results'])",
+                        "message": "TacitRed ingestion completed"
+                      },
+                      "runAfter": {
+                        "Send_to_DCE": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "TacitRed-LogicApp-Ingestion",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "TacitRed",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "TacitRed",
+                  "email": "support@tacitred.com",
+                  "tier": "Partner",
+                  "link": "https://tacitred.com"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "9067205473152741572"
+            },
+            "lastUpdateTime": "2025-11-27T11:48:03.456Z",
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "Playbook",
+        "displayName": "Playbooks",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "TacitRed-LogicApp-Ingestion",
+        "publisherDisplayName": "TacitRed",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TacitRed-LogicApp-Ingestion/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TacitRed Logic App Ingestion solution uses a Logic App with managed identity to poll TacitRed's API and ingest compromised credential findings into Microsoft Sentinel via the Logs Ingestion API. Includes analytics rules for detecting repeat compromises, high-risk users, and cross-feed correlation.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\"height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "TacitRed-LogicApp-Ingestion",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "TacitRed",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "TacitRed",
+          "email": "support@tacitred.com",
+          "tier": "Partner",
+          "link": "https://tacitred.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Playbooks')]",
+              "version": "[variables('playbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-11-27",
+        "providers": [
+          "TacitRed"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
