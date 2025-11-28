@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                    |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------|
+| 3.0.13      | 28-11-2025                     | UUpdate Defender XDR solution with new **Hunting Queries**.				   |
 | 3.0.12      | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 | 3.0.11      | 16-12-2024                     | Updated **Analytic Rule** LocalAdminGroupChanges.yaml.<br> Updated **Workbook**.				   |
 | 3.0.10      | 25-10-2024                     | Added New **Hunting Queries**.				   |
