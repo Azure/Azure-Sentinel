@@ -671,7 +671,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
         $global:baseMainTemplate.resources += $newMetadata;
         ### Removing the Non-Sentinel Resources if there are any:
-        $newobject = $global:baseMainTemplate.resources | ? {$_.type -in $contentResourceDetails.resources}
+        $newobject = @($global:baseMainTemplate.resources | ? {$_.type -in $contentResourceDetails.resources})
         $global:baseMainTemplate.resources = $newobject
     }
 
