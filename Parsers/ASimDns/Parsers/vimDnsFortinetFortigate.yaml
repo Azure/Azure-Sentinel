@@ -96,7 +96,12 @@ ParserQuery: |
           "22", "BADTRUNC", "Failure",
           "23", "BADCOOKIE", "Failure"
       ];
-      let DnsResponseCodeNameLookup = iff(responsecodename == "*" or isempty(responsecodename), "", responsecodename);
+      let DnsResponseCodeNameLookup = toscalar(
+          EventOriginalResultDetailsLookup
+          | where not(disabled)
+          | where (responsecodename == '*' or EventResultDetails =~ responsecodename)
+          | project EventOriginalResultDetails
+      );
       let DnsQueryTypeLookup = datatable(DnsQueryType:int, DnsQueryTypeName:string)[
           0, "Reserved",
           1, "A",
@@ -283,7 +288,7 @@ ParserQuery: |
           _User                       = coalesce(FTNTFGTuser, user),
           _UnauthUser                 = coalesce(FTNTFGTunauthuser, unauthuser)
       | where (array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any)) and
-          (responsecodename == "*" or EventOriginalResultDetails =~ DnsResponseCodeNameLookup) and
+          (responsecodename == '*' or EventOriginalResultDetails == DnsResponseCodeNameLookup) and
           (response_has_ipv4 == '*' or has_ipv4(DnsResponseName, response_has_ipv4)) and
           (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix))
       | extend 
@@ -302,7 +307,7 @@ ParserQuery: |
           Dst                 = DstIpAddr,
           Dvc                 = DvcHostname,
           DnsResponseCodeName = EventResultDetails,
-          EventType           = case(EventSubType =~ "request",  "Query", EventSubType =~ "response", "Response", "Query"),
+          EventType           = "Query",
           EventSchemaVersion  = "0.1.7",
           EventSchema         = "Dns",
           EventCount          = int(1),
