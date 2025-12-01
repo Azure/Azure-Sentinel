@@ -50,8 +50,8 @@ def validate_rule(yaml_file):
     if 'requiredDataConnectors' in rule:
         for connector in rule['requiredDataConnectors']:
             conn_id = connector.get('connectorId')
-            if 'V2' in rule_name and conn_id != 'Lookout-Mobile-Threat-Defense':
-                errors.append(f"V2 rule should use 'Lookout-Mobile-Threat-Defense', found '{conn_id}'")
+            if 'V2' in rule_name and conn_id != 'LookoutAPI':
+                errors.append(f"V2 rule should use 'LookoutAPI', found '{conn_id}'")
             
             # Check if connector ID is in valid list
             valid_ids = load_valid_connector_ids()
