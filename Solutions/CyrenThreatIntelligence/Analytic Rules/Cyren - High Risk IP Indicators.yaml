@@ -1,0 +1,61 @@
+id: 5d7e8b3a-1f2c-4e5d-9a0b-c1d2e3f4a5b6
+name: Cyren High-Risk IP Indicators
+description: |
+  'Detects high-risk IP indicators (risk score >= 80) from Cyren threat intelligence feeds in the last 24 hours.
+  These IPs are associated with malicious activity such as malware distribution, phishing, or botnet command and control.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: CyrenThreatIntel
+    dataTypes:
+      - Cyren_Indicators_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Impact
+relevantTechniques:
+  - T1071
+  - T1568
+query: |
+  Cyren_Indicators_CL
+  | where TimeGenerated > ago(1d)
+  | where isnotempty(ip_s)
+  | extend Risk = toint(risk_d)
+  | where Risk >= 80
+  | summarize 
+      DetectionCount = count(), 
+      MaxRisk = max(Risk), 
+      Categories = make_set(category_s) 
+    by IP = ip_s, Source = source_s
+  | where DetectionCount >= 1
+  | extend 
+      IPAddress = IP,
+      ThreatCategories = strcat_array(Categories, ", ")
+suppressionDuration: 1h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  RiskScore: MaxRisk
+  DetectionCount: DetectionCount
+  Categories: ThreatCategories
+  Source: Source
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled
