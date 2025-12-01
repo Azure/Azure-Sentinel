@@ -1,17 +1,15 @@
 Parser:
   Title: Authentication ASIM filtering parser for OpenSSH sshd
-  Version: '0.2.3'
-  LastUpdated: Apr 22, 2024
+  Version: '0.2.4'
+  LastUpdated: May 29, 2025
 Product:
   Name: OpenSSH
 Normalization:
   Schema: Authentication
-  Version: '0.1.2'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
 Description: |
   This ASIM parser supports filtering and normalizing OpenSSH server (sshd) sign in logs, collected using Syslog to the ASIM Authentication schema.
 Notes: |
@@ -77,7 +75,7 @@ ParserQuery: |
               and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
               and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in) or "Logoff" in~ (eventtype_in))
   // eventresultdetails_in filtering done later in the parser
-  // eventresult filtering done later in the parser
+  // eventresult filtering done later in the parser 
   };
       let SyslogProjects = Syslog
           | project
@@ -95,12 +93,12 @@ ParserQuery: |
       // -- Successful login
       let SSHDAccepted=(disabled: bool=false)
   { 
-      // -- Parse events with the format "Accepted password for <User> from <IP address> port <port> ssh2"
+      // -- Parse events with the format "Accepted (password|none|publickey) for <User> from <IP address> port <port> ssh2"
       SyslogProjects
           | where not(disabled)
           | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
           | invoke prefilter()
-          | parse SyslogMessage with "Accepted password for " TargetUsername: string " from " SrcIpAddr: string " port" SrcPortNumber: int *
+          | parse SyslogMessage with "Accepted " * " for " TargetUsername: string " from " SrcIpAddr: string " port" SrcPortNumber: int *
           | extend
               EventResult     = 'Success'
               ,
@@ -115,7 +113,7 @@ ParserQuery: |
       // -- Failed login - incorrect password
       let SSHDFailed=(disabled: bool=false)
   {
-      // -- Parse events with the format Failed (password|none|publickey) for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
+      // -- Parse events with the format Failed (password|none|publickey)  for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
       // -- Or a number of such events message repeated <n> times: [ <message> ]
       SyslogProjects
           | where not(disabled)
@@ -367,11 +365,13 @@ ParserQuery: |
           ,
           TargetDvcScopeId      = DvcScopeId
           ,
-          TargetDvcIdType       = DvcDomainType
+          TargetDvcIdType       = DvcIdType
           ,
           IpAddr                = DvcIpAddr
           ,
           TargetIpAddr          = DvcIpAddr
+          ,
+          Application           = TargetAppName
   };
     parser
     (
