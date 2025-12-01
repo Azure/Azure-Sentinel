@@ -2,462 +2,357 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "author": "TacitRed",
-    "comments": "TacitRed Compromised Credentials Solution for Microsoft Sentinel"
+    "author": "TacitRed - support@tacitred.com",
+    "comments": "Solution template for Tacitred-CCF-Hub-v2ThreatIntelligence"
   },
   "parameters": {
     "location": {
       "type": "string",
+      "minLength": 1,
       "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Location for all resources"
-      }
-    },
-    "workspace": {
-      "type": "string",
-      "metadata": {
-        "description": "Workspace name for Microsoft Sentinel"
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
       }
     },
     "workspace-location": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Location for workspace and solution resources"
-      }
-    },
-    "tacitRedApiKey": {
-      "type": "securestring",
-      "metadata": {
-        "description": "TacitRed API Key for authentication"
-      }
-    },
-    "tacitRedDcrImmutableId": {
-      "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "[REQUIRED for Content Hub] immutableId of the TacitRed data collection rule. Content Hub packaging pipeline must deploy DCR first, read its immutableId, and pass it here. For local testing, deploy DCR first then get ID via: az monitor data-collection rule show --name dcr-tacitred-findings --query immutableId -o tsv"
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
       }
     },
-    "deployAnalytics": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Deploy 3 pre-configured analytics rules for threat detection"
-      }
-    },
-    "deployWorkbooks": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Deploy TacitRed SecOps workbook for compromised credentials triage and monitoring"
-      }
-    },
-    "deployConnectors": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Automatically configure CCF connector definition and data connectors via deployment script"
-      }
-    },
-    "enableKeyVault": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Enable Azure Key Vault for secure credential storage (recommended for production)"
-      }
-    },
-    "keyVaultOption": {
+    "workspace": {
+      "defaultValue": "",
       "type": "string",
-      "defaultValue": "new",
-      "allowedValues": ["new", "existing"],
       "metadata": {
-        "description": "Create new Key Vault or use existing one"
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
     },
-    "keyVaultName": {
-      "type": "string",
-      "defaultValue": "[concat('kv-tacitred-', uniqueString(resourceGroup().id))]",
-      "metadata": {
-        "description": "Name of the Key Vault (new or existing)"
-      }
-    },
-    "keyVaultResourceGroup": {
+    "resourceGroupName": {
       "type": "string",
       "defaultValue": "[resourceGroup().name]",
       "metadata": {
-        "description": "Resource group of existing Key Vault (only used if keyVaultOption is 'existing')"
+        "description": "resource group name where Microsoft Sentinel is setup"
       }
     },
-    "enablePrivateEndpoint": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Enable private endpoint for Key Vault (requires VNet integration)"
-      }
-    },
-    "subnetId": {
+    "subscription": {
       "type": "string",
-      "defaultValue": "",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
       "metadata": {
-        "description": "Subnet ID for private endpoint (required if enablePrivateEndpoint is true). Format: /subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.Network/virtualNetworks/{vnet-name}/subnets/{subnet-name}"
+        "description": "subscription id where Microsoft Sentinel is setup"
       }
     },
-    "forceUpdateTag": {
+    "workbook1-name": {
       "type": "string",
-      "defaultValue": "[utcNow('u')]",
+      "defaultValue": "TacitRed SecOps - Compromised Credentials",
+      "minLength": 1,
       "metadata": {
-        "description": "Change value to force re-execution of the deployment script."
+        "description": "Name for the workbook"
       }
     }
   },
   "variables": {
-    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dceName": "dce-threatintel-feeds",
-    "tacitRedDcrName": "dcr-tacitred-findings",
-    "uamiName": "uami-ccf-deployment",
-    "keyVaultResourceId": "[if(parameters('enableKeyVault'), if(equals(parameters('keyVaultOption'), 'new'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))), '')]",
-    "connectorId": "TacitRedThreatIntel"
+    "email": "support@tacitred.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Tacitred-CCF-Hub-v2ThreatIntelligence",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "tacitred.azure-sentinel-solution-tacitredcompromisedcredentials",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "TacitRedThreatIntel",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "TacitRedThreatIntelConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "7c0b2f5d-4e7f-4d5c-9b58-3fbaaf74ab12",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '7c0b2f5d-4e7f-4d5c-9b58-3fbaaf74ab12')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('7c0b2f5d-4e7f-4d5c-9b58-3fbaaf74ab12')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','7c0b2f5d-4e7f-4d5c-9b58-3fbaaf74ab12','-', '1.0.0')))]"
+    },
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "TacitRedSecOps-CompromisedCredentials",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
     {
-      "type": "Microsoft.Insights/dataCollectionEndpoints",
-      "apiVersion": "2024-03-11",
-      "name": "[variables('dceName')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
       "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
       "properties": {
-        "networkAcls": {
-          "publicNetworkAccess": "Enabled"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/tables",
-      "apiVersion": "2025-07-01",
-      "name": "[concat(parameters('workspace'), '/TacitRed_Findings_CL')]",
-      "properties": {
-        "schema": {
-          "name": "TacitRed_Findings_CL",
-          "columns": [
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "TacitRed Compromised Credentials",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
             {
-              "name": "TimeGenerated",
-              "type": "datetime"
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "TacitRedThreatIntel",
+                  "title": "TacitRed Compromised Credentials",
+                  "publisher": "TacitRed",
+                  "descriptionMarkdown": "Ingest compromised credential findings from TacitRed using the Common Connector Framework (CCF).",
+                  "graphQueriesTableName": "TacitRed_Findings_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total TacitRed findings received",
+                      "legend": "TacitRed Findings",
+                      "baseQuery": "TacitRed_Findings_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Recent compromised credentials",
+                      "query": "TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | project TimeGenerated, email_s, domain_s, confidence_d, source_s"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "TacitRed_Findings_CL",
+                      "lastDataReceivedQuery": "TacitRed_Findings_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors",
+                      "value": []
+                    }
+                  ],
+                  "availability": {
+                    "status": "Available",
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and write permissions required",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "TacitRed API Key",
+                        "description": "API key stored in Azure Key Vault or provided at deployment time."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Cost Considerations",
+                      "description": "**Recommended:** Set up a Budget Alert in Azure Cost Management to monitor ingestion costs. This connector polls hourly and filters data by time window to minimize duplicate ingestion."
+                    },
+                    {
+                      "title": "Provide API Key",
+                      "description": "For enhanced security, enable Key Vault integration to store and retrieve the API key."
+                    }
+                  ]
+                }
+              }
             },
             {
-              "name": "email_s",
-              "type": "string"
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "TacitRed",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "TacitRed",
+                  "email": "support@tacitred.com",
+                  "tier": "Partner",
+                  "link": "https://www.tacitred.com/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
             },
             {
-              "name": "domain_s",
-              "type": "string"
+              "name": "dcr-tacitred-findings",
+              "apiVersion": "2024-03-11",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-TacitRed_Findings_Raw": {
+                    "columns": [
+                      {
+                        "name": "finding",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-TacitRed_Findings_Raw"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend f = todynamic(finding) | extend TimeGenerated = todatetime(f['time']), email_s = tostring(iif(isnotempty(f['email']), f['email'], f['supporting_data']['credential']['email'])), domain_s = tostring(f['supporting_data']['credential']['domain']), findingType_s = tostring(f['type']), confidence_d = toint(f['confidence']), firstSeen_t = todatetime(f['first_seen']), lastSeen_t = todatetime(f['last_seen']), notes_s = tostring(f['notes']), source_s = tostring(f['source']), severity_s = tostring(f['severity']), status_s = tostring(f['status']), campaign_id_s = tostring(iif(isnotempty(f['campaign_id']), f['campaign_id'], f['campaign']['id'])), user_id_s = tostring(iif(isnotempty(f['user_id']), f['user_id'], f['user']['id'])), username_s = tostring(iif(isnotempty(f['username']), f['username'], f['user']['username'])), detection_ts_t = todatetime(f['detection_ts']), metadata_s = tostring(f) | project TimeGenerated, email_s, domain_s, findingType_s, confidence_d, firstSeen_t, lastSeen_t, notes_s, source_s, severity_s, status_s, campaign_id_s, user_id_s, username_s, detection_ts_t, metadata_s",
+                    "outputStream": "Custom-TacitRed_Findings_CL"
+                  }
+                ]
+              }
             },
             {
-              "name": "findingType_s",
-              "type": "string"
-            },
-            {
-              "name": "confidence_d",
-              "type": "int"
-            },
-            {
-              "name": "firstSeen_t",
-              "type": "datetime"
-            },
-            {
-              "name": "lastSeen_t",
-              "type": "datetime"
-            },
-            {
-              "name": "notes_s",
-              "type": "string"
-            },
-            {
-              "name": "source_s",
-              "type": "string"
-            },
-            {
-              "name": "severity_s",
-              "type": "string"
-            },
-            {
-              "name": "status_s",
-              "type": "string"
-            },
-            {
-              "name": "campaign_id_s",
-              "type": "string"
-            },
-            {
-              "name": "user_id_s",
-              "type": "string"
-            },
-            {
-              "name": "username_s",
-              "type": "string"
-            },
-            {
-              "name": "detection_ts_t",
-              "type": "datetime"
-            },
-            {
-              "name": "metadata_s",
-              "type": "string"
+              "name": "TacitRed_Findings_CL",
+              "apiVersion": "2025-07-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "TacitRed_Findings_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "email_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "domain_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "findingType_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "confidence_d",
+                      "type": "int"
+                    },
+                    {
+                      "name": "firstSeen_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "lastSeen_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "notes_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "source_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "severity_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "status_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "campaign_id_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "user_id_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "username_s",
+                      "type": "string"
+                    },
+                    {
+                      "name": "detection_ts_t",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "metadata_s",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
             }
           ]
-        }
-      }
-    },
-    {
-      "type": "Microsoft.Insights/dataCollectionRules",
-      "apiVersion": "2024-03-11",
-      "name": "[variables('tacitRedDcrName')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'TacitRed_Findings_CL')]"
-      ],
-      "properties": {
-        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "streamDeclarations": {
-          "Custom-TacitRed_Findings_Raw": {
-            "columns": [
-              {
-                "name": "finding",
-                "type": "dynamic"
-              },
-              {
-                "name": "severity",
-                "type": "string"
-              }
-            ]
-          },
-          "Custom-TacitRed_Findings_CL": {
-            "columns": [
-              {
-                "name": "TimeGenerated",
-                "type": "datetime"
-              },
-              {
-                "name": "email_s",
-                "type": "string"
-              },
-              {
-                "name": "domain_s",
-                "type": "string"
-              },
-              {
-                "name": "findingType_s",
-                "type": "string"
-              },
-              {
-                "name": "confidence_d",
-                "type": "int"
-              },
-              {
-                "name": "firstSeen_t",
-                "type": "datetime"
-              },
-              {
-                "name": "lastSeen_t",
-                "type": "datetime"
-              },
-              {
-                "name": "notes_s",
-                "type": "string"
-              },
-              {
-                "name": "source_s",
-                "type": "string"
-              },
-              {
-                "name": "severity_s",
-                "type": "string"
-              },
-              {
-                "name": "status_s",
-                "type": "string"
-              },
-              {
-                "name": "campaign_id_s",
-                "type": "string"
-              },
-              {
-                "name": "user_id_s",
-                "type": "string"
-              },
-              {
-                "name": "username_s",
-                "type": "string"
-              },
-              {
-                "name": "detection_ts_t",
-                "type": "datetime"
-              },
-              {
-                "name": "metadata_s",
-                "type": "string"
-              }
-            ]
-          }
         },
-        "destinations": {
-          "logAnalytics": [
-            {
-              "workspaceResourceId": "[variables('workspaceResourceId')]",
-              "name": "clv2ws1"
-            }
-          ]
-        },
-        "dataFlows": [
-          {
-            "streams": [
-              "Custom-TacitRed_Findings_Raw"
-            ],
-            "destinations": [
-              "clv2ws1"
-            ],
-            "transformKql": "source | project TimeGenerated=now(), email_s=tostring(finding.supporting_data.credential), domain_s=tostring(finding.supporting_data.domain), findingType_s=tostring(finding.uid), confidence_d=toint(75), firstSeen_t=now(), lastSeen_t=now(), notes_s=tostring(finding.uid), source_s=tostring(finding.uid), severity_s=tostring(severity), status_s=tostring(finding.uid), campaign_id_s=tostring(finding.uid), user_id_s=tostring(finding.uid), username_s=tostring(finding.supporting_data.machine), detection_ts_t=now(), metadata_s=tostring(finding)",
-            "outputStream": "Custom-TacitRed_Findings_CL"
-          }
-        ]
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
-      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-      "apiVersion": "2023-01-31",
-      "name": "[variables('uamiName')]",
-      "location": "[parameters('workspace-location')]"
-    },
-    {
-      "condition": "[and(parameters('enableKeyVault'), equals(parameters('keyVaultOption'), 'new'))]",
-      "type": "Microsoft.KeyVault/vaults",
-      "apiVersion": "2025-05-01",
-      "name": "[parameters('keyVaultName')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
-      ],
-      "properties": {
-        "sku": {
-          "family": "A",
-          "name": "standard"
-        },
-        "tenantId": "[subscription().tenantId]",
-        "accessPolicies": [
-          {
-            "tenantId": "[subscription().tenantId]",
-            "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
-            "permissions": {
-              "secrets": ["get", "list"]
-            }
-          }
-        ],
-        "enabledForDeployment": false,
-        "enabledForTemplateDeployment": true,
-        "enabledForDiskEncryption": false,
-        "enableSoftDelete": true,
-        "softDeleteRetentionInDays": 90,
-        "enablePurgeProtection": true,
-        "networkAcls": {
-          "defaultAction": "[if(parameters('enablePrivateEndpoint'), 'Deny', 'Allow')]",
-          "bypass": "AzureServices"
-        }
-      }
-    },
-    {
-      "condition": "[parameters('enableKeyVault')]",
-      "type": "Microsoft.KeyVault/vaults/secrets",
-      "apiVersion": "2023-07-01",
-      "name": "[concat(parameters('keyVaultName'), '/tacitred-api-key')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
-      ],
-      "properties": {
-        "value": "[parameters('tacitRedApiKey')]",
-        "attributes": {
-          "enabled": true
-        },
-        "contentType": "TacitRed API Key for Sentinel Connector"
-      }
-    },
-    {
-      "condition": "[and(parameters('enableKeyVault'), parameters('enablePrivateEndpoint'), not(empty(parameters('subnetId'))))]",
-      "type": "Microsoft.Network/privateEndpoints",
-      "apiVersion": "2025-01-01",
-      "name": "[concat(parameters('keyVaultName'), '-pe')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
-      ],
-      "properties": {
-        "subnet": {
-          "id": "[if(empty(parameters('subnetId')), resourceId('Microsoft.Network/virtualNetworks/subnets', 'placeholder-vnet', 'placeholder-subnet'), parameters('subnetId'))]"
-        },
-        "privateLinkServiceConnections": [
-          {
-            "name": "keyVaultConnection",
-            "properties": {
-              "privateLinkServiceId": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
-              "groupIds": ["vault"]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "condition": "[parameters('enableKeyVault')]",
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(parameters('keyVaultName'), variables('uamiName'), 'key-vault-secrets-user')]",
-      "scope": "[variables('keyVaultResourceId')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
-      ],
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
-        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
-        "principalType": "ServicePrincipal"
-      }
-    },
-    {
-      "condition": "[parameters('enableKeyVault')]",
-      "type": "Microsoft.Insights/diagnosticSettings",
-      "apiVersion": "2021-05-01-preview",
-      "scope": "[variables('keyVaultResourceId')]",
-      "name": "keyVaultDiagnostics",
-      "dependsOn": [
-        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
-      ],
-      "properties": {
-        "workspaceId": "[variables('workspaceResourceId')]",
-        "logs": [
-          {
-            "category": "AuditEvent",
-            "enabled": true
-          }
-        ],
-        "metrics": [
-          {
-            "category": "AllMetrics",
-            "enabled": true
-          }
-        ]
-      }
-    },
-    {
-      "condition": "[parameters('deployConnectors')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2025-09-01",
       "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
-      "apiVersion": "2024-09-01",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'TacitRedThreatIntel')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))]"
-      ],
+      "location": "[parameters('workspace-location')]",
       "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "connectorId": "[variables('connectorId')]",
+          "id": "TacitRedThreatIntel",
           "title": "TacitRed Compromised Credentials",
           "publisher": "TacitRed",
           "descriptionMarkdown": "Ingest compromised credential findings from TacitRed using the Common Connector Framework (CCF).",
@@ -483,7 +378,8 @@
           ],
           "connectivityCriteria": [
             {
-              "type": "HasDataConnectors"
+              "type": "HasDataConnectors",
+              "value": []
             }
           ],
           "availability": {
@@ -513,6 +409,10 @@
           },
           "instructionSteps": [
             {
+              "title": "Cost Considerations",
+              "description": "**Recommended:** Set up a Budget Alert in Azure Cost Management to monitor ingestion costs. This connector polls hourly and filters data by time window to minimize duplicate ingestion."
+            },
+            {
               "title": "Provide API Key",
               "description": "For enhanced security, enable Key Vault integration to store and retrieve the API key."
             }
@@ -521,293 +421,454 @@
       }
     },
     {
-      "condition": "[parameters('deployConnectors')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'DataConnector-TacitRedThreatIntel')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', 'TacitRedThreatIntel')]"
-      ],
       "properties": {
-        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', 'TacitRedThreatIntel')]",
-        "contentId": "TacitRedThreatIntel",
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
         "kind": "DataConnector",
-        "version": "1.0.1",
+        "version": "[variables('dataConnectorCCPVersion')]",
         "source": {
-          "kind": "Solution",
-          "name": "TacitRed Compromised Credentials"
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
         },
         "author": {
-          "name": "TacitRed"
+          "name": "TacitRed",
+          "email": "[variables('_email')]"
         },
         "support": {
-          "tier": "Partner",
           "name": "TacitRed",
           "email": "support@tacitred.com",
+          "tier": "Partner",
           "link": "https://www.tacitred.com/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
         }
       }
     },
     {
-      "condition": "[parameters('deployConnectors')]",
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "apiVersion": "2023-02-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'TacitRedFindings')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
       "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', 'TacitRedThreatIntel')]"
-      ],
-      "kind": "RestApiPoller",
-      "properties": {
-        "connectorDefinitionName": "TacitRedThreatIntel",
-        "dataType": "TacitRed_Findings_CL",
-        "dcrConfig": {
-          "streamName": "Custom-TacitRed_Findings_Raw",
-          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
-          "dataCollectionRuleImmutableId": "[if(equals(parameters('tacitRedDcrImmutableId'), ''), reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName')), '2024-03-11').immutableId, parameters('tacitRedDcrImmutableId'))]"
-        },
-        "auth": {
-          "type": "APIKey",
-          "ApiKeyName": "Authorization",
-          "ApiKey": "[parameters('tacitRedApiKey')]"
-        },
-        "request": {
-          "apiEndpoint": "https://app.tacitred.com/api/v1/findings",
-          "httpMethod": "GET",
-          "queryParameters": {
-            "page_size": 100,
-            "types[]": "compromised_credentials"
-          },
-          "queryWindowInMin": 1440,
-          "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-          "startTimeAttributeName": "from",
-          "endTimeAttributeName": "until",
-          "rateLimitQps": 10,
-          "retryCount": 3,
-          "timeoutInSeconds": 60,
-          "headers": {
-            "Accept": "application/json",
-            "User-Agent": "Microsoft-Sentinel-TacitRed/1.0"
-          }
-        },
-        "paging": {
-          "pagingType": "LinkHeader",
-          "linkHeaderTokenJsonPath": "$.next"
-        },
-        "response": {
-          "eventsJsonPaths": [
-            "$.results"
-          ],
-          "format": "json"
-        },
-        "shouldJoinNestedData": false
-      }
-    },
-    {
-      "condition": false,
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, 'workbook-ti-command-center')]",
-      "location": "[parameters('workspace-location')]",
-      "kind": "shared",
-      "properties": {
-        "displayName": "Threat Intelligence Command Center",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# 🎯 Threat Intelligence Command Center\\n\\n## Real-Time Operational Dashboard\\n\\n**Features:**\\n- 📊 Real-Time Threat Monitoring\\n- ⚡ Threat Activity Timeline\\n- 🔍 Statistical Analysis\\n- 🔗 Cross-Feed Correlation\\n\\n**Data Sources:** Cyren Malware + TacitRed Credentials\"},\"name\":\"header-text\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":86400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":3600000},{\"durationMs\":86400000},{\"durationMs\":604800000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// REAL-TIME THREAT SCORE TIMELINE\\nunion isfuzzy=true withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    ThreatScore = toint(iif(TableName == \\\"Cyren_Indicators_CL\\\", iif(isnull(risk_d), 50, risk_d), iif(isnull(confidence_d), 50, confidence_d))),\\n    Source = case(TableName == \\\"Cyren_Indicators_CL\\\", \\\"Cyren\\\", \\\"TacitRed\\\")\\n| summarize AvgThreatScore = avg(ThreatScore), Count = count() by bin(TimeGenerated, 1h), Source\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"🔥 Real-Time Threat Score Timeline\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query-timeline\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// THREAT VELOCITY & ACCELERATION\\nlet baseline = union isfuzzy=true Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated between(ago(48h)..ago(24h))\\n| summarize BaselineCount = count();\\nlet current = union isfuzzy=true Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(24h)\\n| summarize CurrentCount = count();\\nbaseline\\n| extend CurrentCount = toscalar(current)\\n| extend \\n    Velocity = CurrentCount - BaselineCount,\\n    PercentChange = round(100.0 * (CurrentCount - BaselineCount) / BaselineCount, 2),\\n    Trend = case(\\n        CurrentCount > BaselineCount * 1.2, \\\"📈 Accelerating\\\",\\n        CurrentCount < BaselineCount * 0.8, \\\"📉 Decelerating\\\",\\n        \\\"➡️ Stable\\\"\\n    )\\n| project Trend, Velocity, PercentChange, BaselineCount, CurrentCount\",\"size\":0,\"title\":\"⚡ Threat Velocity & Acceleration\",\"timeContext\":{\"durationMs\":172800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-velocity\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// STATISTICAL ANOMALY DETECTION\\nunion isfuzzy=true Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| summarize HourlyCount = count() by bin(TimeGenerated, 1h)\\n| summarize \\n    AvgCount = avg(HourlyCount),\\n    StdDev = stdev(HourlyCount),\\n    MaxCount = max(HourlyCount),\\n    MinCount = min(HourlyCount)\\n| extend \\n    UpperThreshold = AvgCount + (2 * StdDev),\\n    LowerThreshold = AvgCount - (2 * StdDev),\\n    AnomalyStatus = case(\\n        MaxCount > AvgCount + (2 * StdDev), \\\"⚠️ Anomaly Detected\\\",\\n        \\\"✅ Normal\\\"\\n    )\\n| project \\n    AnomalyStatus,\\n    AvgCount = round(AvgCount, 2),\\n    StdDev = round(StdDev, 2),\\n    UpperThreshold = round(UpperThreshold, 2),\\n    MaxCount\",\"size\":0,\"title\":\"🚨 Statistical Anomaly Detection\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-anomaly\"}],\"styleSettings\":{},\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel"
-      }
-    },
-    {
-      "condition": false,
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, 'workbook-ti-command-center-enhanced')]",
-      "location": "[parameters('workspace-location')]",
-      "kind": "shared",
-      "properties": {
-        "displayName": "Threat Intelligence Command Center (Enhanced)",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# 🎯 Threat Intelligence Command Center\\n\\n## Real-Time Operational Dashboard\\n\\n**Features:**\\n- 📊 Real-Time Threat Monitoring\\n- ⚡ Threat Activity Timeline\\n- 🔍 Statistical Analysis\\n- 🔗 Cross-Feed Correlation\\n\\n**Data Sources:** Cyren Malware + TacitRed Credentials\"},\"name\":\"header-text\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":86400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":3600000},{\"durationMs\":86400000},{\"durationMs\":604800000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// REAL-TIME THREAT SCORE TIMELINE\\nunion isfuzzy=true withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    ThreatScore = toint(iif(TableName == \\\"Cyren_Indicators_CL\\\", iif(isnull(risk_d), 50, risk_d), iif(isnull(confidence_d), 50, confidence_d))),\\n    Source = case(TableName == \\\"Cyren_Indicators_CL\\\", \\\"Cyren\\\", \\\"TacitRed\\\")\\n| summarize AvgThreatScore = avg(ThreatScore), Count = count() by bin(TimeGenerated, 1h), Source\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"🔥 Real-Time Threat Score Timeline\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query-timeline\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// THREAT VELOCITY & ACCELERATION\\nlet baseline = union isfuzzy=true Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated between(ago(48h)..ago(24h))\\n| summarize BaselineCount = count();\\nlet current = union isfuzzy=true Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(24h)\\n| summarize CurrentCount = count();\\nbaseline\\n| extend CurrentCount = toscalar(current)\\n| extend \\n    Velocity = CurrentCount - BaselineCount,\\n    PercentChange = round(100.0 * (CurrentCount - BaselineCount) / BaselineCount, 2),\\n    Trend = case(\\n        CurrentCount > BaselineCount * 1.2, \\\"📈 Accelerating\\\",\\n        CurrentCount < BaselineCount * 0.8, \\\"📉 Decelerating\\\",\\n        \\\"➡️ Stable\\\"\\n    )\\n| project Trend, Velocity, PercentChange, BaselineCount, CurrentCount\",\"size\":0,\"title\":\"⚡ Threat Velocity & Acceleration\",\"timeContext\":{\"durationMs\":172800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-velocity\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// STATISTICAL ANOMALY DETECTION\\nunion isfuzzy=true Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| summarize HourlyCount = count() by bin(TimeGenerated, 1h)\\n| summarize \\n    AvgCount = avg(HourlyCount),\\n    StdDev = stdev(HourlyCount),\\n    MaxCount = max(HourlyCount),\\n    MinCount = min(HourlyCount)\\n| extend \\n    UpperThreshold = AvgCount + (2 * StdDev),\\n    LowerThreshold = AvgCount - (2 * StdDev),\\n    AnomalyStatus = case(\\n        MaxCount > AvgCount + (2 * StdDev), \\\"⚠️ Anomaly Detected\\\",\\n        \\\"✅ Normal\\\"\\n    )\\n| project \\n    AnomalyStatus,\\n    AvgCount = round(AvgCount, 2),\\n    StdDev = round(StdDev, 2),\\n    UpperThreshold = round(UpperThreshold, 2),\\n    MaxCount\",\"size\":0,\"title\":\"🚨 Statistical Anomaly Detection\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-anomaly\"}],\"styleSettings\":{},\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel"
-      }
-    },
-    {
-      "condition": false,
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, 'workbook-executive-risk-dashboard')]",
-      "location": "[parameters('workspace-location')]",
-      "kind": "shared",
-      "properties": {
-        "displayName": "Executive Risk Dashboard",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# 📊 Executive Risk Dashboard\\n\\n## Business Impact & Risk Visibility\\n\\n**Key Metrics:**\\n- Overall Risk Level\\n- Total Threats Detected\\n- Active Threats (Last 48h)\\n- 7-Day and 30-Day Trends\\n\\n**Data Sources:** Cyren Malware URLs + TacitRed Findings\"},\"name\":\"header-text\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// OVERALL RISK METRICS\\nlet CyrenData = Cyren_Indicators_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Risk = toint(iif(isnull(risk_d), 50, risk_d)),\\n    LastSeen = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend \\n    IsActive = datetime_diff('hour', now(), LastSeen) <= 48\\n| summarize \\n    TotalThreats = count(),\\n    ActiveThreats = countif(IsActive),\\n    AvgRisk = avg(Risk)\\n| extend Source = \\\"Cyren\\\";\\nlet TacitRedData = TacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Confidence = todouble(iif(isnull(confidence_d), 50, confidence_d)),\\n    LastSeen = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend \\n    IsActive = datetime_diff('hour', now(), LastSeen) <= 48\\n| summarize \\n    TotalThreats = count(),\\n    ActiveThreats = countif(IsActive),\\n    AvgRisk = avg(Confidence)\\n| extend Source = \\\"TacitRed\\\";\\nunion CyrenData, TacitRedData\\n| summarize \\n    TotalThreats = sum(TotalThreats),\\n    TotalActive = sum(ActiveThreats),\\n    WeightedAvgRisk = avg(AvgRisk)\\n| extend \\n    OverallRiskLevel = case(\\n        TotalActive >= 50, \\\"🔴 Critical\\\",\\n        TotalActive >= 25, \\\"🟠 High\\\",\\n        TotalActive >= 10, \\\"🟡 Elevated\\\",\\n        \\\"🟢 Normal\\\"\\n    )\\n| project \\n    OverallRiskLevel,\\n    TotalThreats,\\n    ActiveThreats = TotalActive,\\n    WeightedAvgRisk = round(WeightedAvgRisk, 2)\",\"size\":0,\"title\":\"📊 Overall Risk Assessment\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-overall-risk\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// 30-DAY THREAT TREND\\nunion isfuzzy=true withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(30d)\\n| extend Source = case(\\n    TableName == \\\"Cyren_Indicators_CL\\\", \\\"Cyren\\\",\\n    \\\"TacitRed\\\"\\n)\\n| summarize Count = count() by bin(TimeGenerated, 1d), Source\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"📈 30-Day Threat Trend\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"name\":\"query-trend\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// SLA PERFORMANCE METRICS\\nlet SLATarget = 4.0;\\nCyren_Indicators_CL\\n| where TimeGenerated >= ago(7d)\\n| extend \\n    DetectionTime = TimeGenerated,\\n    ReportedTime = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend ResponseTimeHours = datetime_diff('hour', ReportedTime, DetectionTime)\\n| summarize \\n    AvgResponseTime = avg(ResponseTimeHours),\\n    MaxResponseTime = max(ResponseTimeHours),\\n    SLACompliance = round(100.0 * countif(ResponseTimeHours <= SLATarget) / count(), 2)\\n| extend \\n    SLAStatus = case(\\n        SLACompliance >= 95, \\\"✅ Excellent\\\",\\n        SLACompliance >= 85, \\\"✔️ Good\\\",\\n        SLACompliance >= 75, \\\"⚠️ Needs Improvement\\\",\\n        \\\"❌ Critical\\\"\\n    )\\n| project \\n    SLAStatus,\\n    SLACompliance,\\n    AvgResponseTime = round(AvgResponseTime, 2),\\n    MaxResponseTime = round(MaxResponseTime, 2)\",\"size\":0,\"title\":\"🎯 SLA Performance Metrics\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-sla\"}],\"styleSettings\":{},\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel"
-      }
-    },
-    {
-      "condition": false,
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, 'workbook-executive-risk-dashboard-enhanced')]",
-      "location": "[parameters('workspace-location')]",
-      "kind": "shared",
-      "properties": {
-        "displayName": "Executive Risk Dashboard (Enhanced)",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# 📊 Executive Risk Dashboard\\n\\n## Business Impact & Risk Visibility\\n\\n**Key Metrics:**\\n- Overall Risk Level\\n- Total Threats Detected\\n- Active Threats (Last 48h)\\n- 7-Day and 30-Day Trends\\n\\n**Data Sources:** Cyren Malware URLs + TacitRed Findings\"},\"name\":\"header-text\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// OVERALL RISK METRICS\\nlet CyrenData = Cyren_Indicators_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Risk = toint(iif(isnull(risk_d), 50, risk_d)),\\n    LastSeen = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend \\n    IsActive = datetime_diff('hour', now(), LastSeen) <= 48\\n| summarize \\n    TotalThreats = count(),\\n    ActiveThreats = countif(IsActive),\\n    AvgRisk = avg(Risk)\\n| extend Source = \\\"Cyren\\\";\\nlet TacitRedData = TacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Confidence = todouble(iif(isnull(confidence_d), 50, confidence_d)),\\n    LastSeen = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend \\n    IsActive = datetime_diff('hour', now(), LastSeen) <= 48\\n| summarize \\n    TotalThreats = count(),\\n    ActiveThreats = countif(IsActive),\\n    AvgRisk = avg(Confidence)\\n| extend Source = \\\"TacitRed\\\";\\nunion CyrenData, TacitRedData\\n| summarize \\n    TotalThreats = sum(TotalThreats),\\n    TotalActive = sum(ActiveThreats),\\n    WeightedAvgRisk = avg(AvgRisk)\\n| extend \\n    OverallRiskLevel = case(\\n        TotalActive >= 50, \\\"🔴 Critical\\\",\\n        TotalActive >= 25, \\\"🟠 High\\\",\\n        TotalActive >= 10, \\\"🟡 Elevated\\\",\\n        \\\"🟢 Normal\\\"\\n    )\\n| project \\n    OverallRiskLevel,\\n    TotalThreats,\\n    ActiveThreats = TotalActive,\\n    WeightedAvgRisk = round(WeightedAvgRisk, 2)\",\"size\":0,\"title\":\"📊 Overall Risk Assessment\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-overall-risk\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// 30-DAY THREAT TREND\\nunion isfuzzy=true withsource=TableName Cyren_Indicators_CL, TacitRed_Findings_CL\\n| where TimeGenerated >= ago(30d)\\n| extend Source = case(\\n    TableName == \\\"Cyren_Indicators_CL\\\", \\\"Cyren\\\",\\n    \\\"TacitRed\\\"\\n)\\n| summarize Count = count() by bin(TimeGenerated, 1d), Source\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"📈 30-Day Threat Trend\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"name\":\"query-trend\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// SLA PERFORMANCE METRICS\\nlet SLATarget = 4.0;\\nCyren_Indicators_CL\\n| where TimeGenerated >= ago(7d)\\n| extend \\n    DetectionTime = TimeGenerated,\\n    ReportedTime = iif(isnull(lastSeen_t), TimeGenerated, lastSeen_t)\\n| extend ResponseTimeHours = datetime_diff('hour', ReportedTime, DetectionTime)\\n| summarize \\n    AvgResponseTime = avg(ResponseTimeHours),\\n    MaxResponseTime = max(ResponseTimeHours),\\n    SLACompliance = round(100.0 * countif(ResponseTimeHours <= SLATarget) / count(), 2)\\n| extend \\n    SLAStatus = case(\\n        SLACompliance >= 95, \\\"✅ Excellent\\\",\\n        SLACompliance >= 85, \\\"✔️ Good\\\",\\n        SLACompliance >= 75, \\\"⚠️ Needs Improvement\\\",\\n        \\\"❌ Critical\\\"\\n    )\\n| project \\n    SLAStatus,\\n    SLACompliance,\\n    AvgResponseTime = round(AvgResponseTime, 2),\\n    MaxResponseTime = round(MaxResponseTime, 2)\",\"size\":0,\"title\":\"🎯 SLA Performance Metrics\",\"timeContext\":{\"durationMs\":604800000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-sla\"}],\"styleSettings\":{},\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel"
-      }
-    },
-    {
-      "condition": false,
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, 'workbook-threat-hunters-arsenal')]",
-      "location": "[parameters('workspace-location')]",
-      "kind": "shared",
-      "properties": {
-        "displayName": "Threat Hunter's Arsenal",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# 🔍 Threat Hunter's Arsenal\\n\\n## Advanced Investigation & Proactive Hunting\\n\\n**Capabilities:**\\n- Rapid Credential Reuse Detection\\n- Persistent Infrastructure Identification\\n- Attack Chain Reconstruction\\n- MITRE ATT&CK Mapping\\n- IOC Multi-Context Enrichment\\n\\n**Purpose:** Accelerate threat hunting with automated behavioral pattern detection\"},\"name\":\"header-text\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// RAPID CREDENTIAL REUSE DETECTION\\nTacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Email = tostring(email_s),\\n    Domain = tostring(domain_s),\\n    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),\\n    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),\\n    FindingType = tostring(findingType_s),\\n    Confidence = todouble(confidence_d)\\n| summarize \\n    FindingCount = count(),\\n    Domains = make_set(Domain),\\n    MinFirstSeen = min(FirstSeen),\\n    MaxLastSeen = max(LastSeen),\\n    AvgConfidence = avg(Confidence)\\n    by Email\\n| extend TimeSpanHours = datetime_diff('hour', MaxLastSeen, MinFirstSeen)\\n| extend UniqueDomains = array_length(Domains)\\n| extend ReuseVelocity = iff(TimeSpanHours > 0, todouble(FindingCount) / todouble(TimeSpanHours), 0.0)\\n| extend BehaviorScore = case(\\n        FindingCount >= 5 and TimeSpanHours <= 24, 95,\\n        FindingCount >= 3 and TimeSpanHours <= 72, 85,\\n        FindingCount >= 2 and UniqueDomains >= 2, 75,\\n        50\\n    )\\n| extend HuntingFlag = case(\\n    BehaviorScore >= 75, \\\"🎯 High Risk\\\",\\n    \\\"📊 Normal Activity\\\"\\n)\\n| project \\n    HuntingFlag, \\n    Email, \\n    FindingCount, \\n    UniqueDomains, \\n    TimeSpanHours, \\n    ReuseVelocity = round(ReuseVelocity, 3), \\n    BehaviorScore,\\n    AvgConfidence = round(AvgConfidence, 2),\\n    AffectedDomains = strcat_array(Domains, \\\", \\\")\\n| order by BehaviorScore desc\\n| take 100\",\"size\":0,\"title\":\"🎯 Rapid Credential Reuse Detection\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-credential-reuse\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// PERSISTENT MALWARE INFRASTRUCTURE\\nCyren_Indicators_CL\\n| where TimeGenerated >= ago(30d)\\n| extend \\n    Domain = tostring(coalesce(domain_s, extract(@\\\"://([^/]+)\\\", 1, tostring(url_s)), \\\"unknown\\\")),\\n    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),\\n    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),\\n    Category = tostring(category_s),\\n    Risk = toint(coalesce(risk_d, 50))\\n| summarize \\n    DetectionCount = count(),\\n    DetectionDays = dcount(bin(TimeGenerated, 1d)),\\n    Categories = make_set(Category),\\n    FirstDetection = min(FirstSeen),\\n    LastDetection = max(LastSeen),\\n    MaxRisk = max(Risk)\\n    by Domain\\n| extend LifespanDays = datetime_diff('day', LastDetection, FirstDetection)\\n| extend IsCurrentlyActive = datetime_diff('hour', now(), LastDetection) <= 48\\n| extend PersistenceScore = case(\\n        DetectionDays >= 20 and IsCurrentlyActive, 100,\\n        DetectionDays >= 14 and IsCurrentlyActive, 90,\\n        DetectionDays >= 10 and IsCurrentlyActive, 80,\\n        DetectionDays >= 7, 70,\\n        60\\n    )\\n| extend HuntingFlag = case(\\n    PersistenceScore >= 80 and IsCurrentlyActive, \\\"🎯 High Persistence\\\",\\n    \\\"📊 Normal Activity\\\"\\n)\\n| project \\n    HuntingFlag, \\n    Domain, \\n    DetectionCount, \\n    DetectionDays, \\n    LifespanDays,\\n    PersistenceScore, \\n    IsCurrentlyActive, \\n    MaxRisk,\\n    MalwareCategories = strcat_array(Categories, \\\", \\\")\\n| order by PersistenceScore desc\\n| take 100\",\"size\":0,\"title\":\"🏗️ Persistent Malware Infrastructure\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-persistent-infrastructure\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// MITRE ATT&CK MAPPING\\nlet CredentialAccessTechniques = TacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    FindingType = tostring(findingType_s),\\n    Confidence = todouble(confidence_d),\\n    Email = tostring(email_s),\\n    Domain = tostring(domain_s)\\n| extend \\n    MitreTechnique = case(\\n        FindingType contains \\\"credential\\\" or FindingType contains \\\"password\\\", \\\"T1078 - Valid Accounts\\\",\\n        FindingType contains \\\"dump\\\", \\\"T1003 - OS Credential Dumping\\\",\\n        \\\"T1552 - Unsecured Credentials\\\"\\n    ),\\n    MitreTactic = \\\"TA0006 - Credential Access\\\",\\n    ThreatSource = \\\"TacitRed\\\"\\n| summarize \\n    Detections = count(),\\n    UniqueAccounts = dcount(Email),\\n    UniqueDomains = dcount(Domain),\\n    AvgConfidence = round(avg(Confidence), 2),\\n    AffectedAccounts = make_set(Email, 10)\\n    by MitreTactic, MitreTechnique, ThreatSource;\\nlet InitialAccessTechniques = Cyren_Indicators_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Category = tostring(category_s),\\n    Type = tostring(type_s),\\n    Risk = toint(coalesce(risk_d, 50)),\\n    Domain = tostring(coalesce(domain_s, extract(@\\\"://([^/]+)\\\", 1, tostring(url_s))))\\n| extend \\n    MitreTechnique = case(\\n        Category contains \\\"phish\\\" or Type contains \\\"phish\\\", \\\"T1566 - Phishing\\\",\\n        Category contains \\\"exploit\\\" or Category contains \\\"vulnerability\\\", \\\"T1190 - Exploit Public-Facing Application\\\",\\n        Category contains \\\"drive-by\\\" or Category contains \\\"watering\\\", \\\"T1189 - Drive-by Compromise\\\",\\n        Category contains \\\"supply\\\", \\\"T1195 - Supply Chain Compromise\\\",\\n        \\\"T1566.002 - Phishing: Spearphishing Link\\\"\\n    ),\\n    MitreTactic = \\\"TA0001 - Initial Access\\\",\\n    ThreatSource = \\\"Cyren\\\"\\n| summarize \\n    Detections = count(),\\n    UniqueDomains = dcount(Domain),\\n    AvgRisk = round(avg(Risk), 2),\\n    MaxRisk = max(Risk),\\n    MaliciousDomains = make_set(Domain, 10)\\n    by MitreTactic, MitreTechnique, ThreatSource;\\nunion CredentialAccessTechniques, InitialAccessTechniques\\n| extend \\n    TechniqueSeverity = case(\\n        Detections >= 50, \\\"🔴 Critical\\\",\\n        Detections >= 20, \\\"🟠 High\\\",\\n        Detections >= 5, \\\"🟡 Medium\\\",\\n        \\\"🟢 Low\\\"\\n    )\\n| project \\n    MitreTactic,\\n    MitreTechnique,\\n    ThreatSource,\\n    Detections,\\n    TechniqueSeverity,\\n    UniqueAccounts = coalesce(UniqueAccounts, 0),\\n    UniqueDomains = coalesce(UniqueDomains, 0),\\n    AvgConfidence = coalesce(AvgConfidence, 0.0),\\n    AvgRisk = coalesce(AvgRisk, 0.0),\\n    MaxRisk = coalesce(MaxRisk, 0)\\n| order by Detections desc\",\"size\":0,\"title\":\"🗺️ MITRE ATT&CK Technique Mapping\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-mitre-attack\"}],\"fallbackResourceIds\":[],\"fromTemplateId\":\"sentinel-ThreatHuntersArsenal\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel"
-      }
-    },
-    {
-      "condition": false,
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, 'workbook-threat-hunters-arsenal-enhanced')]",
-      "location": "[parameters('workspace-location')]",
-      "kind": "shared",
-      "properties": {
-        "displayName": "Threat Hunter's Arsenal (Enhanced)",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# 🔍 Threat Hunter's Arsenal\\n\\n## Advanced Investigation & Proactive Hunting\\n\\n**Capabilities:**\\n- Rapid Credential Reuse Detection\\n- Persistent Infrastructure Identification\\n- Attack Chain Reconstruction\\n- MITRE ATT&CK Mapping\\n- IOC Multi-Context Enrichment\\n\\n**Purpose:** Accelerate threat hunting with automated behavioral pattern detection\"},\"name\":\"header-text\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters-1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// RAPID CREDENTIAL REUSE DETECTION\\nTacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Email = tostring(email_s),\\n    Domain = tostring(domain_s),\\n    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),\\n    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),\\n    FindingType = tostring(findingType_s),\\n    Confidence = todouble(confidence_d)\\n| summarize \\n    FindingCount = count(),\\n    Domains = make_set(Domain),\\n    MinFirstSeen = min(FirstSeen),\\n    MaxLastSeen = max(LastSeen),\\n    AvgConfidence = avg(Confidence)\\n    by Email\\n| extend TimeSpanHours = datetime_diff('hour', MaxLastSeen, MinFirstSeen)\\n| extend UniqueDomains = array_length(Domains)\\n| extend ReuseVelocity = iff(TimeSpanHours > 0, todouble(FindingCount) / todouble(TimeSpanHours), 0.0)\\n| extend BehaviorScore = case(\\n        FindingCount >= 5 and TimeSpanHours <= 24, 95,\\n        FindingCount >= 3 and TimeSpanHours <= 72, 85,\\n        FindingCount >= 2 and UniqueDomains >= 2, 75,\\n        50\\n    )\\n| extend HuntingFlag = case(\\n    BehaviorScore >= 75, \\\"🎯 High Risk\\\",\\n    \\\"📊 Normal Activity\\\"\\n)\\n| project \\n    HuntingFlag, \\n    Email, \\n    FindingCount, \\n    UniqueDomains, \\n    TimeSpanHours, \\n    ReuseVelocity = round(ReuseVelocity, 3), \\n    BehaviorScore,\\n    AvgConfidence = round(AvgConfidence, 2),\\n    AffectedDomains = strcat_array(Domains, \\\", \\\")\\n| order by BehaviorScore desc\\n| take 100\",\"size\":0,\"title\":\"🎯 Rapid Credential Reuse Detection\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-credential-reuse\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// PERSISTENT MALWARE INFRASTRUCTURE\\nCyren_Indicators_CL\\n| where TimeGenerated >= ago(30d)\\n| extend \\n    Domain = tostring(coalesce(domain_s, extract(@\\\"://([^/]+)\\\", 1, tostring(url_s)), \\\"unknown\\\")),\\n    FirstSeen = todatetime(coalesce(firstSeen_t, TimeGenerated)),\\n    LastSeen = todatetime(coalesce(lastSeen_t, TimeGenerated)),\\n    Category = tostring(category_s),\\n    Risk = toint(coalesce(risk_d, 50))\\n| summarize \\n    DetectionCount = count(),\\n    DetectionDays = dcount(bin(TimeGenerated, 1d)),\\n    Categories = make_set(Category),\\n    FirstDetection = min(FirstSeen),\\n    LastDetection = max(LastSeen),\\n    MaxRisk = max(Risk)\\n    by Domain\\n| extend LifespanDays = datetime_diff('day', LastDetection, FirstDetection)\\n| extend IsCurrentlyActive = datetime_diff('hour', now(), LastDetection) <= 48\\n| extend PersistenceScore = case(\\n        DetectionDays >= 20 and IsCurrentlyActive, 100,\\n        DetectionDays >= 14 and IsCurrentlyActive, 90,\\n        DetectionDays >= 10 and IsCurrentlyActive, 80,\\n        DetectionDays >= 7, 70,\\n        60\\n    )\\n| extend HuntingFlag = case(\\n    PersistenceScore >= 80 and IsCurrentlyActive, \\\"🎯 High Persistence\\\",\\n    \\\"📊 Normal Activity\\\"\\n)\\n| project \\n    HuntingFlag, \\n    Domain, \\n    DetectionCount, \\n    DetectionDays, \\n    LifespanDays,\\n    PersistenceScore, \\n    IsCurrentlyActive, \\n    MaxRisk,\\n    MalwareCategories = strcat_array(Categories, \\\", \\\")\\n| order by PersistenceScore desc\\n| take 100\",\"size\":0,\"title\":\"🏗️ Persistent Malware Infrastructure\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-persistent-infrastructure\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"// MITRE ATT&CK MAPPING\\nlet CredentialAccessTechniques = TacitRed_Findings_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    FindingType = tostring(findingType_s),\\n    Confidence = todouble(confidence_d),\\n    Email = tostring(email_s),\\n    Domain = tostring(domain_s)\\n| extend \\n    MitreTechnique = case(\\n        FindingType contains \\\"credential\\\" or FindingType contains \\\"password\\\", \\\"T1078 - Valid Accounts\\\",\\n        FindingType contains \\\"dump\\\", \\\"T1003 - OS Credential Dumping\\\",\\n        \\\"T1552 - Unsecured Credentials\\\"\\n    ),\\n    MitreTactic = \\\"TA0006 - Credential Access\\\",\\n    ThreatSource = \\\"TacitRed\\\"\\n| summarize \\n    Detections = count(),\\n    UniqueAccounts = dcount(Email),\\n    UniqueDomains = dcount(Domain),\\n    AvgConfidence = round(avg(Confidence), 2),\\n    AffectedAccounts = make_set(Email, 10)\\n    by MitreTactic, MitreTechnique, ThreatSource;\\nlet InitialAccessTechniques = Cyren_Indicators_CL\\n| where TimeGenerated > ago(7d)\\n| extend \\n    Category = tostring(category_s),\\n    Type = tostring(type_s),\\n    Risk = toint(coalesce(risk_d, 50)),\\n    Domain = tostring(coalesce(domain_s, extract(@\\\"://([^/]+)\\\", 1, tostring(url_s))))\\n| extend \\n    MitreTechnique = case(\\n        Category contains \\\"phish\\\" or Type contains \\\"phish\\\", \\\"T1566 - Phishing\\\",\\n        Category contains \\\"exploit\\\" or Category contains \\\"vulnerability\\\", \\\"T1190 - Exploit Public-Facing Application\\\",\\n        Category contains \\\"drive-by\\\" or Category contains \\\"watering\\\", \\\"T1189 - Drive-by Compromise\\\",\\n        Category contains \\\"supply\\\", \\\"T1195 - Supply Chain Compromise\\\",\\n        \\\"T1566.002 - Phishing: Spearphishing Link\\\"\\n    ),\\n    MitreTactic = \\\"TA0001 - Initial Access\\\",\\n    ThreatSource = \\\"Cyren\\\"\\n| summarize \\n    Detections = count(),\\n    UniqueDomains = dcount(Domain),\\n    AvgRisk = round(avg(Risk), 2),\\n    MaxRisk = max(Risk),\\n    MaliciousDomains = make_set(Domain, 10)\\n    by MitreTactic, MitreTechnique, ThreatSource;\\nunion CredentialAccessTechniques, InitialAccessTechniques\\n| extend \\n    TechniqueSeverity = case(\\n        Detections >= 50, \\\"🔴 Critical\\\",\\n        Detections >= 20, \\\"🟠 High\\\",\\n        Detections >= 5, \\\"🟡 Medium\\\",\\n        \\\"🟢 Low\\\"\\n    )\\n| project \\n    MitreTactic,\\n    MitreTechnique,\\n    ThreatSource,\\n    Detections,\\n    TechniqueSeverity,\\n    UniqueAccounts = coalesce(UniqueAccounts, 0),\\n    UniqueDomains = coalesce(UniqueDomains, 0),\\n    AvgConfidence = coalesce(AvgConfidence, 0.0),\\n    AvgRisk = coalesce(AvgRisk, 0.0),\\n    MaxRisk = coalesce(MaxRisk, 0)\\n| order by Detections desc\",\"size\":0,\"title\":\"🗺️ MITRE ATT&CK Technique Mapping\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"query-mitre-attack\"}],\"fallbackResourceIds\":[],\"fromTemplateId\":\"sentinel-ThreatHuntersArsenal\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel"
-      }
-    },
-    {
-      "condition": "[parameters('deployAnalytics')]",
-      "type": "Microsoft.SecurityInsights/alertRules",
-      "apiVersion": "2023-02-01",
-      "scope": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
-      "name": "[guid(resourceGroup().id, 'RepeatCompromise')]",
-      "kind": "Scheduled",
-      "dependsOn": [
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'TacitRed_Findings_CL')]"
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "displayName": "TacitRed - Repeat Compromise Detection",
-        "description": "Detects users who have been compromised multiple times within a 7-day window. This may indicate a persistent threat or inadequate remediation.",
-        "severity": "High",
-        "enabled": true,
-        "query": "let lookbackPeriod = 7d;\nlet threshold = 2;\nTacitRed_Findings_CL\n| where TimeGenerated >= ago(lookbackPeriod)\n| extend Email = tostring(email_s), Username = tostring(username_s), Domain = tostring(domain_s), FindingType = tostring(findingType_s), Confidence = todouble(confidence_d), FirstSeen = todatetime(firstSeen_t), LastSeen = todatetime(lastSeen_t), Notes = tostring(notes_s)\n| summarize CompromiseCount = count(), FindingTypes = make_set(FindingType), FirstCompromise = min(FirstSeen), LatestCompromise = max(LastSeen), AverageConfidence = avg(Confidence), Domains = make_set(Domain), AllNotes = make_list(Notes) by Email, Username\n| where CompromiseCount >= threshold\n| extend CompromiseWindow = datetime_diff('day', LatestCompromise, FirstCompromise), Severity = case(CompromiseCount >= 5, 'Critical', CompromiseCount >= 3, 'High', 'Medium')\n| project Email, Username, CompromiseCount, Severity, FirstCompromise, LatestCompromise, CompromiseWindow, AverageConfidence, FindingTypes, Domains, AllNotes\n| order by CompromiseCount desc, LatestCompromise desc",
-        "queryFrequency": "PT1H",
-        "queryPeriod": "P7D",
-        "triggerOperator": "GreaterThan",
-        "triggerThreshold": 0,
-        "suppressionDuration": "PT1H",
-        "suppressionEnabled": false,
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "techniques": [
-          "T1110"
-        ],
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "lookbackDuration": "P7D",
-            "matchingMethod": "Selected",
-            "groupByEntities": [
-              "Account"
-            ]
-          }
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Repeat Compromise: {{Email}} ({{CompromiseCount}}x)",
-          "alertDescriptionFormat": "User {{Email}} compromised {{CompromiseCount}} times",
-          "alertSeverityColumnName": "Severity"
-        },
-        "customDetails": {
-          "CompromiseCount": "CompromiseCount",
-          "FirstCompromise": "FirstCompromise",
-          "LatestCompromise": "LatestCompromise",
-          "AverageConfidence": "AverageConfidence"
-        },
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Email"
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "TacitRed Compromised Credentials",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "tacitRedApiKey": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 4
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "TacitRed Compromised Credentials",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
               },
-              {
-                "identifier": "Name",
-                "columnName": "Username"
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "TacitRed",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "TacitRed",
+                  "email": "support@tacitred.com",
+                  "tier": "Partner",
+                  "link": "https://www.tacitred.com/support"
+                }
               }
-            ]
-          }
-        ]
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'TacitRedFindings', parameters('guidValue'))]",
+              "apiVersion": "2025-09-01",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "TacitRedThreatIntel",
+                "dataType": "TacitRed_Findings_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-TacitRed_Findings_Raw",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKeyName": "Authorization",
+                  "ApiKey": "[[parameters('tacitRedApiKey')]"
+                },
+                "request": {
+                  "apiEndpoint": "https://app.tacitred.com/api/v1/findings",
+                  "httpMethod": "GET",
+                  "queryParameters": {
+                    "page_size": 50
+                  },
+                  "queryWindowInMin": 600,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "startTimeAttributeName": "from",
+                  "endTimeAttributeName": "until",
+                  "rateLimitQps": 10,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Microsoft-Sentinel-TacitRed/1.0"
+                  }
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderTokenJsonPath": "$.next"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.results"
+                  ],
+                  "format": "json"
+                },
+                "shouldJoinNestedData": true
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
       }
     },
     {
-      "condition": "[parameters('deployWorkbooks')]",
-      "type": "Microsoft.Insights/workbooks",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(variables('workspaceResourceId'), 'workbook-tacitred-secops')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
       "location": "[parameters('workspace-location')]",
-      "kind": "shared",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
       "properties": {
-        "displayName": "TacitRed SecOps - Compromised Credentials",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# TacitRed SecOps - Compromised Credentials\\n\\n**Purpose:** Triage and monitor compromised accounts detected by TacitRed.\\n\\n---\"}},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | summarize Total = count(), HasEmail = countif(isnotempty(email_s)), HasDomain = countif(isnotempty(domain_s)), HasConfidence = countif(isnotnull(confidence_d)), HasStatus = countif(isnotempty(status_s)) | extend EmailPct = round(HasEmail * 100.0 / Total, 2), DomainPct = round(HasDomain * 100.0 / Total, 2), ConfidencePct = round(HasConfidence * 100.0 / Total, 2), StatusPct = round(HasStatus * 100.0 / Total, 2)\",\"size\":0,\"title\":\"Data Quality - TacitRed Findings\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | extend Confidence = toint(confidence_d) | summarize TotalFindings = count(), UniqueEmails = dcount(email_s), UniqueDomains = dcount(domain_s), HighConfidence = countif(Confidence >= 80), MediumConfidence = countif(Confidence >= 60 and Confidence < 80), LowConfidence = countif(Confidence < 60)\",\"size\":0,\"title\":\"Compromised Credentials Overview\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | extend Confidence = toint(confidence_d) | where isnotempty(domain_s) | summarize Count = count(), MaxConfidence = max(Confidence), UniqueEmails = dcount(email_s), EarliestSeen = min(TimeGenerated), LatestSeen = max(TimeGenerated) by Domain = tolower(domain_s) | top 20 by Count desc | project Domain, Count, UniqueEmails, MaxConfidence, EarliestSeen, LatestSeen\",\"size\":0,\"title\":\"Top Compromised Domains\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | extend Confidence = toint(confidence_d) | extend Account = case( isnotempty(email_s), email_s, isnotempty(username_s), username_s, isnotempty(user_id_s), user_id_s, 'Unknown' ) | where Account != 'Unknown' | summarize Findings = count(), MaxConfidence = max(Confidence), DistinctDomains = dcount(domain_s), Campaigns = dcount(campaign_id_s), EarliestSeen = min(TimeGenerated), LatestSeen = max(TimeGenerated), Statuses = make_set(status_s) by Account | top 50 by Findings desc | project Account, Findings, DistinctDomains, Campaigns, MaxConfidence, EarliestSeen, LatestSeen, Statuses\",\"size\":0,\"title\":\"Top Compromised Accounts\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | extend Confidence = toint(confidence_d) | extend Account = case( isnotempty(email_s), email_s, isnotempty(username_s), username_s, isnotempty(user_id_s), user_id_s, 'Unknown' ) | project TimeGenerated, Account, domain_s, findingType_s, severity_s, Confidence, status_s, campaign_id_s, source_s | order by TimeGenerated desc | take 100\",\"size\":0,\"title\":\"Latest TacitRed Findings (Triage Queue)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | extend Confidence = toint(confidence_d) | extend Account = case( isnotempty(email_s), email_s, isnotempty(username_s), username_s, isnotempty(user_id_s), user_id_s, 'Unknown' ) | where Account != 'Unknown' | summarize TotalFindings = count(), Last24hFindings = countif(TimeGenerated >= ago(24h)), MaxConfidence = max(Confidence), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), DistinctDomains = dcount(domain_s) by Account | extend LifetimeHours = datetime_diff('hour', LastSeen, FirstSeen) | where TotalFindings >= 2 | order by Last24hFindings desc, TotalFindings desc, MaxConfidence desc | take 50\",\"size\":0,\"title\":\"Repeated / Rapid Re-Compromise\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | where isnotempty(campaign_id_s) | extend Confidence = toint(confidence_d) | summarize TotalFindings = count(), DistinctAccounts = dcount(email_s), DistinctDomains = dcount(domain_s), MaxConfidence = max(Confidence), Severities = make_set(severity_s), Statuses = make_set(status_s), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by CampaignId = campaign_id_s | order by TotalFindings desc | take 50\",\"size\":0,\"title\":\"Campaign View - TacitRed Campaigns\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL | where TimeGenerated >= ago(7d) | extend Confidence = toint(confidence_d) | extend ConfidenceBucket = case( Confidence >= 90, \"Critical (90-100)\", Confidence >= 70, \"High (70-89)\", Confidence >= 50, \"Medium (50-69)\", \"Low (<50)\" ) | summarize Count = count() by ConfidenceBucket, bin(TimeGenerated, 1h) | order by TimeGenerated asc\",\"size\":0,\"title\":\"Confidence Bucket Trend (Last 7 Days)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"}}],\"styleSettings\":{},\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
-        "version": "1.0",
-        "sourceId": "[variables('workspaceResourceId')]",
-        "category": "sentinel",
-        "tags": [
-          "TacitRed",
-          "Compromised Credentials",
-          "SecOps",
-          "Triage"
-        ]
+        "description": "TacitRed - Repeat Compromise Detection_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "Detects users who have been compromised multiple times within a 7-day window.\nMultiple compromises of the same user indicate persistent targeting or ongoing credential theft.\n\nRef: https://tacitred.com/",
+                "displayName": "TacitRed - Repeat Compromise Detection",
+                "enabled": false,
+                "query": "let lookbackPeriod = 7d;\nlet threshold = 2;\nTacitRed_Findings_CL\n| where TimeGenerated >= ago(lookbackPeriod)\n| extend\n    Email = tostring(email_s),\n    Username = tostring(username_s),\n    Domain = tostring(domain_s),\n    FindingType = tostring(findingType_s),\n    Confidence = todouble(confidence_d),\n    FirstSeen = todatetime(firstSeen_t),\n    LastSeen = todatetime(lastSeen_t)\n| summarize \n    CompromiseCount = count(),\n    FindingTypes = make_set(FindingType),\n    FirstCompromise = min(FirstSeen),\n    LatestCompromise = max(LastSeen),\n    AverageConfidence = avg(Confidence),\n    Domains = make_set(Domain)\n    by Email, Username\n| where CompromiseCount >= threshold\n| extend\n    Severity = case(\n        CompromiseCount >= 5, \"Critical\",\n        CompromiseCount >= 3, \"High\",\n        \"Medium\"\n    )\n| project\n    Email,\n    Username,\n    CompromiseCount,\n    Severity,\n    FirstCompromise,\n    LatestCompromise,\n    AverageConfidence,\n    FindingTypes,\n    Domains",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P7D",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "TacitRedThreatIntel",
+                    "dataTypes": [
+                      "TacitRed_Findings_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "CredentialAccess",
+                  "InitialAccess"
+                ],
+                "techniques": [
+                  "T1078",
+                  "T1110"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "columnName": "Username",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "Email",
+                        "identifier": "UPNSuffix"
+                      }
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "SingleAlert"
+                },
+                "incidentConfiguration": {
+                  "groupingConfiguration": {
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "5h",
+                    "matchingMethod": "Selected",
+                    "groupByEntities": [
+                      "Account"
+                    ],
+                    "enabled": true
+                  },
+                  "createIncident": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "Tacitred-CCF-Hub-v2ThreatIntelligence Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Tacitred-CCF-Hub-v2ThreatIntelligence",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "TacitRed",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "TacitRed",
+                  "email": "support@tacitred.com",
+                  "tier": "Partner",
+                  "link": "https://www.tacitred.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "TacitRed - Repeat Compromise Detection",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
       }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "TacitRedSecOps-CompromisedCredentials Workbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "TacitRed SecOps - Compromised Credentials workbook provides visibility into compromised credentials detected by TacitRed, helping security teams triage and monitor credential theft incidents."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# TacitRed SecOps - Compromised Credentials\\n\\n**Purpose:** Triage and monitor compromised accounts detected by TacitRed.\\n\\n---\"}},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| summarize\\n    Total = count(),\\n    HasEmail = countif(isnotempty(email_s)),\\n    HasDomain = countif(isnotempty(domain_s)),\\n    HasConfidence = countif(isnotnull(confidence_d)),\\n    HasStatus = countif(isnotempty(status_s))\\n| extend\\n    EmailPct = round(HasEmail * 100.0 / Total, 2),\\n    DomainPct = round(HasDomain * 100.0 / Total, 2),\\n    ConfidencePct = round(HasConfidence * 100.0 / Total, 2),\\n    StatusPct = round(HasStatus * 100.0 / Total, 2)\",\"size\":0,\"title\":\"Data Quality - TacitRed Findings\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| summarize\\n    TotalFindings = count(),\\n    UniqueEmails = dcount(email_s),\\n    UniqueDomains = dcount(domain_s),\\n    HighConfidence = countif(Confidence >= 80),\\n    MediumConfidence = countif(Confidence >= 60 and Confidence < 80),\\n    LowConfidence = countif(Confidence < 60)\",\"size\":0,\"title\":\"Compromised Credentials Overview\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| where isnotempty(domain_s)\\n| summarize\\n    Count = count(),\\n    MaxConfidence = max(Confidence),\\n    UniqueEmails = dcount(email_s),\\n    EarliestSeen = min(TimeGenerated),\\n    LatestSeen = max(TimeGenerated)\\n    by Domain = tolower(domain_s)\\n| top 20 by Count desc\\n| project Domain, Count, UniqueEmails, MaxConfidence, EarliestSeen, LatestSeen\",\"size\":0,\"title\":\"Top Compromised Domains\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend Account = case(\\n    isnotempty(email_s), email_s,\\n    isnotempty(username_s), username_s,\\n    isnotempty(user_id_s), user_id_s,\\n    'Unknown'\\n)\\n| where Account != 'Unknown'\\n| summarize\\n    Findings = count(),\\n    MaxConfidence = max(Confidence),\\n    DistinctDomains = dcount(domain_s),\\n    Campaigns = dcount(campaign_id_s),\\n    EarliestSeen = min(TimeGenerated),\\n    LatestSeen = max(TimeGenerated),\\n    Statuses = make_set(status_s)\\n  by Account\\n| top 50 by Findings desc\\n| project Account, Findings, DistinctDomains, Campaigns, MaxConfidence, EarliestSeen, LatestSeen, Statuses\",\"size\":0,\"title\":\"Top Compromised Accounts\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend Account = case(\\n    isnotempty(email_s), email_s,\\n    isnotempty(username_s), username_s,\\n    isnotempty(user_id_s), user_id_s,\\n    'Unknown'\\n)\\n| project TimeGenerated,\\n          Account,\\n          domain_s,\\n          findingType_s,\\n          severity_s,\\n          Confidence,\\n          status_s,\\n          campaign_id_s,\\n          source_s\\n| order by TimeGenerated desc\\n| take 100\",\"size\":0,\"title\":\"Latest TacitRed Findings (Triage Queue)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend Account = case(\\n    isnotempty(email_s), email_s,\\n    isnotempty(username_s), username_s,\\n    isnotempty(user_id_s), user_id_s,\\n    'Unknown'\\n)\\n| where Account != 'Unknown'\\n| summarize\\n    TotalFindings = count(),\\n    Last24hFindings = countif(TimeGenerated >= ago(24h)),\\n    MaxConfidence = max(Confidence),\\n    FirstSeen = min(TimeGenerated),\\n    LastSeen = max(TimeGenerated),\\n    DistinctDomains = dcount(domain_s)\\n  by Account\\n| extend LifetimeHours = datetime_diff('hour', LastSeen, FirstSeen)\\n| where TotalFindings >= 2\\n| order by Last24hFindings desc, TotalFindings desc, MaxConfidence desc\\n| take 50\",\"size\":0,\"title\":\"Repeated / Rapid Re-Compromise\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| where isnotempty(campaign_id_s)\\n| extend Confidence = toint(confidence_d)\\n| summarize\\n    TotalFindings = count(),\\n    DistinctAccounts = dcount(email_s),\\n    DistinctDomains = dcount(domain_s),\\n    MaxConfidence = max(Confidence),\\n    Severities = make_set(severity_s),\\n    Statuses = make_set(status_s),\\n    FirstSeen = min(TimeGenerated),\\n    LastSeen = max(TimeGenerated)\\n  by CampaignId = campaign_id_s\\n| order by TotalFindings desc\\n| take 50\",\"size\":0,\"title\":\"Campaign View - TacitRed Campaigns\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend ConfidenceBucket = case(\\n    Confidence >= 90, \\\"Critical (90-100)\\\",\\n    Confidence >= 70, \\\"High (70-89)\\\",\\n    Confidence >= 50, \\\"Medium (50-69)\\\",\\n    \\\"Low (<50)\\\"\\n)\\n| summarize Count = count() by ConfidenceBucket, bin(TimeGenerated, 1h)\\n| order by TimeGenerated asc\",\"size\":0,\"title\":\"Confidence Bucket Trend (Last 7 Days)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"}}],\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=TacitRedSecOps-CompromisedCredentials; logoFileName=; description=TacitRed SecOps - Compromised Credentials workbook provides visibility into compromised credentials detected by TacitRed, helping security teams triage and monitor credential theft incidents.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=TacitRed SecOps - Compromised Credentials; templateRelativePath=TacitRedSecOps-CompromisedCredentials.json; subtitle=; provider=TacitRed}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Tacitred-CCF-Hub-v2ThreatIntelligence",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "TacitRed",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "TacitRed",
+                  "email": "support@tacitred.com",
+                  "tier": "Partner",
+                  "link": "https://www.tacitred.com/support"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "TacitRed_Findings_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "TacitRedThreatIntel",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Tacitred-CCF-Hub-v2ThreatIntelligence",
+        "publisherDisplayName": "TacitRed",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Tacitred-CCF-Hub-v2ThreatIntelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.tacitred.com/\">TacitRed Compromised Credentials</a> solution integrates TacitRed's compromised credential and identity threat intelligence into Microsoft Sentinel using the Codeless Connector Framework (CCF). The solution deploys a REST API poller connector, a custom log table (TacitRed_Findings_CL), analytics rule, and visualization workbook to help security teams detect and investigate credential compromise.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\"height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Tacitred-CCF-Hub-v2ThreatIntelligence",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "TacitRed",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "TacitRed",
+          "email": "support@tacitred.com",
+          "tier": "Partner",
+          "link": "https://www.tacitred.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-01-01",
+        "providers": [
+          "TacitRed"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
     }
   ],
-  "outputs": {
-    "location": {
-      "type": "string",
-      "value": "[parameters('location')]"
-    },
-    "forceUpdateTagValue": {
-      "type": "string",
-      "value": "[parameters('forceUpdateTag')]"
-    },
-    "dceEndpoint": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))).logsIngestion.endpoint]"
-    },
-    "tacitRedDcrImmutableId": {
-      "type": "string",
-      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))).immutableId]"
-    },
-    "deploymentMessage": {
-      "type": "string",
-      "value": "TacitRed infrastructure, CCF connector, analytics, and workbooks deployed successfully."
-    }
-  }
+  "outputs": {}
 }
