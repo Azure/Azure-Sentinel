@@ -35,31 +35,6 @@ NON_TABLE_TOKENS = {
     "view",
     "_im_dns",
 }
-KNOWN_TABLE_PATTERNS = {
-    "syslog",
-    "commonsecuritylog",
-    "securityevent",
-    "windowsevent",
-    "event",
-    "heartbeat",
-    "perf",
-    "usage",
-    "alert",
-    "update",
-    "updaterunprogress",
-    "updatesummary",
-    "protectionstatus",
-    "securityalert",
-    "securitybaseline",
-    "securitybaselinesum",
-    "securitydetection",
-    "securityincident",
-    "securityreco",
-    "w3ciislog",
-    "azurediagnostics",
-    "azureactivity",
-    "azuremetrics",
-}
 LET_ASSIGNMENT_PATTERN = re.compile(r"\blet\s+([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_.]+)", re.IGNORECASE)
 LINE_COMMENT_PATTERN = re.compile(r"(?m)^\s*//.*$")
 PIPE_BLOCK_COMMANDS = {
