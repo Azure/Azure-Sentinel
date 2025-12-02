@@ -79,7 +79,7 @@ def main(mytimer: func.TimerRequest) -> None:
     try:
         managed_identity = ManagedIdentityCredential()
         azure_cli = AzureCliCredential()
-        default_azure_credential = DefaultAzureCredential(
+        default_azure_credential = DefaultAzureCredential(      # CodeQL [SM05139] This connector is deprecated. Code will be deleted soon.
             exclude_shared_token_cache_credential=True
         )
         credential_chain = ChainedTokenCredential(
