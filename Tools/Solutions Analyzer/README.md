@@ -5,8 +5,8 @@ This tool analyzes Azure Sentinel Solutions to extract and map data connector de
 ## Quick Start
 
 **Pre-generated CSV files are already available in this directory:**
-- `solution_connector_tables.csv` - Main mapping of connectors to tables with full metadata
-- `solution_connector_tables_report.csv` - Issues and exceptions report
+- `solutions_connectors_tables_mapping.csv` - Main mapping of connectors to tables with full metadata
+- `solutions_connectors_tables_issues_and_exceptions_report.csv` - Issues and exceptions report
 
 You can use these files directly without running the script. They are kept up-to-date with the Solutions directory.
 
@@ -51,8 +51,8 @@ python "Tools/Solutions Analyzer/solution_connector_tables.py" --solutions-dir S
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--solutions-dir` | `../../Solutions` | Path to the Solutions directory |
-| `--output` | `solution_connector_tables.csv` | Path for the main output CSV file |
-| `--report` | `solution_connector_tables_report.csv` | Path for the issues report CSV file |
+| `--output` | `solutions_connectors_tables_mapping.csv` | Path for the main output CSV file |
+| `--report` | `solutions_connectors_tables_issues_and_exceptions_report.csv` | Path for the issues report CSV file |
 | `--show-detection-methods` | `False` | Include table_detection_methods column showing how each table was detected |
 
 ### Example Usage
@@ -69,7 +69,7 @@ python solution_connector_tables.py --output custom_output.csv --report custom_r
 
 ## Output Files
 
-### 1. solution_connector_tables.csv (Primary Output)
+### 1. solutions_connectors_tables_mapping.csv (Primary Output)
 
 The main CSV file containing one row per unique combination of solution, connector, and table.
 
@@ -111,7 +111,7 @@ https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}
 https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}/Data Connectors/{file_path}
 ```
 
-### 2. solution_connector_tables_report.csv (Issues Report)
+### 2. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 

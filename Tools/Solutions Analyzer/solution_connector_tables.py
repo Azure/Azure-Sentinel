@@ -821,13 +821,13 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solution_connector_tables.csv",
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solutions_connectors_tables_mapping.csv",
         help="Path for the generated CSV file (default: %(default)s)",
     )
     parser.add_argument(
         "--report",
         type=Path,
-        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solution_connector_tables_report.csv",
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solutions_connectors_tables_issues_and_exceptions_report.csv",
         help="Path for the no-table issues report file (default: %(default)s)",
     )
     parser.add_argument(
@@ -1188,7 +1188,7 @@ def main() -> None:
         fieldnames.append("table_detection_methods")
 
     with output_path.open("w", encoding="utf-8", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -1221,7 +1221,7 @@ def main() -> None:
         filtered_issues.append(issue)
     
     with report_path.open("w", encoding="utf-8", newline="") as report_file:
-        writer = csv.DictWriter(report_file, fieldnames=report_fieldnames)
+        writer = csv.DictWriter(report_file, fieldnames=report_fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(filtered_issues)
 
