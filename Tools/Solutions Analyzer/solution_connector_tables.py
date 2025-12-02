@@ -15,11 +15,21 @@ except ImportError:  # pragma: no cover - optional dependency
 
 GITHUB_REPO_URL = "https://github.com/Azure/Azure-Sentinel/blob/master"
 
+# Regex patterns for query parsing
 PLACEHOLDER_PATTERN = re.compile(r"\{\{\s*([^}]+?)\s*\}\}")
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_.]+")
-PARSER_NAME_KEYS = {"functionname", "functionalias"}
 ARM_VARIABLE_PATTERN = re.compile(r"\[\s*variables\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\]\s*", re.IGNORECASE)
 UNION_KEYWORD_PATTERN = re.compile(r"\bunion\b", re.IGNORECASE)
+LET_ASSIGNMENT_PATTERN = re.compile(r"\blet\s+([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_.]+)", re.IGNORECASE)
+LINE_COMMENT_PATTERN = re.compile(r"(?m)^\s*//.*$")
+FIELD_GENERATING_PATTERN = re.compile(
+    r'^\s*\|\s*(?:extend|project|project-away|project-keep|project-rename|project-reorder|'
+    r'summarize|make-series|mv-expand|mv-apply|evaluate)',
+    re.IGNORECASE
+)
+
+# Token validation sets
+PARSER_NAME_KEYS = {"functionname", "functionalias"}
 NON_TABLE_TOKENS = {
     "let",
     "ago",
@@ -35,8 +45,6 @@ NON_TABLE_TOKENS = {
     "view",
     "_im_dns",
 }
-LET_ASSIGNMENT_PATTERN = re.compile(r"\blet\s+([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_.]+)", re.IGNORECASE)
-LINE_COMMENT_PATTERN = re.compile(r"(?m)^\s*//.*$")
 PIPE_BLOCK_COMMANDS = {
     "project",
     "project-away",
@@ -214,9 +222,10 @@ def detect_pipeline_heads(
     lines = text.splitlines()
     total = len(lines)
     
-    # Patterns that indicate field context (not table context)
-    # These operators generate new columns/fields that might have identifiers on subsequent lines
-    field_generating_pattern = re.compile(
+    # Pattern for operators that generate fields (subset of FIELD_GENERATING_PATTERN)
+    # These specific operators indicate field context where identifiers on subsequent lines
+    # are likely field names rather than table names
+    pipeline_field_pattern = re.compile(
         r"^\s*\|\s*(project|extend|parse|mv-expand|mv-apply|summarize)\b",
         re.IGNORECASE
     )
@@ -228,7 +237,7 @@ def detect_pipeline_heads(
         stripped = line.strip()
         
         # Check if this line starts a top-level field-generating operation (at start of line)
-        if field_generating_pattern.match(line):
+        if pipeline_field_pattern.match(line):
             in_field_context = True
             continue
         
