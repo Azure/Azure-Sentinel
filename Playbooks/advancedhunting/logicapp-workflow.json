@@ -1,0 +1,108 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {},
+  "triggers": {
+    "Recurrence": {
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "schedule": {
+          "hours": [
+            "9"
+          ]
+        }
+      },
+      "type": "Recurrence"
+    }
+  },
+  "actions": {
+    "Initialize_Query_Variable": {
+      "runAfter": {},
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "kqlQuery",
+            "type": "String",
+            "value": "DeviceTvmSoftwareInventory\n| where Timestamp > ago(30d)\n| extend IsUnsupported = iff(isnotempty(EndOfSupportDate) and EndOfSupportDate < now(), true, false)\n| where IsUnsupported == true\n| summarize arg_max(Timestamp, *) by DeviceId, SoftwareName\n| project Timestamp, DeviceId, DeviceName, SoftwareName, SoftwareVendor, SoftwareVersion, EndOfSupportDate, OSPlatform\n| order by DeviceName asc"
+          }
+        ]
+      }
+    },
+    "Query_DeviceTvmSoftwareInventory": {
+      "runAfter": {
+        "Initialize_Query_Variable": [
+          "Succeeded"
+        ]
+      },
+      "type": "Http",
+      "inputs": {
+        "method": "POST",
+        "uri": "https://api.securitycenter.microsoft.com/api/advancedhunting/run",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "Query": "@{variables('kqlQuery')}"
+        },
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://api.securitycenter.microsoft.com"
+        }
+      }
+    },
+    "Parse_Query_Results": {
+      "runAfter": {
+        "Query_DeviceTvmSoftwareInventory": [
+          "Succeeded"
+        ]
+      },
+      "type": "ParseJson",
+      "inputs": {
+        "content": "@body('Query_DeviceTvmSoftwareInventory')",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "Schema": {
+              "type": "array"
+            },
+            "Results": {
+              "type": "array"
+            }
+          }
+        }
+      }
+    },
+    "Process_Results": {
+      "runAfter": {
+        "Parse_Query_Results": [
+          "Succeeded"
+        ]
+      },
+      "type": "Foreach",
+      "foreach": "@body('Parse_Query_Results')?['Results']",
+      "actions": {
+        "Send_Email_Notification": {
+          "type": "ApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['office365']['connectionId']"
+              }
+            },
+            "method": "post",
+            "body": {
+              "To": "your-email@example.com",
+              "Subject": "Unsupported Software Detected on Device",
+              "Body": "<p>Device: @{items('Process_Results')?['DeviceName']}<br>Software: @{items('Process_Results')?['SoftwareName']}<br>Version: @{items('Process_Results')?['SoftwareVersion']}<br>End of Support: @{items('Process_Results')?['EndOfSupportDate']}</p>",
+              "Importance": "High"
+            },
+            "path": "/v2/Mail"
+          }
+        }
+      }
+    }
+  },
+  "outputs": {}
+}
