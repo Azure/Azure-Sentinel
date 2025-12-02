@@ -73,6 +73,8 @@ python solution_connector_tables.py --output custom_output.csv --report custom_r
 
 The main CSV file containing one row per unique combination of solution, connector, and table.
 
+**Note:** Newlines in the `connector_description` field are replaced with `<br>` tags to ensure proper rendering in GitHub's CSV viewer while preserving formatting information.
+
 #### Column Descriptions
 
 | Column | Description |
@@ -93,7 +95,7 @@ The main CSV file containing one row per unique combination of solution, connect
 | `connector_id` | Unique connector identifier |
 | `connector_publisher` | Connector publisher name |
 | `connector_title` | Connector display title |
-| `connector_description` | Connector description (from descriptionMarkdown field) |
+| `connector_description` | Connector description (newlines replaced with `<br>` for GitHub CSV rendering) |
 | `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files |
 | `is_unique` | `true` if table appears in only one connector file, `false` otherwise |
 | `table_detection_methods` | (Optional, with --show-detection-methods) Semicolon-separated list of methods used to detect this table |

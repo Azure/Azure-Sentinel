@@ -920,7 +920,8 @@ def main() -> None:
                     connector_id = entry.get("id", "")
                     connector_publisher = entry.get("publisher", "")
                     connector_title = entry.get("title", "")
-                    connector_description = entry.get("description", "")
+                    # Replace newlines with <br> for GitHub CSV rendering
+                    connector_description = entry.get("description", "").replace("\n", "<br>").replace("\r", "")
                     had_table_definitions = had_raw_table_definitions
                     parser_filtered_tables: Set[str] = set()
                     parser_expansion_details: Dict[str, Set[str]] = {}
