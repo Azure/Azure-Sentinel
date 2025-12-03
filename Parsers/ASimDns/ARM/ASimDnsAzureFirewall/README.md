@@ -1,8 +1,8 @@
-# Legacy AzureDiagnostics Azure Firewall ASIM Dns Normalization Parser
+# Azure Firewall ASIM Dns Normalization Parser
 
 ARM template for ASIM Dns schema parser for Azure Firewall.
 
-This ASIM parser supports normalizing legacy AzureDiagnostics Azure Firewall logs to the ASIM Dns normalized schema.
+This ASIM parser supports normalizing Azure Firewall logs to the ASIM Dns normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
