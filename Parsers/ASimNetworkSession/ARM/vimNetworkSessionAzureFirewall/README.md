@@ -1,8 +1,8 @@
-# Legacy AzureDiagnostics Azure Firewall ASIM NetworkSession Normalization Parser
+# Azure Firewall ASIM NetworkSession Normalization Parser
 
 ARM template for ASIM NetworkSession schema parser for Azure Firewall.
 
-This ASIM parser supports filtering and normalizing legacy AzureDiagnostics Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
+This ASIM parser supports filtering and normalizing Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
