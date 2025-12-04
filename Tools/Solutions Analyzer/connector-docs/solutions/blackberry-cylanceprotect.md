@@ -2,30 +2,31 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2022-05-20 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### [Deprecated] Blackberry CylancePROTECT
+### [[Deprecated] Blackberry CylancePROTECT](../connectors/blackberrycylanceprotect.md)
 
 **Publisher:** Blackberry
 
 The [Blackberry CylancePROTECT](https://www.blackberry.com/us/en/products/blackberry-protect) connector allows you to easily connect your CylancePROTECT logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Syslog` |
+| **Connector Definition Files** | [template_BlackberryCylancePROTECT.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT/Data%20Connectors/template_BlackberryCylancePROTECT.JSON) |
 
-- `Syslog`
-
-**Connector Definition Files:**
-
-- [template_BlackberryCylancePROTECT.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT/Data%20Connectors/template_BlackberryCylancePROTECT.JSON)
+[→ View full connector details](../connectors/blackberrycylanceprotect.md)
 
 ## Tables Reference
 
@@ -35,4 +36,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | [Deprecated] Blackberry CylancePROTECT |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

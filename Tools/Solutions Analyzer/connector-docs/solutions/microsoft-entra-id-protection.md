@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
 | **Categories** | domains |
 | **First Published** | 2022-05-18 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Microsoft Entra ID Protection
+### [Microsoft Entra ID Protection](../connectors/azureactivedirectoryidentityprotection.md)
 
 **Publisher:** Microsoft
 
@@ -23,13 +25,12 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Get Microsoft Entra ID Premium P1/P2 ](https://aka.ms/asi-ipcconnectorgetlink)
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `SecurityAlert` |
+| **Connector Definition Files** | [template_AzureActiveDirectoryIdentityProtection.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection/Data%20Connectors/template_AzureActiveDirectoryIdentityProtection.JSON) |
 
-- `SecurityAlert`
-
-**Connector Definition Files:**
-
-- [template_AzureActiveDirectoryIdentityProtection.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection/Data%20Connectors/template_AzureActiveDirectoryIdentityProtection.JSON)
+[→ View full connector details](../connectors/azureactivedirectoryidentityprotection.md)
 
 ## Tables Reference
 
@@ -39,4 +40,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `SecurityAlert` | Microsoft Entra ID Protection |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

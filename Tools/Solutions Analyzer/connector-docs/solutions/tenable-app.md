@@ -2,49 +2,49 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Tenable |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.tenable.com/support/technical-support](https://www.tenable.com/support/technical-support) |
 | **Categories** | domains |
 | **First Published** | 2024-06-06 |
 | **Last Updated** | 2025-06-19 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### Tenable Identity Exposure
+### [Tenable Identity Exposure](../connectors/tenableie.md)
 
 **Publisher:** Tenable
 
 Tenable Identity Exposure connector allows Indicators of Exposure, Indicators of Attack and trailflow logs to be ingested into Microsoft Sentinel.The different work books and data parsers allow you to more easily manipulate logs and monitor your Active Directory environment.  The analytic templates allow you to automate responses regarding different events, exposures and attacks.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Tenable_IE_CL` |
+| **Connector Definition Files** | [TenableIE.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Data%20Connectors/TenableIE/TenableIE.json) |
 
-- `Tenable_IE_CL`
+[→ View full connector details](../connectors/tenableie.md)
 
-**Connector Definition Files:**
-
-- [TenableIE.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Data%20Connectors/TenableIE/TenableIE.json)
-
-### Tenable Vulnerability Management
+### [Tenable Vulnerability Management](../connectors/tenablevm.md)
 
 **Publisher:** Tenable
 
 The TVM data connector provides the ability to ingest Asset, Vulnerability, Compliance, WAS assets and WAS vulnerabilities data into Microsoft Sentinel using TVM REST APIs. Refer to [API documentation](https://developer.tenable.com/reference) for more information. The connector provides the ability to get data which helps to examine potential security risks, get insight into your computing assets, diagnose configuration problems and more
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Tenable_VM_Asset_CL` |
+| | `Tenable_VM_Compliance_CL` |
+| | `Tenable_VM_Vuln_CL` |
+| | `Tenable_WAS_Asset_CL` |
+| | `Tenable_WAS_Vuln_CL` |
+| **Connector Definition Files** | [TenableVM.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Data%20Connectors/TenableVM/TenableVM.json) |
 
-- `Tenable_VM_Asset_CL`
-- `Tenable_VM_Compliance_CL`
-- `Tenable_VM_Vuln_CL`
-- `Tenable_WAS_Asset_CL`
-- `Tenable_WAS_Vuln_CL`
-
-**Connector Definition Files:**
-
-- [TenableVM.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Data%20Connectors/TenableVM/TenableVM.json)
+[→ View full connector details](../connectors/tenablevm.md)
 
 ## Tables Reference
 
@@ -59,4 +59,4 @@ This solution ingests data into **6 table(s)**:
 | `Tenable_WAS_Asset_CL` | Tenable Vulnerability Management |
 | `Tenable_WAS_Vuln_CL` | Tenable Vulnerability Management |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

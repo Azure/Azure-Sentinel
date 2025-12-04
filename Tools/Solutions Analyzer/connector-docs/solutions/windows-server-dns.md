@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2022-05-11 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### Windows DNS Events via AMA
+### [Windows DNS Events via AMA](../connectors/asimdnsactivitylogs.md)
 
 **Publisher:** Microsoft
 
@@ -45,15 +47,14 @@ Windows DNS events are supported by Advanced SIEM Information Model (ASIM) and s
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2225993&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `ASimDnsActivityLogs` |
+| **Connector Definition Files** | [template_ASimDnsActivityLogs.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_ASimDnsActivityLogs.JSON) |
 
-- `ASimDnsActivityLogs`
+[→ View full connector details](../connectors/asimdnsactivitylogs.md)
 
-**Connector Definition Files:**
-
-- [template_ASimDnsActivityLogs.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_ASimDnsActivityLogs.JSON)
-
-### DNS
+### [DNS](../connectors/dns.md)
 
 **Publisher:** Microsoft
 
@@ -77,14 +78,13 @@ The DNS log connector allows you to easily connect your DNS analytic and audit l
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220127&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `DnsEvents` |
+| | `DnsInventory` |
+| **Connector Definition Files** | [template_DNS.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_DNS.JSON) |
 
-- `DnsEvents`
-- `DnsInventory`
-
-**Connector Definition Files:**
-
-- [template_DNS.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_DNS.JSON)
+[→ View full connector details](../connectors/dns.md)
 
 ## Tables Reference
 
@@ -96,4 +96,4 @@ This solution ingests data into **3 table(s)**:
 | `DnsEvents` | DNS |
 | `DnsInventory` | DNS |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

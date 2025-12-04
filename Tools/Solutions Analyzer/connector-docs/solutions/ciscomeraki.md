@@ -2,32 +2,33 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2021-09-08 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### [Deprecated] Cisco Meraki
+### [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md)
 
 **Publisher:** Cisco
 
 The [Cisco Meraki](https://meraki.cisco.com/) connector allows you to easily connect your Cisco Meraki (MX/MR/MS) logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `meraki_CL` |
+| **Connector Definition Files** | [Connector_Syslog_CiscoMeraki.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/Connector_Syslog_CiscoMeraki.json) |
 
-- `meraki_CL`
+[→ View full connector details](../connectors/ciscomeraki.md)
 
-**Connector Definition Files:**
-
-- [Connector_Syslog_CiscoMeraki.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/Connector_Syslog_CiscoMeraki.json)
-
-### Cisco Meraki (using REST API)
+### [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md)
 
 **Publisher:** Microsoft
 
@@ -39,14 +40,13 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
 
  1. Network Session
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `CiscoMerakiNativePoller_CL` |
+| | `meraki_CL` |
+| **Connector Definition Files** | [azuredeploy_Cisco_Meraki_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json) |
 
-- `CiscoMerakiNativePoller_CL`
-- `meraki_CL`
-
-**Connector Definition Files:**
-
-- [azuredeploy_Cisco_Meraki_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json)
+[→ View full connector details](../connectors/ciscomerakinativepoller.md)
 
 ## Tables Reference
 
@@ -57,4 +57,4 @@ This solution ingests data into **2 table(s)**:
 | `CiscoMerakiNativePoller_CL` | Cisco Meraki (using REST API) |
 | `meraki_CL` | 2 connector(s) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

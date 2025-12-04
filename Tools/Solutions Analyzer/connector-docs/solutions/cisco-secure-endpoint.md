@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2021-10-28 |
 | **Last Updated** | 2022-02-02 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### [DEPRECATED] Cisco Secure Endpoint (AMP)
+### [[DEPRECATED] Cisco Secure Endpoint (AMP)](../connectors/ciscosecureendpoint.md)
 
 **Publisher:** Cisco
 
@@ -24,28 +26,26 @@ The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides t
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `CiscoSecureEndpoint_CL` |
+| **Connector Definition Files** | [CiscoSecureEndpoint_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint/Data%20Connectors/CiscoSecureEndpoint_API_FunctionApp.json) |
 
-- `CiscoSecureEndpoint_CL`
+[→ View full connector details](../connectors/ciscosecureendpoint.md)
 
-**Connector Definition Files:**
-
-- [CiscoSecureEndpoint_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint/Data%20Connectors/CiscoSecureEndpoint_API_FunctionApp.json)
-
-### Cisco Secure Endpoint (via Codeless Connector Framework)
+### [Cisco Secure Endpoint (via Codeless Connector Framework)](../connectors/ciscosecureendpointlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
 The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides the capability to ingest Cisco Secure Endpoint [audit logs](https://developer.cisco.com/docs/secure-endpoint/auditlog/) and [events](https://developer.cisco.com/docs/secure-endpoint/v1-api-reference-event/) into Microsoft Sentinel.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `CiscoSecureEndpointAuditLogsV2_CL` |
+| | `CiscoSecureEndpointEventsV2_CL` |
+| **Connector Definition Files** | [CiscoSecureEndpointLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint/Data%20Connectors/CiscoSecureEndpointLogs_ccp/CiscoSecureEndpointLogs_ConnectorDefinition.json) |
 
-- `CiscoSecureEndpointAuditLogsV2_CL`
-- `CiscoSecureEndpointEventsV2_CL`
-
-**Connector Definition Files:**
-
-- [CiscoSecureEndpointLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint/Data%20Connectors/CiscoSecureEndpointLogs_ccp/CiscoSecureEndpointLogs_ConnectorDefinition.json)
+[→ View full connector details](../connectors/ciscosecureendpointlogsccpdefinition.md)
 
 ## Tables Reference
 
@@ -57,4 +57,4 @@ This solution ingests data into **3 table(s)**:
 | `CiscoSecureEndpointEventsV2_CL` | 1 connector(s) |
 | `CiscoSecureEndpoint_CL` | [DEPRECATED] Cisco Secure Endpoint (AMP) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

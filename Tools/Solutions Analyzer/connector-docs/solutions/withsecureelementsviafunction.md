@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | WithSecure |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.withsecure.com/en/support](https://www.withsecure.com/en/support) |
 | **Categories** | domains |
 | **First Published** | 2024-02-22 |
 | **Last Updated** | 2025-04-25 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### WithSecure Elements API (Azure Function)
+### [WithSecure Elements API (Azure Function)](../connectors/withsecureelementsviafunction.md)
 
 **Publisher:** WithSecure
 
@@ -40,13 +42,12 @@ With this solution Azure Function is deployed to your tenant, polling periodical
 
 For more information visit our website at: [https://www.withsecure.com](https://www.withsecure.com).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `WsSecurityEvents_CL` |
+| **Connector Definition Files** | [WithSecureElementsViaFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction/Data%20Connectors/WithSecureElementsViaFunction.json) |
 
-- `WsSecurityEvents_CL`
-
-**Connector Definition Files:**
-
-- [WithSecureElementsViaFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction/Data%20Connectors/WithSecureElementsViaFunction.json)
+[→ View full connector details](../connectors/withsecureelementsviafunction.md)
 
 ## Tables Reference
 
@@ -56,4 +57,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `WsSecurityEvents_CL` | WithSecure Elements API (Azure Function) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

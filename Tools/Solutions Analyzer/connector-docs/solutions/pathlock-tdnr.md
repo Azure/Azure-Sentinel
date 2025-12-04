@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Pathlock Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://pathlock.com/support/](https://pathlock.com/support/) |
 | **Categories** | domains,verticals |
 | **First Published** | 2022-02-17 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Pathlock Inc.: Threat Detection and Response for SAP
+### [Pathlock Inc.: Threat Detection and Response for SAP](../connectors/pathlock-tdnr.md)
 
 **Publisher:** Pathlock Inc.
 
@@ -31,14 +33,13 @@ This precision-driven approach helps security teams drastically reduce false pos
 
 By combining business-context intelligence with advanced analytics, Pathlock enables enterprises to strengthen detection accuracy, streamline response actions, and maintain continuous control across their SAP environments—without adding complexity or redundant monitoring layers.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `ABAPAuditLog` |
+| | `Pathlock_TDnR_CL` |
+| **Connector Definition Files** | [Pathlock_TDnR_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR/Data%20Connectors/Pathlock_TDnR_PUSH_CCP/Pathlock_TDnR_connectorDefinition.json) |
 
-- `ABAPAuditLog`
-- `Pathlock_TDnR_CL`
-
-**Connector Definition Files:**
-
-- [Pathlock_TDnR_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR/Data%20Connectors/Pathlock_TDnR_PUSH_CCP/Pathlock_TDnR_connectorDefinition.json)
+[→ View full connector details](../connectors/pathlock-tdnr.md)
 
 ## Tables Reference
 
@@ -49,4 +50,4 @@ This solution ingests data into **2 table(s)**:
 | `ABAPAuditLog` | 1 connector(s) |
 | `Pathlock_TDnR_CL` | Pathlock Threat Detection and Response Integration |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Veeam Software |
 | **Support Tier** | Partner |
 | **Support Link** | [https://helpcenter.veeam.com/docs/security_plugins_microsoft_sentinel/guide/](https://helpcenter.veeam.com/docs/security_plugins_microsoft_sentinel/guide/) |
 | **Categories** | domains |
 | **Version** | 3.0.2 |
 | **First Published** | 2025-08-26 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Veeam Data Connector (using Azure Functions)
+### [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md)
 
 **Publisher:** Veeam
 
@@ -40,18 +42,17 @@ The connector supports integration with Veeam Backup & Replication, Veeam ONE an
 
 - **VeeamSessions_CL**: Veeam sessions
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `VeeamAuthorizationEvents_CL` |
+| | `VeeamCovewareFindings_CL` |
+| | `VeeamMalwareEvents_CL` |
+| | `VeeamOneTriggeredAlarms_CL` |
+| | `VeeamSecurityComplianceAnalyzer_CL` |
+| | `VeeamSessions_CL` |
+| **Connector Definition Files** | [Veeam_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam/Data%20Connectors/Veeam_API_FunctionApp.json) |
 
-- `VeeamAuthorizationEvents_CL`
-- `VeeamCovewareFindings_CL`
-- `VeeamMalwareEvents_CL`
-- `VeeamOneTriggeredAlarms_CL`
-- `VeeamSecurityComplianceAnalyzer_CL`
-- `VeeamSessions_CL`
-
-**Connector Definition Files:**
-
-- [Veeam_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam/Data%20Connectors/Veeam_API_FunctionApp.json)
+[→ View full connector details](../connectors/veeamcustomtablesdataconnector.md)
 
 ## Tables Reference
 
@@ -66,4 +67,4 @@ This solution ingests data into **6 table(s)**:
 | `VeeamSecurityComplianceAnalyzer_CL` | Veeam Data Connector (using Azure Functions) |
 | `VeeamSessions_CL` | Veeam Data Connector (using Azure Functions) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

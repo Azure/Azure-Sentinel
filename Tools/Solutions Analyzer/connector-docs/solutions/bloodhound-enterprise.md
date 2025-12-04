@@ -2,31 +2,32 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | SpecterOps |
 | **Support Tier** | Partner |
 | **Support Link** | [https://bloodhoundenterprise.io/](https://bloodhoundenterprise.io/) |
 | **Categories** | domains |
 | **First Published** | 2023-05-04 |
 | **Last Updated** | 2021-05-04 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Bloodhound Enterprise
+### [Bloodhound Enterprise](../connectors/bloodhoundenterprise.md)
 
 **Publisher:** SpecterOps
 
 The solution is designed to test Bloodhound Enterprise package creation process.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `BHEAttackPathsData_CL` |
+| **Connector Definition Files** | [BloodHoundFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundFunction.json) |
 
-- `BHEAttackPathsData_CL`
-
-**Connector Definition Files:**
-
-- [BloodHoundFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundFunction.json)
+[→ View full connector details](../connectors/bloodhoundenterprise.md)
 
 ## Tables Reference
 
@@ -36,4 +37,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `BHEAttackPathsData_CL` | Bloodhound Enterprise |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Citrix Systems |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.citrix.com/support/](https://www.citrix.com/support/) |
 | **Categories** | domains |
 | **First Published** | 2022-05-06 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### [Deprecated] Citrix WAF (Web App Firewall) via Legacy Agent
+### [[Deprecated] Citrix WAF (Web App Firewall) via Legacy Agent](../connectors/citrixwaf.md)
 
 **Publisher:** Citrix Systems Inc.
 
@@ -23,15 +25,14 @@ This solution provides **2 data connector(s)**.
 
 Citrix WAF supports Common Event Format (CEF) which is an industry standard format on top of Syslog messages . By connecting Citrix WAF CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `CommonSecurityLog` |
+| **Connector Definition Files** | [Citrix_WAF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall/Data%20Connectors/Citrix_WAF.json) |
 
-- `CommonSecurityLog`
+[→ View full connector details](../connectors/citrixwaf.md)
 
-**Connector Definition Files:**
-
-- [Citrix_WAF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall/Data%20Connectors/Citrix_WAF.json)
-
-### [Deprecated] Citrix WAF (Web App Firewall) via AMA
+### [[Deprecated] Citrix WAF (Web App Firewall) via AMA](../connectors/citrixwafama.md)
 
 **Publisher:** Citrix Systems Inc.
 
@@ -41,13 +42,12 @@ Citrix WAF supports Common Event Format (CEF) which is an industry standard form
 
 Citrix WAF supports Common Event Format (CEF) which is an industry standard format on top of Syslog messages . By connecting Citrix WAF CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `CommonSecurityLog` |
+| **Connector Definition Files** | [template_Citrix_WAFAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall/Data%20Connectors/template_Citrix_WAFAMA.json) |
 
-- `CommonSecurityLog`
-
-**Connector Definition Files:**
-
-- [template_Citrix_WAFAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall/Data%20Connectors/template_Citrix_WAFAMA.json)
+[→ View full connector details](../connectors/citrixwafama.md)
 
 ## Tables Reference
 
@@ -57,4 +57,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | 2 connector(s) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

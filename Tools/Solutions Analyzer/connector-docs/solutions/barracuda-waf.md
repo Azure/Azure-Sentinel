@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Barracuda |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.barracuda.com/support](https://www.barracuda.com/support) |
 | **Categories** | domains |
 | **First Published** | 2022-05-13 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### [Deprecated] Barracuda Web Application Firewall via Legacy Agent
+### [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md)
 
 **Publisher:** Barracuda
 
@@ -23,15 +25,14 @@ The Barracuda Web Application Firewall (WAF) connector allows you to easily conn
 
 [For more information >​](https://aka.ms/CEF-Barracuda)
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Barracuda_CL` |
+| | `CommonSecurityLog` |
+| | `barracuda_CL` |
+| **Connector Definition Files** | [template_Barracuda.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF/Data%20Connectors/template_Barracuda.json) |
 
-- `Barracuda_CL`
-- `CommonSecurityLog`
-- `barracuda_CL`
-
-**Connector Definition Files:**
-
-- [template_Barracuda.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF/Data%20Connectors/template_Barracuda.json)
+[→ View full connector details](../connectors/barracuda.md)
 
 ## Tables Reference
 
@@ -43,4 +44,4 @@ This solution ingests data into **3 table(s)**:
 | `CommonSecurityLog` | 1 connector(s) |
 | `barracuda_CL` | 1 connector(s) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

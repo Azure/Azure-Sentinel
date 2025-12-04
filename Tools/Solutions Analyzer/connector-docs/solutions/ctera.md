@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | CTERA |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.ctera.com/](https://www.ctera.com/) |
 | **Categories** | domains |
 | **First Published** | 2024-07-28 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### CTERA Syslog
+### [CTERA Syslog](../connectors/ctera.md)
 
 **Publisher:** CTERA Networks Ltd
 
@@ -25,13 +27,12 @@ The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat det
 
  Additionally, it helps you identify critical patterns such as mass access denied events, mass deletions, and mass permission changes, enabling proactive threat management and response.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Syslog` |
+| **Connector Definition Files** | [CTERA_Data_Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA/Data%20Connectors/CTERA_Data_Connector.json) |
 
-- `Syslog`
-
-**Connector Definition Files:**
-
-- [CTERA_Data_Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA/Data%20Connectors/CTERA_Data_Connector.json)
+[→ View full connector details](../connectors/ctera.md)
 
 ## Tables Reference
 
@@ -41,4 +42,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | CTERA Syslog |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

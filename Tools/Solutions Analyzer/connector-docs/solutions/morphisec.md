@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Morphisec |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.morphisec.com/support/home](https://support.morphisec.com/support/home) |
 | **Categories** | domains |
 | **First Published** | 2022-05-05 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Morphisec API Data Connector (via Codeless Connector Framework)
+### [Morphisec API Data Connector (via Codeless Connector Framework)](../connectors/morphisecccf.md)
 
 **Publisher:** Morphisec
 
@@ -23,13 +25,12 @@ This solution provides more than just data ingestion; it equips your security te
 
 With this solution, you can empower your SOC to leverage Morphisec's powerful threat prevention within a unified investigation and response workflow in Microsoft Sentinel.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `MorphisecAlerts_CL` |
+| **Connector Definition Files** | [Morphisec_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec/Data%20Connectors/Morphisec_CCF/Morphisec_ConnectorDefinition.json) |
 
-- `MorphisecAlerts_CL`
-
-**Connector Definition Files:**
-
-- [Morphisec_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec/Data%20Connectors/Morphisec_CCF/Morphisec_ConnectorDefinition.json)
+[→ View full connector details](../connectors/morphisecccf.md)
 
 ## Tables Reference
 
@@ -39,4 +40,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `MorphisecAlerts_CL` | 1 connector(s) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

@@ -2,32 +2,33 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2022-05-02 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### Windows Firewall
+### [Windows Firewall](../connectors/windowsfirewall.md)
 
 **Publisher:** Microsoft
 
 Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `WindowsFirewall` |
+| **Connector Definition Files** | [Windows%20Firewall.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/Windows%20Firewall.JSON) |
 
-- `WindowsFirewall`
+[→ View full connector details](../connectors/windowsfirewall.md)
 
-**Connector Definition Files:**
-
-- [Windows%20Firewall.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/Windows%20Firewall.JSON)
-
-### Windows Firewall Events via AMA
+### [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md)
 
 **Publisher:** Microsoft
 
@@ -45,13 +46,12 @@ For more information, see the following articles:
 
 - [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `ASimNetworkSessionLogs` |
+| **Connector Definition Files** | [template_WindowsFirewallAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/template_WindowsFirewallAma.JSON) |
 
-- `ASimNetworkSessionLogs`
-
-**Connector Definition Files:**
-
-- [template_WindowsFirewallAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/template_WindowsFirewallAma.JSON)
+[→ View full connector details](../connectors/windowsfirewallama.md)
 
 ## Tables Reference
 
@@ -62,4 +62,4 @@ This solution ingests data into **2 table(s)**:
 | `ASimNetworkSessionLogs` | Windows Firewall Events via AMA |
 | `WindowsFirewall` | Windows Firewall |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

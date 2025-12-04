@@ -18,7 +18,7 @@ This page lists **503 unique connectors** across all solutions.
 
 ## #
 
-###  Atlassian Confluence Audit (via Codeless Connector Framework)
+### [ Atlassian Confluence Audit (via Codeless Connector Framework)](connectors/confluenceauditccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -28,9 +28,11 @@ This page lists **503 unique connectors** across all solutions.
 
 The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/confluenceauditccpdefinition.md)
+
 ---
 
-###  Dragos Notifications via Cloud Sitestore
+### [ Dragos Notifications via Cloud Sitestore](connectors/dragossitestoreccp.md)
 
 **Publisher:** Dragos
 
@@ -40,9 +42,11 @@ The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit 
 
 The [Dragos Platform](https://www.dragos.com/) is the leading Industrial Cyber Security platform it offers a comprehensive Operational Technology (OT) cyber threat detection built by unrivaled industrial cybersecurity expertise. This solution enables Dragos Platform notification data to be viewed in Microsoft Sentinel so that security analysts are able to triage potential cyber security events occurring in their industrial environments.
 
+[→ View full connector details](connectors/dragossitestoreccp.md)
+
 ---
 
-###  Microsoft Active-Directory Domain Controllers Security Event Logs
+### [ Microsoft Active-Directory Domain Controllers Security Event Logs](connectors/esi-opt34domaincontrollerssecurityeventlogs.md)
 
 **Publisher:** Microsoft
 
@@ -52,9 +56,11 @@ The [Dragos Platform](https://www.dragos.com/) is the leading Industrial Cyber S
 
 [Option 3 & 4] - Using Azure Monitor Agent -You can stream a part or all Domain Controllers Security Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
 
+[→ View full connector details](connectors/esi-opt34domaincontrollerssecurityeventlogs.md)
+
 ---
 
-### 1Password
+### [1Password](connectors/1password.md)
 
 **Publisher:** 1Password
 
@@ -70,9 +76,11 @@ This solution takes a dependency on the following technologies, and some of thes
 
 -  [Azure Functions](https://azure.microsoft.com/services/functions/#overview)
 
+[→ View full connector details](connectors/1password.md)
+
 ---
 
-### 1Password (Serverless)
+### [1Password (Serverless)](connectors/1passwordccpdefinition.md)
 
 **Publisher:** 1Password
 
@@ -82,9 +90,11 @@ This solution takes a dependency on the following technologies, and some of thes
 
 The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & ItemUsage events into Microsoft Sentinel.
 
+[→ View full connector details](connectors/1passwordccpdefinition.md)
+
 ---
 
-### [Recommended] Infoblox Cloud Data Connector via AMA
+### [[Recommended] Infoblox Cloud Data Connector via AMA](connectors/infobloxclouddataconnectorama.md)
 
 **Publisher:** Infoblox
 
@@ -94,9 +104,11 @@ The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & 
 
 The Infoblox Cloud Data Connector allows you to easily connect your Infoblox data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/infobloxclouddataconnectorama.md)
+
 ---
 
-### [Recommended] Infoblox SOC Insight Data Connector via AMA
+### [[Recommended] Infoblox SOC Insight Data Connector via AMA](connectors/infobloxsocinsightsdataconnector-ama.md)
 
 **Publisher:** Infoblox
 
@@ -108,9 +120,11 @@ The Infoblox SOC Insight Data Connector allows you to easily connect your Infobl
 
 This data connector ingests Infoblox SOC Insight CDC logs into your Log Analytics Workspace using the new Azure Monitor Agent. Learn more about ingesting using the new Azure Monitor Agent [here](https://learn.microsoft.com/azure/sentinel/connect-cef-ama). **Microsoft recommends using this Data Connector.**
 
+[→ View full connector details](connectors/infobloxsocinsightsdataconnector-ama.md)
+
 ---
 
-### [Recommended] Vectra AI Stream via AMA
+### [[Recommended] Vectra AI Stream via AMA](connectors/vectrastreamama.md)
 
 **Publisher:** Vectra AI
 
@@ -120,11 +134,13 @@ This data connector ingests Infoblox SOC Insight CDC logs into your Log Analytic
 
 The Vectra AI Stream connector allows to send Network Metadata collected by Vectra Sensors accross the Network and Cloud to Microsoft Sentinel
 
+[→ View full connector details](connectors/vectrastreamama.md)
+
 ---
 
 ## A
 
-### AI Vectra Stream via Legacy Agent
+### [AI Vectra Stream via Legacy Agent](connectors/aivectrastream.md)
 
 **Publisher:** Vectra AI
 
@@ -134,9 +150,11 @@ The Vectra AI Stream connector allows to send Network Metadata collected by Vect
 
 The AI Vectra Stream connector allows to send Network Metadata collected by Vectra Sensors accross the Network and Cloud to Microsoft Sentinel
 
+[→ View full connector details](connectors/aivectrastream.md)
+
 ---
 
-### AIShield
+### [AIShield](connectors/boschaishield.md)
 
 **Publisher:** Bosch
 
@@ -146,9 +164,11 @@ The AI Vectra Stream connector allows to send Network Metadata collected by Vect
 
 [AIShield](https://www.boschaishield.com/) connector allows users to connect with AIShield custom defense mechanism logs with Microsoft Sentinel, allowing the creation of dynamic Dashboards, Workbooks, Notebooks and tailored Alerts to improve investigation and thwart attacks on AI systems. It gives users more insight into their organization's AI assets security posturing and improves their AI systems security operation capabilities.AIShield.GuArdIan analyzes the LLM generated content to identify and mitigate harmful content, safeguarding against legal, policy, role based, and usage based violations
 
+[→ View full connector details](connectors/boschaishield.md)
+
 ---
 
-### API Protection
+### [API Protection](connectors/42crunchapiprotection.md)
 
 **Publisher:** 42Crunch
 
@@ -158,9 +178,11 @@ The AI Vectra Stream connector allows to send Network Metadata collected by Vect
 
 Connects the 42Crunch API protection to Azure Log Analytics via the REST API interface
 
+[→ View full connector details](connectors/42crunchapiprotection.md)
+
 ---
 
-### ARGOS Cloud Security
+### [ARGOS Cloud Security](connectors/argoscloudsecurity.md)
 
 **Publisher:** ARGOS Cloud Security
 
@@ -170,9 +192,11 @@ Connects the 42Crunch API protection to Azure Log Analytics via the REST API int
 
 The ARGOS Cloud Security integration for Microsoft Sentinel allows you to have all your important cloud security events in one place. This enables you to easily create dashboards, alerts, and correlate events across multiple systems. Overall this will improve your organization's security posture and security incident response.
 
+[→ View full connector details](connectors/argoscloudsecurity.md)
+
 ---
 
-### AWS S3 Server Access Logs (via Codeless Connector Framework)
+### [AWS S3 Server Access Logs (via Codeless Connector Framework)](connectors/awss3serveraccesslogsdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -182,9 +206,11 @@ The ARGOS Cloud Security integration for Microsoft Sentinel allows you to have a
 
 This connector allows you to ingest AWS S3 Server Access Logs into Microsoft Sentinel. These logs contain detailed records for requests made to S3 buckets, including the type of request, resource accessed, requester information, and response details. These logs are useful for analyzing access patterns, debugging issues, and ensuring security compliance.
 
+[→ View full connector details](connectors/awss3serveraccesslogsdefinition.md)
+
 ---
 
-### AWS Security Hub Findings (via Codeless Connector Framework)
+### [AWS Security Hub Findings (via Codeless Connector Framework)](connectors/awssecurityhubfindingsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -194,9 +220,11 @@ This connector allows you to ingest AWS S3 Server Access Logs into Microsoft Sen
 
 This connector enables the ingestion of AWS Security Hub Findings, which are collected in AWS S3 buckets, into Microsoft Sentinel. It helps streamline the process of monitoring and managing security alerts by integrating AWS Security Hub Findings with Microsoft Sentinel's advanced threat detection and response capabilities.
 
+[→ View full connector details](connectors/awssecurityhubfindingsccpdefinition.md)
+
 ---
 
-### AbnormalSecurity 
+### [AbnormalSecurity ](connectors/abnormalsecurity.md)
 
 **Publisher:** AbnormalSecurity
 
@@ -206,9 +234,11 @@ This connector enables the ingestion of AWS Security Hub Findings, which are col
 
 The Abnormal Security data connector provides the capability to ingest threat and case logs into Microsoft Sentinel using the [Abnormal Security Rest API.](https://app.swaggerhub.com/apis/abnormal-security/abx/)
 
+[→ View full connector details](connectors/abnormalsecurity.md)
+
 ---
 
-### Agari Phishing Defense and Brand Protection
+### [Agari Phishing Defense and Brand Protection](connectors/agari.md)
 
 **Publisher:** Agari
 
@@ -218,9 +248,11 @@ The Abnormal Security data connector provides the capability to ingest threat an
 
 This connector uses a Agari REST API connection to push data into Azure Sentinel Log Analytics.
 
+[→ View full connector details](connectors/agari.md)
+
 ---
 
-### Alibaba Cloud ActionTrail (via Codeless Connector Framework)
+### [Alibaba Cloud ActionTrail (via Codeless Connector Framework)](connectors/alicloudactiontrailccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -230,9 +262,11 @@ This connector uses a Agari REST API connection to push data into Azure Sentinel
 
 The [Alibaba Cloud ActionTrail](https://www.alibabacloud.com/product/actiontrail) data connector provides the capability to retrieve actiontrail events stored into [Alibaba Cloud Simple Log Service](https://www.alibabacloud.com/product/log-service) and store them into Microsoft Sentinel through the [SLS REST API](https://www.alibabacloud.com/help/sls/developer-reference/api-sls-2020-12-30-getlogs). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/alicloudactiontrailccpdefinition.md)
+
 ---
 
-### Alsid for Active Directory
+### [Alsid for Active Directory](connectors/alsidforad.md)
 
 **Publisher:** Alsid
 
@@ -243,9 +277,11 @@ The [Alibaba Cloud ActionTrail](https://www.alibabacloud.com/product/actiontrail
 Alsid for Active Directory connector allows to export Alsid Indicators of Exposures, trailflow and Indicators of Attacks logs to Azure Sentinel in real time.
 It provides a data parser to manipulate the logs more easily. The different workbooks ease your Active Directory monitoring and provide different ways to visualize the data. The analytic templates allow to automate responses regarding different events, exposures, or attacks.
 
+[→ View full connector details](connectors/alsidforad.md)
+
 ---
 
-### Amazon Web Services
+### [Amazon Web Services](connectors/aws.md)
 
 **Publisher:** Amazon
 
@@ -255,9 +291,11 @@ It provides a data parser to manipulate the logs more easily. The different work
 
 Follow these instructions to connect to AWS and stream your CloudTrail logs into Microsoft Sentinel. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2218883&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/aws.md)
+
 ---
 
-### Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)
+### [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](connectors/awscloudfrontccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -267,9 +305,11 @@ Follow these instructions to connect to AWS and stream your CloudTrail logs into
 
 This data connector enables the integration of AWS CloudFront logs with Microsoft Sentinel to support advanced threat detection, investigation, and security monitoring. By utilizing Amazon S3 for log storage and Amazon SQS for message queuing, the connector reliably ingests CloudFront access logs into Microsoft Sentinel
 
+[→ View full connector details](connectors/awscloudfrontccpdefinition.md)
+
 ---
 
-### Amazon Web Services NetworkFirewall (via Codeless Connector Framework)
+### [Amazon Web Services NetworkFirewall (via Codeless Connector Framework)](connectors/awsnetworkfirewallccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -279,9 +319,11 @@ This data connector enables the integration of AWS CloudFront logs with Microsof
 
 This data connector allows you to ingest AWS Network Firewall logs into Microsoft Sentinel for advanced threat detection and security monitoring. By leveraging Amazon S3 and Amazon SQS, the connector forwards network traffic logs, intrusion detection alerts, and firewall events to Microsoft Sentinel, enabling real-time analysis and correlation with other security data
 
+[→ View full connector details](connectors/awsnetworkfirewallccpdefinition.md)
+
 ---
 
-### Amazon Web Services S3
+### [Amazon Web Services S3](connectors/awss3.md)
 
 **Publisher:** Amazon
 
@@ -297,9 +339,11 @@ This connector allows you to ingest AWS service logs, collected in AWS S3 bucket
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2218883&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/awss3.md)
+
 ---
 
-### Amazon Web Services S3 DNS Route53 (via Codeless Connector Framework)
+### [Amazon Web Services S3 DNS Route53 (via Codeless Connector Framework)](connectors/awsroute53resolverccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -309,9 +353,11 @@ For more information, see the [Microsoft Sentinel documentation](https://go.micr
 
 This connector enables ingestion of AWS Route 53 DNS logs into Microsoft Sentinel for enhanced visibility and threat detection. It supports DNS Resolver query logs ingested directly from AWS S3 buckets, while Public DNS query logs and Route 53 audit logs can be ingested using Microsoft Sentinel's AWS CloudWatch and CloudTrail connectors. Comprehensive instructions are provided to guide you through the setup of each log type. Leverage this connector to monitor DNS activity, detect potential threats, and improve your security posture in cloud environments.
 
+[→ View full connector details](connectors/awsroute53resolverccpdefinition.md)
+
 ---
 
-### Amazon Web Services S3 VPC Flow Logs
+### [Amazon Web Services S3 VPC Flow Logs](connectors/awss3vpcflowlogsparquetdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -321,9 +367,11 @@ This connector enables ingestion of AWS Route 53 DNS logs into Microsoft Sentine
 
 This connector allows you to ingest AWS VPC Flow Logs, collected in AWS S3 buckets, to Microsoft Sentinel. AWS VPC Flow Logs provide visibility into network traffic within your AWS Virtual Private Cloud (VPC), enabling security analysis and network monitoring.
 
+[→ View full connector details](connectors/awss3vpcflowlogsparquetdefinition.md)
+
 ---
 
-### Amazon Web Services S3 WAF
+### [Amazon Web Services S3 WAF](connectors/awss3wafccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -333,9 +381,11 @@ This connector allows you to ingest AWS VPC Flow Logs, collected in AWS S3 bucke
 
 This connector allows you to ingest AWS WAF logs, collected in AWS S3 buckets, to Microsoft Sentinel. AWS WAF logs are detailed records of traffic that web access control lists (ACLs) analyze, which are essential for maintaining the security and performance of web applications. These logs contain information such as the time AWS WAF received the request, the specifics of the request, and the action taken by the rule that the request matched.
 
+[→ View full connector details](connectors/awss3wafccpdefinition.md)
+
 ---
 
-### Anvilogic
+### [Anvilogic](connectors/anvilogicccfdefinition.md)
 
 **Publisher:** Anvilogic
 
@@ -345,9 +395,11 @@ This connector allows you to ingest AWS WAF logs, collected in AWS S3 buckets, t
 
 The Anvilogic data connector allows you to pull events of interest generated in the Anvilogic ADX cluster into your Microsoft Sentinel
 
+[→ View full connector details](connectors/anvilogicccfdefinition.md)
+
 ---
 
-### Armis Activities
+### [Armis Activities](connectors/armisactivities.md)
 
 **Publisher:** Armis
 
@@ -357,9 +409,11 @@ The Anvilogic data connector allows you to pull events of interest generated in 
 
 The [Armis](https://www.armis.com/) Activities connector gives the capability to ingest Armis device Activities into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/doc` for more information. The connector provides the ability to get device activity information from the Armis platform. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. Armis detects what all devices are doing in your environment and classifies those activities to get a complete picture of device behavior. These activities are analyzed for an understanding of normal and abnormal device behavior and used to assess device and network risk.
 
+[→ View full connector details](connectors/armisactivities.md)
+
 ---
 
-### Armis Alerts
+### [Armis Alerts](connectors/armisalerts.md)
 
 **Publisher:** Armis
 
@@ -369,9 +423,11 @@ The [Armis](https://www.armis.com/) Activities connector gives the capability to
 
 The [Armis](https://www.armis.com/) Alerts connector gives the capability to ingest Armis Alerts into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/docs` for more information. The connector provides the ability to get alert information from the Armis platform and to identify and prioritize threats in your environment. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. 
 
+[→ View full connector details](connectors/armisalerts.md)
+
 ---
 
-### Armis Alerts Activities
+### [Armis Alerts Activities](connectors/armisalertsactivities.md)
 
 **Publisher:** Armis
 
@@ -381,9 +437,11 @@ The [Armis](https://www.armis.com/) Alerts connector gives the capability to ing
 
 The [Armis](https://www.armis.com/) Alerts Activities connector gives the capability to ingest Armis Alerts and Activities into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/docs` for more information. The connector provides the ability to get alert and activity information from the Armis platform and to identify and prioritize threats in your environment. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. 
 
+[→ View full connector details](connectors/armisalertsactivities.md)
+
 ---
 
-### Armis Devices
+### [Armis Devices](connectors/armisdevices.md)
 
 **Publisher:** Armis
 
@@ -393,9 +451,11 @@ The [Armis](https://www.armis.com/) Alerts Activities connector gives the capabi
 
 The [Armis](https://www.armis.com/) Device connector gives the capability to ingest Armis Devices into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/docs` for more information. The connector provides the ability to get device information from the Armis platform. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. Armis can also integrate with your existing IT & security management tools to identify and classify each and every device, managed or unmanaged in your environment.
 
+[→ View full connector details](connectors/armisdevices.md)
+
 ---
 
-### Armorblox
+### [Armorblox](connectors/armorblox.md)
 
 **Publisher:** Armorblox
 
@@ -405,9 +465,11 @@ The [Armis](https://www.armis.com/) Device connector gives the capability to ing
 
 The [Armorblox](https://www.armorblox.com/) data connector provides the capability to ingest incidents from your Armorblox instance into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, and more.
 
+[→ View full connector details](connectors/armorblox.md)
+
 ---
 
-### Atlassian Beacon Alerts
+### [Atlassian Beacon Alerts](connectors/atlassianbeaconalerts.md)
 
 **Publisher:** DEFEND Ltd.
 
@@ -417,9 +479,11 @@ The [Armorblox](https://www.armorblox.com/) data connector provides the capabili
 
 Atlassian Beacon is a cloud product that is built for Intelligent threat detection across the Atlassian platforms (Jira, Confluence, and Atlassian Admin). This can help users detect, investigate and respond to risky user activity for the Atlassian suite of products. The solution is  a custom data connector from DEFEND Ltd. that is used to visualize the alerts ingested from Atlassian Beacon to Microsoft Sentinel via a Logic App.
 
+[→ View full connector details](connectors/atlassianbeaconalerts.md)
+
 ---
 
-### Atlassian Confluence
+### [Atlassian Confluence](connectors/atlassianconfluence.md)
 
 **Publisher:** Atlassian
 
@@ -429,9 +493,11 @@ Atlassian Beacon is a cloud product that is built for Intelligent threat detecti
 
 The Atlassian Confluence data connector provides the capability to ingest [Atlassian Confluence audit logs](https://developer.atlassian.com/cloud/confluence/rest/api-group-audit/) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/atlassianconfluence.md)
+
 ---
 
-### Atlassian Jira Audit
+### [Atlassian Jira Audit](connectors/jiraauditapi.md)
 
 **Publisher:** Atlassian
 
@@ -441,9 +507,11 @@ The Atlassian Confluence data connector provides the capability to ingest [Atlas
 
 The [Atlassian Jira](https://www.atlassian.com/software/jira) Audit data connector provides the capability to ingest [Jira Audit Records](https://support.atlassian.com/jira-cloud-administration/docs/audit-activities-in-jira-applications/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/jiraauditapi.md)
+
 ---
 
-### Atlassian Jira Audit (using REST API)
+### [Atlassian Jira Audit (using REST API)](connectors/jiraauditccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -453,9 +521,11 @@ The [Atlassian Jira](https://www.atlassian.com/software/jira) Audit data connect
 
 The [Atlassian Jira](https://www.atlassian.com/software/jira) Audit data connector provides the capability to ingest [Jira Audit Records](https://support.atlassian.com/jira-cloud-administration/docs/audit-activities-in-jira-applications/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/jiraauditccpdefinition.md)
+
 ---
 
-### Auth0 Access Management
+### [Auth0 Access Management](connectors/auth0.md)
 
 **Publisher:** Auth0
 
@@ -465,9 +535,11 @@ The [Atlassian Jira](https://www.atlassian.com/software/jira) Audit data connect
 
 The [Auth0 Access Management](https://auth0.com/access-management) data connector provides the capability to ingest [Auth0 log events](https://auth0.com/docs/api/management/v2/#!/Logs/get_logs) into Microsoft Sentinel
 
+[→ View full connector details](connectors/auth0.md)
+
 ---
 
-### Auth0 Logs
+### [Auth0 Logs](connectors/auth0connectorccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -477,9 +549,11 @@ The [Auth0 Access Management](https://auth0.com/access-management) data connecto
 
 The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connector allows ingesting logs from Auth0 API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses Auth0 API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/auth0connectorccpdefinition.md)
+
 ---
 
-### Authomize Data Connector
+### [Authomize Data Connector](connectors/authomize.md)
 
 **Publisher:** Authomize
 
@@ -489,9 +563,11 @@ The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connect
 
 The Authomize Data Connector provides the capability to ingest custom log types from Authomize into Microsoft Sentinel.
 
+[→ View full connector details](connectors/authomize.md)
+
 ---
 
-### Automated Logic WebCTRL 
+### [Automated Logic WebCTRL ](connectors/automatedlogicwebctrl.md)
 
 **Publisher:** AutomatedLogic
 
@@ -501,9 +577,11 @@ The Authomize Data Connector provides the capability to ingest custom log types 
 
 You can stream the audit logs from the WebCTRL SQL server hosted on Windows machines connected to your Microsoft Sentinel. This connection enables you to view dashboards, create custom alerts and improve investigation. This gives insights into your Industrial Control Systems that are monitored or controlled by the WebCTRL BAS application.
 
+[→ View full connector details](connectors/automatedlogicwebctrl.md)
+
 ---
 
-### Azure Activity
+### [Azure Activity](connectors/azureactivity.md)
 
 **Publisher:** Microsoft
 
@@ -513,9 +591,11 @@ You can stream the audit logs from the WebCTRL SQL server hosted on Windows mach
 
 Azure Activity Log is a subscription log that provides insight into subscription-level events that occur in Azure, including events from Azure Resource Manager operational data, service health events, write operations taken on the resources in your subscription, and the status of activities performed in Azure. For more information, see the [Microsoft Sentinel documentation ](https://go.microsoft.com/fwlink/p/?linkid=2219695&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azureactivity.md)
+
 ---
 
-### Azure Batch Account
+### [Azure Batch Account](connectors/azurebatchaccount-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -525,9 +605,11 @@ Azure Activity Log is a subscription log that provides insight into subscription
 
 Azure Batch Account is a uniquely identified entity within the Batch service. Most Batch solutions use Azure Storage for storing resource files and output files, so each Batch account is usually associated with a corresponding storage account. This connector lets you stream your Azure Batch account diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2224103&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azurebatchaccount-ccp.md)
+
 ---
 
-### Azure CloudNGFW By Palo Alto Networks
+### [Azure CloudNGFW By Palo Alto Networks](connectors/azurecloudngfwbypaloaltonetworks.md)
 
 **Publisher:** Palo Alto Networks
 
@@ -537,9 +619,11 @@ Azure Batch Account is a uniquely identified entity within the Batch service. Mo
 
 Cloud Next-Generation Firewall by Palo Alto Networks - an Azure Native ISV Service - is Palo Alto Networks Next-Generation Firewall (NGFW) delivered as a cloud-native service on Azure. You can discover Cloud NGFW in the Azure Marketplace and consume it in your Azure Virtual Networks (VNet). With Cloud NGFW, you can access the core NGFW capabilities such as App-ID, URL filtering based technologies. It provides threat prevention and detection through cloud-delivered security services and threat prevention signatures. The connector allows you to easily connect your Cloud NGFW logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities. For more information, see the [Cloud NGFW for Azure documentation](https://docs.paloaltonetworks.com/cloud-ngfw/azure).
 
+[→ View full connector details](connectors/azurecloudngfwbypaloaltonetworks.md)
+
 ---
 
-### Azure Cognitive Search
+### [Azure Cognitive Search](connectors/azurecognitivesearch-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -549,9 +633,11 @@ Cloud Next-Generation Firewall by Palo Alto Networks - an Azure Native ISV Servi
 
 Azure Cognitive Search is a cloud search service that gives developers infrastructure, APIs, and tools for building a rich search experience over private, heterogeneous content in web, mobile, and enterprise applications. This connector lets you stream your Azure Cognitive Search diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
 
+[→ View full connector details](connectors/azurecognitivesearch-ccp.md)
+
 ---
 
-### Azure DDoS Protection
+### [Azure DDoS Protection](connectors/ddos.md)
 
 **Publisher:** Microsoft
 
@@ -561,9 +647,11 @@ Azure Cognitive Search is a cloud search service that gives developers infrastru
 
 Connect to Azure DDoS Protection Standard logs via Public IP Address Diagnostic Logs. In addition to the core DDoS protection in the platform, Azure DDoS Protection Standard provides advanced DDoS mitigation capabilities against network attacks. It's automatically tuned to protect your specific Azure resources. Protection is simple to enable during the creation of new virtual networks. It can also be done after creation and requires no application or resource changes. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219760&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/ddos.md)
+
 ---
 
-### Azure Data Lake Storage Gen1
+### [Azure Data Lake Storage Gen1](connectors/azuredatalakestoragegen1-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -573,9 +661,11 @@ Connect to Azure DDoS Protection Standard logs via Public IP Address Diagnostic 
 
 Azure Data Lake Storage Gen1 is an enterprise-wide hyper-scale repository for big data analytic workloads. Azure Data Lake enables you to capture data of any size, type, and ingestion speed in one single place for operational and exploratory analytics. This connector lets you stream your Azure Data Lake Storage Gen1 diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223812&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azuredatalakestoragegen1-ccp.md)
+
 ---
 
-### Azure DevOps Audit Logs (via Codeless Connector Platform)
+### [Azure DevOps Audit Logs (via Codeless Connector Platform)](connectors/azuredevopsauditlogs.md)
 
 **Publisher:** Microsoft
 
@@ -585,9 +675,11 @@ Azure Data Lake Storage Gen1 is an enterprise-wide hyper-scale repository for bi
 
 The Azure DevOps Audit Logs data connector allows you to ingest audit events from Azure DevOps into Microsoft Sentinel. This data connector is built using the Microsoft Sentinel Codeless Connector Platform, ensuring seamless integration. It leverages the Azure DevOps Audit Logs API to fetch detailed audit events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview). These transformations enable parsing of the received audit data into a custom table during ingestion, improving query performance by eliminating the need for additional parsing. By using this connector, you can gain enhanced visibility into your Azure DevOps environment and streamline your security operations.
 
+[→ View full connector details](connectors/azuredevopsauditlogs.md)
+
 ---
 
-### Azure Event Hub
+### [Azure Event Hub](connectors/azureeventhub-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -597,9 +689,11 @@ The Azure DevOps Audit Logs data connector allows you to ingest audit events fro
 
 Azure Event Hubs is a big data streaming platform and event ingestion service. It can receive and process millions of events per second. This connector lets you stream your Azure Event Hub diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
 
+[→ View full connector details](connectors/azureeventhub-ccp.md)
+
 ---
 
-### Azure Firewall
+### [Azure Firewall](connectors/azurefirewall.md)
 
 **Publisher:** Microsoft
 
@@ -609,9 +703,11 @@ Azure Event Hubs is a big data streaming platform and event ingestion service. I
 
 Connect to Azure Firewall. Azure Firewall is a managed, cloud-based network security service that protects your Azure Virtual Network resources. It's a fully stateful firewall as a service with built-in high availability and unrestricted cloud scalability. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220124&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azurefirewall.md)
+
 ---
 
-### Azure Key Vault
+### [Azure Key Vault](connectors/azurekeyvault.md)
 
 **Publisher:** Microsoft
 
@@ -621,9 +717,11 @@ Connect to Azure Firewall. Azure Firewall is a managed, cloud-based network secu
 
 Azure Key Vault is a cloud service for securely storing and accessing secrets. A secret is anything that you want to tightly control access to, such as API keys, passwords, certificates, or cryptographic keys.   This connector lets you stream your Azure Key Vault diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220125&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azurekeyvault.md)
+
 ---
 
-### Azure Kubernetes Service (AKS)
+### [Azure Kubernetes Service (AKS)](connectors/azurekubernetes.md)
 
 **Publisher:** Microsoft
 
@@ -633,9 +731,11 @@ Azure Key Vault is a cloud service for securely storing and accessing secrets. A
 
 Azure Kubernetes Service (AKS) is an open-source, fully-managed container orchestration service that allows you to deploy, scale, and manage Docker containers and container-based applications in a cluster environment. This connector lets you stream your Azure Kubernetes Service (AKS) diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219762&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azurekubernetes.md)
+
 ---
 
-### Azure Logic Apps
+### [Azure Logic Apps](connectors/azurelogicapps-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -645,9 +745,11 @@ Azure Kubernetes Service (AKS) is an open-source, fully-managed container orches
 
 Azure Logic Apps is a cloud-based platform for creating and running automated workflows that integrate your apps, data, services, and systems. This connector lets you stream your Azure Logic Apps diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
 
+[→ View full connector details](connectors/azurelogicapps-ccp.md)
+
 ---
 
-### Azure SQL Databases
+### [Azure SQL Databases](connectors/azuresql.md)
 
 **Publisher:** Microsoft
 
@@ -657,9 +759,11 @@ Azure Logic Apps is a cloud-based platform for creating and running automated wo
 
 Azure SQL is a fully managed, Platform-as-a-Service (PaaS) database engine that handles most database management functions, such as upgrading, patching, backups, and monitoring, without necessitating user involvement. This connector lets you stream your Azure SQL databases audit and diagnostic logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances.
 
+[→ View full connector details](connectors/azuresql.md)
+
 ---
 
-### Azure Service Bus
+### [Azure Service Bus](connectors/azureservicebus-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -669,9 +773,11 @@ Azure SQL is a fully managed, Platform-as-a-Service (PaaS) database engine that 
 
 Azure Service Bus is a fully managed enterprise message broker with message queues and publish-subscribe topics (in a namespace). This connector lets you stream your Azure Service Bus diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
 
+[→ View full connector details](connectors/azureservicebus-ccp.md)
+
 ---
 
-### Azure Storage Account
+### [Azure Storage Account](connectors/azurestorageaccount.md)
 
 **Publisher:** Microsoft
 
@@ -681,9 +787,11 @@ Azure Service Bus is a fully managed enterprise message broker with message queu
 
 Azure Storage account is a cloud solution for modern data storage scenarios. It contains all your data objects: blobs, files, queues, tables, and disks. This connector lets you stream Azure Storage accounts diagnostics logs into your Microsoft Sentinel workspace, allowing you to continuously monitor activity in all your instances, and detect malicious activity in your organization. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220068&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azurestorageaccount.md)
+
 ---
 
-### Azure Stream Analytics
+### [Azure Stream Analytics](connectors/azurestreamanalytics-ccp.md)
 
 **Publisher:** Microsoft
 
@@ -693,9 +801,11 @@ Azure Storage account is a cloud solution for modern data storage scenarios. It 
 
 Azure Stream Analytics is a real-time analytics and complex event-processing engine that is designed to analyze and process high volumes of fast streaming data from multiple sources simultaneously. This connector lets you stream your Azure Stream Analytics hub diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
 
+[→ View full connector details](connectors/azurestreamanalytics-ccp.md)
+
 ---
 
-### Azure Web Application Firewall (WAF)
+### [Azure Web Application Firewall (WAF)](connectors/waf.md)
 
 **Publisher:** Microsoft
 
@@ -705,11 +815,13 @@ Azure Stream Analytics is a real-time analytics and complex event-processing eng
 
 Connect to the Azure Web Application Firewall (WAF) for Application Gateway, Front Door, or CDN. This WAF protects your applications from common web vulnerabilities such as SQL injection and cross-site scripting, and lets you customize rules to reduce false positives. Follow these instructions to stream your Microsoft Web application firewall logs into Microsoft Sentinel. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223546&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/waf.md)
+
 ---
 
 ## B
 
-### BETTER Mobile Threat Defense (MTD)
+### [BETTER Mobile Threat Defense (MTD)](connectors/bettermtd.md)
 
 **Publisher:** BETTER Mobile
 
@@ -719,9 +831,11 @@ Connect to the Azure Web Application Firewall (WAF) for Application Gateway, Fro
 
 The BETTER MTD Connector allows Enterprises to connect their Better MTD instances with Microsoft Sentinel, to view their data in Dashboards, create custom alerts, use it to trigger playbooks and expands threat hunting capabilities. This gives users more insight into their organization's mobile devices and ability to quickly analyze current mobile security posture which improves their overall SecOps capabilities.
 
+[→ View full connector details](connectors/bettermtd.md)
+
 ---
 
-### Beyond Security beSECURE
+### [Beyond Security beSECURE](connectors/beyondsecuritybesecure.md)
 
 **Publisher:** Beyond Security
 
@@ -731,9 +845,11 @@ The BETTER MTD Connector allows Enterprises to connect their Better MTD instance
 
 The [Beyond Security beSECURE](https://beyondsecurity.com/) connector allows you to easily connect your Beyond Security beSECURE scan events, scan results and audit trail with Azure Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/beyondsecuritybesecure.md)
+
 ---
 
-### BigID DSPM connector
+### [BigID DSPM connector](connectors/bigiddspmlogsconnectordefinition.md)
 
 **Publisher:** BigID
 
@@ -743,9 +859,11 @@ The [Beyond Security beSECURE](https://beyondsecurity.com/) connector allows you
 
 The [BigID DSPM](https://bigid.com/data-security-posture-management/) data connector provides the capability to ingest BigID DSPM cases with affected objects and datasource information into Microsoft Sentinel.
 
+[→ View full connector details](connectors/bigiddspmlogsconnectordefinition.md)
+
 ---
 
-### Bitglass
+### [Bitglass](connectors/bitglass.md)
 
 **Publisher:** Bitglass
 
@@ -755,9 +873,11 @@ The [BigID DSPM](https://bigid.com/data-security-posture-management/) data conne
 
 The [Bitglass](https://www.bitglass.com/) data connector provides the capability to retrieve security event logs of the Bitglass services and more events into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/bitglass.md)
+
 ---
 
-### Bitsight data connector
+### [Bitsight data connector](connectors/bitsight.md)
 
 **Publisher:** BitSight Technologies, Inc.
 
@@ -767,9 +887,11 @@ The [Bitglass](https://www.bitglass.com/) data connector provides the capability
 
 The [BitSight](https://www.BitSight.com/) Data Connector supports evidence-based cyber risk monitoring by bringing BitSight data in Microsoft Sentinel.
 
+[→ View full connector details](connectors/bitsight.md)
+
 ---
 
-### Bitwarden Event Logs
+### [Bitwarden Event Logs](connectors/bitwardeneventlogs.md)
 
 **Publisher:** Bitwarden Inc
 
@@ -779,9 +901,11 @@ The [BitSight](https://www.BitSight.com/) Data Connector supports evidence-based
 
 This connector provides insight into activity of your Bitwarden organization such as user's activity (logged in, changed password, 2fa, etc.), cipher activity (created, updated, deleted, shared, etc.), collection activity, organization activity, and more.
 
+[→ View full connector details](connectors/bitwardeneventlogs.md)
+
 ---
 
-### Bloodhound Enterprise
+### [Bloodhound Enterprise](connectors/bloodhoundenterprise.md)
 
 **Publisher:** SpecterOps
 
@@ -791,9 +915,11 @@ This connector provides insight into activity of your Bitwarden organization suc
 
 The solution is designed to test Bloodhound Enterprise package creation process.
 
+[→ View full connector details](connectors/bloodhoundenterprise.md)
+
 ---
 
-### Box
+### [Box](connectors/boxdataconnector.md)
 
 **Publisher:** Box
 
@@ -803,9 +929,11 @@ The solution is designed to test Bloodhound Enterprise package creation process.
 
 The Box data connector provides the capability to ingest [Box enterprise's events](https://developer.box.com/guides/events/#admin-events) into Microsoft Sentinel using the Box REST API. Refer to [Box  documentation](https://developer.box.com/guides/events/enterprise-events/for-enterprise/) for more information.
 
+[→ View full connector details](connectors/boxdataconnector.md)
+
 ---
 
-### Box Events (CCP)
+### [Box Events (CCP)](connectors/boxeventsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -815,11 +943,13 @@ The Box data connector provides the capability to ingest [Box enterprise's event
 
 The Box data connector provides the capability to ingest [Box enterprise's events](https://developer.box.com/guides/events/#admin-events) into Microsoft Sentinel using the Box REST API. Refer to [Box  documentation](https://developer.box.com/guides/events/enterprise-events/for-enterprise/) for more information.
 
+[→ View full connector details](connectors/boxeventsccpdefinition.md)
+
 ---
 
 ## C
 
-### CITRIX SECURITY ANALYTICS
+### [CITRIX SECURITY ANALYTICS](connectors/citrix.md)
 
 **Publisher:** CITRIX
 
@@ -829,9 +959,11 @@ The Box data connector provides the capability to ingest [Box enterprise's event
 
 Citrix Analytics (Security) integration with Microsoft Sentinel helps you to export data analyzed for risky events from Citrix Analytics (Security) into Microsoft Sentinel environment. You can create custom dashboards, analyze data from other sources along with that from Citrix Analytics (Security) and create custom workflows using Logic Apps to monitor and mitigate security events.
 
+[→ View full connector details](connectors/citrix.md)
+
 ---
 
-### CTERA Syslog
+### [CTERA Syslog](connectors/ctera.md)
 
 **Publisher:** CTERA Networks Ltd
 
@@ -844,9 +976,11 @@ The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat det
  It also provides analytic rules which detects ransomware incidents and alert you when a user is blocked due to suspicious ransomware activity.
  Additionally, it helps you identify critical patterns such as mass access denied events, mass deletions, and mass permission changes, enabling proactive threat management and response.
 
+[→ View full connector details](connectors/ctera.md)
+
 ---
 
-### CYFIRMA Attack Surface
+### [CYFIRMA Attack Surface](connectors/cyfirmaattacksurfacealertsconnector.md)
 
 **Publisher:** Microsoft
 
@@ -854,9 +988,11 @@ The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat det
 
 **Tables (6):** `CyfirmaASCertificatesAlerts_CL`, `CyfirmaASCloudWeaknessAlerts_CL`, `CyfirmaASConfigurationAlerts_CL`, `CyfirmaASDomainIPReputationAlerts_CL`, `CyfirmaASDomainIPVulnerabilityAlerts_CL`, `CyfirmaASOpenPortsAlerts_CL`
 
+[→ View full connector details](connectors/cyfirmaattacksurfacealertsconnector.md)
+
 ---
 
-### CYFIRMA Brand Intelligence
+### [CYFIRMA Brand Intelligence](connectors/cyfirmabrandintelligencealertsdc.md)
 
 **Publisher:** Microsoft
 
@@ -864,9 +1000,11 @@ The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat det
 
 **Tables (5):** `CyfirmaBIDomainITAssetAlerts_CL`, `CyfirmaBIExecutivePeopleAlerts_CL`, `CyfirmaBIMaliciousMobileAppsAlerts_CL`, `CyfirmaBIProductSolutionAlerts_CL`, `CyfirmaBISocialHandlersAlerts_CL`
 
+[→ View full connector details](connectors/cyfirmabrandintelligencealertsdc.md)
+
 ---
 
-### CYFIRMA Compromised Accounts
+### [CYFIRMA Compromised Accounts](connectors/cyfirmacompromisedaccountsdataconnector.md)
 
 **Publisher:** Microsoft
 
@@ -876,9 +1014,11 @@ The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat det
 
 The CYFIRMA Compromised Accounts data connector enables seamless log ingestion from the DeCYFIR/DeTCT API into Microsoft Sentinel. Built on the Microsoft Sentinel Codeless Connector Platform, it leverages the DeCYFIR/DeTCT API to retrieve logs. Additionally, it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview), which parse security data into a custom table during ingestion. This eliminates the need for query-time parsing, enhancing performance and efficiency.
 
+[→ View full connector details](connectors/cyfirmacompromisedaccountsdataconnector.md)
+
 ---
 
-### CYFIRMA Cyber Intelligence
+### [CYFIRMA Cyber Intelligence](connectors/cyfirmacyberintelligencedc.md)
 
 **Publisher:** Microsoft
 
@@ -888,9 +1028,11 @@ The CYFIRMA Compromised Accounts data connector enables seamless log ingestion f
 
 The CYFIRMA Cyber Intelligence data connector enables seamless log ingestion from the DeCYFIR API into Microsoft Sentinel. Built on the Microsoft Sentinel Codeless Connector Platform, it leverages the DeCYFIR Alerts API to retrieve logs. Additionally, it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview), which parse security data into a custom table during ingestion. This eliminates the need for query-time parsing, enhancing performance and efficiency.
 
+[→ View full connector details](connectors/cyfirmacyberintelligencedc.md)
+
 ---
 
-### CYFIRMA Digital Risk
+### [CYFIRMA Digital Risk](connectors/cyfirmadigitalriskalertsconnector.md)
 
 **Publisher:** Microsoft
 
@@ -900,9 +1042,11 @@ The CYFIRMA Cyber Intelligence data connector enables seamless log ingestion fro
 
 The CYFIRMA Digital Risk Alerts data connector enables seamless log ingestion from the DeCYFIR/DeTCT API into Microsoft Sentinel. Built on the Microsoft Sentinel Codeless Connector Platform, it leverages the DeCYFIR Alerts API to retrieve logs. Additionally, it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview), which parse security data into a custom table during ingestion. This eliminates the need for query-time parsing, enhancing performance and efficiency.
 
+[→ View full connector details](connectors/cyfirmadigitalriskalertsconnector.md)
+
 ---
 
-### CYFIRMA Vulnerabilities Intelligence
+### [CYFIRMA Vulnerabilities Intelligence](connectors/cyfirmavulnerabilitiesinteldc.md)
 
 **Publisher:** Microsoft
 
@@ -912,9 +1056,11 @@ The CYFIRMA Digital Risk Alerts data connector enables seamless log ingestion fr
 
 The CYFIRMA Vulnerabilities Intelligence data connector enables seamless log ingestion from the DeCYFIR API into Microsoft Sentinel. Built on the Microsoft Sentinel Codeless Connector Platform, it leverages the CYFIRMA API's to retrieve logs. Additionally, it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview), which parse security data into a custom table during ingestion. This eliminates the need for query-time parsing, enhancing performance and efficiency.
 
+[→ View full connector details](connectors/cyfirmavulnerabilitiesinteldc.md)
+
 ---
 
-### Check Point CloudGuard CNAPP Connector for Microsoft Sentinel
+### [Check Point CloudGuard CNAPP Connector for Microsoft Sentinel](connectors/cloudguardccpdefinition.md)
 
 **Publisher:** CheckPoint
 
@@ -924,9 +1070,11 @@ The CYFIRMA Vulnerabilities Intelligence data connector enables seamless log ing
 
 The [CloudGuard](https://sc1.checkpoint.com/documents/CloudGuard_Dome9/Documentation/Overview/CloudGuard-CSPM-Introduction.htm?cshid=help_center_documentation) data connector enables the ingestion of security events from the CloudGuard API into Microsoft Sentinel™, using Microsoft Sentinel’s Codeless Connector Platform. The connector supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) which parses incoming security event data into custom columns. This pre-parsing process eliminates the need for query-time parsing, resulting in improved performance for data queries.
 
+[→ View full connector details](connectors/cloudguardccpdefinition.md)
+
 ---
 
-### Check Point Cyberint Alerts Connector (via Codeless Connector Platform)
+### [Check Point Cyberint Alerts Connector (via Codeless Connector Platform)](connectors/checkpointcyberintalerts.md)
 
 **Publisher:** Checkpoint Cyberint
 
@@ -936,9 +1084,11 @@ The [CloudGuard](https://sc1.checkpoint.com/documents/CloudGuard_Dome9/Documenta
 
 Cyberint, a Check Point company, provides a Microsoft Sentinel integration to streamline critical Alerts and bring enriched threat intelligence from the Infinity External Risk Management solution into Microsoft Sentinel. This simplifies the process of tracking the status of tickets with automatic sync updates across systems. Using this new integration for Microsoft Sentinel, existing Cyberint and Microsoft Sentinel customers can easily pull logs based on Cyberint's findings into Microsoft Sentinel platform.
 
+[→ View full connector details](connectors/checkpointcyberintalerts.md)
+
 ---
 
-### Check Point Cyberint IOC Connector
+### [Check Point Cyberint IOC Connector](connectors/checkpointcyberintioc.md)
 
 **Publisher:** Checkpoint Cyberint
 
@@ -948,9 +1098,11 @@ Cyberint, a Check Point company, provides a Microsoft Sentinel integration to st
 
 This is data connector for Check Point Cyberint IOC.
 
+[→ View full connector details](connectors/checkpointcyberintioc.md)
+
 ---
 
-### Cisco ASA via Legacy Agent
+### [Cisco ASA via Legacy Agent](connectors/ciscoasa.md)
 
 **Publisher:** Cisco
 
@@ -960,9 +1112,11 @@ This is data connector for Check Point Cyberint IOC.
 
 The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/ciscoasa.md)
+
 ---
 
-### Cisco ASA/FTD via AMA
+### [Cisco ASA/FTD via AMA](connectors/ciscoasaama.md)
 
 **Publisher:** Microsoft
 
@@ -972,9 +1126,11 @@ The Cisco ASA firewall connector allows you to easily connect your Cisco ASA log
 
 The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/ciscoasaama.md)
+
 ---
 
-### Cisco Cloud Security
+### [Cisco Cloud Security](connectors/ciscoumbrelladataconnector.md)
 
 **Publisher:** Cisco
 
@@ -984,9 +1140,11 @@ The Cisco ASA firewall connector allows you to easily connect your Cisco ASA log
 
 The Cisco Cloud Security solution for Microsoft Sentinel enables you to ingest [Cisco Secure Access](https://docs.sse.cisco.com/sse-user-guide/docs/welcome-cisco-secure-access) and [Cisco Umbrella](https://docs.umbrella.com/umbrella-user-guide/docs/getting-started) [logs](https://docs.sse.cisco.com/sse-user-guide/docs/manage-your-logs) stored in Amazon S3 into Microsoft Sentinel using the Amazon S3 REST API. Refer to [Cisco Cloud Security log management documentation](https://docs.umbrella.com/deployment-umbrella/docs/log-management) for more information.
 
+[→ View full connector details](connectors/ciscoumbrelladataconnector.md)
+
 ---
 
-### Cisco Cloud Security (using elastic premium plan)
+### [Cisco Cloud Security (using elastic premium plan)](connectors/ciscoumbrelladataconnectorelasticpremium.md)
 
 **Publisher:** Cisco
 
@@ -998,9 +1156,11 @@ The Cisco Umbrella data connector provides the capability to ingest [Cisco Umbre
 
 **NOTE:** This data connector uses the [Azure Functions Premium Plan](https://learn.microsoft.com/azure/azure-functions/functions-premium-plan?tabs=portal) to enable secure ingestion capabilities and will incur additional costs. More pricing details are [here](https://azure.microsoft.com/pricing/details/functions/?msockid=2f4366822d836a7c2ac673462cfc6ba8#pricing).
 
+[→ View full connector details](connectors/ciscoumbrelladataconnectorelasticpremium.md)
+
 ---
 
-### Cisco Duo Security
+### [Cisco Duo Security](connectors/ciscoduosecurity.md)
 
 **Publisher:** Cisco
 
@@ -1010,9 +1170,11 @@ The Cisco Umbrella data connector provides the capability to ingest [Cisco Umbre
 
 The Cisco Duo Security data connector provides the capability to ingest [authentication logs](https://duo.com/docs/adminapi#authentication-logs), [administrator logs](https://duo.com/docs/adminapi#administrator-logs), [telephony logs](https://duo.com/docs/adminapi#telephony-logs), [offline enrollment logs](https://duo.com/docs/adminapi#offline-enrollment-logs) and [Trust Monitor events](https://duo.com/docs/adminapi#trust-monitor) into Microsoft Sentinel using the Cisco Duo Admin API. Refer to [API documentation](https://duo.com/docs/adminapi) for more information.
 
+[→ View full connector details](connectors/ciscoduosecurity.md)
+
 ---
 
-### Cisco ETD
+### [Cisco ETD](connectors/ciscoetd.md)
 
 **Publisher:** Cisco
 
@@ -1022,9 +1184,11 @@ The Cisco Duo Security data connector provides the capability to ingest [authent
 
 The connector fetches data from ETD api for threat analysis
 
+[→ View full connector details](connectors/ciscoetd.md)
+
 ---
 
-### Cisco Meraki (using REST API)
+### [Cisco Meraki (using REST API)](connectors/ciscomerakimultirule.md)
 
 **Publisher:** Microsoft
 
@@ -1039,9 +1203,11 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
  2. Web Session  
  3. Audit Event
 
+[→ View full connector details](connectors/ciscomerakimultirule.md)
+
 ---
 
-### Cisco Meraki (using REST API)
+### [Cisco Meraki (using REST API)](connectors/ciscomerakinativepoller.md)
 
 **Publisher:** Microsoft
 
@@ -1054,9 +1220,11 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
  **Supported ASIM schema:** 
  1. Network Session
 
+[→ View full connector details](connectors/ciscomerakinativepoller.md)
+
 ---
 
-### Cisco Secure Endpoint (via Codeless Connector Framework)
+### [Cisco Secure Endpoint (via Codeless Connector Framework)](connectors/ciscosecureendpointlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1066,9 +1234,11 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
 
 The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides the capability to ingest Cisco Secure Endpoint [audit logs](https://developer.cisco.com/docs/secure-endpoint/auditlog/) and [events](https://developer.cisco.com/docs/secure-endpoint/v1-api-reference-event/) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ciscosecureendpointlogsccpdefinition.md)
+
 ---
 
-### Cisco Software Defined WAN
+### [Cisco Software Defined WAN](connectors/ciscosdwan.md)
 
 **Publisher:** Cisco
 
@@ -1078,9 +1248,11 @@ The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides t
 
 The Cisco Software Defined WAN(SD-WAN) data connector provides the capability to ingest [Cisco SD-WAN](https://www.cisco.com/c/en_in/solutions/enterprise-networks/sd-wan/index.html) Syslog and Netflow data into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ciscosdwan.md)
+
 ---
 
-### Claroty xDome
+### [Claroty xDome](connectors/clarotyxdome.md)
 
 **Publisher:** Claroty
 
@@ -1090,9 +1262,11 @@ The Cisco Software Defined WAN(SD-WAN) data connector provides the capability to
 
 [Claroty](https://claroty.com/) xDome delivers comprehensive security and alert management capabilities for healthcare and industrial network environments. It is designed to map multiple source types, identify the collected data, and integrate it into Microsoft Sentinel data models. This results in the ability to monitor all potential threats in your healthcare and industrial environments in one location, leading to more effective security monitoring and a stronger security posture.
 
+[→ View full connector details](connectors/clarotyxdome.md)
+
 ---
 
-### Cloudflare (Using Blob Container) (via Codeless Connector Framework)
+### [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](connectors/cloudflaredefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1102,9 +1276,11 @@ The Cisco Software Defined WAN(SD-WAN) data connector provides the capability to
 
  The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/)for more information.
 
+[→ View full connector details](connectors/cloudflaredefinition.md)
+
 ---
 
-### Cofense Intelligence Threat Indicators Ingestion
+### [Cofense Intelligence Threat Indicators Ingestion](connectors/cofenseintelligence.md)
 
 **Publisher:** Cofense
 
@@ -1133,9 +1309,11 @@ The [Cofense-Intelligence](https://cofense.com/product-services/phishing-intelli
  3. Microsoft Defender for Endpoints Indicator documentation: 
 > https://learn.microsoft.com/microsoft-365/security/defender-endpoint/ti-indicator?view=o365-worldwide
 
+[→ View full connector details](connectors/cofenseintelligence.md)
+
 ---
 
-### Cofense Triage Threat Indicators Ingestion
+### [Cofense Triage Threat Indicators Ingestion](connectors/cofensetriage.md)
 
 **Publisher:** Cofense
 
@@ -1163,9 +1341,11 @@ The [Cofense-Triage](https://cofense.com/product-services/cofense-triage/) data 
  3. Microsoft Defender for Endpoints Indicator documentation: 
 > https://learn.microsoft.com/microsoft-365/security/defender-endpoint/ti-indicator?view=o365-worldwide
 
+[→ View full connector details](connectors/cofensetriage.md)
+
 ---
 
-### Cognni
+### [Cognni](connectors/cognnisentineldataconnector.md)
 
 **Publisher:** Cognni
 
@@ -1175,9 +1355,11 @@ The [Cofense-Triage](https://cofense.com/product-services/cofense-triage/) data 
 
 The Cognni connector offers a quick and simple integration with Microsoft Sentinel. You can use Cognni to autonomously map your previously unclassified important information and detect related incidents. This allows you to recognize risks to your important information, understand the severity of the incidents, and investigate the details you need to remediate, fast enough to make a difference.
 
+[→ View full connector details](connectors/cognnisentineldataconnector.md)
+
 ---
 
-### Cohesity
+### [Cohesity](connectors/cohesitydataconnector.md)
 
 **Publisher:** Cohesity
 
@@ -1187,9 +1369,11 @@ The Cognni connector offers a quick and simple integration with Microsoft Sentin
 
 The Cohesity function apps provide the ability to ingest Cohesity Datahawk ransomware alerts into Microsoft Sentinel.
 
+[→ View full connector details](connectors/cohesitydataconnector.md)
+
 ---
 
-### Common Event Format (CEF)
+### [Common Event Format (CEF)](connectors/cef.md)
 
 **Publisher:** Any
 
@@ -1199,9 +1383,11 @@ The Cohesity function apps provide the ability to ingest Cohesity Datahawk ranso
 
 Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by many security vendors to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223902&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/cef.md)
+
 ---
 
-### Common Event Format (CEF) via AMA
+### [Common Event Format (CEF) via AMA](connectors/cefama.md)
 
 **Publisher:** Microsoft
 
@@ -1211,9 +1397,11 @@ Common Event Format (CEF) is an industry standard format on top of Syslog messag
 
 Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by many security vendors to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223547&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/cefama.md)
+
 ---
 
-### CommvaultSecurityIQ
+### [CommvaultSecurityIQ](connectors/commvaultsecurityiq-cl.md)
 
 **Publisher:** Commvault
 
@@ -1223,9 +1411,11 @@ Common Event Format (CEF) is an industry standard format on top of Syslog messag
 
 This Azure Function enables Commvault users to ingest alerts/events into their Microsoft Sentinel instance. With Analytic Rules,Microsoft Sentinel can automatically create Microsoft Sentinel incidents from incoming events and logs.
 
+[→ View full connector details](connectors/commvaultsecurityiq-cl.md)
+
 ---
 
-### ContrastADR
+### [ContrastADR](connectors/contrastadr.md)
 
 **Publisher:** Contrast Security
 
@@ -1235,9 +1425,11 @@ This Azure Function enables Commvault users to ingest alerts/events into their M
 
 The ContrastADR data connector provides the capability to ingest Contrast ADR attack events into Microsoft Sentinel using the ContrastADR Webhook. ContrastADR data connector can enrich the incoming webhook data with ContrastADR API enrichment calls.
 
+[→ View full connector details](connectors/contrastadr.md)
+
 ---
 
-### Corelight Connector Exporter
+### [Corelight Connector Exporter](connectors/corelightconnectorexporter.md)
 
 **Publisher:** Corelight
 
@@ -1247,9 +1439,11 @@ The ContrastADR data connector provides the capability to ingest Contrast ADR at
 
 The [Corelight](https://corelight.com/) data connector enables incident responders and threat hunters who use Microsoft Sentinel to work faster and more effectively. The data connector enables ingestion of events from [Zeek](https://zeek.org/) and [Suricata](https://suricata-ids.org/) via Corelight Sensors into Microsoft Sentinel.
 
+[→ View full connector details](connectors/corelightconnectorexporter.md)
+
 ---
 
-### Cribl
+### [Cribl](connectors/cribl.md)
 
 **Publisher:** Cribl
 
@@ -1259,9 +1453,11 @@ The [Corelight](https://corelight.com/) data connector enables incident responde
 
 The [Cribl](https://cribl.io/accelerate-cloud-migration/) connector allows you to easily connect your Cribl (Cribl Enterprise Edition - Standalone) logs with Microsoft Sentinel. This gives you more security insight into your organization's data pipelines.
 
+[→ View full connector details](connectors/cribl.md)
+
 ---
 
-### CrowdStrike API Data Connector (via Codeless Connector Framework)
+### [CrowdStrike API Data Connector (via Codeless Connector Framework)](connectors/crowdstrikeapiccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1271,9 +1467,11 @@ The [Cribl](https://cribl.io/accelerate-cloud-migration/) connector allows you t
 
 The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting logs from the CrowdStrike API into Microsoft Sentinel. This connector is built on the Microsoft Sentinel Codeless Connector Platform and uses the CrowdStrike API to fetch logs for Alerts, Detections, Hosts, Incidents, and Vulnerabilities. It supports DCR-based ingestion time transformations so that queries can run more efficiently.
 
+[→ View full connector details](connectors/crowdstrikeapiccpdefinition.md)
+
 ---
 
-### CrowdStrike Falcon Adversary Intelligence 
+### [CrowdStrike Falcon Adversary Intelligence ](connectors/crowdstrikefalconadversaryintelligence.md)
 
 **Publisher:** CrowdStrike
 
@@ -1283,9 +1481,11 @@ The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting 
 
 The [CrowdStrike](https://www.crowdstrike.com/) Falcon Indicators of Compromise connector retrieves the Indicators of Compromise from the Falcon Intel API and uploads them [Microsoft Sentinel Threat Intel](https://learn.microsoft.com/en-us/azure/sentinel/understand-threat-intelligence).
 
+[→ View full connector details](connectors/crowdstrikefalconadversaryintelligence.md)
+
 ---
 
-### CrowdStrike Falcon Data Replicator (AWS S3) (via Codeless Connector Framework)
+### [CrowdStrike Falcon Data Replicator (AWS S3) (via Codeless Connector Framework)](connectors/crowdstrikefalcons3ccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1295,9 +1495,11 @@ The [CrowdStrike](https://www.crowdstrike.com/) Falcon Indicators of Compromise 
 
 The Crowdstrike Falcon Data Replicator (S3) connector provides the capability to ingest FDR event datainto Microsoft Sentinel from the AWS S3 bucket where the FDR logs have been streamed. The connector provides ability to get events from Falcon Agents which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.<p><span style='color:red; font-weight:bold;'>NOTE:</span></p><div style='margin-left:20px;'><p>1. CrowdStrike FDR license must be available & enabled.</p><p>2. The connector requires an IAM role to be configured on AWS to allow access to the AWS S3 bucket and may not be suitable for environments that leverage CrowdStrike - managed buckets.</p><p>3. For environments that leverage CrowdStrike-managed buckets, please configure the <strong>CrowdStrike Falcon Data Replicator (CrowdStrike-Managed AWS S3)</strong> connector.</p></div>
 
+[→ View full connector details](connectors/crowdstrikefalcons3ccpdefinition.md)
+
 ---
 
-### CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3)
+### [CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3)](connectors/crowdstrikereplicatorv2.md)
 
 **Publisher:** Crowdstrike
 
@@ -1307,9 +1509,11 @@ The Crowdstrike Falcon Data Replicator (S3) connector provides the capability to
 
 This connector enables the ingestion of FDR data into Microsoft Sentinel using Azure Functions to support the assessment of potential security risks, analysis of collaboration activities, identification of configuration issues, and other operational insights.<p><span style='color:red; font-weight:bold;'>NOTE:</span></p><div style='margin-left:20px;'><p>1. CrowdStrike FDR license must be available & enabled.</p><p>2. The connector uses a Key & Secret based authentication and is suitable for CrowdStrike Managed buckets.</p><p>3. For environments that use a fully owned AWS S3 bucket, Microsoft recommends using the <strong>CrowdStrike Falcon Data Replicator (AWS S3)</strong> connector.</p></div>
 
+[→ View full connector details](connectors/crowdstrikereplicatorv2.md)
+
 ---
 
-### Cyber Blind Spot Integration
+### [Cyber Blind Spot Integration](connectors/cbspollingidazurefunctions.md)
 
 **Publisher:** CTM360
 
@@ -1319,9 +1523,11 @@ This connector enables the ingestion of FDR data into Microsoft Sentinel using A
 
 Through the API integration, you have the capability to retrieve all the issues related to your CBS organizations via a RESTful interface.
 
+[→ View full connector details](connectors/cbspollingidazurefunctions.md)
+
 ---
 
-### CyberArkAudit
+### [CyberArkAudit](connectors/cyberarkaudit.md)
 
 **Publisher:** CyberArk
 
@@ -1331,9 +1537,11 @@ Through the API integration, you have the capability to retrieve all the issues 
 
 The [CyberArk Audit](https://docs.cyberark.com/Audit/Latest/en/Content/Resources/_TopNav/cc_Home.htm) data connector provides the capability to retrieve security event logs of the CyberArk Audit service and more events into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/cyberarkaudit.md)
+
 ---
 
-### Cybersixgill Actionable Alerts
+### [Cybersixgill Actionable Alerts](connectors/cybersixgillactionablealerts.md)
 
 **Publisher:** Cybersixgill
 
@@ -1343,9 +1551,11 @@ The [CyberArk Audit](https://docs.cyberark.com/Audit/Latest/en/Content/Resources
 
 Actionable alerts provide customized alerts based on configured assets
 
+[→ View full connector details](connectors/cybersixgillactionablealerts.md)
+
 ---
 
-### Cyborg Security HUNTER Hunt Packages
+### [Cyborg Security HUNTER Hunt Packages](connectors/cyborgsecurity-hunter.md)
 
 **Publisher:** Cyborg Security
 
@@ -1357,9 +1567,11 @@ Cyborg Security is a leading provider of advanced threat hunting solutions, with
 
 Follow the steps to gain access to Cyborg Security's Community and setup the 'Open in Tool' capabilities in the HUNTER Platform.
 
+[→ View full connector details](connectors/cyborgsecurity-hunter.md)
+
 ---
 
-### Cyera DSPM Azure Functions Sentinel Data Connector
+### [Cyera DSPM Azure Functions Sentinel Data Connector](connectors/cyerafunctionsconnector.md)
 
 **Publisher:** Cyera Inc
 
@@ -1369,9 +1581,11 @@ Follow the steps to gain access to Cyborg Security's Community and setup the 'Op
 
 The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Sentinel.
 
+[→ View full connector details](connectors/cyerafunctionsconnector.md)
+
 ---
 
-### Cyera DSPM Azure Sentinel Data Connector
+### [Cyera DSPM Azure Sentinel Data Connector](connectors/cyeradspmccf.md)
 
 **Publisher:** Cyera Inc
 
@@ -1381,9 +1595,11 @@ The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera�
 
 The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once recieced can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/cyeradspmccf.md)
+
 ---
 
-### Cynerio Security Events
+### [Cynerio Security Events](connectors/cyneriosecurityevents.md)
 
 **Publisher:** Cynerio
 
@@ -1393,11 +1609,13 @@ The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to 
 
 The [Cynerio](https://www.cynerio.com/) connector allows you to easily connect your Cynerio Security Events with Microsoft Sentinel, to view IDS Events. This gives you more insight into your organization network security posture and improves your security operation capabilities. 
 
+[→ View full connector details](connectors/cyneriosecurityevents.md)
+
 ---
 
 ## D
 
-### DNS
+### [DNS](connectors/dns.md)
 
 **Publisher:** Microsoft
 
@@ -1416,9 +1634,11 @@ The DNS log connector allows you to easily connect your DNS analytic and audit l
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220127&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/dns.md)
+
 ---
 
-### Darktrace Connector for Microsoft Sentinel REST API
+### [Darktrace Connector for Microsoft Sentinel REST API](connectors/darktracerestconnector.md)
 
 **Publisher:** Darktrace
 
@@ -1428,9 +1648,11 @@ For more information, see the [Microsoft Sentinel documentation](https://go.micr
 
 The Darktrace REST API connector pushes real-time events from Darktrace to Microsoft Sentinel and is designed to be used with the Darktrace Solution for Sentinel. The connector writes logs to a custom log table titled "darktrace_model_alerts_CL"; Model Breaches, AI Analyst Incidents, System Alerts and Email Alerts can be ingested - additional filters can be set up on the Darktrace System Configuration page. Data is pushed to Sentinel from Darktrace masters.
 
+[→ View full connector details](connectors/darktracerestconnector.md)
+
 ---
 
-### Datalake2Sentinel
+### [Datalake2Sentinel](connectors/datalake2sentinelconnector.md)
 
 **Publisher:** Orange Cyberdefense
 
@@ -1440,9 +1662,11 @@ The Darktrace REST API connector pushes real-time events from Darktrace to Micro
 
 This solution installs the Datalake2Sentinel connector which is built using the Codeless Connector Platform and allows you to automatically ingest threat intelligence indicators from **Datalake Orange Cyberdefense's CTI platform** into Microsoft Sentinel via the Upload Indicators REST API. After installing the solution, configure and enable this data connector by following guidance in Manage solution view.
 
+[→ View full connector details](connectors/datalake2sentinelconnector.md)
+
 ---
 
-### Dataminr Pulse Alerts Data Connector
+### [Dataminr Pulse Alerts Data Connector](connectors/dataminrpulsealerts.md)
 
 **Publisher:** Dataminr
 
@@ -1452,9 +1676,11 @@ This solution installs the Datalake2Sentinel connector which is built using the 
 
 Dataminr Pulse Alerts Data Connector brings our AI-powered real-time intelligence into Microsoft Sentinel for faster threat detection and response.
 
+[→ View full connector details](connectors/dataminrpulsealerts.md)
+
 ---
 
-### Derdack SIGNL4
+### [Derdack SIGNL4](connectors/derdacksignl4.md)
 
 **Publisher:** Derdack
 
@@ -1466,9 +1692,11 @@ When critical systems fail or security incidents happen, SIGNL4 bridges the ‘l
 
 [Learn more >](https://www.signl4.com)
 
+[→ View full connector details](connectors/derdacksignl4.md)
+
 ---
 
-### Digital Shadows Searchlight
+### [Digital Shadows Searchlight](connectors/digitalshadowssearchlightazurefunctions.md)
 
 **Publisher:** Digital Shadows
 
@@ -1478,9 +1706,11 @@ When critical systems fail or security incidents happen, SIGNL4 bridges the ‘l
 
 The Digital Shadows data connector provides ingestion of the incidents and alerts from Digital Shadows Searchlight into the Microsoft Sentinel using the REST API. The connector will provide the incidents and alerts information such that it helps to examine, diagnose and analyse the potential security risks and threats.
 
+[→ View full connector details](connectors/digitalshadowssearchlightazurefunctions.md)
+
 ---
 
-### Doppel Data Connector
+### [Doppel Data Connector](connectors/doppel-dataconnector.md)
 
 **Publisher:** Doppel
 
@@ -1490,9 +1720,11 @@ The Digital Shadows data connector provides ingestion of the incidents and alert
 
 The data connector is built on Microsoft Sentinel for Doppel events and alerts and supports DCR-based [ingestion time transformations](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/ingestion-time-transformations) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/doppel-dataconnector.md)
+
 ---
 
-### Druva Events Connector
+### [Druva Events Connector](connectors/druvaeventccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1502,9 +1734,11 @@ The data connector is built on Microsoft Sentinel for Doppel events and alerts a
 
 Provides capability to ingest the Druva events from Druva APIs
 
+[→ View full connector details](connectors/druvaeventccpdefinition.md)
+
 ---
 
-### Dynamics 365
+### [Dynamics 365](connectors/dynamics365.md)
 
 **Publisher:** Microsoft
 
@@ -1514,9 +1748,11 @@ Provides capability to ingest the Druva events from Druva APIs
 
 The Dynamics 365 Common Data Service (CDS) activities connector provides insight into admin, user, and support activities, as well as Microsoft Social Engagement logging events. By connecting Dynamics 365 CRM logs into Microsoft Sentinel, you can view this data in workbooks, use it to create custom alerts, and improve your investigation process. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com//fwlink/p/?linkid=2226719&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/dynamics365.md)
+
 ---
 
-### Dynamics 365 Finance and Operations
+### [Dynamics 365 Finance and Operations](connectors/dynamics365finance.md)
 
 **Publisher:** Microsoft
 
@@ -1528,9 +1764,11 @@ Dynamics 365 for Finance and Operations is a comprehensive Enterprise Resource P
 
 The Dynamics 365 Finance and Operations data connector ingests Dynamics 365 Finance and Operations admin activities and audit logs as well as user business process and application activities logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/dynamics365finance.md)
+
 ---
 
-### Dynatrace Attacks
+### [Dynatrace Attacks](connectors/dynatraceattacks.md)
 
 **Publisher:** Dynatrace
 
@@ -1540,9 +1778,11 @@ The Dynamics 365 Finance and Operations data connector ingests Dynamics 365 Fina
 
 This connector uses the Dynatrace Attacks REST API to ingest detected attacks into Microsoft Sentinel Log Analytics
 
+[→ View full connector details](connectors/dynatraceattacks.md)
+
 ---
 
-### Dynatrace Audit Logs
+### [Dynatrace Audit Logs](connectors/dynatraceauditlogs.md)
 
 **Publisher:** Dynatrace
 
@@ -1552,9 +1792,11 @@ This connector uses the Dynatrace Attacks REST API to ingest detected attacks in
 
 This connector uses the [Dynatrace Audit Logs REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/audit-logs) to ingest tenant audit logs into Microsoft Sentinel Log Analytics
 
+[→ View full connector details](connectors/dynatraceauditlogs.md)
+
 ---
 
-### Dynatrace Problems
+### [Dynatrace Problems](connectors/dynatraceproblems.md)
 
 **Publisher:** Dynatrace
 
@@ -1564,9 +1806,11 @@ This connector uses the [Dynatrace Audit Logs REST API](https://docs.dynatrace.c
 
 This connector uses the [Dynatrace Problem REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/problems-v2) to ingest problem events into Microsoft Sentinel Log Analytics
 
+[→ View full connector details](connectors/dynatraceproblems.md)
+
 ---
 
-### Dynatrace Runtime Vulnerabilities
+### [Dynatrace Runtime Vulnerabilities](connectors/dynatraceruntimevulnerabilities.md)
 
 **Publisher:** Dynatrace
 
@@ -1576,11 +1820,13 @@ This connector uses the [Dynatrace Problem REST API](https://docs.dynatrace.com/
 
 This connector uses the [Dynatrace Security Problem REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/application-security/vulnerabilities/get-vulnerabilities) to ingest detected runtime vulnerabilities into Microsoft Sentinel Log Analytics.
 
+[→ View full connector details](connectors/dynatraceruntimevulnerabilities.md)
+
 ---
 
 ## E
 
-### ESET Inspect
+### [ESET Inspect](connectors/esetinspect.md)
 
 **Publisher:** ESET Netherlands
 
@@ -1590,9 +1836,11 @@ This connector uses the [Dynatrace Security Problem REST API](https://docs.dynat
 
 This connector will ingest detections from [ESET Inspect](https://www.eset.com/int/business/solutions/xdr-extended-detection-and-response/) using the provided [REST API](https://help.eset.com/ei_navigate/latest/en-US/api.html). This API is present in ESET Inspect version 1.4 and later.
 
+[→ View full connector details](connectors/esetinspect.md)
+
 ---
 
-### ESET Protect Platform
+### [ESET Protect Platform](connectors/esetprotectplatform.md)
 
 **Publisher:** ESET
 
@@ -1602,9 +1850,11 @@ This connector will ingest detections from [ESET Inspect](https://www.eset.com/i
 
 The ESET Protect Platform data connector enables users to inject detections data from [ESET Protect Platform](https://www.eset.com/int/business/protect-platform/) using the provided [Integration REST API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ESET%20Protect%20Platform/Data%20Connectors). Integration REST API runs as scheduled Azure Function App.
 
+[→ View full connector details](connectors/esetprotectplatform.md)
+
 ---
 
-### Egress Defend
+### [Egress Defend](connectors/egressdefendpolling.md)
 
 **Publisher:** Egress Software Technologies
 
@@ -1614,9 +1864,11 @@ The ESET Protect Platform data connector enables users to inject detections data
 
 The Egress Defend audit connector provides the capability to ingest Egress Defend Data into Microsoft Sentinel.
 
+[→ View full connector details](connectors/egressdefendpolling.md)
+
 ---
 
-### Egress Iris Connector
+### [Egress Iris Connector](connectors/egresssiempolling.md)
 
 **Publisher:** Egress Software Technologies
 
@@ -1626,9 +1878,11 @@ The Egress Defend audit connector provides the capability to ingest Egress Defen
 
 The Egress Iris connector will allow you to ingest Egress data into Sentinel.
 
+[→ View full connector details](connectors/egresssiempolling.md)
+
 ---
 
-### Elastic Agent
+### [Elastic Agent](connectors/elasticagent.md)
 
 **Publisher:** Elastic
 
@@ -1638,9 +1892,11 @@ The Egress Iris connector will allow you to ingest Egress data into Sentinel.
 
 The [Elastic Agent](https://www.elastic.co/security) data connector provides the capability to ingest Elastic Agent logs, metrics, and security data into Microsoft Sentinel.
 
+[→ View full connector details](connectors/elasticagent.md)
+
 ---
 
-### Ermes Browser Security Events
+### [Ermes Browser Security Events](connectors/ermesbrowsersecurityevents.md)
 
 **Publisher:** Ermes Cyber Security S.p.A.
 
@@ -1650,9 +1906,11 @@ The [Elastic Agent](https://www.elastic.co/security) data connector provides the
 
 Ermes Browser Security Events
 
+[→ View full connector details](connectors/ermesbrowsersecurityevents.md)
+
 ---
 
-### Eset Security Management Center
+### [Eset Security Management Center](connectors/esetsmc.md)
 
 **Publisher:** Eset
 
@@ -1662,9 +1920,11 @@ Ermes Browser Security Events
 
 Connector for [Eset SMC](https://help.eset.com/esmc_admin/72/en-US/) threat events, audit logs, firewall events and web sites filter.
 
+[→ View full connector details](connectors/esetsmc.md)
+
 ---
 
-### Exchange Security Insights On-Premises Collector
+### [Exchange Security Insights On-Premises Collector](connectors/esi-exchangeonpremisescollector.md)
 
 **Publisher:** Microsoft
 
@@ -1674,9 +1934,11 @@ Connector for [Eset SMC](https://help.eset.com/esmc_admin/72/en-US/) threat even
 
 Connector used to push Exchange On-Premises Security configuration for Microsoft Sentinel Analysis
 
+[→ View full connector details](connectors/esi-exchangeonpremisescollector.md)
+
 ---
 
-### Exchange Security Insights Online Collector
+### [Exchange Security Insights Online Collector](connectors/esi-exchangeonlinecollector.md)
 
 **Publisher:** Microsoft
 
@@ -1686,9 +1948,11 @@ Connector used to push Exchange On-Premises Security configuration for Microsoft
 
 Connector used to push Exchange Online Security configuration for Microsoft Sentinel Analysis
 
+[→ View full connector details](connectors/esi-exchangeonlinecollector.md)
+
 ---
 
-### ExtraHop Detections Data Connector
+### [ExtraHop Detections Data Connector](connectors/extrahop.md)
 
 **Publisher:** ExtraHop
 
@@ -1698,11 +1962,13 @@ Connector used to push Exchange Online Security configuration for Microsoft Sent
 
 The [ExtraHop](https://extrahop.com/) Detections Data Connector enables you to import detection data from ExtraHop RevealX to Microsoft Sentinel through webhook payloads.
 
+[→ View full connector details](connectors/extrahop.md)
+
 ---
 
 ## F
 
-### F5 BIG-IP
+### [F5 BIG-IP](connectors/f5bigip.md)
 
 **Publisher:** F5 Networks
 
@@ -1712,9 +1978,11 @@ The [ExtraHop](https://extrahop.com/) Detections Data Connector enables you to i
 
 The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/f5bigip.md)
+
 ---
 
-### Feedly
+### [Feedly](connectors/feedly.md)
 
 **Publisher:** Feedly
 
@@ -1724,9 +1992,11 @@ The F5 firewall connector allows you to easily connect your F5 logs with Microso
 
 This connector allows you to ingest IoCs from Feedly.
 
+[→ View full connector details](connectors/feedly.md)
+
 ---
 
-### Flare
+### [Flare](connectors/flare.md)
 
 **Publisher:** Flare
 
@@ -1736,9 +2006,11 @@ This connector allows you to ingest IoCs from Feedly.
 
 [Flare](https://flare.systems/platform/) connector allows you to receive data and intelligence from Flare on Microsoft Sentinel.
 
+[→ View full connector details](connectors/flare.md)
+
 ---
 
-### Forcepoint DLP
+### [Forcepoint DLP](connectors/forcepoint-dlp.md)
 
 **Publisher:** Forcepoint
 
@@ -1748,9 +2020,11 @@ This connector allows you to ingest IoCs from Feedly.
 
 The Forcepoint DLP (Data Loss Prevention) connector allows you to automatically export DLP incident data from Forcepoint DLP into Microsoft Sentinel in real-time. This enriches visibility into user activities and data loss incidents, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
 
+[→ View full connector details](connectors/forcepoint-dlp.md)
+
 ---
 
-### Forescout
+### [Forescout](connectors/forescout.md)
 
 **Publisher:** Forescout
 
@@ -1760,9 +2034,11 @@ The Forcepoint DLP (Data Loss Prevention) connector allows you to automatically 
 
 The [Forescout](https://www.forescout.com/) data connector provides the capability to ingest [Forescout events](https://docs.forescout.com/bundle/syslog-3-6-1-h/page/syslog-3-6-1-h.How-to-Work-with-the-Syslog-Plugin.html) into Microsoft Sentinel. Refer to [Forescout documentation](https://docs.forescout.com/bundle/syslog-msg-3-6-tn/page/syslog-msg-3-6-tn.About-Syslog-Messages-in-Forescout.html) for more information.
 
+[→ View full connector details](connectors/forescout.md)
+
 ---
 
-### Forescout Host Property Monitor
+### [Forescout Host Property Monitor](connectors/forescouthostpropertymonitor.md)
 
 **Publisher:** Forescout
 
@@ -1772,9 +2048,11 @@ The [Forescout](https://www.forescout.com/) data connector provides the capabili
 
 The Forescout Host Property Monitor connector allows you to connect host/policy/compliance properties from Forescout platform with Microsoft Sentinel, to view, create custom incidents, and improve investigation. This gives you more insight into your organization network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/forescouthostpropertymonitor.md)
+
 ---
 
-### Forescout eyeInspect for OT Security
+### [Forescout eyeInspect for OT Security](connectors/forescout-eyeinspect-for-ot-security.md)
 
 **Publisher:** Forescout
 
@@ -1784,9 +2062,11 @@ The Forescout Host Property Monitor connector allows you to connect host/policy/
 
 Forescout eyeInspect for OT Security connector allows you to connect Asset/Alert information from Forescout eyeInspect OT platform with Microsoft Sentinel, to view and analyze data using Log Analytics Tables and Workbooks. This gives you more insight into OT organization network and improves security operation capabilities.
 
+[→ View full connector details](connectors/forescout-eyeinspect-for-ot-security.md)
+
 ---
 
-### Fortinet FortiNDR Cloud
+### [Fortinet FortiNDR Cloud](connectors/fortinetfortindrclouddataconnector.md)
 
 **Publisher:** Fortinet
 
@@ -1796,9 +2076,11 @@ Forescout eyeInspect for OT Security connector allows you to connect Asset/Alert
 
 The Fortinet FortiNDR Cloud data connector provides the capability to ingest [Fortinet FortiNDR Cloud](https://docs.fortinet.com/product/fortindr-cloud) data into Microsoft Sentinel using the FortiNDR Cloud API
 
+[→ View full connector details](connectors/fortinetfortindrclouddataconnector.md)
+
 ---
 
-### Fortinet FortiWeb Web Application Firewall via AMA
+### [Fortinet FortiWeb Web Application Firewall via AMA](connectors/fortinetfortiwebama.md)
 
 **Publisher:** Microsoft
 
@@ -1808,11 +2090,13 @@ The Fortinet FortiNDR Cloud data connector provides the capability to ingest [Fo
 
 The [fortiweb](https://www.fortinet.com/products/web-application-firewall/fortiweb) data connector provides the capability to ingest Threat Analytics and events into Microsoft Sentinel.
 
+[→ View full connector details](connectors/fortinetfortiwebama.md)
+
 ---
 
 ## G
 
-### GCP Cloud Run (via Codeless Connector Framework)
+### [GCP Cloud Run (via Codeless Connector Framework)](connectors/gcpcloudrunlogs-connectordefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1822,9 +2106,11 @@ The [fortiweb](https://www.fortinet.com/products/web-application-firewall/fortiw
 
 The GCP Cloud Run data connector provides the capability to ingest Cloud Run request logs into Microsoft Sentinel using Pub/Sub. Refer the [Cloud Run Overview](https://cloud.google.com/run/docs/logging) for more details.
 
+[→ View full connector details](connectors/gcpcloudrunlogs-connectordefinition.md)
+
 ---
 
-### GCP Cloud SQL (via Codeless Connector Framework)
+### [GCP Cloud SQL (via Codeless Connector Framework)](connectors/gcpcloudsqlccfdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1834,9 +2120,11 @@ The GCP Cloud Run data connector provides the capability to ingest Cloud Run req
 
 The GCP Cloud SQL data connector provides the capability to ingest Audit logs into Microsoft Sentinel using the GCP Cloud SQL API. Refer to [GCP cloud SQL Audit Logs](https://cloud.google.com/sql/docs/mysql/audit-logging) documentation for more information.
 
+[→ View full connector details](connectors/gcpcloudsqlccfdefinition.md)
+
 ---
 
-### GCP Pub/Sub Audit Logs
+### [GCP Pub/Sub Audit Logs](connectors/gcpauditlogsdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1846,9 +2134,11 @@ The GCP Cloud SQL data connector provides the capability to ingest Audit logs in
 
 The Google Cloud Platform (GCP) audit logs, ingested from Microsoft Sentinel's connector, enables you to capture three types of audit logs: admin activity logs, data access logs, and access transparency logs. Google cloud audit logs record a trail that practitioners can use to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.
 
+[→ View full connector details](connectors/gcpauditlogsdefinition.md)
+
 ---
 
-### GCP Pub/Sub Firewall Logs
+### [GCP Pub/Sub Firewall Logs](connectors/gcpfirewalllogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1858,9 +2148,11 @@ The Google Cloud Platform (GCP) audit logs, ingested from Microsoft Sentinel's c
 
 The Google Cloud Platform (GCP) firewall logs, enable you to capture network inbound and outbound activity to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.
 
+[→ View full connector details](connectors/gcpfirewalllogsccpdefinition.md)
+
 ---
 
-### GCP Pub/Sub Load Balancer Logs (via Codeless Connector Platform).
+### [GCP Pub/Sub Load Balancer Logs (via Codeless Connector Platform).](connectors/gcpfloadbalancerlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1870,9 +2162,11 @@ The Google Cloud Platform (GCP) firewall logs, enable you to capture network inb
 
 Google Cloud Platform (GCP) Load Balancer logs provide detailed insights into network traffic, capturing both inbound and outbound activities. These logs are used for monitoring access patterns and identifying potential security threats across GCP resources. Additionally, these logs also include GCP Web Application Firewall (WAF) logs, enhancing the ability to detect and mitigate risks effectively.
 
+[→ View full connector details](connectors/gcpfloadbalancerlogsccpdefinition.md)
+
 ---
 
-### GCP Pub/Sub VPC Flow Logs (via Codeless Connector Framework)
+### [GCP Pub/Sub VPC Flow Logs (via Codeless Connector Framework)](connectors/gcpvpcflowlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1882,9 +2176,11 @@ Google Cloud Platform (GCP) Load Balancer logs provide detailed insights into ne
 
 The Google Cloud Platform (GCP) VPC Flow Logs enable you to capture network traffic activity at the VPC level, allowing you to monitor access patterns, analyze network performance, and detect potential threats across GCP resources.
 
+[→ View full connector details](connectors/gcpvpcflowlogsccpdefinition.md)
+
 ---
 
-### Garrison ULTRA Remote Logs
+### [Garrison ULTRA Remote Logs](connectors/garrisonultraremotelogs.md)
 
 **Publisher:** Garrison
 
@@ -1894,9 +2190,11 @@ The Google Cloud Platform (GCP) VPC Flow Logs enable you to capture network traf
 
 The [Garrison ULTRA](https://www.garrison.com/en/garrison-ultra-cloud-platform) Remote Logs connector allows you to ingest Garrison ULTRA Remote Logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/garrisonultraremotelogs.md)
+
 ---
 
-### Gigamon AMX Data Connector
+### [Gigamon AMX Data Connector](connectors/gigamondataconnector.md)
 
 **Publisher:** Gigamon
 
@@ -1906,9 +2204,11 @@ The [Garrison ULTRA](https://www.garrison.com/en/garrison-ultra-cloud-platform) 
 
 Use this data connector to integrate with Gigamon Application Metadata Exporter (AMX) and get data sent directly to Microsoft Sentinel. 
 
+[→ View full connector details](connectors/gigamondataconnector.md)
+
 ---
 
-### GitHub (using Webhooks)
+### [GitHub (using Webhooks)](connectors/githubwebhook.md)
 
 **Publisher:** Microsoft
 
@@ -1920,9 +2220,11 @@ The [GitHub](https://www.github.com) webhook data connector provides the capabil
 
  **Note:** If you are intended to ingest Github Audit logs, Please refer to GitHub Enterprise Audit Log Connector from "**Data Connectors**" gallery.
 
+[→ View full connector details](connectors/githubwebhook.md)
+
 ---
 
-### GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)
+### [GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)](connectors/githubauditdefinitionv2.md)
 
 **Publisher:** Microsoft
 
@@ -1934,9 +2236,11 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
  **Note:** If you intended to ingest GitHub subscribed events into Microsoft Sentinel, please refer to GitHub (using Webhooks) Connector from "**Data Connectors**" gallery.
 
+[→ View full connector details](connectors/githubauditdefinitionv2.md)
+
 ---
 
-### Google ApigeeX (via Codeless Connector Framework)
+### [Google ApigeeX (via Codeless Connector Framework)](connectors/googleapigeexlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1946,9 +2250,11 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 The Google ApigeeX data connector provides the capability to ingest Audit logs into Microsoft Sentinel using the Google Apigee API. Refer to [Google Apigee API](https://cloud.google.com/apigee/docs/reference/apis/apigee/rest/?apix=true) documentation for more information.
 
+[→ View full connector details](connectors/googleapigeexlogsccpdefinition.md)
+
 ---
 
-### Google Cloud Platform CDN (via Codeless Connector Framework)
+### [Google Cloud Platform CDN (via Codeless Connector Framework)](connectors/gcpcdnlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1958,9 +2264,11 @@ The Google ApigeeX data connector provides the capability to ingest Audit logs i
 
 The Google Cloud Platform CDN data connector provides the capability to ingest Cloud CDN Audit logs and Cloud CDN Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/cdn/docs/overview) document for more details.
 
+[→ View full connector details](connectors/gcpcdnlogsccpdefinition.md)
+
 ---
 
-### Google Cloud Platform Cloud IDS (via Codeless Connector Framework)
+### [Google Cloud Platform Cloud IDS (via Codeless Connector Framework)](connectors/gcpcloudidslogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1970,9 +2278,11 @@ The Google Cloud Platform CDN data connector provides the capability to ingest C
 
 The Google Cloud Platform IDS data connector provides the capability to ingest Cloud IDS Traffic logs, Threat logs and Audit logs into Microsoft Sentinel using the Google Cloud IDS API. Refer to [Cloud IDS API](https://cloud.google.com/intrusion-detection-system/docs/audit-logging#google.cloud.ids.v1.IDS) documentation for more information.
 
+[→ View full connector details](connectors/gcpcloudidslogsccpdefinition.md)
+
 ---
 
-### Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework)
+### [Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework)](connectors/gcpmonitorccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1982,9 +2292,11 @@ The Google Cloud Platform IDS data connector provides the capability to ingest C
 
 The Google Cloud Platform Cloud Monitoring data connector ingests Monitoring logs from Google Cloud into Microsoft Sentinel using the Google Cloud Monitoring API. Refer to [Cloud Monitoring API](https://cloud.google.com/monitoring/api/v3) documentation for more details.
 
+[→ View full connector details](connectors/gcpmonitorccpdefinition.md)
+
 ---
 
-### Google Cloud Platform Compute Engine (via Codeless Connector Framework)
+### [Google Cloud Platform Compute Engine (via Codeless Connector Framework)](connectors/gcpcomputeenginelogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -1994,9 +2306,11 @@ The Google Cloud Platform Cloud Monitoring data connector ingests Monitoring log
 
 The Google Cloud Platform Compute Engine data connector provides the capability to ingest Compute Engine Audit logs into Microsoft Sentinel using the Google Cloud Compute Engine API. Refer to [Cloud Compute Engine API](https://cloud.google.com/compute/docs/reference/rest/v1) documentation for more information.
 
+[→ View full connector details](connectors/gcpcomputeenginelogsccpdefinition.md)
+
 ---
 
-### Google Cloud Platform DNS (via Codeless Connector Framework)
+### [Google Cloud Platform DNS (via Codeless Connector Framework)](connectors/gcpdnslogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2006,9 +2320,11 @@ The Google Cloud Platform Compute Engine data connector provides the capability 
 
 The Google Cloud Platform DNS data connector provides the capability to ingest Cloud DNS Query logs and Cloud DNS Audit logs into Microsoft Sentinel using the Google Cloud DNS API. Refer to [Cloud DNS API](https://cloud.google.com/dns/docs/reference/rest/v1) documentation for more information.
 
+[→ View full connector details](connectors/gcpdnslogsccpdefinition.md)
+
 ---
 
-### Google Cloud Platform IAM (via Codeless Connector Framework)
+### [Google Cloud Platform IAM (via Codeless Connector Framework)](connectors/gcpiamccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2018,9 +2334,11 @@ The Google Cloud Platform DNS data connector provides the capability to ingest C
 
 The Google Cloud Platform IAM data connector provides the capability to ingest the Audit logs relating to Identity and Access Management (IAM) activities within Google Cloud into Microsoft Sentinel using the Google IAM API. Refer to [GCP IAM API](https://cloud.google.com/iam/docs/reference/rest) documentation for more information.
 
+[→ View full connector details](connectors/gcpiamccpdefinition.md)
+
 ---
 
-### Google Cloud Platform NAT (via Codeless Connector Framework)
+### [Google Cloud Platform NAT (via Codeless Connector Framework)](connectors/gcpnatlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2030,9 +2348,11 @@ The Google Cloud Platform IAM data connector provides the capability to ingest t
 
 The Google Cloud Platform NAT data connector provides the capability to ingest Cloud NAT Audit logs and Cloud NAT Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/nat/docs/overview) document for more details.
 
+[→ View full connector details](connectors/gcpnatlogsccpdefinition.md)
+
 ---
 
-### Google Cloud Platform Resource Manager (via Codeless Connector Framework)
+### [Google Cloud Platform Resource Manager (via Codeless Connector Framework)](connectors/gcpresourcemanagerlogsccfdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2042,9 +2362,11 @@ The Google Cloud Platform NAT data connector provides the capability to ingest C
 
 The Google Cloud Platform Resource Manager data connector provides the capability to ingest Resource Manager [Admin Activity and Data Access Audit logs](https://cloud.google.com/resource-manager/docs/audit-logging) into Microsoft Sentinel using the Cloud Resource Manager API. Refer the [Product overview](https://cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy) document for more details.
 
+[→ View full connector details](connectors/gcpresourcemanagerlogsccfdefinition.md)
+
 ---
 
-### Google Kubernetes Engine (via Codeless Connector Framework)
+### [Google Kubernetes Engine (via Codeless Connector Framework)](connectors/gkeccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2054,9 +2376,11 @@ The Google Cloud Platform Resource Manager data connector provides the capabilit
 
 The Google Kubernetes Engine (GKE) Logs enable you to capture cluster activity, workload behavior, and security events, allowing you to monitor Kubernetes workloads, analyze performance, and detect potential threats across GKE clusters.
 
+[→ View full connector details](connectors/gkeccpdefinition.md)
+
 ---
 
-### Google Security Command Center
+### [Google Security Command Center](connectors/googlesccdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2066,9 +2390,11 @@ The Google Kubernetes Engine (GKE) Logs enable you to capture cluster activity, 
 
 The Google Cloud Platform (GCP) Security Command Center is a comprehensive security and risk management platform for Google Cloud, ingested from Sentinel's connector. It offers features such as asset inventory and discovery, vulnerability and threat detection, and risk mitigation and remediation to help you gain insight into your organization's security and data attack surface. This integration enables you to perform tasks related to findings and assets more effectively.
 
+[→ View full connector details](connectors/googlesccdefinition.md)
+
 ---
 
-### Google Workspace Activities (via Codeless Connector Framework)
+### [Google Workspace Activities (via Codeless Connector Framework)](connectors/googleworkspaceccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2078,9 +2404,11 @@ The Google Cloud Platform (GCP) Security Command Center is a comprehensive secur
 
 The [Google Workspace](https://workspace.google.com/) Activities data connector provides the capability to ingest Activity Events from [Google Workspace API](https://developers.google.com/admin-sdk/reports/reference/rest/v1/activities/list) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/googleworkspaceccpdefinition.md)
+
 ---
 
-### GreyNoise Threat Intelligence
+### [GreyNoise Threat Intelligence](connectors/greynoise2sentinelapi.md)
 
 **Publisher:** GreyNoise, Inc. and BlueCycle LLC
 
@@ -2090,11 +2418,13 @@ The [Google Workspace](https://workspace.google.com/) Activities data connector 
 
 This Data Connector installs an Azure Function app to download GreyNoise indicators once per day and inserts them into the ThreatIntelligenceIndicator table in Microsoft Sentinel.
 
+[→ View full connector details](connectors/greynoise2sentinelapi.md)
+
 ---
 
 ## H
 
-### HYAS Protect
+### [HYAS Protect](connectors/hyasprotect.md)
 
 **Publisher:** HYAS
 
@@ -2104,9 +2434,11 @@ This Data Connector installs an Azure Function app to download GreyNoise indicat
 
 HYAS Protect provide logs based on reputation values - Blocked, Malicious, Permitted, Suspicious.
 
+[→ View full connector details](connectors/hyasprotect.md)
+
 ---
 
-### HackerView Intergration
+### [HackerView Intergration](connectors/hvpollingidazurefunctions.md)
 
 **Publisher:** CTM360
 
@@ -2116,9 +2448,11 @@ HYAS Protect provide logs based on reputation values - Blocked, Malicious, Permi
 
 Through the API integration, you have the capability to retrieve all the issues related to your HackerView organizations via a RESTful interface.
 
+[→ View full connector details](connectors/hvpollingidazurefunctions.md)
+
 ---
 
-### Holm Security Asset Data
+### [Holm Security Asset Data](connectors/holmsecurityassets.md)
 
 **Publisher:** Holm Security
 
@@ -2128,11 +2462,13 @@ Through the API integration, you have the capability to retrieve all the issues 
 
 The connector provides the capability to poll data from Holm Security Center into Microsoft Sentinel.
 
+[→ View full connector details](connectors/holmsecurityassets.md)
+
 ---
 
 ## I
 
-### IIS Logs of Microsoft Exchange Servers
+### [IIS Logs of Microsoft Exchange Servers](connectors/esi-opt5exchangeiislogs.md)
 
 **Publisher:** Microsoft
 
@@ -2142,9 +2478,11 @@ The connector provides the capability to poll data from Holm Security Center int
 
 [Option 5] - Using Azure Monitor Agent - You can stream all IIS Logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
 
+[→ View full connector details](connectors/esi-opt5exchangeiislogs.md)
+
 ---
 
-### IONIX Security Logs
+### [IONIX Security Logs](connectors/cyberpionsecuritylogs.md)
 
 **Publisher:** IONIX
 
@@ -2154,9 +2492,11 @@ The connector provides the capability to poll data from Holm Security Center int
 
 The IONIX Security Logs data connector, ingests logs from the IONIX system directly into Sentinel. The connector allows users to visualize their data, create alerts and incidents and improve security investigations.
 
+[→ View full connector details](connectors/cyberpionsecuritylogs.md)
+
 ---
 
-### IPinfo ASN Data Connector
+### [IPinfo ASN Data Connector](connectors/ipinfoasndataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2166,9 +2506,11 @@ The IONIX Security Logs data connector, ingests logs from the IONIX system direc
 
 This IPinfo data connector installs an Azure Function app to download standard_ASN datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfoasndataconnector.md)
+
 ---
 
-### IPinfo Abuse Data Connector
+### [IPinfo Abuse Data Connector](connectors/ipinfoabusedataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2178,9 +2520,11 @@ This IPinfo data connector installs an Azure Function app to download standard_A
 
 This IPinfo data connector installs an Azure Function app to download standard_abuse datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfoabusedataconnector.md)
+
 ---
 
-### IPinfo Carrier Data Connector
+### [IPinfo Carrier Data Connector](connectors/ipinfocarrierdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2190,9 +2534,11 @@ This IPinfo data connector installs an Azure Function app to download standard_a
 
 This IPinfo data connector installs an Azure Function app to download standard_carrier datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfocarrierdataconnector.md)
+
 ---
 
-### IPinfo Company Data Connector
+### [IPinfo Company Data Connector](connectors/ipinfocompanydataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2202,9 +2548,11 @@ This IPinfo data connector installs an Azure Function app to download standard_c
 
 This IPinfo data connector installs an Azure Function app to download standard_company datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfocompanydataconnector.md)
+
 ---
 
-### IPinfo Country ASN Data Connector
+### [IPinfo Country ASN Data Connector](connectors/ipinfocountrydataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2214,9 +2562,11 @@ This IPinfo data connector installs an Azure Function app to download standard_c
 
 This IPinfo data connector installs an Azure Function app to download country_asn datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfocountrydataconnector.md)
+
 ---
 
-### IPinfo Domain Data Connector
+### [IPinfo Domain Data Connector](connectors/ipinfodomaindataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2226,9 +2576,11 @@ This IPinfo data connector installs an Azure Function app to download country_as
 
 This IPinfo data connector installs an Azure Function app to download standard_domain datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfodomaindataconnector.md)
+
 ---
 
-### IPinfo Iplocation Data Connector
+### [IPinfo Iplocation Data Connector](connectors/ipinfoiplocationdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2238,9 +2590,11 @@ This IPinfo data connector installs an Azure Function app to download standard_d
 
 This IPinfo data connector installs an Azure Function app to download standard_location datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfoiplocationdataconnector.md)
+
 ---
 
-### IPinfo Iplocation Extended Data Connector
+### [IPinfo Iplocation Extended Data Connector](connectors/ipinfoiplocationextendeddataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2250,9 +2604,11 @@ This IPinfo data connector installs an Azure Function app to download standard_l
 
 This IPinfo data connector installs an Azure Function app to download standard_location_extended datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfoiplocationextendeddataconnector.md)
+
 ---
 
-### IPinfo Privacy Data Connector
+### [IPinfo Privacy Data Connector](connectors/ipinfoprivacydataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2262,9 +2618,11 @@ This IPinfo data connector installs an Azure Function app to download standard_l
 
 This IPinfo data connector installs an Azure Function app to download standard_privacy datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfoprivacydataconnector.md)
+
 ---
 
-### IPinfo Privacy Extended Data Connector
+### [IPinfo Privacy Extended Data Connector](connectors/ipinfoprivacyextendeddataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2274,9 +2632,11 @@ This IPinfo data connector installs an Azure Function app to download standard_p
 
 This IPinfo data connector installs an Azure Function app to download standard_privacy datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfoprivacyextendeddataconnector.md)
+
 ---
 
-### IPinfo RIRWHOIS Data Connector
+### [IPinfo RIRWHOIS Data Connector](connectors/ipinforirwhoisdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2286,9 +2646,11 @@ This IPinfo data connector installs an Azure Function app to download standard_p
 
 This IPinfo data connector installs an Azure Function app to download RIRWHOIS datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinforirwhoisdataconnector.md)
+
 ---
 
-### IPinfo RWHOIS Data Connector
+### [IPinfo RWHOIS Data Connector](connectors/ipinforwhoisdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2298,9 +2660,11 @@ This IPinfo data connector installs an Azure Function app to download RIRWHOIS d
 
 This IPinfo data connector installs an Azure Function app to download RWHOIS datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinforwhoisdataconnector.md)
+
 ---
 
-### IPinfo WHOIS ASN Data Connector
+### [IPinfo WHOIS ASN Data Connector](connectors/ipinfowhoisasndataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2310,9 +2674,11 @@ This IPinfo data connector installs an Azure Function app to download RWHOIS dat
 
 This IPinfo data connector installs an Azure Function app to download WHOIS_ASN datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfowhoisasndataconnector.md)
+
 ---
 
-### IPinfo WHOIS MNT Data Connector
+### [IPinfo WHOIS MNT Data Connector](connectors/ipinfowhoismntdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2322,9 +2688,11 @@ This IPinfo data connector installs an Azure Function app to download WHOIS_ASN 
 
 This IPinfo data connector installs an Azure Function app to download WHOIS_MNT datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfowhoismntdataconnector.md)
+
 ---
 
-### IPinfo WHOIS NET Data Connector
+### [IPinfo WHOIS NET Data Connector](connectors/ipinfowhoisnetdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2334,9 +2702,11 @@ This IPinfo data connector installs an Azure Function app to download WHOIS_MNT 
 
 This IPinfo data connector installs an Azure Function app to download WHOIS_NET datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfowhoisnetdataconnector.md)
+
 ---
 
-### IPinfo WHOIS ORG Data Connector
+### [IPinfo WHOIS ORG Data Connector](connectors/ipinfowhoisorgdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2346,9 +2716,11 @@ This IPinfo data connector installs an Azure Function app to download WHOIS_NET 
 
 This IPinfo data connector installs an Azure Function app to download WHOIS_ORG datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfowhoisorgdataconnector.md)
+
 ---
 
-### IPinfo WHOIS POC Data Connector
+### [IPinfo WHOIS POC Data Connector](connectors/ipinfowhoispocdataconnector.md)
 
 **Publisher:** IPinfo
 
@@ -2358,9 +2730,11 @@ This IPinfo data connector installs an Azure Function app to download WHOIS_ORG 
 
 This IPinfo data connector installs an Azure Function app to download WHOIS_POC datasets and insert it into custom log table in Microsoft Sentinel
 
+[→ View full connector details](connectors/ipinfowhoispocdataconnector.md)
+
 ---
 
-### Illumio Insights
+### [Illumio Insights](connectors/illumioinsightsdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2370,9 +2744,11 @@ This IPinfo data connector installs an Azure Function app to download WHOIS_POC 
 
 Illumio Insights Connector sends workload and security graph data from Illumio Insights into the Azure Microsoft Sentinel Data Lake, providing deep context for threat detection, lateral movement analysis, and real-time investigation.
 
+[→ View full connector details](connectors/illumioinsightsdefinition.md)
+
 ---
 
-### Illumio Insights Summary
+### [Illumio Insights Summary](connectors/illumioinsightssummaryccp.md)
 
 **Publisher:** Illumio
 
@@ -2382,9 +2758,11 @@ Illumio Insights Connector sends workload and security graph data from Illumio I
 
 The Illumio Insights Summary connector Publishes AI-powered threat discovery and anomaly reports generated by the Illumio Insights Agent. Leveraging the MITRE ATT&CK framework, these reports surface high-fidelity insights into emerging threats and risky behaviors, directly into the Data Lake.
 
+[→ View full connector details](connectors/illumioinsightssummaryccp.md)
+
 ---
 
-### Illumio SaaS
+### [Illumio SaaS](connectors/illumiosaasdataconnector.md)
 
 **Publisher:** Illumio
 
@@ -2394,9 +2772,11 @@ The Illumio Insights Summary connector Publishes AI-powered threat discovery and
 
 [Illumio](https://www.illumio.com/) connector provides the capability to ingest events into Microsoft Sentinel. The connector provides ability to ingest auditable and flow events from AWS S3 bucket.
 
+[→ View full connector details](connectors/illumiosaasdataconnector.md)
+
 ---
 
-### Illumio Saas
+### [Illumio Saas](connectors/illumiosaasccfdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2406,9 +2786,11 @@ The Illumio Insights Summary connector Publishes AI-powered threat discovery and
 
 The Illumio Saas Cloud data connector provides the capability to ingest Flow logs into Microsoft Sentinel using the Illumio Saas Log Integration through AWS S3 Bucket. Refer to [Illumio Saas Log Integration](https://product-docs-repo.illumio.com/Tech-Docs/CloudSecure/out/en/administer-cloudsecure/connector.html#UUID-c14edaab-9726-1f23-9c4c-bc2937be39ee_section-idm234556433515698) for more information.
 
+[→ View full connector details](connectors/illumiosaasccfdefinition.md)
+
 ---
 
-### Imperva Cloud WAF
+### [Imperva Cloud WAF](connectors/impervacloudwaflogsccfdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -2418,9 +2800,11 @@ The Illumio Saas Cloud data connector provides the capability to ingest Flow log
 
 The Imperva WAF Cloud data connector provides the capability to ingest logs into Microsoft Sentinel using the Imperva Log Integration through AWS S3 Bucket. Refer to [Imperva WAF Cloud Log Integration](https://docs.imperva.com/bundle/cloud-application-security/page/settings/log-integration.htm) for more information.
 
+[→ View full connector details](connectors/impervacloudwaflogsccfdefinition.md)
+
 ---
 
-### Imperva Cloud WAF
+### [Imperva Cloud WAF](connectors/impervawafcloudapi.md)
 
 **Publisher:** Imperva
 
@@ -2430,9 +2814,11 @@ The Imperva WAF Cloud data connector provides the capability to ingest logs into
 
 The [Imperva Cloud WAF](https://www.imperva.com/resources/resource-library/datasheets/imperva-cloud-waf/) data connector provides the capability to integrate and ingest Web Application Firewall events into Microsoft Sentinel through the REST API. Refer to Log integration [documentation](https://docs.imperva.com/bundle/cloud-application-security/page/settings/log-integration.htm#Download) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/impervawafcloudapi.md)
+
 ---
 
-### Imperva WAF Gateway
+### [Imperva WAF Gateway](connectors/impervawafgateway.md)
 
 **Publisher:** Imperva
 
@@ -2442,9 +2828,11 @@ The [Imperva Cloud WAF](https://www.imperva.com/resources/resource-library/datas
 
 The [Imperva](https://www.imperva.com) connector will allow you to quickly connect your Imperva WAF Gateway alerts to Azure Sentinel. This provides you additional insight into your organization's WAF traffic and improves your security operation capabilities.
 
+[→ View full connector details](connectors/impervawafgateway.md)
+
 ---
 
-### InfoSecGlobal Data Connector
+### [InfoSecGlobal Data Connector](connectors/infosecdataconnector.md)
 
 **Publisher:** InfoSecGlobal
 
@@ -2454,9 +2842,11 @@ The [Imperva](https://www.imperva.com) connector will allow you to quickly conne
 
 Use this data connector to integrate with InfoSec Crypto Analytics and get data sent directly to Microsoft Sentinel.
 
+[→ View full connector details](connectors/infosecdataconnector.md)
+
 ---
 
-### Infoblox Data Connector via REST API
+### [Infoblox Data Connector via REST API](connectors/infobloxdataconnector.md)
 
 **Publisher:** Infoblox
 
@@ -2466,9 +2856,11 @@ Use this data connector to integrate with InfoSec Crypto Analytics and get data 
 
 The Infoblox Data Connector allows you to easily connect your Infoblox TIDE data and Dossier data with Microsoft Sentinel. By connecting your data to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/infobloxdataconnector.md)
+
 ---
 
-### Infoblox SOC Insight Data Connector via REST API
+### [Infoblox SOC Insight Data Connector via REST API](connectors/infobloxsocinsightsdataconnector-api.md)
 
 **Publisher:** Infoblox
 
@@ -2478,9 +2870,11 @@ The Infoblox Data Connector allows you to easily connect your Infoblox TIDE data
 
 The Infoblox SOC Insight Data Connector allows you to easily connect your Infoblox BloxOne SOC Insight data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/infobloxsocinsightsdataconnector-api.md)
+
 ---
 
-### Island Enterprise Browser Admin Audit (Polling CCP)
+### [Island Enterprise Browser Admin Audit (Polling CCP)](connectors/island-admin-polling.md)
 
 **Publisher:** Island
 
@@ -2490,9 +2884,11 @@ The Infoblox SOC Insight Data Connector allows you to easily connect your Infobl
 
 The [Island](https://www.island.io) Admin connector provides the capability to ingest Island Admin Audit logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/island-admin-polling.md)
+
 ---
 
-### Island Enterprise Browser User Activity (Polling CCP)
+### [Island Enterprise Browser User Activity (Polling CCP)](connectors/island-user-polling.md)
 
 **Publisher:** Island
 
@@ -2502,9 +2898,11 @@ The [Island](https://www.island.io) Admin connector provides the capability to i
 
 The [Island](https://www.island.io) connector provides the capability to ingest Island User Activity logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/island-user-polling.md)
+
 ---
 
-### iboss via AMA
+### [iboss via AMA](connectors/ibossama.md)
 
 **Publisher:** iboss
 
@@ -2514,11 +2912,13 @@ The [Island](https://www.island.io) connector provides the capability to ingest 
 
 The [iboss](https://www.iboss.com) data connector enables you to seamlessly connect your Threat Console to Microsoft Sentinel and enrich your instance with iboss URL event logs. Our logs are forwarded in Common Event Format (CEF) over Syslog and the configuration required can be completed on the iboss platform without the use of a proxy. Take advantage of our connector to garner critical data points and gain insight into security threats.
 
+[→ View full connector details](connectors/ibossama.md)
+
 ---
 
 ## J
 
-### Jamf Protect Push Connector
+### [Jamf Protect Push Connector](connectors/jamfprotectpush.md)
 
 **Publisher:** Jamf
 
@@ -2528,11 +2928,13 @@ The [iboss](https://www.iboss.com) data connector enables you to seamlessly conn
 
 The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provides the capability to read raw event data from Jamf Protect in Microsoft Sentinel.
 
+[→ View full connector details](connectors/jamfprotectpush.md)
+
 ---
 
 ## K
 
-### Keeper Security Push Connector
+### [Keeper Security Push Connector](connectors/keepersecuritypush2.md)
 
 **Publisher:** Keeper Security
 
@@ -2542,11 +2944,13 @@ The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provid
 
 The [Keeper Security](https://keepersecurity.com) connector provides the capability to read raw event data from Keeper Security in Microsoft Sentinel.
 
+[→ View full connector details](connectors/keepersecuritypush2.md)
+
 ---
 
 ## L
 
-### LastPass Enterprise - Reporting (Polling CCP)
+### [LastPass Enterprise - Reporting (Polling CCP)](connectors/lastpass-polling.md)
 
 **Publisher:** The Collective Consulting BV
 
@@ -2556,9 +2960,11 @@ The [Keeper Security](https://keepersecurity.com) connector provides the capabil
 
 The [LastPass Enterprise](https://www.lastpass.com/products/enterprise-password-management-and-sso) connector provides the capability to LastPass reporting (audit) logs into Microsoft Sentinel. The connector provides visibility into logins and activity within LastPass (such as reading and removing passwords).
 
+[→ View full connector details](connectors/lastpass-polling.md)
+
 ---
 
-### Lookout Cloud Security for Microsoft Sentinel
+### [Lookout Cloud Security for Microsoft Sentinel](connectors/lookoutcloudsecuritydataconnector.md)
 
 **Publisher:** Lookout
 
@@ -2568,9 +2974,11 @@ The [LastPass Enterprise](https://www.lastpass.com/products/enterprise-password-
 
 This connector uses a Agari REST API connection to push data into Microsoft Sentinel Log Analytics.
 
+[→ View full connector details](connectors/lookoutcloudsecuritydataconnector.md)
+
 ---
 
-### Lookout Mobile Threat Detection Connector (via Codeless Connector Framework) (Preview)
+### [Lookout Mobile Threat Detection Connector (via Codeless Connector Framework) (Preview)](connectors/lookoutstreaming-definition.md)
 
 **Publisher:** Microsoft
 
@@ -2580,9 +2988,11 @@ This connector uses a Agari REST API connection to push data into Microsoft Sent
 
 The [Lookout Mobile Threat Detection](https://lookout.com) data connector provides the capability to ingest events related to mobile security risks into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. This connector helps you examine potential security risks detected in mobile devices.
 
+[→ View full connector details](connectors/lookoutstreaming-definition.md)
+
 ---
 
-### Lumen Defender Threat Feed Data Connector
+### [Lumen Defender Threat Feed Data Connector](connectors/lumenthreatfeedconnector.md)
 
 **Publisher:** Lumen Technologies, Inc.
 
@@ -2592,9 +3002,11 @@ The [Lookout Mobile Threat Detection](https://lookout.com) data connector provid
 
 The [Lumen Defender Threat Feed](https://bll-analytics.mss.lumen.com/analytics) connector provides the capability to ingest STIX-formatted threat intelligence indicators from Lumen's Black Lotus Labs research team into Microsoft Sentinel. The connector automatically downloads and uploads daily threat intelligence indicators including IPv4 addresses and domains to the ThreatIntelIndicators table via the STIX Objects Upload API.
 
+[→ View full connector details](connectors/lumenthreatfeedconnector.md)
+
 ---
 
-### Luminar IOCs and Leaked Credentials
+### [Luminar IOCs and Leaked Credentials](connectors/cognyteluminar.md)
 
 **Publisher:** Cognyte Technologies Israel Ltd
 
@@ -2604,11 +3016,13 @@ The [Lumen Defender Threat Feed](https://bll-analytics.mss.lumen.com/analytics) 
 
 Luminar IOCs and Leaked Credentials connector allows integration of intelligence-based IOC data and customer-related leaked records identified by Luminar.
 
+[→ View full connector details](connectors/cognyteluminar.md)
+
 ---
 
 ## M
 
-### MISP2Sentinel
+### [MISP2Sentinel](connectors/misp2sentinelconnector.md)
 
 **Publisher:** MISP project & cudeso.be
 
@@ -2618,9 +3032,11 @@ Luminar IOCs and Leaked Credentials connector allows integration of intelligence
 
 This solution installs the MISP2Sentinel connector that allows you to automatically push threat indicators from MISP to Microsoft Sentinel via the Upload Indicators REST API. After installing the solution, configure and enable this data connector by following guidance in Manage solution view.
 
+[→ View full connector details](connectors/misp2sentinelconnector.md)
+
 ---
 
-### MailGuard 365
+### [MailGuard 365](connectors/mailguard365.md)
 
 **Publisher:** MailGuard365
 
@@ -2630,9 +3046,11 @@ This solution installs the MISP2Sentinel connector that allows you to automatica
 
 MailGuard 365 Enhanced Email Security for Microsoft 365. Exclusive to the Microsoft marketplace, MailGuard 365 is integrated with Microsoft 365 security (incl. Defender) for enhanced protection against advanced email threats like phishing, ransomware and sophisticated BEC attacks.
 
+[→ View full connector details](connectors/mailguard365.md)
+
 ---
 
-### MailRisk by Secure Practice
+### [MailRisk by Secure Practice](connectors/securepracticemailriskconnector.md)
 
 **Publisher:** Secure Practice
 
@@ -2642,9 +3060,11 @@ MailGuard 365 Enhanced Email Security for Microsoft 365. Exclusive to the Micros
 
 The MailRisk by Secure Practice connector allows you to ingest email threat intelligence data from the MailRisk API into Microsoft Sentinel. This connector provides visibility into reported emails, risk assessments, and security events related to email threats.
 
+[→ View full connector details](connectors/securepracticemailriskconnector.md)
+
 ---
 
-### Microsoft 365 (formerly, Office 365)
+### [Microsoft 365 (formerly, Office 365)](connectors/office365.md)
 
 **Publisher:** Microsoft
 
@@ -2654,9 +3074,11 @@ The MailRisk by Secure Practice connector allows you to ingest email threat inte
 
 The Microsoft 365 (formerly, Office 365) activity log connector provides insight into ongoing user activities. You will get details of operations such as file downloads, access requests sent, changes to group events, set-mailbox and details of the user who performed the actions. By connecting Microsoft 365 logs into Microsoft Sentinel you can use this data to view dashboards, create custom alerts, and improve your investigation process. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219943&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/office365.md)
+
 ---
 
-### Microsoft 365 Insider Risk Management
+### [Microsoft 365 Insider Risk Management](connectors/officeirm.md)
 
 **Publisher:** Microsoft
 
@@ -2676,9 +3098,11 @@ This solution produces alerts that can be seen by Office customers in the Inside
 
 These alerts can be imported into Microsoft Sentinel with this connector, allowing you to see, investigate, and respond to them in a broader organizational threat context. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223721&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/officeirm.md)
+
 ---
 
-### Microsoft Copilot
+### [Microsoft Copilot](connectors/microsoftcopilot.md)
 
 **Publisher:** Microsoft
 
@@ -2688,9 +3112,11 @@ These alerts can be imported into Microsoft Sentinel with this connector, allowi
 
 The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless ingestion of Copilot-generated activity logs into Microsoft Sentinel for advanced threat detection, investigation, and response. It collects telemetry from Microsoft Copilot services - such as usage data, prompts and system responses - and ingests into Microsoft Sentinel, allowing security teams to monitor for misuse, detect anomalies, and maintain compliance with organizational policies.
 
+[→ View full connector details](connectors/microsoftcopilot.md)
+
 ---
 
-### Microsoft Defender Threat Intelligence
+### [Microsoft Defender Threat Intelligence](connectors/microsoftdefenderthreatintelligence.md)
 
 **Publisher:** Microsoft
 
@@ -2700,9 +3126,11 @@ The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless 
 
 Microsoft Sentinel provides you the capability to import threat intelligence generated by Microsoft to enable monitoring, alerting and hunting. Use this data connector to import Indicators of Compromise (IOCs) from Microsoft Defender Threat Intelligence (MDTI) into Microsoft Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes, etc.
 
+[→ View full connector details](connectors/microsoftdefenderthreatintelligence.md)
+
 ---
 
-### Microsoft Defender XDR
+### [Microsoft Defender XDR](connectors/microsoftthreatprotection.md)
 
 **Publisher:** Microsoft
 
@@ -2721,9 +3149,11 @@ Microsoft Defender XDR suite includes:
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220004&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/microsoftthreatprotection.md)
+
 ---
 
-### Microsoft Defender for Cloud Apps
+### [Microsoft Defender for Cloud Apps](connectors/microsoftcloudappsecurity.md)
 
 **Publisher:** Microsoft
 
@@ -2741,9 +3171,11 @@ By connecting with [Microsoft Defender for Cloud Apps](https://aka.ms/asi-mcas-c
 
 [Deploy now >](https://aka.ms/asi-mcas-connector-deploynow)
 
+[→ View full connector details](connectors/microsoftcloudappsecurity.md)
+
 ---
 
-### Microsoft Defender for Endpoint
+### [Microsoft Defender for Endpoint](connectors/microsoftdefenderadvancedthreatprotection.md)
 
 **Publisher:** Microsoft
 
@@ -2753,9 +3185,11 @@ By connecting with [Microsoft Defender for Cloud Apps](https://aka.ms/asi-mcas-c
 
 Microsoft Defender for Endpoint is a security platform designed to prevent, detect, investigate, and respond to advanced threats. The platform creates alerts when suspicious security events are seen in an organization. Fetch alerts generated in Microsoft Defender for Endpoint to Microsoft Sentinel so that you can effectively analyze security events. You can create rules, build dashboards and author playbooks for immediate response. For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2220128&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/microsoftdefenderadvancedthreatprotection.md)
+
 ---
 
-### Microsoft Defender for Identity
+### [Microsoft Defender for Identity](connectors/azureadvancedthreatprotection.md)
 
 **Publisher:** Microsoft
 
@@ -2776,9 +3210,11 @@ Connect Microsoft Defender for Identity to gain visibility into the events and u
 
 For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2220069&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azureadvancedthreatprotection.md)
+
 ---
 
-### Microsoft Defender for Office 365 (Preview)
+### [Microsoft Defender for Office 365 (Preview)](connectors/officeatp.md)
 
 **Publisher:** Microsoft
 
@@ -2801,9 +3237,11 @@ These alerts can be seen by Office customers in the ** Office Security and Compl
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219942&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/officeatp.md)
+
 ---
 
-### Microsoft Entra ID
+### [Microsoft Entra ID](connectors/azureactivedirectory.md)
 
 **Publisher:** Microsoft
 
@@ -2813,9 +3251,11 @@ For more information, see the [Microsoft Sentinel documentation](https://go.micr
 
 Gain insights into Microsoft Entra ID by connecting Audit and Sign-in logs to Microsoft Sentinel to gather insights around Microsoft Entra ID scenarios. You can learn about app usage, conditional access policies, legacy auth relate details using our Sign-in logs. You can get information on your Self Service Password Reset (SSPR) usage, Microsoft Entra ID Management activities like user, group, role, app management using our Audit logs table. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2219715&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azureactivedirectory.md)
+
 ---
 
-### Microsoft Entra ID Protection
+### [Microsoft Entra ID Protection](connectors/azureactivedirectoryidentityprotection.md)
 
 **Publisher:** Microsoft
 
@@ -2827,9 +3267,11 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Get Microsoft Entra ID Premium P1/P2 ](https://aka.ms/asi-ipcconnectorgetlink)
 
+[→ View full connector details](connectors/azureactivedirectoryidentityprotection.md)
+
 ---
 
-### Microsoft Exchange Admin Audit Logs by Event Logs
+### [Microsoft Exchange Admin Audit Logs by Event Logs](connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md)
 
 **Publisher:** Microsoft
 
@@ -2839,9 +3281,11 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Option 1] - Using Azure Monitor Agent - You can stream all Exchange Audit events from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This is used by Microsoft Exchange Security Workbooks to provide security insights of your On-Premises Exchange environment
 
+[→ View full connector details](connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md)
+
 ---
 
-### Microsoft Exchange HTTP Proxy Logs
+### [Microsoft Exchange HTTP Proxy Logs](connectors/esi-opt7exchangehttpproxylogs.md)
 
 **Publisher:** Microsoft
 
@@ -2851,9 +3295,11 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Option 7] - Using Azure Monitor Agent - You can stream HTTP Proxy logs and Security Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you create custom alerts, and improve investigation. [Learn more](https://aka.ms/ESI_DataConnectorOptions)
 
+[→ View full connector details](connectors/esi-opt7exchangehttpproxylogs.md)
+
 ---
 
-### Microsoft Exchange Logs and Events
+### [Microsoft Exchange Logs and Events](connectors/esi-opt2exchangeserverseventlogs.md)
 
 **Publisher:** Microsoft
 
@@ -2863,9 +3309,11 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Option 2] - Using Azure Monitor Agent - You can stream all Exchange Security & Application Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
 
+[→ View full connector details](connectors/esi-opt2exchangeserverseventlogs.md)
+
 ---
 
-### Microsoft Exchange Message Tracking Logs
+### [Microsoft Exchange Message Tracking Logs](connectors/esi-opt6exchangemessagetrackinglogs.md)
 
 **Publisher:** Microsoft
 
@@ -2875,9 +3323,11 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Option 6] - Using Azure Monitor Agent - You can stream all Exchange Message Tracking from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. Those logs can be used to track the flow of messages in your Exchange environment. This data connector is based on the option 6 of the [Microsoft Exchange Security wiki](https://aka.ms/ESI_DataConnectorOptions).
 
+[→ View full connector details](connectors/esi-opt6exchangemessagetrackinglogs.md)
+
 ---
 
-### Microsoft PowerBI
+### [Microsoft PowerBI](connectors/officepowerbi.md)
 
 **Publisher:** Microsoft
 
@@ -2887,9 +3337,11 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 Microsoft PowerBI is a collection of software services, apps, and connectors that work together to turn your unrelated sources of data into coherent, visually immersive, and interactive insights. Your data may be an Excel spreadsheet, a collection of cloud-based and on-premises hybrid data warehouses, or a data store of some other type. This connector lets you stream PowerBI audit logs into Microsoft Sentinel, allowing you to track user activities in your PowerBI environment. You can filter the audit data by date range, user, dashboard, report, dataset, and activity type.
 
+[→ View full connector details](connectors/officepowerbi.md)
+
 ---
 
-### Microsoft Project
+### [Microsoft Project](connectors/office365project.md)
 
 **Publisher:** Microsoft
 
@@ -2899,9 +3351,11 @@ Microsoft PowerBI is a collection of software services, apps, and connectors tha
 
 Microsoft Project (MSP) is a project management software solution. Depending on your plan, Microsoft Project lets you plan projects, assign tasks, manage resources, create reports and more. This connector allows you to stream your Azure Project audit logs into Microsoft Sentinel in order to track your project activities.
 
+[→ View full connector details](connectors/office365project.md)
+
 ---
 
-### Microsoft Purview
+### [Microsoft Purview](connectors/microsoftazurepurview.md)
 
 **Publisher:** Microsoft
 
@@ -2911,9 +3365,11 @@ Microsoft Project (MSP) is a project management software solution. Depending on 
 
 Connect to Microsoft Purview to enable data sensitivity enrichment of Microsoft Sentinel. Data classification and sensitivity label logs from Microsoft Purview scans can be ingested and visualized through workbooks, analytical rules, and more. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2224125&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/microsoftazurepurview.md)
+
 ---
 
-### Microsoft Purview Information Protection
+### [Microsoft Purview Information Protection](connectors/microsoftpurviewinformationprotection.md)
 
 **Publisher:** Microsoft
 
@@ -2924,9 +3380,11 @@ Connect to Microsoft Purview to enable data sensitivity enrichment of Microsoft 
 Microsoft Purview Information Protection helps you discover, classify, protect, and govern sensitive information wherever it lives or travels. Using these capabilities enable you to know your data, identify items that are sensitive and gain visibility into how they are being used to better protect your data. Sensitivity labels are the foundational capability that provide protection actions, applying encryption, access restrictions and visual markings.
     Integrate Microsoft Purview Information Protection logs with Microsoft Sentinel to view dashboards, create custom alerts and improve investigation. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223811&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/microsoftpurviewinformationprotection.md)
+
 ---
 
-### Mimecast Audit
+### [Mimecast Audit](connectors/mimecastauditapi.md)
 
 **Publisher:** Mimecast
 
@@ -2939,9 +3397,11 @@ The Mimecast products included within the connector are:
 Audit
  
 
+[→ View full connector details](connectors/mimecastauditapi.md)
+
 ---
 
-### Mimecast Awareness Training
+### [Mimecast Awareness Training](connectors/mimecastatapi.md)
 
 **Publisher:** Mimecast
 
@@ -2957,9 +3417,11 @@ The Mimecast products included within the connector are:
 - Watchlist Details
 
 
+[→ View full connector details](connectors/mimecastatapi.md)
+
 ---
 
-### Mimecast Cloud Integrated
+### [Mimecast Cloud Integrated](connectors/mimecastciapi.md)
 
 **Publisher:** Mimecast
 
@@ -2969,9 +3431,11 @@ The Mimecast products included within the connector are:
 
 The data connector for [Mimecast Cloud Integrated](https://integrations.mimecast.com/tech-partners/microsoft-sentinel/) provides customers with the visibility into security events related to the Cloud Integrated inspection technologies within Microsoft Sentinel. The data connector provides pre-created dashboards to allow analysts to view insight into email based threats, aid in incident correlation and reduce investigation response times coupled with custom alert capabilities.
 
+[→ View full connector details](connectors/mimecastciapi.md)
+
 ---
 
-### Mimecast Intelligence for Microsoft - Microsoft Sentinel
+### [Mimecast Intelligence for Microsoft - Microsoft Sentinel](connectors/mimecasttiregionalconnectorazurefunctions.md)
 
 **Publisher:** Mimecast
 
@@ -2985,9 +3449,11 @@ Mimecast products and features required:
 - Mimecast Threat Intelligence
 
 
+[→ View full connector details](connectors/mimecasttiregionalconnectorazurefunctions.md)
+
 ---
 
-### Mimecast Secure Email Gateway
+### [Mimecast Secure Email Gateway](connectors/mimecastsegapi.md)
 
 **Publisher:** Mimecast
 
@@ -3000,9 +3466,11 @@ The data connector for [Mimecast Secure Email Gateway](https://integrations.mime
 - Mimecast Data Leak Prevention
  
 
+[→ View full connector details](connectors/mimecastsegapi.md)
+
 ---
 
-### Mimecast Secure Email Gateway
+### [Mimecast Secure Email Gateway](connectors/mimecastsiemapi.md)
 
 **Publisher:** Mimecast
 
@@ -3015,9 +3483,11 @@ The data connector for [Mimecast Secure Email Gateway](https://integrations.mime
 - Mimecast Data Leak Prevention
  
 
+[→ View full connector details](connectors/mimecastsiemapi.md)
+
 ---
 
-### Mimecast Targeted Threat Protection
+### [Mimecast Targeted Threat Protection](connectors/mimecastttpapi.md)
 
 **Publisher:** Mimecast
 
@@ -3032,9 +3502,11 @@ The Mimecast products included within the connector are:
 - Attachment Protect
 
 
+[→ View full connector details](connectors/mimecastttpapi.md)
+
 ---
 
-### MongoDB Atlas Logs
+### [MongoDB Atlas Logs](connectors/mongodbatlaslogsazurefunctions.md)
 
 **Publisher:** MongoDB
 
@@ -3044,9 +3516,11 @@ The Mimecast products included within the connector are:
 
 The [MongoDBAtlas](https://www.mongodb.com/products/platform/atlas-database) Logs connector gives the capability to upload MongoDB Atlas database logs into Microsoft Sentinel through the MongoDB Atlas Administration API. Refer to the [API documentation](https://www.mongodb.com/docs/api/doc/atlas-admin-api-v2/) for more information. The connector provides the ability to get a range of database log messages for the specified hosts and specified project.
 
+[→ View full connector details](connectors/mongodbatlaslogsazurefunctions.md)
+
 ---
 
-### Morphisec API Data Connector (via Codeless Connector Framework)
+### [Morphisec API Data Connector (via Codeless Connector Framework)](connectors/morphisecccf.md)
 
 **Publisher:** Morphisec
 
@@ -3058,9 +3532,11 @@ The [Morphisec](https://www.morphisec.com/) solution for Microsoft Sentinel enab
 This solution provides more than just data ingestion; it equips your security team with a full suite of ready-to-use content, including: Data Connector, ASIM Parser, Analytic Rule Templates and Workbook.
 With this solution, you can empower your SOC to leverage Morphisec's powerful threat prevention within a unified investigation and response workflow in Microsoft Sentinel.
 
+[→ View full connector details](connectors/morphisecccf.md)
+
 ---
 
-### MuleSoft Cloudhub
+### [MuleSoft Cloudhub](connectors/mulesoft.md)
 
 **Publisher:** MuleSoft
 
@@ -3070,11 +3546,13 @@ With this solution, you can empower your SOC to leverage Morphisec's powerful th
 
 The [MuleSoft Cloudhub](https://www.mulesoft.com/platform/saas/cloudhub-ipaas-cloud-based-integration) data connector provides the capability to retrieve logs from Cloudhub applications using the Cloudhub API and more events into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/mulesoft.md)
+
 ---
 
 ## N
 
-### NC Protect
+### [NC Protect](connectors/nucleuscyberncprotect.md)
 
 **Publisher:** archTIS
 
@@ -3084,9 +3562,11 @@ The [MuleSoft Cloudhub](https://www.mulesoft.com/platform/saas/cloudhub-ipaas-cl
 
 [NC Protect Data Connector (archtis.com)](https://info.archtis.com/get-started-with-nc-protect-sentinel-data-connector) provides the capability to ingest user activity logs and events into Microsoft Sentinel. The connector provides visibility into NC Protect user activity logs and events in Microsoft Sentinel to improve monitoring and investigation capabilities
 
+[→ View full connector details](connectors/nucleuscyberncprotect.md)
+
 ---
 
-### NXLog AIX Audit
+### [NXLog AIX Audit](connectors/nxlogaixaudit.md)
 
 **Publisher:** NXLog
 
@@ -3096,9 +3576,11 @@ The [MuleSoft Cloudhub](https://www.mulesoft.com/platform/saas/cloudhub-ipaas-cl
 
 The [NXLog AIX Audit](https://docs.nxlog.co/refman/current/im/aixaudit.html) data connector uses the AIX Audit subsystem to read events directly from the kernel for capturing audit events on the AIX platform. This REST API connector can efficiently export AIX Audit events to Microsoft Sentinel in real time.
 
+[→ View full connector details](connectors/nxlogaixaudit.md)
+
 ---
 
-### NXLog BSM macOS
+### [NXLog BSM macOS](connectors/nxlogbsmmacos.md)
 
 **Publisher:** NXLog
 
@@ -3108,9 +3590,11 @@ The [NXLog AIX Audit](https://docs.nxlog.co/refman/current/im/aixaudit.html) dat
 
 The [NXLog BSM](https://docs.nxlog.co/refman/current/im/bsm.html) macOS data connector uses Sun's Basic Security Module (BSM) Auditing API to read events directly from the kernel for capturing audit events on the macOS platform. This REST API connector can efficiently export macOS audit events to Microsoft Sentinel in real-time.
 
+[→ View full connector details](connectors/nxlogbsmmacos.md)
+
 ---
 
-### NXLog DNS Logs
+### [NXLog DNS Logs](connectors/nxlogdnslogs.md)
 
 **Publisher:** NXLog
 
@@ -3120,9 +3604,11 @@ The [NXLog BSM](https://docs.nxlog.co/refman/current/im/bsm.html) macOS data con
 
 The NXLog DNS Logs data connector uses Event Tracing for Windows ([ETW](https://docs.microsoft.com/windows/apps/trace-processing/overview)) for collecting both Audit and Analytical DNS Server events. The [NXLog *im_etw* module](https://docs.nxlog.co/refman/current/im/etw.html) reads event tracing data directly for maximum efficiency, without the need to capture the event trace into an .etl file. This REST API connector can forward DNS Server events to Microsoft Sentinel in real time.
 
+[→ View full connector details](connectors/nxlogdnslogs.md)
+
 ---
 
-### NXLog FIM
+### [NXLog FIM](connectors/nxlogfim.md)
 
 **Publisher:** NXLog
 
@@ -3132,9 +3618,11 @@ The NXLog DNS Logs data connector uses Event Tracing for Windows ([ETW](https://
 
 The [NXLog FIM](https://docs.nxlog.co/refman/current/im/fim.html) module allows for the scanning of files and directories, reporting detected additions, changes, renames and deletions on the designated paths through calculated checksums during successive scans. This REST API connector can efficiently export the configured FIM events to Microsoft Sentinel in real time.
 
+[→ View full connector details](connectors/nxlogfim.md)
+
 ---
 
-### NXLog LinuxAudit
+### [NXLog LinuxAudit](connectors/nxloglinuxaudit.md)
 
 **Publisher:** NXLog
 
@@ -3144,9 +3632,11 @@ The [NXLog FIM](https://docs.nxlog.co/refman/current/im/fim.html) module allows 
 
 The [NXLog LinuxAudit](https://docs.nxlog.co/refman/current/im/linuxaudit.html) data connector supports custom audit rules and collects logs without auditd or any other user-space software. IP addresses and group/user IDs are resolved to their respective names making [Linux audit](https://docs.nxlog.co/userguide/integrate/linux-audit.html) logs more intelligible to security analysts. This REST API connector can efficiently export Linux security events to Microsoft Sentinel in real-time.
 
+[→ View full connector details](connectors/nxloglinuxaudit.md)
+
 ---
 
-### Netclean ProActive Incidents
+### [Netclean ProActive Incidents](connectors/netclean-proactive-incidents.md)
 
 **Publisher:** NetClean Technologies
 
@@ -3156,9 +3646,11 @@ The [NXLog LinuxAudit](https://docs.nxlog.co/refman/current/im/linuxaudit.html) 
 
 This connector uses the Netclean Webhook (required) and Logic Apps to push data into Microsoft Sentinel Log Analytics
 
+[→ View full connector details](connectors/netclean-proactive-incidents.md)
+
 ---
 
-### Netskope
+### [Netskope](connectors/netskope.md)
 
 **Publisher:** Netskope
 
@@ -3168,9 +3660,11 @@ This connector uses the Netclean Webhook (required) and Logic Apps to push data 
 
 The [Netskope Cloud Security Platform](https://www.netskope.com/platform) connector provides the capability to ingest Netskope logs and events into Microsoft Sentinel. The connector provides visibility into Netskope Platform Events and Alerts in Microsoft Sentinel to improve monitoring and investigation capabilities.
 
+[→ View full connector details](connectors/netskope.md)
+
 ---
 
-### Netskope Alerts and Events
+### [Netskope Alerts and Events](connectors/netskopealertsevents.md)
 
 **Publisher:** Netskope
 
@@ -3180,9 +3674,11 @@ The [Netskope Cloud Security Platform](https://www.netskope.com/platform) connec
 
 Netskope Security Alerts and Events
 
+[→ View full connector details](connectors/netskopealertsevents.md)
+
 ---
 
-### Netskope Data Connector
+### [Netskope Data Connector](connectors/netskopedataconnector.md)
 
 **Publisher:** Netskope
 
@@ -3207,9 +3703,11 @@ The [Netskope](https://docs.netskope.com/en/netskope-help/admin-console/rest-api
  3. Microsoft log analytic documentation: 
 > https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-overview
 
+[→ View full connector details](connectors/netskopedataconnector.md)
+
 ---
 
-### Netskope Web Transactions Data Connector
+### [Netskope Web Transactions Data Connector](connectors/netskopewebtransactionsdataconnector.md)
 
 **Publisher:** Netskope
 
@@ -3225,9 +3723,11 @@ The [Netskope Web Transactions](https://docs.netskope.com/en/netskope-help/data-
 > https://docs.netskope.com/en/netskope-help/data-security/transaction-events/netskope-transaction-events/ 
 
 
+[→ View full connector details](connectors/netskopewebtransactionsdataconnector.md)
+
 ---
 
-### Network Security Groups
+### [Network Security Groups](connectors/azurensg.md)
 
 **Publisher:** Microsoft
 
@@ -3245,9 +3745,11 @@ When you enable logging for an NSG, you can gather the following types of resour
 
 This connector lets you stream your NSG diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223718&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/azurensg.md)
+
 ---
 
-### Noname Security for Microsoft Sentinel
+### [Noname Security for Microsoft Sentinel](connectors/nonamesecuritymicrosoftsentinel.md)
 
 **Publisher:** Noname Security
 
@@ -3257,9 +3759,11 @@ This connector lets you stream your NSG diagnostics logs into Microsoft Sentinel
 
 Noname Security solution to POST data into a Microsoft Sentinel SIEM workspace via the Azure Monitor REST API
 
+[→ View full connector details](connectors/nonamesecuritymicrosoftsentinel.md)
+
 ---
 
-### NordPass
+### [NordPass](connectors/nordpass.md)
 
 **Publisher:** NordPass
 
@@ -3269,11 +3773,13 @@ Noname Security solution to POST data into a Microsoft Sentinel SIEM workspace v
 
 Integrating NordPass with Microsoft Sentinel SIEM via the API will allow you to automatically transfer Activity Log data from NordPass to Microsoft Sentinel and get real-time insights, such as item activity, all login attempts, and security notifications.
 
+[→ View full connector details](connectors/nordpass.md)
+
 ---
 
 ## O
 
-### Obsidian Datasharing Connector
+### [Obsidian Datasharing Connector](connectors/obsidiandatasharing.md)
 
 **Publisher:** Obsidian Security
 
@@ -3283,9 +3789,11 @@ Integrating NordPass with Microsoft Sentinel SIEM via the API will allow you to 
 
 The Obsidian Datasharing connector provides the capability to read raw event data from Obsidian Datasharing in Microsoft Sentinel.
 
+[→ View full connector details](connectors/obsidiandatasharing.md)
+
 ---
 
-### Okta Single Sign-On
+### [Okta Single Sign-On](connectors/oktasso.md)
 
 **Publisher:** Okta
 
@@ -3295,9 +3803,11 @@ The Obsidian Datasharing connector provides the capability to read raw event dat
 
 The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft Sentinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
 
+[→ View full connector details](connectors/oktasso.md)
+
 ---
 
-### Okta Single Sign-On
+### [Okta Single Sign-On](connectors/oktassov2.md)
 
 **Publisher:** Microsoft
 
@@ -3307,9 +3817,11 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 
 The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) data connector provides the capability to ingest audit and event logs from the Okta Sysem Log API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform and uses the Okta System Log API to fetch the events. The connector supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/oktassov2.md)
+
 ---
 
-### Okta Single Sign-On (Polling CCP)
+### [Okta Single Sign-On (Polling CCP)](connectors/oktasso-polling.md)
 
 **Publisher:** Okta
 
@@ -3319,9 +3831,11 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) d
 
 The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft entinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
 
+[→ View full connector details](connectors/oktasso-polling.md)
+
 ---
 
-### Onapsis Defend Integration
+### [Onapsis Defend Integration](connectors/onapsis.md)
 
 **Publisher:** Onapsis Platform
 
@@ -3331,9 +3845,11 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 
 Onapsis Defend Integration is aimed at forwarding alerts and logs collected and detected by Onapsis Platform into Microsoft Sentinel SIEM
 
+[→ View full connector details](connectors/onapsis.md)
+
 ---
 
-### One Identity Safeguard
+### [One Identity Safeguard](connectors/oneidentity.md)
 
 **Publisher:** One Identity LLC.
 
@@ -3343,9 +3859,11 @@ Onapsis Defend Integration is aimed at forwarding alerts and logs collected and 
 
 The One Identity Safeguard (CEF) Sentinel data connector enhances the standard Common Event Format (CEF) connector with Safeguard for Privileged Sessions-specific dashboards. Use this connector to easily start utilizing the events generated by your device for visualization, alerts, investigations and more.
 
+[→ View full connector details](connectors/oneidentity.md)
+
 ---
 
-### OneLogin IAM Platform (via Codeless Connector Framework)
+### [OneLogin IAM Platform (via Codeless Connector Framework)](connectors/oneloginiamlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3355,9 +3873,11 @@ The One Identity Safeguard (CEF) Sentinel data connector enhances the standard C
 
 The [OneLogin](https://www.onelogin.com/) data connector provides the capability to ingest common OneLogin IAM Platform events into Microsoft Sentinel through REST API by using OneLogin [Events API](https://developers.onelogin.com/api-docs/1/events/get-events) and OneLogin [Users API](https://developers.onelogin.com/api-docs/1/users/get-users). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/oneloginiamlogsccpdefinition.md)
+
 ---
 
-### OneTrust
+### [OneTrust](connectors/onetrustpush.md)
 
 **Publisher:** OneTrust
 
@@ -3367,9 +3887,11 @@ The [OneLogin](https://www.onelogin.com/) data connector provides the capability
 
 The OneTrust connector for Microsoft Sentinel provides the capability to have near real time visibility into where sensitive data has been located or remediated across across Google Cloud and other OneTrust supported data sources.
 
+[→ View full connector details](connectors/onetrustpush.md)
+
 ---
 
-### Oracle Cloud Infrastructure (via Codeless Connector Framework)
+### [Oracle Cloud Infrastructure (via Codeless Connector Framework)](connectors/oci-connector-ccp-definition.md)
 
 **Publisher:** Microsoft
 
@@ -3379,9 +3901,11 @@ The OneTrust connector for Microsoft Sentinel provides the capability to have ne
 
 The Oracle Cloud Infrastructure (OCI) data connector provides the capability to ingest OCI Logs from [OCI Stream](https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm) into Microsoft Sentinel using the [OCI Streaming REST API](https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418).
 
+[→ View full connector details](connectors/oci-connector-ccp-definition.md)
+
 ---
 
-### Orca Security Alerts
+### [Orca Security Alerts](connectors/orcasecurityalerts.md)
 
 **Publisher:** Orca Security
 
@@ -3391,11 +3915,13 @@ The Oracle Cloud Infrastructure (OCI) data connector provides the capability to 
 
 The Orca Security Alerts connector allows you to easily export Alerts logs to Microsoft Sentinel.
 
+[→ View full connector details](connectors/orcasecurityalerts.md)
+
 ---
 
 ## P
 
-### Palo Alto Cortex XDR
+### [Palo Alto Cortex XDR](connectors/cortexxdrdataconnector.md)
 
 **Publisher:** Microsoft
 
@@ -3405,9 +3931,11 @@ The Orca Security Alerts connector allows you to easily export Alerts logs to Mi
 
 The [Palo Alto Cortex XDR](https://cortex-panw.stoplight.io/docs/cortex-xdr/branches/main/09agw06t5dpvw-cortex-xdr-rest-api) data connector allows ingesting logs from the Palo Alto Cortex XDR API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the Palo Alto Cortex XDR API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/cortexxdrdataconnector.md)
+
 ---
 
-### Palo Alto Cortex Xpanse (via Codeless Connector Framework)
+### [Palo Alto Cortex Xpanse (via Codeless Connector Framework)](connectors/paloaltoexpanseccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3417,9 +3945,11 @@ The [Palo Alto Cortex XDR](https://cortex-panw.stoplight.io/docs/cortex-xdr/bran
 
 The Palo Alto Cortex Xpanse data connector ingests alerts data into Microsoft Sentinel.
 
+[→ View full connector details](connectors/paloaltoexpanseccpdefinition.md)
+
 ---
 
-### Palo Alto Networks Cortex XDR
+### [Palo Alto Networks Cortex XDR](connectors/paloaltonetworkscortex.md)
 
 **Publisher:** Palo Alto Networks
 
@@ -3429,9 +3959,11 @@ The Palo Alto Cortex Xpanse data connector ingests alerts data into Microsoft Se
 
 The Palo Alto Networks Cortex XDR connector gives you an easy way to connect to your Cortex XDR logs with Microsoft Sentinel. This increases the visibility of your endpoint security. It will give you better ability to monitor your resources by creating custom Workbooks, analytics rules, Incident investigation, and evidence gathering.
 
+[→ View full connector details](connectors/paloaltonetworkscortex.md)
+
 ---
 
-### Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)
+### [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](connectors/paloaltoprismacloudcspmccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3441,9 +3973,11 @@ The Palo Alto Networks Cortex XDR connector gives you an easy way to connect to 
 
 The Palo Alto Prisma Cloud CSPM data connector allows you to connect to your Palo Alto Prisma Cloud CSPM instance and ingesting Alerts (https://pan.dev/prisma-cloud/api/cspm/alerts/) & Audit Logs(https://pan.dev/prisma-cloud/api/cspm/audit-logs/) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/paloaltoprismacloudcspmccpdefinition.md)
+
 ---
 
-### Palo Alto Prisma Cloud CWPP (using REST API)
+### [Palo Alto Prisma Cloud CWPP (using REST API)](connectors/paloaltoprismacloudcwpp.md)
 
 **Publisher:** Microsoft
 
@@ -3453,9 +3987,11 @@ The Palo Alto Prisma Cloud CSPM data connector allows you to connect to your Pal
 
 The [Palo Alto Prisma Cloud CWPP](https://prisma.pan.dev/api/cloud/cwpp/audits/#operation/get-audits-incidents) data connector allows you to connect to your Palo Alto Prisma Cloud CWPP instance and ingesting alerts into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Platform and uses the Prisma Cloud API to fetch security events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/paloaltoprismacloudcwpp.md)
+
 ---
 
-### Palo Alto Prisma Cloud CWPP (using REST API)
+### [Palo Alto Prisma Cloud CWPP (using REST API)](connectors/prismacloudcomputenativepoller.md)
 
 **Publisher:** Microsoft
 
@@ -3465,9 +4001,11 @@ The [Palo Alto Prisma Cloud CWPP](https://prisma.pan.dev/api/cloud/cwpp/audits/#
 
 The [Palo Alto Prisma Cloud CWPP](https://prisma.pan.dev/api/cloud/cwpp/audits/#operation/get-audits-incidents) data connector allows you to connect to your Prisma Cloud CWPP instance and ingesting alerts into Microsoft Sentinel. The data connector is built on Microsoft Sentinel’s Codeless Connector Platform and uses the Prisma Cloud API to fetch security events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/prismacloudcomputenativepoller.md)
+
 ---
 
-### Pathlock Inc.: Threat Detection and Response for SAP
+### [Pathlock Inc.: Threat Detection and Response for SAP](connectors/pathlock-tdnr.md)
 
 **Publisher:** Pathlock Inc.
 
@@ -3483,9 +4021,11 @@ This precision-driven approach helps security teams drastically reduce false pos
 
 By combining business-context intelligence with advanced analytics, Pathlock enables enterprises to strengthen detection accuracy, streamline response actions, and maintain continuous control across their SAP environments—without adding complexity or redundant monitoring layers.
 
+[→ View full connector details](connectors/pathlock-tdnr.md)
+
 ---
 
-### Perimeter 81 Activity Logs
+### [Perimeter 81 Activity Logs](connectors/perimeter81activitylogs.md)
 
 **Publisher:** Perimeter 81
 
@@ -3495,9 +4035,11 @@ By combining business-context intelligence with advanced analytics, Pathlock ena
 
 The Perimeter 81 Activity Logs connector allows you to easily connect your Perimeter 81 activity logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.
 
+[→ View full connector details](connectors/perimeter81activitylogs.md)
+
 ---
 
-### Phosphorus Devices
+### [Phosphorus Devices](connectors/phosphorus-polling.md)
 
 **Publisher:** Phosphorus Inc.
 
@@ -3507,9 +4049,11 @@ The Perimeter 81 Activity Logs connector allows you to easily connect your Perim
 
 The Phosphorus Device Connector provides the capability to Phosphorus to ingest device data logs into Microsoft Sentinel through the Phosphorus REST API. The Connector provides visibility into the devices enrolled in Phosphorus. This Data Connector pulls devices information along with its corresponding alerts.
 
+[→ View full connector details](connectors/phosphorus-polling.md)
+
 ---
 
-### Ping One (via Codeless Connector Framework)
+### [Ping One (via Codeless Connector Framework)](connectors/pingoneauditlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3519,9 +4063,11 @@ The Phosphorus Device Connector provides the capability to Phosphorus to ingest 
 
 This connector ingests **audit activity logs** from the PingOne Identity platform into Microsoft Sentinel using a Codeless Connector Framework.
 
+[→ View full connector details](connectors/pingoneauditlogsccpdefinition.md)
+
 ---
 
-### Prancer Data Connector
+### [Prancer Data Connector](connectors/prancerlogdata.md)
 
 **Publisher:** Prancer
 
@@ -3531,9 +4077,11 @@ This connector ingests **audit activity logs** from the PingOne Identity platfor
 
 The Prancer Data Connector has provides the capability to ingest Prancer (CSPM)[https://docs.prancer.io/web/CSPM/] and [PAC](https://docs.prancer.io/web/PAC/introduction/) data to process through Microsoft Sentinel. Refer to [Prancer Documentation](https://docs.prancer.io/web) for more information.
 
+[→ View full connector details](connectors/prancerlogdata.md)
+
 ---
 
-### Premium Microsoft Defender Threat Intelligence
+### [Premium Microsoft Defender Threat Intelligence](connectors/premiummicrosoftdefenderforthreatintelligence.md)
 
 **Publisher:** Microsoft
 
@@ -3543,9 +4091,11 @@ The Prancer Data Connector has provides the capability to ingest Prancer (CSPM)[
 
 Microsoft Sentinel provides you the capability to import threat intelligence generated by Microsoft to enable monitoring, alerting and hunting. Use this data connector to import Indicators of Compromise (IOCs) from Premium Microsoft Defender Threat Intelligence (MDTI) into Microsoft Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes, etc. Note: This is a paid connector. To use and ingest data from it, please purchase the "MDTI API Access" SKU from the Partner Center.
 
+[→ View full connector details](connectors/premiummicrosoftdefenderforthreatintelligence.md)
+
 ---
 
-### Proofpoint On Demand Email Security (via Codeless Connector Platform)
+### [Proofpoint On Demand Email Security (via Codeless Connector Platform)](connectors/proofpointccpdefinition.md)
 
 **Publisher:** Proofpoint
 
@@ -3555,9 +4105,11 @@ Microsoft Sentinel provides you the capability to import threat intelligence gen
 
 Proofpoint On Demand Email Security data connector provides the capability to get Proofpoint on Demand Email Protection data, allows users to check message traceability, monitoring into email activity, threats,and data exfiltration by attackers and malicious insiders. The connector provides ability to review events in your org on an accelerated basis, get event log files in hourly increments for recent activity.
 
+[→ View full connector details](connectors/proofpointccpdefinition.md)
+
 ---
 
-### Proofpoint TAP (via Codeless Connector Platform)
+### [Proofpoint TAP (via Codeless Connector Platform)](connectors/proofpointtapv2.md)
 
 **Publisher:** Proofpoint
 
@@ -3567,11 +4119,13 @@ Proofpoint On Demand Email Security data connector provides the capability to ge
 
 The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
 
+[→ View full connector details](connectors/proofpointtapv2.md)
+
 ---
 
 ## Q
 
-### QscoutAppEventsConnector
+### [QscoutAppEventsConnector](connectors/qscoutappeventsccfdefinition.md)
 
 **Publisher:** Quokka
 
@@ -3581,9 +4135,11 @@ The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/
 
 Ingest Qscout application events into Microsoft Sentinel
 
+[→ View full connector details](connectors/qscoutappeventsccfdefinition.md)
+
 ---
 
-### Qualys VM KnowledgeBase
+### [Qualys VM KnowledgeBase](connectors/qualyskb.md)
 
 **Publisher:** Qualys
 
@@ -3595,9 +4151,11 @@ The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerabi
 
  This data can used to correlate and enrich vulnerability detections found by the [Qualys Vulnerability Management (VM)](https://docs.microsoft.com/azure/sentinel/connect-qualys-vm) data connector.
 
+[→ View full connector details](connectors/qualyskb.md)
+
 ---
 
-### Qualys Vulnerability Management (via Codeless Connector Framework)
+### [Qualys Vulnerability Management (via Codeless Connector Framework)](connectors/qualysvmlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3607,11 +4165,13 @@ The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerabi
 
 The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerability-management/) data connector provides the capability to ingest vulnerability host detection data into Microsoft Sentinel through the Qualys API. The connector provides visibility into host detection data from vulerability scans.
 
+[→ View full connector details](connectors/qualysvmlogsccpdefinition.md)
+
 ---
 
 ## R
 
-### RSA ID Plus Admin Logs Connector
+### [RSA ID Plus Admin Logs Connector](connectors/rsaidplus-adminglogs-connector.md)
 
 **Publisher:** RSA
 
@@ -3621,9 +4181,11 @@ The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerabi
 
 The RSA ID Plus AdminLogs Connector provides the capability to ingest [Cloud Admin Console Audit Events](https://community.rsa.com/s/article/Cloud-Administration-Event-Log-API-5d22ba17) into Microsoft Sentinel using Cloud Admin APIs.
 
+[→ View full connector details](connectors/rsaidplus-adminglogs-connector.md)
+
 ---
 
-### Radiflow iSID via AMA
+### [Radiflow iSID via AMA](connectors/radiflowisid.md)
 
 **Publisher:** Radiflow
 
@@ -3633,9 +4195,11 @@ The RSA ID Plus AdminLogs Connector provides the capability to ingest [Cloud Adm
 
 iSID enables non-disruptive monitoring of distributed ICS networks for changes in topology and behavior, using multiple security packages, each offering a unique capability pertaining to a specific type of network activity
 
+[→ View full connector details](connectors/radiflowisid.md)
+
 ---
 
-### Rapid7 Insight Platform Vulnerability Management Reports
+### [Rapid7 Insight Platform Vulnerability Management Reports](connectors/insightvmcloudapi.md)
 
 **Publisher:** Rapid7
 
@@ -3645,9 +4209,11 @@ iSID enables non-disruptive monitoring of distributed ICS networks for changes i
 
 The [Rapid7 Insight VM](https://www.rapid7.com/products/insightvm/) Report data connector provides the capability to ingest Scan reports and vulnerability data into Microsoft Sentinel through the REST API from the  Rapid7 Insight platform (Managed in the cloud). Refer to [API documentation](https://docs.rapid7.com/insight/api-overview/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/insightvmcloudapi.md)
+
 ---
 
-### Red Canary Threat Detection
+### [Red Canary Threat Detection](connectors/redcanarydataconnector.md)
 
 **Publisher:** Red Canary
 
@@ -3657,9 +4223,11 @@ The [Rapid7 Insight VM](https://www.rapid7.com/products/insightvm/) Report data 
 
 The Red Canary data connector provides the capability to ingest published Detections into Microsoft Sentinel using the Data Collector REST API.
 
+[→ View full connector details](connectors/redcanarydataconnector.md)
+
 ---
 
-### Rubrik Security Cloud data connector
+### [Rubrik Security Cloud data connector](connectors/rubriksecuritycloudazurefunctions.md)
 
 **Publisher:** Rubrik, Inc
 
@@ -3669,11 +4237,13 @@ The Red Canary data connector provides the capability to ingest published Detect
 
 The Rubrik Security Cloud data connector enables security operations teams to integrate insights from Rubrik's Data Observability services into Microsoft Sentinel. The insights include identification of anomalous filesystem behavior associated with ransomware and mass deletion, assess the blast radius of a ransomware attack, and sensitive data operators to prioritize and more rapidly investigate potential incidents.
 
+[→ View full connector details](connectors/rubriksecuritycloudazurefunctions.md)
+
 ---
 
 ## S
 
-### SAP BTP
+### [SAP BTP](connectors/sapbtpauditevents.md)
 
 **Publisher:** Microsoft
 
@@ -3683,9 +4253,11 @@ The Rubrik Security Cloud data connector enables security operations teams to in
 
 SAP Business Technology Platform (SAP BTP) brings together data management, analytics, artificial intelligence, application development, automation, and integration in one, unified environment.
 
+[→ View full connector details](connectors/sapbtpauditevents.md)
+
 ---
 
-### SAP Enterprise Threat Detection, cloud edition
+### [SAP Enterprise Threat Detection, cloud edition](connectors/sapetdalerts.md)
 
 **Publisher:** SAP
 
@@ -3695,9 +4267,11 @@ SAP Business Technology Platform (SAP BTP) brings together data management, anal
 
 The SAP Enterprise Threat Detection, cloud edition (ETD) data connector enables ingestion of security alerts from ETD into Microsoft Sentinel, supporting cross-correlation, alerting, and threat hunting.
 
+[→ View full connector details](connectors/sapetdalerts.md)
+
 ---
 
-### SAP LogServ (RISE), S/4HANA Cloud private edition
+### [SAP LogServ (RISE), S/4HANA Cloud private edition](connectors/saplogserv.md)
 
 **Publisher:** SAP SE
 
@@ -3710,9 +4284,11 @@ SAP LogServ is an SAP Enterprise Cloud Services (ECS) service aimed at collectio
 Near Realtime Log Collection: With ability to integrate into Microsoft Sentinel as SIEM solution.
 LogServ complements the existing SAP application layer threat monitoring and detections in Microsoft Sentinel with the log types owned by SAP ECS as the system provider. This includes logs like: SAP Security Audit Log (AS ABAP), HANA database, AS JAVA, ICM, SAP Web Dispatcher, SAP Cloud Connector, OS, SAP Gateway, 3rd party Database, Network, DNS, Proxy, Firewall
 
+[→ View full connector details](connectors/saplogserv.md)
+
 ---
 
-### SAP S/4HANA Cloud Public Edition
+### [SAP S/4HANA Cloud Public Edition](connectors/saps4publicalerts.md)
 
 **Publisher:** SAP
 
@@ -3722,9 +4298,11 @@ LogServ complements the existing SAP application layer threat monitoring and det
 
 The SAP S/4HANA Cloud Public Edition (GROW with SAP) data connector enables ingestion of SAP's security audit log into the Microsoft Sentinel Solution for SAP, supporting cross-correlation, alerting, and threat hunting. Looking for alternative authentication mechanisms? See [here](https://github.com/Azure-Samples/Sentinel-For-SAP-Community/tree/main/integration-artifacts).
 
+[→ View full connector details](connectors/saps4publicalerts.md)
+
 ---
 
-### SINEC Security Guard
+### [SINEC Security Guard](connectors/ssg.md)
 
 **Publisher:** Siemens AG
 
@@ -3734,9 +4312,11 @@ The SAP S/4HANA Cloud Public Edition (GROW with SAP) data connector enables inge
 
 The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest security events of your industrial networks from the [SINEC Security Guard](https://siemens.com/sinec-security-guard) into Microsoft Sentinel
 
+[→ View full connector details](connectors/ssg.md)
+
 ---
 
-### SaaS Security
+### [SaaS Security](connectors/valencesecurity.md)
 
 **Publisher:** Valence Security
 
@@ -3746,9 +4326,11 @@ The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest se
 
 Connects the Valence SaaS security platform Azure Log Analytics via the REST API interface.
 
+[→ View full connector details](connectors/valencesecurity.md)
+
 ---
 
-### SailPoint IdentityNow
+### [SailPoint IdentityNow](connectors/sailpointidentitynow.md)
 
 **Publisher:** SailPoint
 
@@ -3758,9 +4340,11 @@ Connects the Valence SaaS security platform Azure Log Analytics via the REST API
 
 The [SailPoint](https://www.sailpoint.com/) IdentityNow data connector provides the capability to ingest [SailPoint IdentityNow] search events into Microsoft Sentinel through the REST API. The connector provides customers the ability to extract audit information from their IdentityNow tenant. It is intended to make it even easier to bring IdentityNow user activity and governance events into Microsoft Sentinel to improve insights from your security incident and event monitoring solution.
 
+[→ View full connector details](connectors/sailpointidentitynow.md)
+
 ---
 
-### Salesforce Service Cloud (via Codeless Connector Framework)
+### [Salesforce Service Cloud (via Codeless Connector Framework)](connectors/salesforceservicecloudccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3770,9 +4354,11 @@ The [SailPoint](https://www.sailpoint.com/) IdentityNow data connector provides 
 
 The Salesforce Service Cloud data connector provides the capability to ingest information about your Salesforce operational events into Microsoft Sentinel through the REST API. The connector provides ability to review events in your org on an accelerated basis, get [event log files](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/event_log_file_hourly_overview.htm) in hourly increments for recent activity.
 
+[→ View full connector details](connectors/salesforceservicecloudccpdefinition.md)
+
 ---
 
-### Samsung Knox Asset Intelligence
+### [Samsung Knox Asset Intelligence](connectors/samsungdcdefinition.md)
 
 **Publisher:** Samsung
 
@@ -3782,9 +4368,11 @@ The Salesforce Service Cloud data connector provides the capability to ingest in
 
 Samsung Knox Asset Intelligence Data Connector lets you centralize your mobile security events and logs in order to view customized insights using the Workbook template, and identify incidents based on Analytics Rules templates.
 
+[→ View full connector details](connectors/samsungdcdefinition.md)
+
 ---
 
-### Security Events via Legacy Agent
+### [Security Events via Legacy Agent](connectors/securityevents.md)
 
 **Publisher:** Microsoft
 
@@ -3794,9 +4382,11 @@ Samsung Knox Asset Intelligence Data Connector lets you centralize your mobile s
 
 You can stream all security events from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220093&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/securityevents.md)
+
 ---
 
-### SecurityBridge Solution for SAP
+### [SecurityBridge Solution for SAP](connectors/securitybridge.md)
 
 **Publisher:** SecurityBridge Group GmbH
 
@@ -3806,9 +4396,11 @@ You can stream all security events from the Windows machines connected to your M
 
 SecurityBridge enhances SAP security by integrating seamlessly with Microsoft Sentinel, enabling real-time monitoring and threat detection across SAP environments. This integration allows Security Operations Centers (SOCs) to consolidate SAP security events with other organizational data, providing a unified view of the threat landscape . Leveraging AI-powered analytics and Microsoft’s Security Copilot, SecurityBridge identifies sophisticated attack patterns and vulnerabilities within SAP applications, including ABAP code scanning and configuration assessments . The solution supports scalable deployments across complex SAP landscapes, whether on-premises, in the cloud, or hybrid environments . By bridging the gap between IT and SAP security teams, SecurityBridge empowers organizations to proactively detect, investigate, and respond to threats, enhancing overall security posture.
 
+[→ View full connector details](connectors/securitybridge.md)
+
 ---
 
-### SecurityBridge Threat Detection for SAP
+### [SecurityBridge Threat Detection for SAP](connectors/securitybridgesap.md)
 
 **Publisher:** SecurityBridge
 
@@ -3818,9 +4410,11 @@ SecurityBridge enhances SAP security by integrating seamlessly with Microsoft Se
 
 SecurityBridge is the first and only holistic, natively integrated security platform, addressing all aspects needed to protect organizations running SAP from internal and external threats against their core business applications. The SecurityBridge platform is an SAP-certified add-on, used by organizations around the globe, and addresses the clients’ need for advanced cybersecurity, real-time monitoring, compliance, code security, and patching to protect against internal and external threats.This Microsoft Sentinel Solution allows you to integrate SecurityBridge Threat Detection events from all your on-premise and cloud based SAP instances into your security monitoring.Use this Microsoft Sentinel Solution to receive normalized and speaking security events, pre-built dashboards and out-of-the-box templates for your SAP security monitoring.
 
+[→ View full connector details](connectors/securitybridgesap.md)
+
 ---
 
-### SecurityScorecard Cybersecurity Ratings
+### [SecurityScorecard Cybersecurity Ratings](connectors/securityscorecardratingsazurefunctions.md)
 
 **Publisher:** SecurityScorecard
 
@@ -3830,9 +4424,11 @@ SecurityBridge is the first and only holistic, natively integrated security plat
 
 SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScorecard](https://www.SecurityScorecard.com/) data connector provides the ability for Sentinel to import SecurityScorecard ratings as logs. SecurityScorecard provides ratings for over 12 million companies and domains using countless data points from across the internet. Maintain full awareness of any company's security posture and be able to receive timely updates when scores change or drop. SecurityScorecard ratings are updated daily based on evidence collected across the web.
 
+[→ View full connector details](connectors/securityscorecardratingsazurefunctions.md)
+
 ---
 
-### SecurityScorecard Factor
+### [SecurityScorecard Factor](connectors/securityscorecardfactorazurefunctions.md)
 
 **Publisher:** SecurityScorecard
 
@@ -3842,9 +4438,11 @@ SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScor
 
 SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScorecard](https://www.SecurityScorecard.com/) Factors data connector provides the ability for Sentinel to import SecurityScorecard factor ratings as logs. SecurityScorecard provides ratings for over 12 million companies and domains using countless data points from across the internet. Maintain full awareness of any company's security posture and be able to receive timely updates when factor scores change or drop. SecurityScorecard factor ratings are updated daily based on evidence collected across the web.
 
+[→ View full connector details](connectors/securityscorecardfactorazurefunctions.md)
+
 ---
 
-### SecurityScorecard Issue
+### [SecurityScorecard Issue](connectors/securityscorecardissueazurefunctions.md)
 
 **Publisher:** SecurityScorecard
 
@@ -3854,9 +4452,11 @@ SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScor
 
 SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScorecard](https://www.SecurityScorecard.com/) Issues data connector provides the ability for Sentinel to import SecurityScorecard issue data as logs. SecurityScorecard provides ratings for over 12 million companies and domains using countless data points from across the internet. Maintain full awareness of any company's security posture and be able to receive timely updates when new cybersecurity issues are discovered.
 
+[→ View full connector details](connectors/securityscorecardissueazurefunctions.md)
+
 ---
 
-### Semperis Directory Services Protector
+### [Semperis Directory Services Protector](connectors/semperisdsp.md)
 
 **Publisher:** SEMPERIS
 
@@ -3867,9 +4467,11 @@ SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScor
 Semperis Directory Services Protector data connector allows for the export of its Windows event logs (i.e. Indicators of Exposure and Indicators of Compromise) to Microsoft Sentinel in real time.
 It provides a data parser to manipulate the Windows event logs more easily. The different workbooks ease your Active Directory security monitoring and provide different ways to visualize the data. The analytic templates allow to automate responses regarding different events, exposures, or attacks.
 
+[→ View full connector details](connectors/semperisdsp.md)
+
 ---
 
-### SenservaPro (Preview)
+### [SenservaPro (Preview)](connectors/senservapro.md)
 
 **Publisher:** Senserva
 
@@ -3879,9 +4481,11 @@ It provides a data parser to manipulate the Windows event logs more easily. The 
 
 The SenservaPro data connector provides a viewing experience for your SenservaPro scanning logs. View dashboards of your data, use queries to hunt & explore, and create custom alerts.
 
+[→ View full connector details](connectors/senservapro.md)
+
 ---
 
-### SentinelOne
+### [SentinelOne](connectors/sentinelone.md)
 
 **Publisher:** SentinelOne
 
@@ -3891,9 +4495,11 @@ The SenservaPro data connector provides a viewing experience for your SenservaPr
 
 The [SentinelOne](https://www.sentinelone.com/) data connector provides the capability to ingest common SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API. Refer to API documentation: `https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview` for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/sentinelone.md)
+
 ---
 
-### SentinelOne
+### [SentinelOne](connectors/sentineloneccp.md)
 
 **Publisher:** Microsoft
 
@@ -3903,9 +4509,11 @@ The [SentinelOne](https://www.sentinelone.com/) data connector provides the capa
 
 The [SentinelOne](https://usea1-nessat.sentinelone.net/api-doc/overview) data connector allows ingesting logs from the SentinelOne API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SentinelOne API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.
 
+[→ View full connector details](connectors/sentineloneccp.md)
+
 ---
 
-### Seraphic Web Security
+### [Seraphic Web Security](connectors/seraphicwebsecurity.md)
 
 **Publisher:** Seraphic
 
@@ -3915,9 +4523,11 @@ The [SentinelOne](https://usea1-nessat.sentinelone.net/api-doc/overview) data co
 
 The Seraphic Web Security data connector provides the capability to ingest [Seraphic Web Security](https://seraphicsecurity.com/) events and alerts into Microsoft Sentinel.
 
+[→ View full connector details](connectors/seraphicwebsecurity.md)
+
 ---
 
-### Sevco Platform - Devices
+### [Sevco Platform - Devices](connectors/sevcodevices.md)
 
 **Publisher:** Sevco Security
 
@@ -3929,9 +4539,11 @@ The Sevco Platform - Devices connector allows you to easily connect your Sevco D
 
 [For more information >​](https://docs.sev.co/docs/microsoft-sentinel-inventory)
 
+[→ View full connector details](connectors/sevcodevices.md)
+
 ---
 
-### Silverfort Admin Console
+### [Silverfort Admin Console](connectors/silverfortama.md)
 
 **Publisher:** Silverfort
 
@@ -3943,9 +4555,11 @@ The [Silverfort](https://silverfort.com) ITDR Admin Console connector solution a
  Silverfort provides syslog based events and logging using Common Event Format (CEF). By forwarding your Silverfort ITDR Admin Console CEF data into Microsoft Sentinel, you can take advantage of Sentinels's search & correlation, alerting, and threat intelligence enrichment on Silverfort data. 
  Please contact Silverfort or consult the Silverfort documentation for more information.
 
+[→ View full connector details](connectors/silverfortama.md)
+
 ---
 
-### Slack
+### [Slack](connectors/slackaudit.md)
 
 **Publisher:** Slack
 
@@ -3955,9 +4569,11 @@ The [Silverfort](https://silverfort.com) ITDR Admin Console connector solution a
 
 The [Slack](https://slack.com) data connector provides the capability to ingest [Slack Audit Records](https://api.slack.com/admins/audit-logs) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs#the_audit_event) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more. This data connector uses Microsoft Sentinel native polling capability.
 
+[→ View full connector details](connectors/slackaudit.md)
+
 ---
 
-### SlackAudit (via Codeless Connector Framework)
+### [SlackAudit (via Codeless Connector Framework)](connectors/slackauditlogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3967,9 +4583,11 @@ The [Slack](https://slack.com) data connector provides the capability to ingest 
 
 The SlackAudit data connector provides the capability to ingest [Slack Audit logs](https://api.slack.com/admins/audit-logs) into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs-call) for more information.
 
+[→ View full connector details](connectors/slackauditlogsccpdefinition.md)
+
 ---
 
-### Snowflake (via Codeless Connector Framework)
+### [Snowflake (via Codeless Connector Framework)](connectors/snowflakelogsccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -3979,9 +4597,11 @@ The SlackAudit data connector provides the capability to ingest [Slack Audit log
 
 The Snowflake data connector provides the capability to ingest Snowflake [Login History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/login_history), [Query History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/query_history), [User-Grant Logs](https://docs.snowflake.com/en/sql-reference/account-usage/grants_to_users), [Role-Grant Logs](https://docs.snowflake.com/en/sql-reference/account-usage/grants_to_roles), [Load History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/load_history), [Materialized View Refresh History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/materialized_view_refresh_history), [Roles Logs](https://docs.snowflake.com/en/sql-reference/account-usage/roles), [Tables Logs](https://docs.snowflake.com/en/sql-reference/account-usage/tables), [Table Storage Metrics Logs](https://docs.snowflake.com/en/sql-reference/account-usage/table_storage_metrics), [Users Logs](https://docs.snowflake.com/en/sql-reference/account-usage/users) into Microsoft Sentinel using the Snowflake SQL API. Refer to [Snowflake SQL API documentation](https://docs.snowflake.com/en/developer-guide/sql-api/reference) for more information.
 
+[→ View full connector details](connectors/snowflakelogsccpdefinition.md)
+
 ---
 
-### Sonrai Data Connector
+### [Sonrai Data Connector](connectors/sonraidataconnector.md)
 
 **Publisher:** Sonrai
 
@@ -3991,9 +4611,11 @@ The Snowflake data connector provides the capability to ingest Snowflake [Login 
 
 Use this data connector to integrate with Sonrai Security and get Sonrai tickets sent directly to Microsoft Sentinel.
 
+[→ View full connector details](connectors/sonraidataconnector.md)
+
 ---
 
-### Sophos Cloud Optix
+### [Sophos Cloud Optix](connectors/sophoscloudoptix.md)
 
 **Publisher:** Sophos
 
@@ -4003,9 +4625,11 @@ Use this data connector to integrate with Sonrai Security and get Sonrai tickets
 
 The [Sophos Cloud Optix](https://www.sophos.com/products/cloud-optix.aspx) connector allows you to easily connect your Sophos Cloud Optix logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's cloud security and compliance posture and improves your cloud security operation capabilities.
 
+[→ View full connector details](connectors/sophoscloudoptix.md)
+
 ---
 
-### Sophos Endpoint Protection
+### [Sophos Endpoint Protection](connectors/sophosep.md)
 
 **Publisher:** Sophos
 
@@ -4015,9 +4639,11 @@ The [Sophos Cloud Optix](https://www.sophos.com/products/cloud-optix.aspx) conne
 
 The [Sophos Endpoint Protection](https://www.sophos.com/en-us/products/endpoint-antivirus.aspx) data connector provides the capability to ingest [Sophos events](https://docs.sophos.com/central/Customer/help/en-us/central/Customer/common/concepts/Events.html) into Microsoft Sentinel. Refer to [Sophos Central Admin documentation](https://docs.sophos.com/central/Customer/help/en-us/central/Customer/concepts/Logs.html) for more information.
 
+[→ View full connector details](connectors/sophosep.md)
+
 ---
 
-### Sophos Endpoint Protection (using REST API)
+### [Sophos Endpoint Protection (using REST API)](connectors/sophosendpointprotectionccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -4027,9 +4653,11 @@ The [Sophos Endpoint Protection](https://www.sophos.com/en-us/products/endpoint-
 
 The [Sophos Endpoint Protection](https://www.sophos.com/en-us/products/endpoint-antivirus.aspx) data connector provides the capability to ingest [Sophos events](https://developer.sophos.com/docs/siem-v1/1/routes/events/get) and [Sophos alerts](https://developer.sophos.com/docs/siem-v1/1/routes/alerts/get) into Microsoft Sentinel. Refer to [Sophos Central Admin documentation](https://docs.sophos.com/central/Customer/help/en-us/central/Customer/concepts/Logs.html) for more information.
 
+[→ View full connector details](connectors/sophosendpointprotectionccpdefinition.md)
+
 ---
 
-### Squadra Technologies secRMM
+### [Squadra Technologies secRMM](connectors/squadratechnologiessecrmm.md)
 
 **Publisher:** Squadra Technologies
 
@@ -4039,9 +4667,11 @@ The [Sophos Endpoint Protection](https://www.sophos.com/en-us/products/endpoint-
 
 Use the Squadra Technologies secRMM Data Connector to push USB removable storage security event data into Microsoft Sentinel Log Analytics.
 
+[→ View full connector details](connectors/squadratechnologiessecrmm.md)
+
 ---
 
-### StyxView Alerts (via Codeless Connector Platform)
+### [StyxView Alerts (via Codeless Connector Platform)](connectors/styxviewendpointconnectordefinition.md)
 
 **Publisher:** Styx Intelligence
 
@@ -4051,9 +4681,11 @@ Use the Squadra Technologies secRMM Data Connector to push USB removable storage
 
 The [StyxView Alerts](https://styxintel.com/) data connector enables seamless integration between the StyxView Alerts platform and Microsoft Sentinel. This connector ingests alert data from the StyxView Alerts API, allowing organizations to centralize and correlate actionable threat intelligence directly within their Microsoft Sentinel workspace.
 
+[→ View full connector details](connectors/styxviewendpointconnectordefinition.md)
+
 ---
 
-### Subscription-based Microsoft Defender for Cloud (Legacy)
+### [Subscription-based Microsoft Defender for Cloud (Legacy)](connectors/azuresecuritycenter.md)
 
 **Publisher:** Microsoft
 
@@ -4065,9 +4697,11 @@ Microsoft Defender for Cloud is a security management tool that allows you to de
 
 [For more information>](https://aka.ms/ASC-Connector)
 
+[→ View full connector details](connectors/azuresecuritycenter.md)
+
 ---
 
-### Symantec Integrated Cyber Defense Exchange
+### [Symantec Integrated Cyber Defense Exchange](connectors/symantec.md)
 
 **Publisher:** Symantec
 
@@ -4077,9 +4711,11 @@ Microsoft Defender for Cloud is a security management tool that allows you to de
 
 Symantec ICDx connector allows you to easily connect your Symantec security solutions logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/symantec.md)
+
 ---
 
-### Syslog via AMA
+### [Syslog via AMA](connectors/syslogama.md)
 
 **Publisher:** Microsoft
 
@@ -4091,9 +4727,11 @@ Syslog is an event logging protocol that is common to Linux. Applications will s
 
 [Learn more >](https://aka.ms/sysLogInfo)
 
+[→ View full connector details](connectors/syslogama.md)
+
 ---
 
-### Syslog via Legacy Agent
+### [Syslog via Legacy Agent](connectors/syslog.md)
 
 **Publisher:** Microsoft
 
@@ -4104,12 +4742,14 @@ Syslog is an event logging protocol that is common to Linux. Applications will s
 Syslog is an event logging protocol that is common to Linux. Applications will send messages that may be stored on the local machine or delivered to a Syslog collector. When the Agent for Linux is installed, it configures the local Syslog daemon to forward messages to the agent. The agent then sends the message to the workspace.
 
 [Learn more >](https://aka.ms/sysLogInfo)
+
+[→ View full connector details](connectors/syslog.md)
 
 ---
 
 ## T
 
-### Talon Insights
+### [Talon Insights](connectors/talonlogs.md)
 
 **Publisher:** Talon Security
 
@@ -4119,9 +4759,11 @@ Syslog is an event logging protocol that is common to Linux. Applications will s
 
 The Talon Security Logs connector allows you to easily connect your Talon events and audit logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.
 
+[→ View full connector details](connectors/talonlogs.md)
+
 ---
 
-### Team Cymru Scout Data Connector
+### [Team Cymru Scout Data Connector](connectors/teamcymruscout.md)
 
 **Publisher:** Team Cymru Scout
 
@@ -4131,9 +4773,11 @@ The Talon Security Logs connector allows you to easily connect your Talon events
 
 The [TeamCymruScout](https://scout.cymru.com/) Data Connector allows users to bring Team Cymru Scout IP, domain and account usage data in Microsoft Sentinel for enrichment.
 
+[→ View full connector details](connectors/teamcymruscout.md)
+
 ---
 
-### Tenable Identity Exposure
+### [Tenable Identity Exposure](connectors/tenableie.md)
 
 **Publisher:** Tenable
 
@@ -4143,9 +4787,11 @@ The [TeamCymruScout](https://scout.cymru.com/) Data Connector allows users to br
 
 Tenable Identity Exposure connector allows Indicators of Exposure, Indicators of Attack and trailflow logs to be ingested into Microsoft Sentinel.The different work books and data parsers allow you to more easily manipulate logs and monitor your Active Directory environment.  The analytic templates allow you to automate responses regarding different events, exposures and attacks.
 
+[→ View full connector details](connectors/tenableie.md)
+
 ---
 
-### Tenable Vulnerability Management
+### [Tenable Vulnerability Management](connectors/tenablevm.md)
 
 **Publisher:** Tenable
 
@@ -4155,9 +4801,11 @@ Tenable Identity Exposure connector allows Indicators of Exposure, Indicators of
 
 The TVM data connector provides the ability to ingest Asset, Vulnerability, Compliance, WAS assets and WAS vulnerabilities data into Microsoft Sentinel using TVM REST APIs. Refer to [API documentation](https://developer.tenable.com/reference) for more information. The connector provides the ability to get data which helps to examine potential security risks, get insight into your computing assets, diagnose configuration problems and more
 
+[→ View full connector details](connectors/tenablevm.md)
+
 ---
 
-### Tenable.ad
+### [Tenable.ad](connectors/tenable.ad.md)
 
 **Publisher:** Tenable
 
@@ -4168,9 +4816,11 @@ The TVM data connector provides the ability to ingest Asset, Vulnerability, Comp
 Tenable.ad connector allows to export Tenable.ad Indicators of Exposures, trailflow and Indicators of Attacks logs to Azure Sentinel in real time.
 It provides a data parser to manipulate the logs more easily. The different workbooks ease your Active Directory monitoring and provide different ways to visualize the data. The analytic templates allow to automate responses regarding different events, exposures, or attacks.
 
+[→ View full connector details](connectors/tenable.ad.md)
+
 ---
 
-### Tenable.io Vulnerability Management
+### [Tenable.io Vulnerability Management](connectors/tenableioapi.md)
 
 **Publisher:** Tenable
 
@@ -4180,9 +4830,11 @@ It provides a data parser to manipulate the logs more easily. The different work
 
 The [Tenable.io](https://www.tenable.com/products/tenable-io) data connector provides the capability to ingest Asset and Vulnerability data into Microsoft Sentinel through the REST API from the Tenable.io platform (Managed in the cloud). Refer to [API documentation](https://developer.tenable.com/reference) for more information. The connector provides the ability to get data which helps to examine potential security risks, get insight into your computing assets, diagnose configuration problems and more
 
+[→ View full connector details](connectors/tenableioapi.md)
+
 ---
 
-### Tenant-based Microsoft Defender for Cloud
+### [Tenant-based Microsoft Defender for Cloud](connectors/microsoftdefenderforcloudtenantbased.md)
 
 **Publisher:** Microsoft
 
@@ -4192,9 +4844,11 @@ The [Tenable.io](https://www.tenable.com/products/tenable-io) data connector pro
 
 Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your MDC security alerts from Microsoft 365 Defender into Microsoft Sentinel, so you can can leverage the advantages of XDR correlations connecting the dots across your cloud resources, devices and identities and view the data in workbooks, queries and investigate and respond to incidents. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2269832&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/microsoftdefenderforcloudtenantbased.md)
+
 ---
 
-### TheHive Project - TheHive
+### [TheHive Project - TheHive](connectors/thehiveprojectthehive.md)
 
 **Publisher:** TheHive Project
 
@@ -4204,9 +4858,11 @@ Microsoft Defender for Cloud is a security management tool that allows you to de
 
 The [TheHive](http://thehive-project.org/) data connector provides the capability to ingest common TheHive events into Microsoft Sentinel through Webhooks. TheHive can notify external system of modification events (case creation, alert update, task assignment) in real time. When a change occurs in the TheHive, an HTTPS POST request with event information is sent to a callback data connector URL.  Refer to [Webhooks documentation](https://docs.thehive-project.org/thehive/legacy/thehive3/admin/webhooks/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/thehiveprojectthehive.md)
+
 ---
 
-### Theom
+### [Theom](connectors/theom.md)
 
 **Publisher:** Theom
 
@@ -4216,9 +4872,11 @@ The [TheHive](http://thehive-project.org/) data connector provides the capabilit
 
 Theom Data Connector enables organizations to connect their Theom environment to Microsoft Sentinel. This solution enables users to receive alerts on data security risks, create and enrich incidents, check statistics and trigger SOAR playbooks in Microsoft Sentinel
 
+[→ View full connector details](connectors/theom.md)
+
 ---
 
-### Threat Intelligence Platforms
+### [Threat Intelligence Platforms](connectors/threatintelligence.md)
 
 **Publisher:** Microsoft
 
@@ -4228,9 +4886,11 @@ Theom Data Connector enables organizations to connect their Theom environment to
 
 Microsoft Sentinel integrates with Microsoft Graph Security API data sources to enable monitoring, alerting, and hunting using your threat intelligence. Use this connector to send threat indicators to Microsoft Sentinel from your Threat Intelligence Platform (TIP), such as Threat Connect, Palo Alto Networks MindMeld, MISP, or other integrated applications. Threat indicators can include IP addresses, domains, URLs, and file hashes. For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2223729&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/threatintelligence.md)
+
 ---
 
-### Threat Intelligence Upload API (Preview)
+### [Threat Intelligence Upload API (Preview)](connectors/threatintelligenceuploadindicatorsapi.md)
 
 **Publisher:** Microsoft
 
@@ -4240,9 +4900,11 @@ Microsoft Sentinel integrates with Microsoft Graph Security API data sources to 
 
 Microsoft Sentinel offers a data plane API to bring in threat intelligence from your Threat Intelligence Platform (TIP), such as Threat Connect, Palo Alto Networks MineMeld, MISP, or other integrated applications. Threat indicators can include IP addresses, domains, URLs, file hashes and email addresses. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2269830&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/threatintelligenceuploadindicatorsapi.md)
+
 ---
 
-### Threat intelligence - TAXII
+### [Threat intelligence - TAXII](connectors/threatintelligencetaxii.md)
 
 **Publisher:** Microsoft
 
@@ -4252,9 +4914,11 @@ Microsoft Sentinel offers a data plane API to bring in threat intelligence from 
 
 Microsoft Sentinel integrates with TAXII 2.0 and 2.1 data sources to enable monitoring, alerting, and hunting using your threat intelligence. Use this connector to send the supported STIX object types from TAXII servers to Microsoft Sentinel. Threat indicators can include IP addresses, domains, URLs, and file hashes. For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2224105&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/threatintelligencetaxii.md)
+
 ---
 
-### Threat intelligence - TAXII Export (Preview)
+### [Threat intelligence - TAXII Export (Preview)](connectors/threatintelligencetaxiiexport.md)
 
 **Publisher:** Microsoft
 
@@ -4264,9 +4928,11 @@ Microsoft Sentinel integrates with TAXII 2.0 and 2.1 data sources to enable moni
 
 Microsoft Sentinel integrates with TAXII 2.1 servers to enable exporting of your threat intelligence objects. Use this connector to send the supported STIX object types from Microsoft Sentinel to TAXII servers.
 
+[→ View full connector details](connectors/threatintelligencetaxiiexport.md)
+
 ---
 
-### Transmit Security Connector
+### [Transmit Security Connector](connectors/transmitsecurity.md)
 
 **Publisher:** TransmitSecurity
 
@@ -4276,9 +4942,11 @@ Microsoft Sentinel integrates with TAXII 2.1 servers to enable exporting of your
 
 The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. [Refer to API documentation for more information](https://developer.transmitsecurity.com/). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/transmitsecurity.md)
+
 ---
 
-### Trend Micro Cloud App Security
+### [Trend Micro Cloud App Security](connectors/trendmicrocas.md)
 
 **Publisher:** Trend Micro
 
@@ -4288,9 +4956,11 @@ The [Transmit Security] data connector provides the capability to ingest common 
 
 The [Trend Micro Cloud App Security](https://www.trendmicro.com/en_be/business/products/user-protection/sps/email-and-collaboration/cloud-app-security.html) data connector provides the capability to retrieve security event logs of the services that Cloud App Security protects and more events into Microsoft Sentinel through the Log Retrieval API. Refer to API [documentation](https://docs.trendmicro.com/en-us/enterprise/cloud-app-security-integration-api-online-help/supported-cloud-app-/log-retrieval-api/get-security-logs.aspx) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/trendmicrocas.md)
+
 ---
 
-### Trend Vision One
+### [Trend Vision One](connectors/trendmicroxdr.md)
 
 **Publisher:** Trend Micro
 
@@ -4302,11 +4972,13 @@ The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detect
 
 The Trend Vision One connector is supported in Microsoft Sentinel in the following regions: Australia East, Australia Southeast, Brazil South, Canada Central, Canada East, Central India, Central US, East Asia, East US, East US 2, France Central, Japan East, Korea Central, North Central US, North Europe, Norway East, South Africa North, South Central US, Southeast Asia, Sweden Central, Switzerland North, UAE North, UK South, UK West, West Europe, West US, West US 2, West US 3.
 
+[→ View full connector details](connectors/trendmicroxdr.md)
+
 ---
 
 ## V
 
-### VMRayThreatIntelligence
+### [VMRayThreatIntelligence](connectors/vmray.md)
 
 **Publisher:** VMRay
 
@@ -4316,9 +4988,11 @@ The Trend Vision One connector is supported in Microsoft Sentinel in the followi
 
 VMRayThreatIntelligence connector automatically generates and feeds threat intelligence for all submissions to VMRay, improving threat detection and incident response in Sentinel. This seamless integration empowers teams to proactively address emerging threats.
 
+[→ View full connector details](connectors/vmray.md)
+
 ---
 
-### VMware Carbon Black Cloud
+### [VMware Carbon Black Cloud](connectors/vmwarecarbonblack.md)
 
 **Publisher:** VMware
 
@@ -4328,9 +5002,11 @@ VMRayThreatIntelligence connector automatically generates and feeds threat intel
 
 The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-cloud.html) connector provides the capability to ingest Carbon Black data into Microsoft Sentinel. The connector provides visibility into Audit, Notification and Event logs in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
 
+[→ View full connector details](connectors/vmwarecarbonblack.md)
+
 ---
 
-### VMware Carbon Black Cloud via AWS S3
+### [VMware Carbon Black Cloud via AWS S3](connectors/carbonblackawss3.md)
 
 **Publisher:** Microsoft
 
@@ -4340,9 +5016,11 @@ The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-clo
 
 The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-cloud.html) via AWS S3 data connector provides the capability to ingest watchlist, alerts, auth and endpoints events via AWS S3 and stream them to ASIM normalized tables. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/carbonblackawss3.md)
+
 ---
 
-### VMware SD-WAN and SASE Connector
+### [VMware SD-WAN and SASE Connector](connectors/vmwaresdwan.md)
 
 **Publisher:** VMware by Broadcom
 
@@ -4352,9 +5030,11 @@ The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-clo
 
 The [VMware SD-WAN & SASE](https://sase.vmware.com) data connector offers the capability to ingest VMware SD-WAN and CWS events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://developer.vmware.com/apis/vmware-sase-platform/) for more information. The connector provides ability to get events which helps to examine potential network security issues, identify misconfigured network devices and monitor SD-WAN and SASE usage. If you have your own custom connector, make sure that the connector is deployed under an isolated Log Analytics Workspace first. In case of issues, questions or feature requests, please contact us via email on sase-siem-integration@vmware.com.
 
+[→ View full connector details](connectors/vmwaresdwan.md)
+
 ---
 
-### Varonis Purview Push Connector
+### [Varonis Purview Push Connector](connectors/varonispurviewpush.md)
 
 **Publisher:** Varonis
 
@@ -4364,9 +5044,11 @@ The [VMware SD-WAN & SASE](https://sase.vmware.com) data connector offers the ca
 
 The [Varonis Purview](https://www.varonis.com/) connector provides the capability to sync resources from Varonis to Microsoft Purview.
 
+[→ View full connector details](connectors/varonispurviewpush.md)
+
 ---
 
-### Varonis SaaS
+### [Varonis SaaS](connectors/varonissaas.md)
 
 **Publisher:** Varonis
 
@@ -4378,9 +5060,11 @@ Varonis SaaS provides the capability to ingest [Varonis Alerts](https://www.varo
 
 Varonis prioritizes deep data visibility, classification capabilities, and automated remediation for data access. Varonis builds a single prioritized view of risk for your data, so you can proactively and systematically eliminate risk from insider threats and cyberattacks.
 
+[→ View full connector details](connectors/varonissaas.md)
+
 ---
 
-### Vectra XDR
+### [Vectra XDR](connectors/vectraxdr.md)
 
 **Publisher:** Vectra
 
@@ -4390,9 +5074,11 @@ Varonis prioritizes deep data visibility, classification capabilities, and autom
 
 The [Vectra XDR](https://www.vectra.ai/) connector gives the capability to ingest Vectra Detections, Audits, Entity Scoring, Lockdown, Health and Entities data into Microsoft Sentinel through the Vectra REST API. Refer to the API documentation: `https://support.vectra.ai/s/article/KB-VS-1666` for more information.
 
+[→ View full connector details](connectors/vectraxdr.md)
+
 ---
 
-### Veeam Data Connector (using Azure Functions)
+### [Veeam Data Connector (using Azure Functions)](connectors/veeamcustomtablesdataconnector.md)
 
 **Publisher:** Veeam
 
@@ -4412,9 +5098,11 @@ The connector supports integration with Veeam Backup & Replication, Veeam ONE an
 - **VeeamCovewareFindings_CL**: Security findings from Coveware solution
 - **VeeamSessions_CL**: Veeam sessions
 
+[→ View full connector details](connectors/veeamcustomtablesdataconnector.md)
+
 ---
 
-### VirtualMetric DataStream for Microsoft Sentinel
+### [VirtualMetric DataStream for Microsoft Sentinel](connectors/virtualmetricmssentinelconnector.md)
 
 **Publisher:** VirtualMetric
 
@@ -4424,9 +5112,11 @@ The connector supports integration with Veeam Backup & Replication, Veeam ONE an
 
 VirtualMetric DataStream connector deploys Data Collection Rules to ingest security telemetry into Microsoft Sentinel.
 
+[→ View full connector details](connectors/virtualmetricmssentinelconnector.md)
+
 ---
 
-### VirtualMetric DataStream for Microsoft Sentinel data lake
+### [VirtualMetric DataStream for Microsoft Sentinel data lake](connectors/virtualmetricmssentineldatalakeconnector.md)
 
 **Publisher:** VirtualMetric
 
@@ -4436,9 +5126,11 @@ VirtualMetric DataStream connector deploys Data Collection Rules to ingest secur
 
 VirtualMetric DataStream connector deploys Data Collection Rules to ingest security telemetry into Microsoft Sentinel data lake.
 
+[→ View full connector details](connectors/virtualmetricmssentineldatalakeconnector.md)
+
 ---
 
-### VirtualMetric Director Proxy
+### [VirtualMetric Director Proxy](connectors/virtualmetricdirectorproxy.md)
 
 **Publisher:** VirtualMetric
 
@@ -4448,11 +5140,13 @@ VirtualMetric DataStream connector deploys Data Collection Rules to ingest secur
 
 VirtualMetric Director Proxy deploys an Azure Function App to securely bridge VirtualMetric DataStream with Azure services including Microsoft Sentinel, Azure Data Explorer, and Azure Storage.
 
+[→ View full connector details](connectors/virtualmetricdirectorproxy.md)
+
 ---
 
 ## W
 
-### Windows DNS Events via AMA
+### [Windows DNS Events via AMA](connectors/asimdnsactivitylogs.md)
 
 **Publisher:** Microsoft
 
@@ -4475,9 +5169,11 @@ Windows DNS events are supported by Advanced SIEM Information Model (ASIM) and s
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2225993&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/asimdnsactivitylogs.md)
+
 ---
 
-### Windows Firewall
+### [Windows Firewall](connectors/windowsfirewall.md)
 
 **Publisher:** Microsoft
 
@@ -4487,9 +5183,11 @@ For more information, see the [Microsoft Sentinel documentation](https://go.micr
 
 Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/windowsfirewall.md)
+
 ---
 
-### Windows Firewall Events via AMA
+### [Windows Firewall Events via AMA](connectors/windowsfirewallama.md)
 
 **Publisher:** Microsoft
 
@@ -4505,9 +5203,11 @@ For more information, see the following articles:
 - [Data collection endpoints in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview?tabs=portal)
 - [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
 
+[→ View full connector details](connectors/windowsfirewallama.md)
+
 ---
 
-### Windows Forwarded Events
+### [Windows Forwarded Events](connectors/windowsforwardedevents.md)
 
 **Publisher:** Microsoft
 
@@ -4519,9 +5219,11 @@ You can stream all Windows Event Forwarding (WEF) logs from the Windows Servers 
 	This connection enables you to view dashboards, create custom alerts, and improve investigation.
 	This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219963&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/windowsforwardedevents.md)
+
 ---
 
-### Windows Security Events via AMA
+### [Windows Security Events via AMA](connectors/windowssecurityevents.md)
 
 **Publisher:** Microsoft
 
@@ -4531,9 +5233,11 @@ You can stream all Windows Event Forwarding (WEF) logs from the Windows Servers 
 
 You can stream all security events from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220225&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+[→ View full connector details](connectors/windowssecurityevents.md)
+
 ---
 
-### WithSecure Elements API (Azure Function)
+### [WithSecure Elements API (Azure Function)](connectors/withsecureelementsviafunction.md)
 
 **Publisher:** WithSecure
 
@@ -4553,9 +5257,11 @@ With this solution Azure Function is deployed to your tenant, polling periodical
 
 For more information visit our website at: [https://www.withsecure.com](https://www.withsecure.com).
 
+[→ View full connector details](connectors/withsecureelementsviafunction.md)
+
 ---
 
-### Wiz
+### [Wiz](connectors/wiz.md)
 
 **Publisher:** Wiz
 
@@ -4565,9 +5271,11 @@ For more information visit our website at: [https://www.withsecure.com](https://
 
 The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, and Audit logs to Microsoft Sentinel.
 
+[→ View full connector details](connectors/wiz.md)
+
 ---
 
-### Workday User Activity
+### [Workday User Activity](connectors/workdayccpdefinition.md)
 
 **Publisher:** Microsoft
 
@@ -4577,9 +5285,11 @@ The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, 
 
 The [Workday](https://www.workday.com/) User Activity data connector provides the capability to ingest User Activity Logs from [Workday API](https://community.workday.com/sites/default/files/file-hosting/restapi/index.html#privacy/v1/get-/activityLogging) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/workdayccpdefinition.md)
+
 ---
 
-### Workplace from Facebook
+### [Workplace from Facebook](connectors/workplacefacebook.md)
 
 **Publisher:** Facebook
 
@@ -4589,11 +5299,13 @@ The [Workday](https://www.workday.com/) User Activity data connector provides th
 
 The [Workplace](https://www.workplace.com/) data connector provides the capability to ingest common Workplace events into Microsoft Sentinel through Webhooks. Webhooks enable custom integration apps to subscribe to events in Workplace and receive updates in real time. When a change occurs in Workplace, an HTTPS POST request with event information is sent to a callback data connector URL.  Refer to [Webhooks documentation](https://developers.facebook.com/docs/workplace/reference/webhooks) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/workplacefacebook.md)
+
 ---
 
 ## Z
 
-### Zero Networks Segment Audit
+### [Zero Networks Segment Audit](connectors/zeronetworkssegmentauditnativepoller.md)
 
 **Publisher:** Zero Networks
 
@@ -4603,9 +5315,11 @@ The [Workplace](https://www.workplace.com/) data connector provides the capabili
 
 The [Zero Networks Segment](https://zeronetworks.com/) Audit data connector provides the capability to ingest Zero Networks Audit events into Microsoft Sentinel through the REST API. This data connector uses Microsoft Sentinel native polling capability.
 
+[→ View full connector details](connectors/zeronetworkssegmentauditnativepoller.md)
+
 ---
 
-### ZeroFox CTI
+### [ZeroFox CTI](connectors/zerofoxctidataconnector.md)
 
 **Publisher:** ZeroFox
 
@@ -4615,9 +5329,11 @@ The [Zero Networks Segment](https://zeronetworks.com/) Audit data connector prov
 
 The ZeroFox CTI data connectors provide the capability to ingest the different [ZeroFox](https://www.zerofox.com/threat-intelligence/) cyber threat intelligence alerts into Microsoft Sentinel.
 
+[→ View full connector details](connectors/zerofoxctidataconnector.md)
+
 ---
 
-### ZeroFox Enterprise - Alerts (Polling CCF)
+### [ZeroFox Enterprise - Alerts (Polling CCF)](connectors/zerofoxalertsdefinition.md)
 
 **Publisher:** ZeroFox Enterprise
 
@@ -4627,9 +5343,11 @@ The ZeroFox CTI data connectors provide the capability to ingest the different [
 
 Collects alerts from ZeroFox API.
 
+[→ View full connector details](connectors/zerofoxalertsdefinition.md)
+
 ---
 
-### Zimperium Mobile Threat Defense
+### [Zimperium Mobile Threat Defense](connectors/zimperiummtdalerts.md)
 
 **Publisher:** Zimperium
 
@@ -4639,9 +5357,11 @@ Collects alerts from ZeroFox API.
 
 Zimperium Mobile Threat Defense connector gives you the ability to connect the Zimperium threat log with Microsoft Sentinel to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's mobile threat landscape and enhances your security operation capabilities.
 
+[→ View full connector details](connectors/zimperiummtdalerts.md)
+
 ---
 
-### Zoom Reports
+### [Zoom Reports](connectors/zoom.md)
 
 **Publisher:** Zoom
 
@@ -4651,13 +5371,15 @@ Zimperium Mobile Threat Defense connector gives you the ability to connect the Z
 
 The [Zoom](https://zoom.us/) Reports data connector provides the capability to ingest [Zoom Reports](https://developers.zoom.us/docs/api/rest/reference/zoom-api/methods/#tag/Reports) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://developers.zoom.us/docs/api/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
 
+[→ View full connector details](connectors/zoom.md)
+
 ---
 
 ## Deprecated Connectors
 
 The following **142 connector(s)** are deprecated:
 
-### [DEPRECATED] Cisco Secure Endpoint (AMP)
+### [[DEPRECATED] Cisco Secure Endpoint (AMP)](connectors/ciscosecureendpoint.md)
 
 **Publisher:** Cisco
 
@@ -4669,9 +5391,11 @@ The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides t
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/ciscosecureendpoint.md)
+
 ---
 
-### [DEPRECATED] Cloudflare
+### [[DEPRECATED] Cloudflare](connectors/cloudflaredataconnector.md)
 
 **Publisher:** Cloudflare
 
@@ -4683,9 +5407,11 @@ The Cloudflare data connector provides the capability to ingest [Cloudflare logs
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/cloudflaredataconnector.md)
+
 ---
 
-### [DEPRECATED] Google ApigeeX
+### [[DEPRECATED] Google ApigeeX](connectors/apigeexdataconnector.md)
 
 **Publisher:** Google
 
@@ -4697,9 +5423,11 @@ The [Google ApigeeX](https://cloud.google.com/apigee/docs) data connector provid
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/apigeexdataconnector.md)
+
 ---
 
-### [DEPRECATED] Google Cloud Platform Cloud Monitoring
+### [[DEPRECATED] Google Cloud Platform Cloud Monitoring](connectors/gcpmonitordataconnector.md)
 
 **Publisher:** Google
 
@@ -4711,9 +5439,11 @@ The Google Cloud Platform Cloud Monitoring data connector provides the capabilit
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/gcpmonitordataconnector.md)
+
 ---
 
-### [DEPRECATED] Google Cloud Platform DNS
+### [[DEPRECATED] Google Cloud Platform DNS](connectors/gcpdnsdataconnector.md)
 
 **Publisher:** Google
 
@@ -4725,9 +5455,11 @@ The Google Cloud Platform DNS data connector provides the capability to ingest [
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/gcpdnsdataconnector.md)
+
 ---
 
-### [DEPRECATED] Google Cloud Platform IAM
+### [[DEPRECATED] Google Cloud Platform IAM](connectors/gcpiamdataconnector.md)
 
 **Publisher:** Google
 
@@ -4739,9 +5471,11 @@ The Google Cloud Platform Identity and Access Management (IAM) data connector pr
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/gcpiamdataconnector.md)
+
 ---
 
-### [DEPRECATED] Google Workspace (G Suite)
+### [[DEPRECATED] Google Workspace (G Suite)](connectors/googleworkspacereportsapi.md)
 
 **Publisher:** Google
 
@@ -4753,9 +5487,11 @@ The [Google Workspace](https://workspace.google.com/) data connector provides th
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/googleworkspacereportsapi.md)
+
 ---
 
-### [DEPRECATED] Lookout
+### [[DEPRECATED] Lookout](connectors/lookoutapi.md)
 
 **Publisher:** Lookout
 
@@ -4767,9 +5503,11 @@ The [Lookout](https://lookout.com) data connector provides the capability to ing
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/lookoutapi.md)
+
 ---
 
-### [DEPRECATED] OneLogin IAM Platform
+### [[DEPRECATED] OneLogin IAM Platform](connectors/onelogin.md)
 
 **Publisher:** OneLogin
 
@@ -4781,9 +5519,11 @@ The [OneLogin](https://www.onelogin.com/) data connector provides the capability
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/onelogin.md)
+
 ---
 
-### [DEPRECATED] Oracle Cloud Infrastructure
+### [[DEPRECATED] Oracle Cloud Infrastructure](connectors/oraclecloudinfrastructurelogsconnector.md)
 
 **Publisher:** Oracle
 
@@ -4795,9 +5535,11 @@ The Oracle Cloud Infrastructure (OCI) data connector provides the capability to 
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/oraclecloudinfrastructurelogsconnector.md)
+
 ---
 
-### [DEPRECATED] Palo Alto Prisma Cloud CSPM
+### [[DEPRECATED] Palo Alto Prisma Cloud CSPM](connectors/paloaltoprismacloud.md)
 
 **Publisher:** Palo Alto
 
@@ -4809,9 +5551,11 @@ The Palo Alto Prisma Cloud CSPM data connector provides the capability to ingest
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/paloaltoprismacloud.md)
+
 ---
 
-### [DEPRECATED] Qualys Vulnerability Management
+### [[DEPRECATED] Qualys Vulnerability Management](connectors/qualysvulnerabilitymanagement.md)
 
 **Publisher:** Qualys
 
@@ -4823,9 +5567,11 @@ The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerabi
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/qualysvulnerabilitymanagement.md)
+
 ---
 
-### [DEPRECATED] Salesforce Service Cloud
+### [[DEPRECATED] Salesforce Service Cloud](connectors/salesforceservicecloud.md)
 
 **Publisher:** Salesforce
 
@@ -4837,9 +5583,11 @@ The Salesforce Service Cloud data connector provides the capability to ingest in
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/salesforceservicecloud.md)
+
 ---
 
-### [DEPRECATED] Slack Audit
+### [[DEPRECATED] Slack Audit](connectors/slackauditapi.md)
 
 **Publisher:** Slack
 
@@ -4849,9 +5597,11 @@ The Salesforce Service Cloud data connector provides the capability to ingest in
 
 The [Slack](https://slack.com) Audit data connector provides the capability to ingest [Slack Audit Records](https://api.slack.com/admins/audit-logs) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs#the_audit_event) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/slackauditapi.md)
+
 ---
 
-### [DEPRECATED] Snowflake
+### [[DEPRECATED] Snowflake](connectors/snowflakedataconnector.md)
 
 **Publisher:** Snowflake
 
@@ -4863,9 +5613,11 @@ The Snowflake data connector provides the capability to ingest Snowflake [login 
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/snowflakedataconnector.md)
+
 ---
 
-### [Deprecated] AI Analyst Darktrace via AMA
+### [[Deprecated] AI Analyst Darktrace via AMA](connectors/darktraceama.md)
 
 **Publisher:** Darktrace
 
@@ -4875,9 +5627,11 @@ The Snowflake data connector provides the capability to ingest Snowflake [login 
 
 The Darktrace connector lets users connect Darktrace Model Breaches in real-time with Microsoft Sentinel, allowing creation of custom Dashboards, Workbooks, Notebooks and Custom Alerts to improve investigation.  Microsoft Sentinel's enhanced visibility into Darktrace logs enables monitoring and mitigation of security threats.
 
+[→ View full connector details](connectors/darktraceama.md)
+
 ---
 
-### [Deprecated] AI Analyst Darktrace via Legacy Agent
+### [[Deprecated] AI Analyst Darktrace via Legacy Agent](connectors/darktrace.md)
 
 **Publisher:** Darktrace
 
@@ -4887,9 +5641,11 @@ The Darktrace connector lets users connect Darktrace Model Breaches in real-time
 
 The Darktrace connector lets users connect Darktrace Model Breaches in real-time with Microsoft Sentinel, allowing creation of custom Dashboards, Workbooks, Notebooks and Custom Alerts to improve investigation.  Microsoft Sentinel's enhanced visibility into Darktrace logs enables monitoring and mitigation of security threats.
 
+[→ View full connector details](connectors/darktrace.md)
+
 ---
 
-### [Deprecated] Akamai Security Events via AMA
+### [[Deprecated] Akamai Security Events via AMA](connectors/akamaisecurityeventsama.md)
 
 **Publisher:** Akamai
 
@@ -4899,9 +5655,11 @@ The Darktrace connector lets users connect Darktrace Model Breaches in real-time
 
 Akamai Solution for Microsoft Sentinel provides the capability to ingest [Akamai Security Events](https://www.akamai.com/us/en/products/security/) into Microsoft Sentinel. Refer to [Akamai SIEM Integration documentation](https://developer.akamai.com/tools/integrations/siem) for more information.
 
+[→ View full connector details](connectors/akamaisecurityeventsama.md)
+
 ---
 
-### [Deprecated] Akamai Security Events via Legacy Agent
+### [[Deprecated] Akamai Security Events via Legacy Agent](connectors/akamaisecurityevents.md)
 
 **Publisher:** Akamai
 
@@ -4911,9 +5669,11 @@ Akamai Solution for Microsoft Sentinel provides the capability to ingest [Akamai
 
 Akamai Solution for Microsoft Sentinel provides the capability to ingest [Akamai Security Events](https://www.akamai.com/us/en/products/security/) into Microsoft Sentinel. Refer to [Akamai SIEM Integration documentation](https://developer.akamai.com/tools/integrations/siem) for more information.
 
+[→ View full connector details](connectors/akamaisecurityevents.md)
+
 ---
 
-### [Deprecated] Apache HTTP Server
+### [[Deprecated] Apache HTTP Server](connectors/apachehttpserver.md)
 
 **Publisher:** Apache
 
@@ -4923,9 +5683,11 @@ Akamai Solution for Microsoft Sentinel provides the capability to ingest [Akamai
 
 The Apache HTTP Server data connector provides the capability to ingest [Apache HTTP Server](http://httpd.apache.org/) events into Microsoft Sentinel. Refer to [Apache Logs documentation](https://httpd.apache.org/docs/2.4/logs.html) for more information.
 
+[→ View full connector details](connectors/apachehttpserver.md)
+
 ---
 
-### [Deprecated] Apache Tomcat
+### [[Deprecated] Apache Tomcat](connectors/apachetomcat.md)
 
 **Publisher:** Apache
 
@@ -4935,9 +5697,11 @@ The Apache HTTP Server data connector provides the capability to ingest [Apache 
 
 The Apache Tomcat solution provides the capability to ingest [Apache Tomcat](http://tomcat.apache.org/) events into Microsoft Sentinel. Refer to [Apache Tomcat documentation](http://tomcat.apache.org/tomcat-10.0-doc/logging.html) for more information.
 
+[→ View full connector details](connectors/apachetomcat.md)
+
 ---
 
-### [Deprecated] Aruba ClearPass via AMA
+### [[Deprecated] Aruba ClearPass via AMA](connectors/arubaclearpassama.md)
 
 **Publisher:** Aruba Networks
 
@@ -4947,9 +5711,11 @@ The Apache Tomcat solution provides the capability to ingest [Apache Tomcat](htt
 
 The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-access-control/secure-access/) connector allows you to easily connect your Aruba ClearPass with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/arubaclearpassama.md)
+
 ---
 
-### [Deprecated] Aruba ClearPass via Legacy Agent
+### [[Deprecated] Aruba ClearPass via Legacy Agent](connectors/arubaclearpass.md)
 
 **Publisher:** Aruba Networks
 
@@ -4959,9 +5725,11 @@ The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-ac
 
 The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-access-control/secure-access/) connector allows you to easily connect your Aruba ClearPass with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/arubaclearpass.md)
+
 ---
 
-### [Deprecated] Atlassian Confluence Audit
+### [[Deprecated] Atlassian Confluence Audit](connectors/confluenceauditapi.md)
 
 **Publisher:** Atlassian
 
@@ -4971,9 +5739,11 @@ The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-ac
 
 The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/confluenceauditapi.md)
+
 ---
 
-### [Deprecated] Awake Security via Legacy Agent
+### [[Deprecated] Awake Security via Legacy Agent](connectors/aristaawakesecurity.md)
 
 **Publisher:** Arista Networks
 
@@ -4983,9 +5753,11 @@ The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit 
 
 The Awake Security CEF connector allows users to send detection model matches from the Awake Security Platform to Microsoft Sentinel. Remediate threats quickly with the power of network detection and response and speed up investigations with deep visibility especially into unmanaged entities including users, devices and applications on your network. The connector also enables the creation of network security-focused custom alerts, incidents, workbooks and notebooks that align with your existing security operations workflows. 
 
+[→ View full connector details](connectors/aristaawakesecurity.md)
+
 ---
 
-### [Deprecated] Barracuda CloudGen Firewall
+### [[Deprecated] Barracuda CloudGen Firewall](connectors/barracudacloudfirewall.md)
 
 **Publisher:** Barracuda
 
@@ -4995,9 +5767,11 @@ The Awake Security CEF connector allows users to send detection model matches fr
 
 The Barracuda CloudGen Firewall (CGFW) connector allows you to easily connect your Barracuda CGFW logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/barracudacloudfirewall.md)
+
 ---
 
-### [Deprecated] Barracuda Web Application Firewall via Legacy Agent
+### [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](connectors/barracuda.md)
 
 **Publisher:** Barracuda
 
@@ -5009,9 +5783,11 @@ The Barracuda Web Application Firewall (WAF) connector allows you to easily conn
 
 [For more information >​](https://aka.ms/CEF-Barracuda)
 
+[→ View full connector details](connectors/barracuda.md)
+
 ---
 
-### [Deprecated] Blackberry CylancePROTECT
+### [[Deprecated] Blackberry CylancePROTECT](connectors/blackberrycylanceprotect.md)
 
 **Publisher:** Blackberry
 
@@ -5021,9 +5797,11 @@ The Barracuda Web Application Firewall (WAF) connector allows you to easily conn
 
 The [Blackberry CylancePROTECT](https://www.blackberry.com/us/en/products/blackberry-protect) connector allows you to easily connect your CylancePROTECT logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/blackberrycylanceprotect.md)
+
 ---
 
-### [Deprecated] Broadcom Symantec DLP via AMA
+### [[Deprecated] Broadcom Symantec DLP via AMA](connectors/broadcomsymantecdlpama.md)
 
 **Publisher:** Broadcom
 
@@ -5033,9 +5811,11 @@ The [Blackberry CylancePROTECT](https://www.blackberry.com/us/en/products/blackb
 
 The [Broadcom Symantec Data Loss Prevention (DLP)](https://www.broadcom.com/products/cyber-security/information-protection/data-loss-prevention) connector allows you to easily connect your Symantec DLP with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s information, where it travels, and improves your security operation capabilities.
 
+[→ View full connector details](connectors/broadcomsymantecdlpama.md)
+
 ---
 
-### [Deprecated] Broadcom Symantec DLP via Legacy Agent
+### [[Deprecated] Broadcom Symantec DLP via Legacy Agent](connectors/broadcomsymantecdlp.md)
 
 **Publisher:** Broadcom
 
@@ -5045,9 +5825,11 @@ The [Broadcom Symantec Data Loss Prevention (DLP)](https://www.broadcom.com/prod
 
 The [Broadcom Symantec Data Loss Prevention (DLP)](https://www.broadcom.com/products/cyber-security/information-protection/data-loss-prevention) connector allows you to easily connect your Symantec DLP with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s information, where it travels, and improves your security operation capabilities.
 
+[→ View full connector details](connectors/broadcomsymantecdlp.md)
+
 ---
 
-### [Deprecated] Cisco Application Centric Infrastructure
+### [[Deprecated] Cisco Application Centric Infrastructure](connectors/ciscoaci.md)
 
 **Publisher:** Cisco
 
@@ -5057,9 +5839,11 @@ The [Broadcom Symantec Data Loss Prevention (DLP)](https://www.broadcom.com/prod
 
 [Cisco Application Centric Infrastructure (ACI)](https://www.cisco.com/c/en/us/solutions/collateral/data-center-virtualization/application-centric-infrastructure/solution-overview-c22-741487.html) data connector provides the capability to ingest [Cisco ACI logs](https://www.cisco.com/c/en/us/td/docs/switches/datacenter/aci/apic/sw/all/syslog/guide/b_ACI_System_Messages_Guide/m-aci-system-messages-reference.html) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ciscoaci.md)
+
 ---
 
-### [Deprecated] Cisco Firepower eStreamer via AMA
+### [[Deprecated] Cisco Firepower eStreamer via AMA](connectors/ciscofirepowerestreamerama.md)
 
 **Publisher:** Cisco
 
@@ -5069,9 +5853,11 @@ The [Broadcom Symantec Data Loss Prevention (DLP)](https://www.broadcom.com/prod
 
 eStreamer is a Client Server API designed for the Cisco Firepower NGFW Solution. The eStreamer client requests detailed event data on behalf of the SIEM or logging solution in the Common Event Format (CEF).
 
+[→ View full connector details](connectors/ciscofirepowerestreamerama.md)
+
 ---
 
-### [Deprecated] Cisco Firepower eStreamer via Legacy Agent
+### [[Deprecated] Cisco Firepower eStreamer via Legacy Agent](connectors/ciscofirepowerestreamer.md)
 
 **Publisher:** Cisco
 
@@ -5081,9 +5867,11 @@ eStreamer is a Client Server API designed for the Cisco Firepower NGFW Solution.
 
 eStreamer is a Client Server API designed for the Cisco Firepower NGFW Solution. The eStreamer client requests detailed event data on behalf of the SIEM or logging solution in the Common Event Format (CEF).
 
+[→ View full connector details](connectors/ciscofirepowerestreamer.md)
+
 ---
 
-### [Deprecated] Cisco Identity Services Engine
+### [[Deprecated] Cisco Identity Services Engine](connectors/ciscoise.md)
 
 **Publisher:** Cisco
 
@@ -5093,9 +5881,11 @@ eStreamer is a Client Server API designed for the Cisco Firepower NGFW Solution.
 
 The Cisco Identity Services Engine (ISE) data connector provides the capability to ingest [Cisco ISE](https://www.cisco.com/c/en/us/products/security/identity-services-engine/index.html) events into Microsoft Sentinel. It helps you gain visibility into what is happening in your network, such as who is connected, which applications are installed and running, and much more. Refer to [Cisco ISE logging mechanism documentation](https://www.cisco.com/c/en/us/td/docs/security/ise/2-7/admin_guide/b_ise_27_admin_guide/b_ISE_admin_27_maintain_monitor.html#reference_BAFBA5FA046A45938810A5DF04C00591) for more information.
 
+[→ View full connector details](connectors/ciscoise.md)
+
 ---
 
-### [Deprecated] Cisco Meraki
+### [[Deprecated] Cisco Meraki](connectors/ciscomeraki.md)
 
 **Publisher:** Cisco
 
@@ -5105,9 +5895,11 @@ The Cisco Identity Services Engine (ISE) data connector provides the capability 
 
 The [Cisco Meraki](https://meraki.cisco.com/) connector allows you to easily connect your Cisco Meraki (MX/MR/MS) logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/ciscomeraki.md)
+
 ---
 
-### [Deprecated] Cisco Secure Cloud Analytics
+### [[Deprecated] Cisco Secure Cloud Analytics](connectors/stealthwatch.md)
 
 **Publisher:** Cisco
 
@@ -5117,9 +5909,11 @@ The [Cisco Meraki](https://meraki.cisco.com/) connector allows you to easily con
 
 The [Cisco Secure Cloud Analytics](https://www.cisco.com/c/en/us/products/security/stealthwatch/index.html) data connector provides the capability to ingest [Cisco Secure Cloud Analytics events](https://www.cisco.com/c/dam/en/us/td/docs/security/stealthwatch/management_console/securit_events_alarm_categories/7_4_2_Security_Events_and_Alarm_Categories_DV_2_1.pdf) into Microsoft Sentinel. Refer to [Cisco Secure Cloud Analytics documentation](https://www.cisco.com/c/dam/en/us/td/docs/security/stealthwatch/system_installation_configuration/7_5_0_System_Configuration_Guide_DV_1_3.pdf) for more information.
 
+[→ View full connector details](connectors/stealthwatch.md)
+
 ---
 
-### [Deprecated] Cisco Secure Email Gateway via AMA
+### [[Deprecated] Cisco Secure Email Gateway via AMA](connectors/ciscosegama.md)
 
 **Publisher:** Cisco
 
@@ -5129,9 +5923,11 @@ The [Cisco Secure Cloud Analytics](https://www.cisco.com/c/en/us/products/securi
 
 The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/security/email-security/index.html) data connector provides the capability to ingest [Cisco SEG Consolidated Event Logs](https://www.cisco.com/c/en/us/td/docs/security/esa/esa14-0/user_guide/b_ESA_Admin_Guide_14-0/b_ESA_Admin_Guide_12_1_chapter_0100111.html#con_1061902) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ciscosegama.md)
+
 ---
 
-### [Deprecated] Cisco Secure Email Gateway via Legacy Agent
+### [[Deprecated] Cisco Secure Email Gateway via Legacy Agent](connectors/ciscoseg.md)
 
 **Publisher:** Cisco
 
@@ -5141,9 +5937,11 @@ The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/se
 
 The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/security/email-security/index.html) data connector provides the capability to ingest [Cisco SEG Consolidated Event Logs](https://www.cisco.com/c/en/us/td/docs/security/esa/esa14-0/user_guide/b_ESA_Admin_Guide_14-0/b_ESA_Admin_Guide_12_1_chapter_0100111.html#con_1061902) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ciscoseg.md)
+
 ---
 
-### [Deprecated] Cisco UCS
+### [[Deprecated] Cisco UCS](connectors/ciscoucs.md)
 
 **Publisher:** Cisco
 
@@ -5153,9 +5951,11 @@ The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/se
 
 The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/products/servers-unified-computing/index.html) connector allows you to easily connect your Cisco UCS logs with Microsoft Sentinel This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/ciscoucs.md)
+
 ---
 
-### [Deprecated] Cisco Web Security Appliance
+### [[Deprecated] Cisco Web Security Appliance](connectors/ciscowsa.md)
 
 **Publisher:** Cisco
 
@@ -5165,9 +5965,11 @@ The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/product
 
 [Cisco Web Security Appliance (WSA)](https://www.cisco.com/c/en/us/products/security/web-security-appliance/index.html) data connector provides the capability to ingest [Cisco WSA Access Logs](https://www.cisco.com/c/en/us/td/docs/security/wsa/wsa_14-0/User-Guide/b_WSA_UserGuide_14_0/b_WSA_UserGuide_11_7_chapter_010101.html) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ciscowsa.md)
+
 ---
 
-### [Deprecated] Citrix ADC (former NetScaler)
+### [[Deprecated] Citrix ADC (former NetScaler)](connectors/citrixadc.md)
 
 **Publisher:** Citrix
 
@@ -5177,9 +5979,11 @@ The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/product
 
 The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/) data connector provides the capability to ingest Citrix ADC logs into Microsoft Sentinel. If you want to ingest Citrix WAF logs into Microsoft Sentinel, refer this [documentation](https://learn.microsoft.com/azure/sentinel/data-connectors/citrix-waf-web-app-firewall)
 
+[→ View full connector details](connectors/citrixadc.md)
+
 ---
 
-### [Deprecated] Citrix WAF (Web App Firewall) via AMA
+### [[Deprecated] Citrix WAF (Web App Firewall) via AMA](connectors/citrixwafama.md)
 
 **Publisher:** Citrix Systems Inc.
 
@@ -5191,9 +5995,11 @@ The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/)
 
 Citrix WAF supports Common Event Format (CEF) which is an industry standard format on top of Syslog messages . By connecting Citrix WAF CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/citrixwafama.md)
+
 ---
 
-### [Deprecated] Citrix WAF (Web App Firewall) via Legacy Agent
+### [[Deprecated] Citrix WAF (Web App Firewall) via Legacy Agent](connectors/citrixwaf.md)
 
 **Publisher:** Citrix Systems Inc.
 
@@ -5205,9 +6011,11 @@ Citrix WAF supports Common Event Format (CEF) which is an industry standard form
 
 Citrix WAF supports Common Event Format (CEF) which is an industry standard format on top of Syslog messages . By connecting Citrix WAF CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/citrixwaf.md)
+
 ---
 
-### [Deprecated] Claroty via AMA
+### [[Deprecated] Claroty via AMA](connectors/clarotyama.md)
 
 **Publisher:** Claroty
 
@@ -5217,9 +6025,11 @@ Citrix WAF supports Common Event Format (CEF) which is an industry standard form
 
 The [Claroty](https://claroty.com/) data connector provides the capability to ingest [Continuous Threat Detection](https://claroty.com/resources/datasheets/continuous-threat-detection) and [Secure Remote Access](https://claroty.com/industrial-cybersecurity/sra) events into Microsoft Sentinel.
 
+[→ View full connector details](connectors/clarotyama.md)
+
 ---
 
-### [Deprecated] Claroty via Legacy Agent
+### [[Deprecated] Claroty via Legacy Agent](connectors/claroty.md)
 
 **Publisher:** Claroty
 
@@ -5229,9 +6039,11 @@ The [Claroty](https://claroty.com/) data connector provides the capability to in
 
 The [Claroty](https://claroty.com/) data connector provides the capability to ingest [Continuous Threat Detection](https://claroty.com/resources/datasheets/continuous-threat-detection) and [Secure Remote Access](https://claroty.com/industrial-cybersecurity/sra) events into Microsoft Sentinel.
 
+[→ View full connector details](connectors/claroty.md)
+
 ---
 
-### [Deprecated] Contrast Protect via AMA
+### [[Deprecated] Contrast Protect via AMA](connectors/contrastprotectama.md)
 
 **Publisher:** Contrast Security
 
@@ -5241,9 +6053,11 @@ The [Claroty](https://claroty.com/) data connector provides the capability to in
 
 Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.
 
+[→ View full connector details](connectors/contrastprotectama.md)
+
 ---
 
-### [Deprecated] Contrast Protect via Legacy Agent
+### [[Deprecated] Contrast Protect via Legacy Agent](connectors/contrastprotect.md)
 
 **Publisher:** Contrast Security
 
@@ -5253,9 +6067,11 @@ Contrast Protect mitigates security threats in production applications with runt
 
 Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.
 
+[→ View full connector details](connectors/contrastprotect.md)
+
 ---
 
-### [Deprecated] CrowdStrike Falcon Endpoint Protection via AMA
+### [[Deprecated] CrowdStrike Falcon Endpoint Protection via AMA](connectors/crowdstrikefalconendpointprotectionama.md)
 
 **Publisher:** CrowdStrike
 
@@ -5265,9 +6081,11 @@ Contrast Protect mitigates security threats in production applications with runt
 
 The [CrowdStrike Falcon Endpoint Protection](https://www.crowdstrike.com/endpoint-security-products/) connector allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization's endpoints and improves your security operation capabilities.<p><span style='color:red; font-weight:bold;'>NOTE:</span> This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/crowdstrikefalconendpointprotectionama.md)
+
 ---
 
-### [Deprecated] CrowdStrike Falcon Endpoint Protection via Legacy Agent
+### [[Deprecated] CrowdStrike Falcon Endpoint Protection via Legacy Agent](connectors/crowdstrikefalconendpointprotection.md)
 
 **Publisher:** CrowdStrike
 
@@ -5277,9 +6095,11 @@ The [CrowdStrike Falcon Endpoint Protection](https://www.crowdstrike.com/endpoin
 
 The [CrowdStrike Falcon Endpoint Protection](https://www.crowdstrike.com/endpoint-security-products/) connector allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization's endpoints and improves your security operation capabilities.<p><span style='color:red; font-weight:bold;'>NOTE:</span> This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/crowdstrikefalconendpointprotection.md)
+
 ---
 
-### [Deprecated] CyberArk Enterprise Password Vault (EPV) Events via Legacy Agent
+### [[Deprecated] CyberArk Enterprise Password Vault (EPV) Events via Legacy Agent](connectors/cyberark.md)
 
 **Publisher:** Cyber-Ark
 
@@ -5289,9 +6109,11 @@ The [CrowdStrike Falcon Endpoint Protection](https://www.crowdstrike.com/endpoin
 
 CyberArk Enterprise Password Vault generates an xml Syslog message for every action taken against the Vault.  The EPV will send the xml messages through the Microsoft Sentinel.xsl translator to be converted into CEF standard format and sent to a syslog staging server of your choice (syslog-ng, rsyslog). The Log Analytics agent installed on your syslog staging server will import the messages into Microsoft Log Analytics. Refer to the [CyberArk documentation](https://docs.cyberark.com/Product-Doc/OnlineHelp/PAS/Latest/en/Content/PASIMP/DV-Integrating-with-SIEM-Applications.htm) for more guidance on SIEM integrations.
 
+[→ View full connector details](connectors/cyberark.md)
+
 ---
 
-### [Deprecated] CyberArk Privilege Access Manager (PAM) Events via AMA
+### [[Deprecated] CyberArk Privilege Access Manager (PAM) Events via AMA](connectors/cyberarkama.md)
 
 **Publisher:** Cyber-Ark
 
@@ -5301,9 +6123,11 @@ CyberArk Enterprise Password Vault generates an xml Syslog message for every act
 
 CyberArk Privilege Access Manager generates an xml Syslog message for every action taken against the Vault.  The PAM will send the xml messages through the Microsoft Sentinel.xsl translator to be converted into CEF standard format and sent to a syslog staging server of your choice (syslog-ng, rsyslog). The Log Analytics agent installed on your syslog staging server will import the messages into Microsoft Log Analytics. Refer to the [CyberArk documentation](https://docs.cyberark.com/privilege-cloud-standard/Latest/en/Content/Privilege%20Cloud/privCloud-connect-siem.htm) for more guidance on SIEM integrations.
 
+[→ View full connector details](connectors/cyberarkama.md)
+
 ---
 
-### [Deprecated] Delinea Secret Server via AMA
+### [[Deprecated] Delinea Secret Server via AMA](connectors/delineasecretserverama.md)
 
 **Publisher:** Delinea, Inc
 
@@ -5313,9 +6137,11 @@ CyberArk Privilege Access Manager generates an xml Syslog message for every acti
 
 Common Event Format (CEF) from Delinea Secret Server 
 
+[→ View full connector details](connectors/delineasecretserverama.md)
+
 ---
 
-### [Deprecated] Delinea Secret Server via Legacy Agent
+### [[Deprecated] Delinea Secret Server via Legacy Agent](connectors/delineasecretserver-cef.md)
 
 **Publisher:** Delinea, Inc
 
@@ -5325,9 +6151,11 @@ Common Event Format (CEF) from Delinea Secret Server
 
 Common Event Format (CEF) from Delinea Secret Server 
 
+[→ View full connector details](connectors/delineasecretserver-cef.md)
+
 ---
 
-### [Deprecated] Digital Guardian Data Loss Prevention
+### [[Deprecated] Digital Guardian Data Loss Prevention](connectors/digitalguardiandlp.md)
 
 **Publisher:** Digital Guardian
 
@@ -5337,9 +6165,11 @@ Common Event Format (CEF) from Delinea Secret Server
 
 [Digital Guardian Data Loss Prevention (DLP)](https://digitalguardian.com/platform-overview) data connector provides the capability to ingest Digital Guardian DLP logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/digitalguardiandlp.md)
+
 ---
 
-### [Deprecated] ESET PROTECT
+### [[Deprecated] ESET PROTECT](connectors/esetprotect.md)
 
 **Publisher:** ESET
 
@@ -5349,9 +6179,11 @@ Common Event Format (CEF) from Delinea Secret Server
 
 This connector gathers all events generated by ESET software through the central management solution ESET PROTECT (formerly ESET Security Management Center). This includes Anti-Virus detections, Firewall detections but also more advanced EDR detections. For a complete list of events please refer to [the documentation](https://help.eset.com/protect_admin/latest/en-US/events-exported-to-json-format.html).
 
+[→ View full connector details](connectors/esetprotect.md)
+
 ---
 
-### [Deprecated] Exabeam Advanced Analytics
+### [[Deprecated] Exabeam Advanced Analytics](connectors/exabeam.md)
 
 **Publisher:** Exabeam
 
@@ -5361,9 +6193,11 @@ This connector gathers all events generated by ESET software through the central
 
 The [Exabeam Advanced Analytics](https://www.exabeam.com/ueba/advanced-analytics-and-mitre-detect-and-stop-threats/) data connector provides the capability to ingest Exabeam Advanced Analytics events into Microsoft Sentinel. Refer to [Exabeam Advanced Analytics documentation](https://docs.exabeam.com/) for more information.
 
+[→ View full connector details](connectors/exabeam.md)
+
 ---
 
-### [Deprecated] ExtraHop Reveal(x) via AMA
+### [[Deprecated] ExtraHop Reveal(x) via AMA](connectors/extrahopnetworksama.md)
 
 **Publisher:** ExtraHop Networks
 
@@ -5373,9 +6207,11 @@ The [Exabeam Advanced Analytics](https://www.exabeam.com/ueba/advanced-analytics
 
 The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(x) system with Microsoft Sentinel to view dashboards, create custom alerts, and improve investigation. This integration gives you the ability to gain insight into your organization's network and improve your security operation capabilities.
 
+[→ View full connector details](connectors/extrahopnetworksama.md)
+
 ---
 
-### [Deprecated] ExtraHop Reveal(x) via Legacy Agent
+### [[Deprecated] ExtraHop Reveal(x) via Legacy Agent](connectors/extrahopnetworks.md)
 
 **Publisher:** ExtraHop Networks
 
@@ -5385,9 +6221,11 @@ The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(
 
 The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(x) system with Microsoft Sentinel to view dashboards, create custom alerts, and improve investigation. This integration gives you the ability to gain insight into your organization's network and improve your security operation capabilities.
 
+[→ View full connector details](connectors/extrahopnetworks.md)
+
 ---
 
-### [Deprecated] F5 Networks via AMA
+### [[Deprecated] F5 Networks via AMA](connectors/f5ama.md)
 
 **Publisher:** F5 Networks
 
@@ -5397,9 +6235,11 @@ The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(
 
 The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/f5ama.md)
+
 ---
 
-### [Deprecated] F5 Networks via Legacy Agent
+### [[Deprecated] F5 Networks via Legacy Agent](connectors/f5.md)
 
 **Publisher:** F5 Networks
 
@@ -5409,9 +6249,11 @@ The F5 firewall connector allows you to easily connect your F5 logs with Microso
 
 The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/f5.md)
+
 ---
 
-### [Deprecated] FireEye Network Security (NX) via AMA
+### [[Deprecated] FireEye Network Security (NX) via AMA](connectors/fireeyenxama.md)
 
 **Publisher:** FireEye
 
@@ -5421,9 +6263,11 @@ The F5 firewall connector allows you to easily connect your F5 logs with Microso
 
 The [FireEye Network Security (NX)](https://www.fireeye.com/products/network-security.html) data connector provides the capability to ingest FireEye Network Security logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/fireeyenxama.md)
+
 ---
 
-### [Deprecated] FireEye Network Security (NX) via Legacy Agent
+### [[Deprecated] FireEye Network Security (NX) via Legacy Agent](connectors/fireeyenx.md)
 
 **Publisher:** FireEye
 
@@ -5433,9 +6277,11 @@ The [FireEye Network Security (NX)](https://www.fireeye.com/products/network-sec
 
 The [FireEye Network Security (NX)](https://www.fireeye.com/products/network-security.html) data connector provides the capability to ingest FireEye Network Security logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/fireeyenx.md)
+
 ---
 
-### [Deprecated] Forcepoint CASB via AMA
+### [[Deprecated] Forcepoint CASB via AMA](connectors/forcepointcasbama.md)
 
 **Publisher:** Forcepoint CASB
 
@@ -5445,9 +6291,11 @@ The [FireEye Network Security (NX)](https://www.fireeye.com/products/network-sec
 
 The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
 
+[→ View full connector details](connectors/forcepointcasbama.md)
+
 ---
 
-### [Deprecated] Forcepoint CASB via Legacy Agent
+### [[Deprecated] Forcepoint CASB via Legacy Agent](connectors/forcepointcasb.md)
 
 **Publisher:** Forcepoint CASB
 
@@ -5457,9 +6305,11 @@ The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to autom
 
 The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
 
+[→ View full connector details](connectors/forcepointcasb.md)
+
 ---
 
-### [Deprecated] Forcepoint CSG via AMA
+### [[Deprecated] Forcepoint CSG via AMA](connectors/forcepointcsgama.md)
 
 **Publisher:** Forcepoint
 
@@ -5469,9 +6319,11 @@ The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to autom
 
 Forcepoint Cloud Security Gateway is a converged cloud security service that provides visibility, control, and threat protection for users and data, wherever they are. For more information visit: https://www.forcepoint.com/product/cloud-security-gateway
 
+[→ View full connector details](connectors/forcepointcsgama.md)
+
 ---
 
-### [Deprecated] Forcepoint CSG via Legacy Agent
+### [[Deprecated] Forcepoint CSG via Legacy Agent](connectors/forcepointcsg.md)
 
 **Publisher:** Forcepoint
 
@@ -5481,9 +6333,11 @@ Forcepoint Cloud Security Gateway is a converged cloud security service that pro
 
 Forcepoint Cloud Security Gateway is a converged cloud security service that provides visibility, control, and threat protection for users and data, wherever they are. For more information visit: https://www.forcepoint.com/product/cloud-security-gateway
 
+[→ View full connector details](connectors/forcepointcsg.md)
+
 ---
 
-### [Deprecated] Forcepoint NGFW via AMA
+### [[Deprecated] Forcepoint NGFW via AMA](connectors/forcepointngfwama.md)
 
 **Publisher:** Forcepoint
 
@@ -5493,9 +6347,11 @@ Forcepoint Cloud Security Gateway is a converged cloud security service that pro
 
 The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatically export user-defined Forcepoint NGFW logs into Microsoft Sentinel in real-time. This enriches visibility into user activities recorded by NGFW, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
 
+[→ View full connector details](connectors/forcepointngfwama.md)
+
 ---
 
-### [Deprecated] Forcepoint NGFW via Legacy Agent
+### [[Deprecated] Forcepoint NGFW via Legacy Agent](connectors/forcepointngfw.md)
 
 **Publisher:** Forcepoint
 
@@ -5505,9 +6361,11 @@ The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatic
 
 The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatically export user-defined Forcepoint NGFW logs into Microsoft Sentinel in real-time. This enriches visibility into user activities recorded by NGFW, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
 
+[→ View full connector details](connectors/forcepointngfw.md)
+
 ---
 
-### [Deprecated] ForgeRock Identity Platform
+### [[Deprecated] ForgeRock Identity Platform](connectors/forgerock.md)
 
 **Publisher:** ForgeRock Inc
 
@@ -5517,9 +6375,11 @@ The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatic
 
 The ForgeRock Identity Platform provides a single common auditing framework. Extract and aggregate log data across the entire platform with common audit (CAUD) event handlers and unique IDs so that it can be tracked holistically. Open and extensible, you can leverage audit logging and reporting capabilities for integration with Microsoft Sentinel via this CAUD for CEF connector.
 
+[→ View full connector details](connectors/forgerock.md)
+
 ---
 
-### [Deprecated] Fortinet FortiWeb Web Application Firewall via Legacy Agent
+### [[Deprecated] Fortinet FortiWeb Web Application Firewall via Legacy Agent](connectors/fortinetfortiweb.md)
 
 **Publisher:** Microsoft
 
@@ -5529,9 +6389,11 @@ The ForgeRock Identity Platform provides a single common auditing framework. Ext
 
 The [fortiweb](https://www.fortinet.com/products/web-application-firewall/fortiweb) data connector provides the capability to ingest Threat Analytics and events into Microsoft Sentinel.
 
+[→ View full connector details](connectors/fortinetfortiweb.md)
+
 ---
 
-### [Deprecated] Fortinet via AMA
+### [[Deprecated] Fortinet via AMA](connectors/fortinetama.md)
 
 **Publisher:** Fortinet
 
@@ -5541,9 +6403,11 @@ The [fortiweb](https://www.fortinet.com/products/web-application-firewall/fortiw
 
 The Fortinet firewall connector allows you to easily connect your Fortinet logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/fortinetama.md)
+
 ---
 
-### [Deprecated] Fortinet via Legacy Agent
+### [[Deprecated] Fortinet via Legacy Agent](connectors/fortinet.md)
 
 **Publisher:** Fortinet
 
@@ -5553,9 +6417,11 @@ The Fortinet firewall connector allows you to easily connect your Fortinet logs 
 
 The Fortinet firewall connector allows you to easily connect your Fortinet logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/fortinet.md)
+
 ---
 
-### [Deprecated] GitHub Enterprise Audit Log
+### [[Deprecated] GitHub Enterprise Audit Log](connectors/githubecauditlogpolling.md)
 
 **Publisher:** GitHub
 
@@ -5569,9 +6435,11 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/githubecauditlogpolling.md)
+
 ---
 
-### [Deprecated] GitLab
+### [[Deprecated] GitLab](connectors/gitlab.md)
 
 **Publisher:** Microsoft
 
@@ -5581,9 +6449,11 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 The [GitLab](https://about.gitlab.com/solutions/devops-platform/) connector allows you to easily connect your GitLab (GitLab Enterprise Edition - Standalone) logs with Microsoft Sentinel. This gives you more security insight into your organization's DevOps pipelines.
 
+[→ View full connector details](connectors/gitlab.md)
+
 ---
 
-### [Deprecated] ISC Bind
+### [[Deprecated] ISC Bind](connectors/iscbind.md)
 
 **Publisher:** ISC
 
@@ -5593,9 +6463,11 @@ The [GitLab](https://about.gitlab.com/solutions/devops-platform/) connector allo
 
 The [ISC Bind](https://www.isc.org/bind/) connector allows you to easily connect your ISC Bind logs with Microsoft Sentinel. This gives you more insight into your organization's network traffic data, DNS query data, traffic statistics and improves your security operation capabilities.
 
+[→ View full connector details](connectors/iscbind.md)
+
 ---
 
-### [Deprecated] Illumio Core via AMA
+### [[Deprecated] Illumio Core via AMA](connectors/illumiocoreama.md)
 
 **Publisher:** Illumio
 
@@ -5605,9 +6477,11 @@ The [ISC Bind](https://www.isc.org/bind/) connector allows you to easily connect
 
 The [Illumio Core](https://www.illumio.com/products/) data connector provides the capability to ingest Illumio Core logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/illumiocoreama.md)
+
 ---
 
-### [Deprecated] Illumio Core via Legacy Agent
+### [[Deprecated] Illumio Core via Legacy Agent](connectors/illumiocore.md)
 
 **Publisher:** Illumio
 
@@ -5617,9 +6491,11 @@ The [Illumio Core](https://www.illumio.com/products/) data connector provides th
 
 The [Illumio Core](https://www.illumio.com/products/) data connector provides the capability to ingest Illumio Core logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/illumiocore.md)
+
 ---
 
-### [Deprecated] Illusive Platform via AMA
+### [[Deprecated] Illusive Platform via AMA](connectors/illusiveattackmanagementsystemama.md)
 
 **Publisher:** illusive
 
@@ -5629,9 +6505,11 @@ The [Illumio Core](https://www.illumio.com/products/) data connector provides th
 
 The Illusive Platform Connector allows you to share Illusive's attack surface analysis data and incident logs with Microsoft Sentinel and view this information in dedicated dashboards that offer insight into your organization's attack surface risk (ASM Dashboard) and track unauthorized lateral movement in your organization's network (ADS Dashboard).
 
+[→ View full connector details](connectors/illusiveattackmanagementsystemama.md)
+
 ---
 
-### [Deprecated] Illusive Platform via Legacy Agent
+### [[Deprecated] Illusive Platform via Legacy Agent](connectors/illusiveattackmanagementsystem.md)
 
 **Publisher:** illusive
 
@@ -5641,9 +6519,11 @@ The Illusive Platform Connector allows you to share Illusive's attack surface an
 
 The Illusive Platform Connector allows you to share Illusive's attack surface analysis data and incident logs with Microsoft Sentinel and view this information in dedicated dashboards that offer insight into your organization's attack surface risk (ASM Dashboard) and track unauthorized lateral movement in your organization's network (ADS Dashboard).
 
+[→ View full connector details](connectors/illusiveattackmanagementsystem.md)
+
 ---
 
-### [Deprecated] Infoblox Cloud Data Connector via Legacy Agent
+### [[Deprecated] Infoblox Cloud Data Connector via Legacy Agent](connectors/infobloxclouddataconnector.md)
 
 **Publisher:** Infoblox
 
@@ -5653,9 +6533,11 @@ The Illusive Platform Connector allows you to share Illusive's attack surface an
 
 The Infoblox Cloud Data Connector allows you to easily connect your Infoblox BloxOne data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/infobloxclouddataconnector.md)
+
 ---
 
-### [Deprecated] Infoblox NIOS
+### [[Deprecated] Infoblox NIOS](connectors/infobloxnios.md)
 
 **Publisher:** Infoblox
 
@@ -5665,9 +6547,11 @@ The Infoblox Cloud Data Connector allows you to easily connect your Infoblox Blo
 
 The [Infoblox Network Identity Operating System (NIOS)](https://www.infoblox.com/glossary/network-identity-operating-system-nios/) connector allows you to easily connect your Infoblox NIOS logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/infobloxnios.md)
+
 ---
 
-### [Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent
+### [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](connectors/infobloxsocinsightsdataconnector-legacy.md)
 
 **Publisher:** Infoblox
 
@@ -5683,9 +6567,11 @@ This data connector ingests Infoblox SOC Insight CDC logs into your Log Analytic
 
  Using MMA and AMA on the same machine can cause log duplication and extra ingestion cost. [More details](https://learn.microsoft.com/en-us/azure/sentinel/ama-migrate).
 
+[→ View full connector details](connectors/infobloxsocinsightsdataconnector-legacy.md)
+
 ---
 
-### [Deprecated] Ivanti Unified Endpoint Management
+### [[Deprecated] Ivanti Unified Endpoint Management](connectors/ivantiuem.md)
 
 **Publisher:** Ivanti
 
@@ -5695,9 +6581,11 @@ This data connector ingests Infoblox SOC Insight CDC logs into your Log Analytic
 
 The [Ivanti Unified Endpoint Management](https://www.ivanti.com/products/unified-endpoint-manager) data connector provides the capability to ingest [Ivanti UEM Alerts](https://help.ivanti.com/ld/help/en_US/LDMS/11.0/Windows/alert-c-monitoring-overview.htm) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ivantiuem.md)
+
 ---
 
-### [Deprecated] JBoss Enterprise Application Platform
+### [[Deprecated] JBoss Enterprise Application Platform](connectors/jbosseap.md)
 
 **Publisher:** Red Hat
 
@@ -5707,9 +6595,11 @@ The [Ivanti Unified Endpoint Management](https://www.ivanti.com/products/unified
 
 The JBoss Enterprise Application Platform data connector provides the capability to ingest [JBoss](https://www.redhat.com/en/technologies/jboss-middleware/application-platform) events into Microsoft Sentinel. Refer to [Red Hat documentation](https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/configuration_guide/logging_with_jboss_eap) for more information.
 
+[→ View full connector details](connectors/jbosseap.md)
+
 ---
 
-### [Deprecated] Juniper IDP
+### [[Deprecated] Juniper IDP](connectors/juniperidp.md)
 
 **Publisher:** Juniper
 
@@ -5719,9 +6609,11 @@ The JBoss Enterprise Application Platform data connector provides the capability
 
 The [Juniper](https://www.juniper.net/) IDP data connector provides the capability to ingest [Juniper IDP](https://www.juniper.net/documentation/us/en/software/junos/idp-policy/topics/topic-map/security-idp-overview.html) events into Microsoft Sentinel.
 
+[→ View full connector details](connectors/juniperidp.md)
+
 ---
 
-### [Deprecated] Juniper SRX
+### [[Deprecated] Juniper SRX](connectors/junipersrx.md)
 
 **Publisher:** Juniper
 
@@ -5731,9 +6623,11 @@ The [Juniper](https://www.juniper.net/) IDP data connector provides the capabili
 
 The [Juniper SRX](https://www.juniper.net/us/en/products-services/security/srx-series/) connector allows you to easily connect your Juniper SRX logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/junipersrx.md)
+
 ---
 
-### [Deprecated] McAfee Network Security Platform
+### [[Deprecated] McAfee Network Security Platform](connectors/mcafeensp.md)
 
 **Publisher:** McAfee
 
@@ -5743,9 +6637,11 @@ The [Juniper SRX](https://www.juniper.net/us/en/products-services/security/srx-s
 
 The [McAfee® Network Security Platform](https://www.mcafee.com/enterprise/en-us/products/network-security-platform.html) data connector provides the capability to ingest [McAfee® Network Security Platform events](https://docs.mcafee.com/bundle/network-security-platform-10.1.x-integration-guide-unmanaged/page/GUID-8C706BE9-6AC9-4641-8A53-8910B51207D8.html) into Microsoft Sentinel. Refer to [McAfee® Network Security Platform](https://docs.mcafee.com/bundle/network-security-platform-10.1.x-integration-guide-unmanaged/page/GUID-F7D281EC-1CC9-4962-A7A3-5A9D9584670E.html) for more information.
 
+[→ View full connector details](connectors/mcafeensp.md)
+
 ---
 
-### [Deprecated] McAfee ePolicy Orchestrator (ePO)
+### [[Deprecated] McAfee ePolicy Orchestrator (ePO)](connectors/mcafeeepo.md)
 
 **Publisher:** McAfee
 
@@ -5755,9 +6651,11 @@ The [McAfee® Network Security Platform](https://www.mcafee.com/enterprise/en-us
 
 The McAfee ePolicy Orchestrator data connector provides the capability to ingest [McAfee ePO](https://www.mcafee.com/enterprise/en-us/products/epolicy-orchestrator.html) events into Microsoft Sentinel through the syslog. Refer to [documentation](https://docs.mcafee.com/bundle/epolicy-orchestrator-landing/page/GUID-0C40020F-5B7F-4549-B9CC-0E017BC8797F.html) for more information.
 
+[→ View full connector details](connectors/mcafeeepo.md)
+
 ---
 
-### [Deprecated] Microsoft Exchange Logs and Events
+### [[Deprecated] Microsoft Exchange Logs and Events](connectors/esi-exchangeadminauditlogevents.md)
 
 **Publisher:** Microsoft
 
@@ -5767,9 +6665,11 @@ The McAfee ePolicy Orchestrator data connector provides the capability to ingest
 
 Deprecated, use the 'ESI-Opt' dataconnectors. You can stream all Exchange Audit events, IIS Logs, HTTP Proxy logs and Security Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This is used by Microsoft Exchange Security Workbooks to provide security insights of your On-Premises Exchange environment
 
+[→ View full connector details](connectors/esi-exchangeadminauditlogevents.md)
+
 ---
 
-### [Deprecated] Microsoft Sysmon For Linux
+### [[Deprecated] Microsoft Sysmon For Linux](connectors/microsoftsysmonforlinux.md)
 
 **Publisher:** Microsoft
 
@@ -5780,9 +6680,11 @@ Deprecated, use the 'ESI-Opt' dataconnectors. You can stream all Exchange Audit 
 [Sysmon for Linux](https://github.com/Sysinternals/SysmonForLinux) provides detailed information about process creations, network connections and other system events.
 [Sysmon for linux link:]. The Sysmon for Linux connector uses [Syslog](https://aka.ms/sysLogInfo) as its data ingestion method. This solution depends on ASIM to work as expected. [Deploy ASIM](https://aka.ms/DeployASIM) to get the full value from the solution.
 
+[→ View full connector details](connectors/microsoftsysmonforlinux.md)
+
 ---
 
-### [Deprecated] MongoDB Audit
+### [[Deprecated] MongoDB Audit](connectors/mongodb.md)
 
 **Publisher:** MongoDB
 
@@ -5792,9 +6694,11 @@ Deprecated, use the 'ESI-Opt' dataconnectors. You can stream all Exchange Audit 
 
 MongoDB data connector provides the capability to ingest [MongoDBAudit](https://www.mongodb.com/) into Microsoft Sentinel. Refer to [MongoDB documentation](https://www.mongodb.com/docs/manual/tutorial/getting-started/) for more information.
 
+[→ View full connector details](connectors/mongodb.md)
+
 ---
 
-### [Deprecated] NGINX HTTP Server
+### [[Deprecated] NGINX HTTP Server](connectors/nginxhttpserver.md)
 
 **Publisher:** Nginx
 
@@ -5804,9 +6708,11 @@ MongoDB data connector provides the capability to ingest [MongoDBAudit](https://
 
 The NGINX HTTP Server data connector provides the capability to ingest [NGINX](https://nginx.org/en/) HTTP Server events into Microsoft Sentinel. Refer to [NGINX Logs documentation](https://nginx.org/en/docs/http/ngx_http_log_module.html) for more information.
 
+[→ View full connector details](connectors/nginxhttpserver.md)
+
 ---
 
-### [Deprecated] Nasuni Edge Appliance
+### [[Deprecated] Nasuni Edge Appliance](connectors/nasuniedgeappliance.md)
 
 **Publisher:** Nasuni
 
@@ -5816,9 +6722,11 @@ The NGINX HTTP Server data connector provides the capability to ingest [NGINX](h
 
 The [Nasuni](https://www.nasuni.com/) connector allows you to easily connect your Nasuni Edge Appliance Notifications and file system audit logs with Microsoft Sentinel. This gives you more insight into activity within your Nasuni infrastructure and improves your security operation capabilities.
 
+[→ View full connector details](connectors/nasuniedgeappliance.md)
+
 ---
 
-### [Deprecated] Netwrix Auditor via AMA
+### [[Deprecated] Netwrix Auditor via AMA](connectors/netwrixama.md)
 
 **Publisher:** Netwrix
 
@@ -5828,9 +6736,11 @@ The [Nasuni](https://www.nasuni.com/) connector allows you to easily connect you
 
 Netwrix Auditor data connector provides the capability to ingest [Netwrix Auditor (formerly Stealthbits Privileged Activity Manager)](https://www.netwrix.com/auditor.html) events into Microsoft Sentinel. Refer to [Netwrix documentation](https://helpcenter.netwrix.com/) for more information.
 
+[→ View full connector details](connectors/netwrixama.md)
+
 ---
 
-### [Deprecated] Netwrix Auditor via Legacy Agent
+### [[Deprecated] Netwrix Auditor via Legacy Agent](connectors/netwrix.md)
 
 **Publisher:** Netwrix
 
@@ -5840,9 +6750,11 @@ Netwrix Auditor data connector provides the capability to ingest [Netwrix Audito
 
 Netwrix Auditor data connector provides the capability to ingest [Netwrix Auditor (formerly Stealthbits Privileged Activity Manager)](https://www.netwrix.com/auditor.html) events into Microsoft Sentinel. Refer to [Netwrix documentation](https://helpcenter.netwrix.com/) for more information.
 
+[→ View full connector details](connectors/netwrix.md)
+
 ---
 
-### [Deprecated] Nozomi Networks N2OS via AMA
+### [[Deprecated] Nozomi Networks N2OS via AMA](connectors/nozominetworksn2osama.md)
 
 **Publisher:** Nozomi Networks
 
@@ -5852,9 +6764,11 @@ Netwrix Auditor data connector provides the capability to ingest [Netwrix Audito
 
 The [Nozomi Networks](https://www.nozominetworks.com/) data connector provides the capability to ingest Nozomi Networks Events into Microsoft Sentinel. Refer to the Nozomi Networks [PDF documentation](https://www.nozominetworks.com/resources/data-sheets-brochures-learning-guides/) for more information.
 
+[→ View full connector details](connectors/nozominetworksn2osama.md)
+
 ---
 
-### [Deprecated] Nozomi Networks N2OS via Legacy Agent
+### [[Deprecated] Nozomi Networks N2OS via Legacy Agent](connectors/nozominetworksn2os.md)
 
 **Publisher:** Nozomi Networks
 
@@ -5864,9 +6778,11 @@ The [Nozomi Networks](https://www.nozominetworks.com/) data connector provides t
 
 The [Nozomi Networks](https://www.nozominetworks.com/) data connector provides the capability to ingest Nozomi Networks Events into Microsoft Sentinel. Refer to the Nozomi Networks [PDF documentation](https://www.nozominetworks.com/resources/data-sheets-brochures-learning-guides/) for more information.
 
+[→ View full connector details](connectors/nozominetworksn2os.md)
+
 ---
 
-### [Deprecated] OSSEC via AMA
+### [[Deprecated] OSSEC via AMA](connectors/ossecama.md)
 
 **Publisher:** OSSEC
 
@@ -5876,9 +6792,11 @@ The [Nozomi Networks](https://www.nozominetworks.com/) data connector provides t
 
 OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec.net/) events into Microsoft Sentinel. Refer to [OSSEC documentation](https://www.ossec.net/docs) for more information.
 
+[→ View full connector details](connectors/ossecama.md)
+
 ---
 
-### [Deprecated] OSSEC via Legacy Agent
+### [[Deprecated] OSSEC via Legacy Agent](connectors/ossec.md)
 
 **Publisher:** OSSEC
 
@@ -5888,9 +6806,11 @@ OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec
 
 OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec.net/) events into Microsoft Sentinel. Refer to [OSSEC documentation](https://www.ossec.net/docs) for more information.
 
+[→ View full connector details](connectors/ossec.md)
+
 ---
 
-### [Deprecated] Onapsis Platform
+### [[Deprecated] Onapsis Platform](connectors/onapsisplatform.md)
 
 **Publisher:** Onapsis
 
@@ -5900,9 +6820,11 @@ OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec
 
 The Onapsis Connector allows you to export the alarms triggered in the Onapsis Platform into Microsoft Sentinel in real-time. This gives you the ability to monitor the activity on your SAP systems, identify incidents and respond to them quickly.
 
+[→ View full connector details](connectors/onapsisplatform.md)
+
 ---
 
-### [Deprecated] OpenVPN Server
+### [[Deprecated] OpenVPN Server](connectors/openvpn.md)
 
 **Publisher:** OpenVPN
 
@@ -5912,9 +6834,11 @@ The Onapsis Connector allows you to export the alarms triggered in the Onapsis P
 
 The [OpenVPN](https://github.com/OpenVPN) data connector provides the capability to ingest OpenVPN Server logs into Microsoft Sentinel.
 
+[→ View full connector details](connectors/openvpn.md)
+
 ---
 
-### [Deprecated] Oracle Database Audit
+### [[Deprecated] Oracle Database Audit](connectors/oracledatabaseaudit.md)
 
 **Publisher:** Oracle
 
@@ -5924,9 +6848,11 @@ The [OpenVPN](https://github.com/OpenVPN) data connector provides the capability
 
 The Oracle DB Audit data connector provides the capability to ingest [Oracle Database](https://www.oracle.com/database/technologies/) audit events into Microsoft Sentinel through the syslog. Refer to [documentation](https://docs.oracle.com/en/database/oracle/oracle-database/21/dbseg/introduction-to-auditing.html#GUID-94381464-53A3-421B-8F13-BD171C867405) for more information.
 
+[→ View full connector details](connectors/oracledatabaseaudit.md)
+
 ---
 
-### [Deprecated] Oracle WebLogic Server
+### [[Deprecated] Oracle WebLogic Server](connectors/oracleweblogicserver.md)
 
 **Publisher:** Oracle
 
@@ -5936,9 +6862,11 @@ The Oracle DB Audit data connector provides the capability to ingest [Oracle Dat
 
 OracleWebLogicServer data connector provides the capability to ingest [OracleWebLogicServer](https://docs.oracle.com/en/middleware/standalone/weblogic-server/index.html) events into Microsoft Sentinel. Refer to [OracleWebLogicServer documentation](https://docs.oracle.com/en/middleware/standalone/weblogic-server/14.1.1.0/index.html) for more information.
 
+[→ View full connector details](connectors/oracleweblogicserver.md)
+
 ---
 
-### [Deprecated] Palo Alto Networks (Firewall) via AMA
+### [[Deprecated] Palo Alto Networks (Firewall) via AMA](connectors/paloaltonetworksama.md)
 
 **Publisher:** Palo Alto Networks
 
@@ -5948,9 +6876,11 @@ OracleWebLogicServer data connector provides the capability to ingest [OracleWeb
 
 The Palo Alto Networks firewall connector allows you to easily connect your Palo Alto Networks logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/paloaltonetworksama.md)
+
 ---
 
-### [Deprecated] Palo Alto Networks (Firewall) via Legacy Agent
+### [[Deprecated] Palo Alto Networks (Firewall) via Legacy Agent](connectors/paloaltonetworks.md)
 
 **Publisher:** Palo Alto Networks
 
@@ -5960,9 +6890,11 @@ The Palo Alto Networks firewall connector allows you to easily connect your Palo
 
 The Palo Alto Networks firewall connector allows you to easily connect your Palo Alto Networks logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/paloaltonetworks.md)
+
 ---
 
-### [Deprecated] Palo Alto Networks Cortex Data Lake (CDL) via AMA
+### [[Deprecated] Palo Alto Networks Cortex Data Lake (CDL) via AMA](connectors/paloaltocdlama.md)
 
 **Publisher:** Palo Alto Networks
 
@@ -5972,9 +6904,11 @@ The Palo Alto Networks firewall connector allows you to easily connect your Palo
 
 The [Palo Alto Networks CDL](https://www.paloaltonetworks.com/cortex/cortex-data-lake) data connector provides the capability to ingest [CDL logs](https://docs.paloaltonetworks.com/strata-logging-service/log-reference/log-forwarding-schema-overview) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/paloaltocdlama.md)
+
 ---
 
-### [Deprecated] Palo Alto Networks Cortex Data Lake (CDL) via Legacy Agent
+### [[Deprecated] Palo Alto Networks Cortex Data Lake (CDL) via Legacy Agent](connectors/paloaltocdl.md)
 
 **Publisher:** Palo Alto Networks
 
@@ -5984,9 +6918,11 @@ The [Palo Alto Networks CDL](https://www.paloaltonetworks.com/cortex/cortex-data
 
 The [Palo Alto Networks CDL](https://www.paloaltonetworks.com/cortex/cortex-data-lake) data connector provides the capability to ingest [CDL logs](https://docs.paloaltonetworks.com/strata-logging-service/log-reference/log-forwarding-schema-overview) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/paloaltocdl.md)
+
 ---
 
-### [Deprecated] PingFederate via AMA
+### [[Deprecated] PingFederate via AMA](connectors/pingfederateama.md)
 
 **Publisher:** Ping Identity
 
@@ -5996,9 +6932,11 @@ The [Palo Alto Networks CDL](https://www.paloaltonetworks.com/cortex/cortex-data
 
 The [PingFederate](https://www.pingidentity.com/en/software/pingfederate.html) data connector provides the capability to ingest [PingFederate events](https://docs.pingidentity.com/bundle/pingfederate-102/page/lly1564002980532.html) into Microsoft Sentinel. Refer to [PingFederate documentation](https://docs.pingidentity.com/bundle/pingfederate-102/page/tle1564002955874.html) for more information.
 
+[→ View full connector details](connectors/pingfederateama.md)
+
 ---
 
-### [Deprecated] PingFederate via Legacy Agent
+### [[Deprecated] PingFederate via Legacy Agent](connectors/pingfederate.md)
 
 **Publisher:** Ping Identity
 
@@ -6008,9 +6946,11 @@ The [PingFederate](https://www.pingidentity.com/en/software/pingfederate.html) d
 
 The [PingFederate](https://www.pingidentity.com/en/software/pingfederate.html) data connector provides the capability to ingest [PingFederate events](https://docs.pingidentity.com/bundle/pingfederate-102/page/lly1564002980532.html) into Microsoft Sentinel. Refer to [PingFederate documentation](https://docs.pingidentity.com/bundle/pingfederate-102/page/tle1564002955874.html) for more information.
 
+[→ View full connector details](connectors/pingfederate.md)
+
 ---
 
-### [Deprecated] PostgreSQL Events
+### [[Deprecated] PostgreSQL Events](connectors/postgresql.md)
 
 **Publisher:** PostgreSQL
 
@@ -6020,9 +6960,11 @@ The [PingFederate](https://www.pingidentity.com/en/software/pingfederate.html) d
 
 PostgreSQL data connector provides the capability to ingest [PostgreSQL](https://www.postgresql.org/) events into Microsoft Sentinel. Refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/index.html) for more information.
 
+[→ View full connector details](connectors/postgresql.md)
+
 ---
 
-### [Deprecated] Proofpoint On Demand Email Security
+### [[Deprecated] Proofpoint On Demand Email Security](connectors/proofpointpod.md)
 
 **Publisher:** Proofpoint
 
@@ -6032,9 +6974,11 @@ PostgreSQL data connector provides the capability to ingest [PostgreSQL](https:/
 
 Proofpoint On Demand Email Security data connector provides the capability to get Proofpoint on Demand Email Protection data, allows users to check message traceability, monitoring into email activity, threats,and data exfiltration by attackers and malicious insiders. The connector provides ability to review events in your org on an accelerated basis, get event log files in hourly increments for recent activity.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/proofpointpod.md)
+
 ---
 
-### [Deprecated] Proofpoint TAP
+### [[Deprecated] Proofpoint TAP](connectors/proofpointtap.md)
 
 **Publisher:** Proofpoint
 
@@ -6044,9 +6988,11 @@ Proofpoint On Demand Email Security data connector provides the capability to ge
 
 The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
+[→ View full connector details](connectors/proofpointtap.md)
+
 ---
 
-### [Deprecated] Pulse Connect Secure
+### [[Deprecated] Pulse Connect Secure](connectors/pulseconnectsecure.md)
 
 **Publisher:** Pulse Secure
 
@@ -6056,9 +7002,11 @@ The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/
 
 The [Pulse Connect Secure](https://www.pulsesecure.net/products/pulse-connect-secure/) connector allows you to easily connect your Pulse Connect Secure logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigations. Integrating Pulse Connect Secure with Microsoft Sentinel provides more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/pulseconnectsecure.md)
+
 ---
 
-### [Deprecated] RIDGEBOT - data connector for Microsoft Sentinel
+### [[Deprecated] RIDGEBOT - data connector for Microsoft Sentinel](connectors/ridgebotdataconnector.md)
 
 **Publisher:** RidgeSecurity
 
@@ -6068,9 +7016,11 @@ The [Pulse Connect Secure](https://www.pulsesecure.net/products/pulse-connect-se
 
 The RidgeBot connector lets users connect RidgeBot with Microsoft Sentinel, allowing creation of Dashboards, Workbooks, Notebooks and Alerts.
 
+[→ View full connector details](connectors/ridgebotdataconnector.md)
+
 ---
 
-### [Deprecated] RSA® SecurID (Authentication Manager)
+### [[Deprecated] RSA® SecurID (Authentication Manager)](connectors/rsasecuridam.md)
 
 **Publisher:** RSA
 
@@ -6080,9 +7030,11 @@ The RidgeBot connector lets users connect RidgeBot with Microsoft Sentinel, allo
 
 The [RSA® SecurID Authentication Manager](https://www.securid.com/) data connector provides the capability to ingest [RSA® SecurID Authentication Manager events](https://community.rsa.com/t5/rsa-authentication-manager/rsa-authentication-manager-log-messages/ta-p/630160) into Microsoft Sentinel. Refer to [RSA® SecurID Authentication Manager documentation](https://community.rsa.com/t5/rsa-authentication-manager/getting-started-with-rsa-authentication-manager/ta-p/569582) for more information.
 
+[→ View full connector details](connectors/rsasecuridam.md)
+
 ---
 
-### [Deprecated] SonicWall Firewall via AMA
+### [[Deprecated] SonicWall Firewall via AMA](connectors/sonicwallfirewallama.md)
 
 **Publisher:** SonicWall
 
@@ -6092,9 +7044,11 @@ The [RSA® SecurID Authentication Manager](https://www.securid.com/) data connec
 
 Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by SonicWall to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/sonicwallfirewallama.md)
+
 ---
 
-### [Deprecated] SonicWall Firewall via Legacy Agent
+### [[Deprecated] SonicWall Firewall via Legacy Agent](connectors/sonicwallfirewall.md)
 
 **Publisher:** SonicWall
 
@@ -6104,9 +7058,11 @@ Common Event Format (CEF) is an industry standard format on top of Syslog messag
 
 Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by SonicWall to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/sonicwallfirewall.md)
+
 ---
 
-### [Deprecated] Sophos XG Firewall
+### [[Deprecated] Sophos XG Firewall](connectors/sophosxgfirewall.md)
 
 **Publisher:** Sophos
 
@@ -6116,9 +7072,11 @@ Common Event Format (CEF) is an industry standard format on top of Syslog messag
 
 The [Sophos XG Firewall](https://www.sophos.com/products/next-gen-firewall.aspx) allows you to easily connect your Sophos XG Firewall logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigations. Integrating Sophos XG Firewall with Microsoft Sentinel provides more visibility into your organization's firewall traffic and will enhance security monitoring capabilities.
 
+[→ View full connector details](connectors/sophosxgfirewall.md)
+
 ---
 
-### [Deprecated] Squid Proxy
+### [[Deprecated] Squid Proxy](connectors/squidproxy.md)
 
 **Publisher:** Squid
 
@@ -6128,9 +7086,11 @@ The [Sophos XG Firewall](https://www.sophos.com/products/next-gen-firewall.aspx)
 
 The [Squid Proxy](http://www.squid-cache.org/) connector allows you to easily connect your Squid Proxy logs with Microsoft Sentinel. This gives you more insight into your organization's network proxy traffic and improves your security operation capabilities.
 
+[→ View full connector details](connectors/squidproxy.md)
+
 ---
 
-### [Deprecated] Symantec Endpoint Protection
+### [[Deprecated] Symantec Endpoint Protection](connectors/symantecendpointprotection.md)
 
 **Publisher:** Broadcom
 
@@ -6140,9 +7100,11 @@ The [Squid Proxy](http://www.squid-cache.org/) connector allows you to easily co
 
 The [Broadcom Symantec Endpoint Protection (SEP)](https://www.broadcom.com/products/cyber-security/endpoint/end-user/enterprise) connector allows you to easily connect your SEP logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/symantecendpointprotection.md)
+
 ---
 
-### [Deprecated] Symantec ProxySG
+### [[Deprecated] Symantec ProxySG](connectors/symantecproxysg.md)
 
 **Publisher:** Symantec
 
@@ -6152,9 +7114,11 @@ The [Broadcom Symantec Endpoint Protection (SEP)](https://www.broadcom.com/produ
 
 The [Symantec ProxySG](https://www.broadcom.com/products/cyber-security/network/gateway/proxy-sg-and-advanced-secure-gateway) allows you to easily connect your Symantec ProxySG logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigations. Integrating Symantec ProxySG with Microsoft Sentinel provides more visibility into your organization's network proxy traffic and will enhance security monitoring capabilities.
 
+[→ View full connector details](connectors/symantecproxysg.md)
+
 ---
 
-### [Deprecated] Symantec VIP
+### [[Deprecated] Symantec VIP](connectors/symantecvip.md)
 
 **Publisher:** Symantec
 
@@ -6164,9 +7128,11 @@ The [Symantec ProxySG](https://www.broadcom.com/products/cyber-security/network/
 
 The [Symantec VIP](https://vip.symantec.com/) connector allows you to easily connect your Symantec VIP logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
 
+[→ View full connector details](connectors/symantecvip.md)
+
 ---
 
-### [Deprecated] Trend Micro Apex One via AMA
+### [[Deprecated] Trend Micro Apex One via AMA](connectors/trendmicroapexoneama.md)
 
 **Publisher:** Trend Micro
 
@@ -6176,9 +7142,11 @@ The [Symantec VIP](https://vip.symantec.com/) connector allows you to easily con
 
 The [Trend Micro Apex One](https://www.trendmicro.com/en_us/business/products/user-protection/sps/endpoint.html) data connector provides the capability to ingest [Trend Micro Apex One events](https://aka.ms/sentinel-TrendMicroApex-OneEvents) into Microsoft Sentinel. Refer to [Trend Micro Apex Central](https://aka.ms/sentinel-TrendMicroApex-OneCentral) for more information.
 
+[→ View full connector details](connectors/trendmicroapexoneama.md)
+
 ---
 
-### [Deprecated] Trend Micro Apex One via Legacy Agent
+### [[Deprecated] Trend Micro Apex One via Legacy Agent](connectors/trendmicroapexone.md)
 
 **Publisher:** Trend Micro
 
@@ -6188,9 +7156,11 @@ The [Trend Micro Apex One](https://www.trendmicro.com/en_us/business/products/us
 
 The [Trend Micro Apex One](https://www.trendmicro.com/en_us/business/products/user-protection/sps/endpoint.html) data connector provides the capability to ingest [Trend Micro Apex One events](https://aka.ms/sentinel-TrendMicroApex-OneEvents) into Microsoft Sentinel. Refer to [Trend Micro Apex Central](https://aka.ms/sentinel-TrendMicroApex-OneCentral) for more information.
 
+[→ View full connector details](connectors/trendmicroapexone.md)
+
 ---
 
-### [Deprecated] Trend Micro Deep Security via Legacy
+### [[Deprecated] Trend Micro Deep Security via Legacy](connectors/trendmicro.md)
 
 **Publisher:** Trend Micro
 
@@ -6200,9 +7170,11 @@ The [Trend Micro Apex One](https://www.trendmicro.com/en_us/business/products/us
 
 The Trend Micro Deep Security connector allows you to easily connect your Deep Security logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.
 
+[→ View full connector details](connectors/trendmicro.md)
+
 ---
 
-### [Deprecated] Trend Micro TippingPoint via Legacy
+### [[Deprecated] Trend Micro TippingPoint via Legacy](connectors/trendmicrotippingpoint.md)
 
 **Publisher:** Trend Micro
 
@@ -6212,9 +7184,11 @@ The Trend Micro Deep Security connector allows you to easily connect your Deep S
 
 The Trend Micro TippingPoint connector allows you to easily connect your TippingPoint SMS IPS events with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.
 
+[→ View full connector details](connectors/trendmicrotippingpoint.md)
+
 ---
 
-### [Deprecated] Ubiquiti UniFi
+### [[Deprecated] Ubiquiti UniFi](connectors/ubiquitiunifi.md)
 
 **Publisher:** Ubiquiti
 
@@ -6224,9 +7198,11 @@ The Trend Micro TippingPoint connector allows you to easily connect your Tipping
 
 The [Ubiquiti UniFi](https://www.ui.com/) data connector provides the capability to ingest [Ubiquiti UniFi firewall, dns, ssh, AP events](https://help.ui.com/hc/en-us/articles/204959834-UniFi-How-to-View-Log-Files) into Microsoft Sentinel.
 
+[→ View full connector details](connectors/ubiquitiunifi.md)
+
 ---
 
-### [Deprecated] VMware ESXi
+### [[Deprecated] VMware ESXi](connectors/vmwareesxi.md)
 
 **Publisher:** VMWare
 
@@ -6236,9 +7212,11 @@ The [Ubiquiti UniFi](https://www.ui.com/) data connector provides the capability
 
 The [VMware ESXi](https://www.vmware.com/products/esxi-and-esx.html) connector allows you to easily connect your VMWare ESXi logs with Microsoft Sentinel This gives you more insight into your organization's ESXi servers and improves your security operation capabilities.
 
+[→ View full connector details](connectors/vmwareesxi.md)
+
 ---
 
-### [Deprecated] VMware vCenter
+### [[Deprecated] VMware vCenter](connectors/vmwarevcenter.md)
 
 **Publisher:** VMware
 
@@ -6248,9 +7226,11 @@ The [VMware ESXi](https://www.vmware.com/products/esxi-and-esx.html) connector a
 
 The [vCenter](https://www.vmware.com/in/products/vcenter-server.html) connector allows you to easily connect your vCenter server logs with Microsoft Sentinel. This gives you more insight into your organization's data centers and improves your security operation capabilities.
 
+[→ View full connector details](connectors/vmwarevcenter.md)
+
 ---
 
-### [Deprecated] Vectra AI Detect via AMA
+### [[Deprecated] Vectra AI Detect via AMA](connectors/aivectradetectama.md)
 
 **Publisher:** Vectra AI
 
@@ -6260,9 +7240,11 @@ The [vCenter](https://www.vmware.com/in/products/vcenter-server.html) connector 
 
 The AI Vectra Detect connector allows users to connect Vectra Detect logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives users more insight into their organization's network and improves their security operation capabilities.
 
+[→ View full connector details](connectors/aivectradetectama.md)
+
 ---
 
-### [Deprecated] Vectra AI Detect via Legacy Agent
+### [[Deprecated] Vectra AI Detect via Legacy Agent](connectors/aivectradetect.md)
 
 **Publisher:** Vectra AI
 
@@ -6272,9 +7254,11 @@ The AI Vectra Detect connector allows users to connect Vectra Detect logs with M
 
 The AI Vectra Detect connector allows users to connect Vectra Detect logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives users more insight into their organization's network and improves their security operation capabilities.
 
+[→ View full connector details](connectors/aivectradetect.md)
+
 ---
 
-### [Deprecated] Votiro Sanitization Engine Logs
+### [[Deprecated] Votiro Sanitization Engine Logs](connectors/votiro.md)
 
 **Publisher:** Votiro
 
@@ -6284,9 +7268,11 @@ The AI Vectra Detect connector allows users to connect Vectra Detect logs with M
 
 The Votiro data connector allows you to easily connect your Votiro Event logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.  Using Votiro on Microsoft Sentinel will provide you more insights into the sanitization results of files.
 
+[→ View full connector details](connectors/votiro.md)
+
 ---
 
-### [Deprecated] WatchGuard Firebox
+### [[Deprecated] WatchGuard Firebox](connectors/watchguardfirebox.md)
 
 **Publisher:** WatchGuard Technologies
 
@@ -6296,9 +7282,11 @@ The Votiro data connector allows you to easily connect your Votiro Event logs wi
 
 WatchGuard Firebox (https://www.watchguard.com/wgrd-products/firewall-appliances and https://www.watchguard.com/wgrd-products/cloud-and-virtual-firewalls) is security products/firewall-appliances. Watchguard Firebox will send syslog to Watchguard Firebox collector agent.The agent then sends the message to the workspace.
 
+[→ View full connector details](connectors/watchguardfirebox.md)
+
 ---
 
-### [Deprecated] WireX Network Forensics Platform via AMA
+### [[Deprecated] WireX Network Forensics Platform via AMA](connectors/wirex-systems-nfpama.md)
 
 **Publisher:** WireX_Systems
 
@@ -6308,9 +7296,11 @@ WatchGuard Firebox (https://www.watchguard.com/wgrd-products/firewall-appliances
 
 The WireX Systems data connector allows security professional to integrate with Microsoft Sentinel to allow you to further enrich your forensics investigations; to not only encompass the contextual content offered by WireX but to analyze data from other sources, and to create custom dashboards to give the most complete picture during a forensic investigation and to create custom workflows.
 
+[→ View full connector details](connectors/wirex-systems-nfpama.md)
+
 ---
 
-### [Deprecated] WireX Network Forensics Platform via Legacy Agent
+### [[Deprecated] WireX Network Forensics Platform via Legacy Agent](connectors/wirex-systems-nfp.md)
 
 **Publisher:** WireX_Systems
 
@@ -6320,9 +7310,11 @@ The WireX Systems data connector allows security professional to integrate with 
 
 The WireX Systems data connector allows security professional to integrate with Microsoft Sentinel to allow you to further enrich your forensics investigations; to not only encompass the contextual content offered by WireX but to analyze data from other sources, and to create custom dashboards to give the most complete picture during a forensic investigation and to create custom workflows.
 
+[→ View full connector details](connectors/wirex-systems-nfp.md)
+
 ---
 
-### [Deprecated] WithSecure Elements via Connector
+### [[Deprecated] WithSecure Elements via Connector](connectors/withsecureelementsviaconnector.md)
 
 **Publisher:** WithSecure
 
@@ -6335,9 +7327,11 @@ By connecting WithSecure Elements via Connector to Microsoft Sentinel, security 
 It requires deploying "Elements Connector" either on-prem or in cloud.
 The Common Event Format (CEF) provides natively search & correlation, alerting and threat intelligence enrichment for each data log.
 
+[→ View full connector details](connectors/withsecureelementsviaconnector.md)
+
 ---
 
-### [Deprecated] Zscaler Private Access
+### [[Deprecated] Zscaler Private Access](connectors/zscalerprivateaccess.md)
 
 **Publisher:** Zscaler
 
@@ -6347,9 +7341,11 @@ The Common Event Format (CEF) provides natively search & correlation, alerting a
 
 The [Zscaler Private Access (ZPA)](https://help.zscaler.com/zpa/what-zscaler-private-access) data connector provides the capability to ingest [Zscaler Private Access events](https://help.zscaler.com/zpa/log-streaming-service) into Microsoft Sentinel. Refer to [Zscaler Private Access documentation](https://help.zscaler.com/zpa) for more information.
 
+[→ View full connector details](connectors/zscalerprivateaccess.md)
+
 ---
 
-### [Deprecated] Zscaler via AMA
+### [[Deprecated] Zscaler via AMA](connectors/zscalerama.md)
 
 **Publisher:** Zscaler
 
@@ -6359,9 +7355,11 @@ The [Zscaler Private Access (ZPA)](https://help.zscaler.com/zpa/what-zscaler-pri
 
 The Zscaler data connector allows you to easily connect your Zscaler Internet Access (ZIA) logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.  Using Zscaler on Microsoft Sentinel will provide you more insights into your organization’s Internet usage, and will enhance its security operation capabilities.​
 
+[→ View full connector details](connectors/zscalerama.md)
+
 ---
 
-### [Deprecated] Zscaler via Legacy Agent
+### [[Deprecated] Zscaler via Legacy Agent](connectors/zscaler.md)
 
 **Publisher:** Zscaler
 
@@ -6371,9 +7369,11 @@ The Zscaler data connector allows you to easily connect your Zscaler Internet Ac
 
 The Zscaler data connector allows you to easily connect your Zscaler Internet Access (ZIA) logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.  Using Zscaler on Microsoft Sentinel will provide you more insights into your organization’s Internet usage, and will enhance its security operation capabilities.​
 
+[→ View full connector details](connectors/zscaler.md)
+
 ---
 
-### [Deprecated] iboss via Legacy Agent
+### [[Deprecated] iboss via Legacy Agent](connectors/iboss.md)
 
 **Publisher:** iboss
 
@@ -6383,9 +7383,11 @@ The Zscaler data connector allows you to easily connect your Zscaler Internet Ac
 
 The [iboss](https://www.iboss.com) data connector enables you to seamlessly connect your Threat Console to Microsoft Sentinel and enrich your instance with iboss URL event logs. Our logs are forwarded in Common Event Format (CEF) over Syslog and the configuration required can be completed on the iboss platform without the use of a proxy. Take advantage of our connector to garner critical data points and gain insight into security threats.
 
+[→ View full connector details](connectors/iboss.md)
+
 ---
 
-### [Deprecated] vArmour Application Controller via AMA
+### [[Deprecated] vArmour Application Controller via AMA](connectors/varmouracama.md)
 
 **Publisher:** vArmour
 
@@ -6395,9 +7397,11 @@ The [iboss](https://www.iboss.com) data connector enables you to seamlessly conn
 
 vArmour reduces operational risk and increases cyber resiliency by visualizing and controlling application relationships across the enterprise. This vArmour connector enables streaming of Application Controller Violation Alerts into Microsoft Sentinel, so you can take advantage of search & correlation, alerting, & threat intelligence enrichment for each log.
 
+[→ View full connector details](connectors/varmouracama.md)
+
 ---
 
-### [Deprecated] vArmour Application Controller via Legacy Agent
+### [[Deprecated] vArmour Application Controller via Legacy Agent](connectors/varmourac.md)
 
 **Publisher:** vArmour
 
@@ -6406,6 +7410,8 @@ vArmour reduces operational risk and increases cyber resiliency by visualizing a
 **Tables (1):** `CommonSecurityLog`
 
 vArmour reduces operational risk and increases cyber resiliency by visualizing and controlling application relationships across the enterprise. This vArmour connector enables streaming of Application Controller Violation Alerts into Microsoft Sentinel, so you can take advantage of search & correlation, alerting, & threat intelligence enrichment for each log.
+
+[→ View full connector details](connectors/varmourac.md)
 
 ---
 

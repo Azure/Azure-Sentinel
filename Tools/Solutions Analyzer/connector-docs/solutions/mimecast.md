@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Mimecast |
 | **Support Tier** | Partner |
 | **Support Link** | [https://mimecastsupport.zendesk.com/](https://mimecastsupport.zendesk.com/) |
 | **Categories** | domains |
 | **First Published** | 2024-09-10 |
 | **Last Updated** | 2024-09-10 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast) |
+
+## Data Connectors
 
 This solution provides **5 data connector(s)**.
 
-### Mimecast Awareness Training
+### [Mimecast Awareness Training](../connectors/mimecastatapi.md)
 
 **Publisher:** Mimecast
 
@@ -32,18 +34,17 @@ The Mimecast products included within the connector are:
 
 
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Awareness_Performance_Details_CL` |
+| | `Awareness_SafeScore_Details_CL` |
+| | `Awareness_User_Data_CL` |
+| | `Awareness_Watchlist_Details_CL` |
+| **Connector Definition Files** | [Mimecast_AT_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastAT/Mimecast_AT_FunctionApp.json) |
 
-- `Awareness_Performance_Details_CL`
-- `Awareness_SafeScore_Details_CL`
-- `Awareness_User_Data_CL`
-- `Awareness_Watchlist_Details_CL`
+[→ View full connector details](../connectors/mimecastatapi.md)
 
-**Connector Definition Files:**
-
-- [Mimecast_AT_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastAT/Mimecast_AT_FunctionApp.json)
-
-### Mimecast Audit
+### [Mimecast Audit](../connectors/mimecastauditapi.md)
 
 **Publisher:** Mimecast
 
@@ -55,29 +56,27 @@ Audit
 
  
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Audit_CL` |
+| **Connector Definition Files** | [Mimecast_Audit_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastAudit/Mimecast_Audit_FunctionApp.json) |
 
-- `Audit_CL`
+[→ View full connector details](../connectors/mimecastauditapi.md)
 
-**Connector Definition Files:**
-
-- [Mimecast_Audit_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastAudit/Mimecast_Audit_FunctionApp.json)
-
-### Mimecast Cloud Integrated
+### [Mimecast Cloud Integrated](../connectors/mimecastciapi.md)
 
 **Publisher:** Mimecast
 
 The data connector for [Mimecast Cloud Integrated](https://integrations.mimecast.com/tech-partners/microsoft-sentinel/) provides customers with the visibility into security events related to the Cloud Integrated inspection technologies within Microsoft Sentinel. The data connector provides pre-created dashboards to allow analysts to view insight into email based threats, aid in incident correlation and reduce investigation response times coupled with custom alert capabilities.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Cloud_Integrated_CL` |
+| **Connector Definition Files** | [Mimecast_Cloud_Integrated_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastCloudIntegrated/Mimecast_Cloud_Integrated_FunctionApp.json) |
 
-- `Cloud_Integrated_CL`
+[→ View full connector details](../connectors/mimecastciapi.md)
 
-**Connector Definition Files:**
-
-- [Mimecast_Cloud_Integrated_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastCloudIntegrated/Mimecast_Cloud_Integrated_FunctionApp.json)
-
-### Mimecast Secure Email Gateway
+### [Mimecast Secure Email Gateway](../connectors/mimecastsegapi.md)
 
 **Publisher:** Mimecast
 
@@ -89,16 +88,15 @@ The data connector for [Mimecast Secure Email Gateway](https://integrations.mime
 
  
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Seg_Cg_CL` |
+| | `Seg_Dlp_CL` |
+| **Connector Definition Files** | [Mimecast_SEG_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastSEG/Mimecast_SEG_FunctionApp.json) |
 
-- `Seg_Cg_CL`
-- `Seg_Dlp_CL`
+[→ View full connector details](../connectors/mimecastsegapi.md)
 
-**Connector Definition Files:**
-
-- [Mimecast_SEG_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastSEG/Mimecast_SEG_FunctionApp.json)
-
-### Mimecast Targeted Threat Protection
+### [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md)
 
 **Publisher:** Mimecast
 
@@ -114,15 +112,14 @@ The Mimecast products included within the connector are:
 
 
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Ttp_Attachment_CL` |
+| | `Ttp_Impersonation_CL` |
+| | `Ttp_Url_CL` |
+| **Connector Definition Files** | [Mimecast_TTP_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastTTP/Mimecast_TTP_FunctionApp.json) |
 
-- `Ttp_Attachment_CL`
-- `Ttp_Impersonation_CL`
-- `Ttp_Url_CL`
-
-**Connector Definition Files:**
-
-- [Mimecast_TTP_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastTTP/Mimecast_TTP_FunctionApp.json)
+[→ View full connector details](../connectors/mimecastttpapi.md)
 
 ## Tables Reference
 
@@ -142,4 +139,4 @@ This solution ingests data into **11 table(s)**:
 | `Ttp_Impersonation_CL` | Mimecast Targeted Threat Protection |
 | `Ttp_Url_CL` | Mimecast Targeted Threat Protection |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

@@ -2,45 +2,45 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Illumio |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.illumio.com/support/support](https://www.illumio.com/support/support) |
 | **Categories** | domains |
 | **First Published** | 2024-05-13 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### Illumio SaaS
+### [Illumio SaaS](../connectors/illumiosaasdataconnector.md)
 
 **Publisher:** Illumio
 
 [Illumio](https://www.illumio.com/) connector provides the capability to ingest events into Microsoft Sentinel. The connector provides ability to ingest auditable and flow events from AWS S3 bucket.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Illumio_Auditable_Events_CL` |
+| | `Illumio_Flow_Events_CL` |
+| **Connector Definition Files** | [IllumioSaaS_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS/Data%20Connectors/IllumioSaaS_FunctionApp.json) |
 
-- `Illumio_Auditable_Events_CL`
-- `Illumio_Flow_Events_CL`
+[→ View full connector details](../connectors/illumiosaasdataconnector.md)
 
-**Connector Definition Files:**
-
-- [IllumioSaaS_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS/Data%20Connectors/IllumioSaaS_FunctionApp.json)
-
-### Illumio Saas
+### [Illumio Saas](../connectors/illumiosaasccfdefinition.md)
 
 **Publisher:** Microsoft
 
 The Illumio Saas Cloud data connector provides the capability to ingest Flow logs into Microsoft Sentinel using the Illumio Saas Log Integration through AWS S3 Bucket. Refer to [Illumio Saas Log Integration](https://product-docs-repo.illumio.com/Tech-Docs/CloudSecure/out/en/administer-cloudsecure/connector.html#UUID-c14edaab-9726-1f23-9c4c-bc2937be39ee_section-idm234556433515698) for more information.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `IllumioFlowEventsV2_CL` |
+| **Connector Definition Files** | [IllumioSaasLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS/Data%20Connectors/IllumioSaasLogs_ccf/IllumioSaasLogs_ConnectorDefinition.json) |
 
-- `IllumioFlowEventsV2_CL`
-
-**Connector Definition Files:**
-
-- [IllumioSaasLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS/Data%20Connectors/IllumioSaasLogs_ccf/IllumioSaasLogs_ConnectorDefinition.json)
+[→ View full connector details](../connectors/illumiosaasccfdefinition.md)
 
 ## Tables Reference
 
@@ -52,4 +52,4 @@ This solution ingests data into **3 table(s)**:
 | `Illumio_Auditable_Events_CL` | Illumio SaaS |
 | `Illumio_Flow_Events_CL` | Illumio SaaS |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

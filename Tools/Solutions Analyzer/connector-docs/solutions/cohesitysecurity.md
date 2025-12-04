@@ -2,30 +2,31 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Cohesity |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.cohesity.com/](https://support.cohesity.com/) |
 | **Categories** | domains |
 | **First Published** | 2022-10-10 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Cohesity
+### [Cohesity](../connectors/cohesitydataconnector.md)
 
 **Publisher:** Cohesity
 
 The Cohesity function apps provide the ability to ingest Cohesity Datahawk ransomware alerts into Microsoft Sentinel.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Cohesity_CL` |
+| **Connector Definition Files** | [Cohesity_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/Cohesity_API_FunctionApp.json) |
 
-- `Cohesity_CL`
-
-**Connector Definition Files:**
-
-- [Cohesity_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/Cohesity_API_FunctionApp.json)
+[→ View full connector details](../connectors/cohesitydataconnector.md)
 
 ## Tables Reference
 
@@ -35,4 +36,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Cohesity_CL` | Cohesity |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

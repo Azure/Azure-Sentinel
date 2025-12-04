@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2021-10-18 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub) |
+
+## Data Connectors
 
 This solution provides **3 data connector(s)**.
 
-### GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)
+### [GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)](../connectors/githubauditdefinitionv2.md)
 
 **Publisher:** Microsoft
 
@@ -23,15 +25,14 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
  **Note:** If you intended to ingest GitHub subscribed events into Microsoft Sentinel, please refer to GitHub (using Webhooks) Connector from "**Data Connectors**" gallery.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `GitHubAuditLogsV2_CL` |
+| **Connector Definition Files** | [GitHubAuditLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GitHubAuditLogs_CCF/GitHubAuditLogs_ConnectorDefinition.json) |
 
-- `GitHubAuditLogsV2_CL`
+[→ View full connector details](../connectors/githubauditdefinitionv2.md)
 
-**Connector Definition Files:**
-
-- [GitHubAuditLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GitHubAuditLogs_CCF/GitHubAuditLogs_ConnectorDefinition.json)
-
-### [Deprecated] GitHub Enterprise Audit Log
+### [[Deprecated] GitHub Enterprise Audit Log](../connectors/githubecauditlogpolling.md)
 
 **Publisher:** GitHub
 
@@ -45,15 +46,14 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `GitHubAuditLogPolling_CL` |
+| **Connector Definition Files** | [azuredeploy_GitHub_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/azuredeploy_GitHub_native_poller_connector.json) |
 
-- `GitHubAuditLogPolling_CL`
+[→ View full connector details](../connectors/githubecauditlogpolling.md)
 
-**Connector Definition Files:**
-
-- [azuredeploy_GitHub_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/azuredeploy_GitHub_native_poller_connector.json)
-
-### GitHub (using Webhooks)
+### [GitHub (using Webhooks)](../connectors/githubwebhook.md)
 
 **Publisher:** Microsoft
 
@@ -63,13 +63,12 @@ The [GitHub](https://www.github.com) webhook data connector provides the capabil
 
  **Note:** If you are intended to ingest Github Audit logs, Please refer to GitHub Enterprise Audit Log Connector from "**Data Connectors**" gallery.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `githubscanaudit_CL` |
+| **Connector Definition Files** | [GithubWebhook_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GithubWebhook/GithubWebhook_API_FunctionApp.json) |
 
-- `githubscanaudit_CL`
-
-**Connector Definition Files:**
-
-- [GithubWebhook_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GithubWebhook/GithubWebhook_API_FunctionApp.json)
+[→ View full connector details](../connectors/githubwebhook.md)
 
 ## Tables Reference
 
@@ -81,4 +80,4 @@ This solution ingests data into **3 table(s)**:
 | `GitHubAuditLogsV2_CL` | 1 connector(s) |
 | `githubscanaudit_CL` | GitHub (using Webhooks) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

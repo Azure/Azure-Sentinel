@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Cyborg Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://hunter.cyborgsecurity.io/customer-support](https://hunter.cyborgsecurity.io/customer-support) |
 | **Categories** | domains |
 | **First Published** | 2023-07-03 |
 | **Last Updated** | 2023-09-22 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Cyborg Security HUNTER Hunt Packages
+### [Cyborg Security HUNTER Hunt Packages](../connectors/cyborgsecurity-hunter.md)
 
 **Publisher:** Cyborg Security
 
@@ -24,13 +26,12 @@ Cyborg Security is a leading provider of advanced threat hunting solutions, with
 
 Follow the steps to gain access to Cyborg Security's Community and setup the 'Open in Tool' capabilities in the HUNTER Platform.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `SecurityEvent` |
+| **Connector Definition Files** | [CyborgSecurity_HUNTER.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER/Data%20Connectors/CyborgSecurity_HUNTER.json) |
 
-- `SecurityEvent`
-
-**Connector Definition Files:**
-
-- [CyborgSecurity_HUNTER.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER/Data%20Connectors/CyborgSecurity_HUNTER.json)
+[→ View full connector details](../connectors/cyborgsecurity-hunter.md)
 
 ## Tables Reference
 
@@ -40,4 +41,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `SecurityEvent` | Cyborg Security HUNTER Hunt Packages |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

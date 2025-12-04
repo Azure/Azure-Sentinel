@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Cloudflare |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.cloudflare.com](https://support.cloudflare.com) |
 | **Categories** | domains |
 | **First Published** | 2021-10-20 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### [DEPRECATED] Cloudflare
+### [[DEPRECATED] Cloudflare](../connectors/cloudflaredataconnector.md)
 
 **Publisher:** Cloudflare
 
@@ -23,27 +25,25 @@ The Cloudflare data connector provides the capability to ingest [Cloudflare logs
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Cloudflare_CL` |
+| **Connector Definition Files** | [Cloudflare_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare/Data%20Connectors/Cloudflare_API_FunctionApp.json) |
 
-- `Cloudflare_CL`
+[→ View full connector details](../connectors/cloudflaredataconnector.md)
 
-**Connector Definition Files:**
-
-- [Cloudflare_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare/Data%20Connectors/Cloudflare_API_FunctionApp.json)
-
-### Cloudflare (Using Blob Container) (via Codeless Connector Framework)
+### [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](../connectors/cloudflaredefinition.md)
 
 **Publisher:** Microsoft
 
  The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/)for more information.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `CloudflareV2_CL` |
+| **Connector Definition Files** | [CloudflareLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare/Data%20Connectors/CloudflareLog_CCF/CloudflareLog_ConnectorDefinition.json) |
 
-- `CloudflareV2_CL`
-
-**Connector Definition Files:**
-
-- [CloudflareLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare/Data%20Connectors/CloudflareLog_CCF/CloudflareLog_ConnectorDefinition.json)
+[→ View full connector details](../connectors/cloudflaredefinition.md)
 
 ## Tables Reference
 
@@ -54,4 +54,4 @@ This solution ingests data into **2 table(s)**:
 | `CloudflareV2_CL` | 1 connector(s) |
 | `Cloudflare_CL` | [DEPRECATED] Cloudflare |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

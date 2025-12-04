@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2022-05-02 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Microsoft Defender XDR
+### [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md)
 
 **Publisher:** Microsoft
 
@@ -37,34 +39,33 @@ Microsoft Defender XDR suite includes:
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220004&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `AlertEvidence` |
+| | `CloudAppEvents` |
+| | `DeviceEvents` |
+| | `DeviceFileCertificateInfo` |
+| | `DeviceFileEvents` |
+| | `DeviceImageLoadEvents` |
+| | `DeviceInfo` |
+| | `DeviceLogonEvents` |
+| | `DeviceNetworkEvents` |
+| | `DeviceNetworkInfo` |
+| | `DeviceProcessEvents` |
+| | `DeviceRegistryEvents` |
+| | `EmailAttachmentInfo` |
+| | `EmailEvents` |
+| | `EmailPostDeliveryEvents` |
+| | `EmailUrlInfo` |
+| | `IdentityDirectoryEvents` |
+| | `IdentityLogonEvents` |
+| | `IdentityQueryEvents` |
+| | `SecurityAlert` |
+| | `SecurityIncident` |
+| | `UrlClickEvents` |
+| **Connector Definition Files** | [MicrosoftThreatProtection.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Data%20Connectors/MicrosoftThreatProtection.JSON) |
 
-- `AlertEvidence`
-- `CloudAppEvents`
-- `DeviceEvents`
-- `DeviceFileCertificateInfo`
-- `DeviceFileEvents`
-- `DeviceImageLoadEvents`
-- `DeviceInfo`
-- `DeviceLogonEvents`
-- `DeviceNetworkEvents`
-- `DeviceNetworkInfo`
-- `DeviceProcessEvents`
-- `DeviceRegistryEvents`
-- `EmailAttachmentInfo`
-- `EmailEvents`
-- `EmailPostDeliveryEvents`
-- `EmailUrlInfo`
-- `IdentityDirectoryEvents`
-- `IdentityLogonEvents`
-- `IdentityQueryEvents`
-- `SecurityAlert`
-- `SecurityIncident`
-- `UrlClickEvents`
-
-**Connector Definition Files:**
-
-- [MicrosoftThreatProtection.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Data%20Connectors/MicrosoftThreatProtection.JSON)
+[→ View full connector details](../connectors/microsoftthreatprotection.md)
 
 ## Tables Reference
 
@@ -95,4 +96,4 @@ This solution ingests data into **22 table(s)**:
 | `SecurityIncident` | Microsoft Defender XDR |
 | `UrlClickEvents` | Microsoft Defender XDR |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

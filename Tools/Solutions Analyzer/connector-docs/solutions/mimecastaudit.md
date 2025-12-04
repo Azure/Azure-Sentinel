@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Mimecast |
 | **Support Tier** | Partner |
 | **Support Link** | [https://mimecastsupport.zendesk.com/](https://mimecastsupport.zendesk.com/) |
 | **Categories** | domains |
 | **First Published** | 2022-02-24 |
 | **Last Updated** | 2022-02-24 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Mimecast Audit & Authentication
+### [Mimecast Audit & Authentication](../connectors/mimecastauditapi.md)
 
 **Publisher:** Mimecast
 
@@ -26,13 +28,12 @@ Audit & Authentication
 
  
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `MimecastAudit_CL` |
+| **Connector Definition Files** | [MimecastAudit_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit/Data%20Connectors/MimecastAudit_API_AzureFunctionApp.json) |
 
-- `MimecastAudit_CL`
-
-**Connector Definition Files:**
-
-- [MimecastAudit_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit/Data%20Connectors/MimecastAudit_API_AzureFunctionApp.json)
+[→ View full connector details](../connectors/mimecastauditapi.md)
 
 ## Tables Reference
 
@@ -42,4 +43,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `MimecastAudit_CL` | Mimecast Audit & Authentication |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

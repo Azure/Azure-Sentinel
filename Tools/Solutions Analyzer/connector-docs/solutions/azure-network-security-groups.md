@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2022-05-23 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Network Security Groups
+### [Network Security Groups](../connectors/azurensg.md)
 
 **Publisher:** Microsoft
 
@@ -35,13 +37,12 @@ When you enable logging for an NSG, you can gather the following types of resour
 
 This connector lets you stream your NSG diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223718&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `AzureDiagnostics` |
+| **Connector Definition Files** | [AzureNSG.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups/Data%20Connectors/AzureNSG.JSON) |
 
-- `AzureDiagnostics`
-
-**Connector Definition Files:**
-
-- [AzureNSG.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups/Data%20Connectors/AzureNSG.JSON)
+[→ View full connector details](../connectors/azurensg.md)
 
 ## Tables Reference
 
@@ -51,4 +52,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AzureDiagnostics` | Network Security Groups |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

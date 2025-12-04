@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2021-10-20 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Microsoft 365 Insider Risk Management
+### [Microsoft 365 Insider Risk Management](../connectors/officeirm.md)
 
 **Publisher:** Microsoft
 
@@ -39,13 +41,12 @@ This solution produces alerts that can be seen by Office customers in the Inside
 
 These alerts can be imported into Microsoft Sentinel with this connector, allowing you to see, investigate, and respond to them in a broader organizational threat context. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223721&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `SecurityAlert` |
+| **Connector Definition Files** | [template_OfficeIRM.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement/Data%20Connectors/template_OfficeIRM.JSON) |
 
-- `SecurityAlert`
-
-**Connector Definition Files:**
-
-- [template_OfficeIRM.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement/Data%20Connectors/template_OfficeIRM.JSON)
+[→ View full connector details](../connectors/officeirm.md)
 
 ## Tables Reference
 
@@ -55,4 +56,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `SecurityAlert` | Microsoft 365 Insider Risk Management |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

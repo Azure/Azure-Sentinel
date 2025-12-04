@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2023-07-12 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Cisco Meraki (using REST API)
+### [Cisco Meraki (using REST API)](../connectors/ciscomerakimultirule.md)
 
 **Publisher:** Microsoft
 
@@ -29,15 +31,14 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
 
  3. Audit Event
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `ASimAuditEventLogs` |
+| | `ASimNetworkSessionLogs` |
+| | `ASimWebSessionLogs` |
+| **Connector Definition Files** | [dataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/dataConnectorDefinition.json) |
 
-- `ASimAuditEventLogs`
-- `ASimNetworkSessionLogs`
-- `ASimWebSessionLogs`
-
-**Connector Definition Files:**
-
-- [dataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/dataConnectorDefinition.json)
+[→ View full connector details](../connectors/ciscomerakimultirule.md)
 
 ## Tables Reference
 
@@ -49,4 +50,4 @@ This solution ingests data into **3 table(s)**:
 | `ASimNetworkSessionLogs` | Cisco Meraki (using REST API) |
 | `ASimWebSessionLogs` | Cisco Meraki (using REST API) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Mimecast |
 | **Support Tier** | Partner |
 | **Support Link** | [https://mimecastsupport.zendesk.com/](https://mimecastsupport.zendesk.com/) |
 | **Categories** | domains |
 | **First Published** | 2022-02-24 |
 | **Last Updated** | 2022-02-24 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Mimecast Targeted Threat Protection
+### [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md)
 
 **Publisher:** Mimecast
 
@@ -30,15 +32,14 @@ The Mimecast products included within the connector are:
 
 
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `MimecastTTPAttachment_CL` |
+| | `MimecastTTPImpersonation_CL` |
+| | `MimecastTTPUrl_CL` |
+| **Connector Definition Files** | [MimecastTTP_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Data%20Connectors/MimecastTTP_API_FunctionApp.json) |
 
-- `MimecastTTPAttachment_CL`
-- `MimecastTTPImpersonation_CL`
-- `MimecastTTPUrl_CL`
-
-**Connector Definition Files:**
-
-- [MimecastTTP_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Data%20Connectors/MimecastTTP_API_FunctionApp.json)
+[→ View full connector details](../connectors/mimecastttpapi.md)
 
 ## Tables Reference
 
@@ -50,4 +51,4 @@ This solution ingests data into **3 table(s)**:
 | `MimecastTTPImpersonation_CL` | Mimecast Targeted Threat Protection |
 | `MimecastTTPUrl_CL` | Mimecast Targeted Threat Protection |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

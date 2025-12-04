@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2021-10-27 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### [Deprecated] Microsoft Sysmon For Linux
+### [[Deprecated] Microsoft Sysmon For Linux](../connectors/microsoftsysmonforlinux.md)
 
 **Publisher:** Microsoft
 
@@ -21,14 +23,13 @@ This solution provides **1 data connector(s)**.
 
 [Sysmon for linux link:]. The Sysmon for Linux connector uses [Syslog](https://aka.ms/sysLogInfo) as its data ingestion method. This solution depends on ASIM to work as expected. [Deploy ASIM](https://aka.ms/DeployASIM) to get the full value from the solution.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Syslog` |
+| | `vimProcessCreateLinuxSysmon` |
+| **Connector Definition Files** | [SysmonForLinux.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux/Data%20Connectors/SysmonForLinux.json) |
 
-- `Syslog`
-- `vimProcessCreateLinuxSysmon`
-
-**Connector Definition Files:**
-
-- [SysmonForLinux.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux/Data%20Connectors/SysmonForLinux.json)
+[→ View full connector details](../connectors/microsoftsysmonforlinux.md)
 
 ## Tables Reference
 
@@ -39,4 +40,4 @@ This solution ingests data into **2 table(s)**:
 | `Syslog` | [Deprecated] Microsoft Sysmon For Linux |
 | `vimProcessCreateLinuxSysmon` | [Deprecated] Microsoft Sysmon For Linux |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Cofense Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cofense.com/contact-support/](https://cofense.com/contact-support/) |
 | **Categories** | domains |
 | **First Published** | 2023-03-24 |
 | **Last Updated** | 2023-03-24 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Cofense Triage Threat Indicators Ingestion
+### [Cofense Triage Threat Indicators Ingestion](../connectors/cofensetriage.md)
 
 **Publisher:** Cofense
 
@@ -56,15 +58,14 @@ The [Cofense-Triage](https://cofense.com/product-services/cofense-triage/) data 
 
 > https://learn.microsoft.com/microsoft-365/security/defender-endpoint/ti-indicator?view=o365-worldwide
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Cofense_Triage_failed_indicators_CL` |
+| | `Report_links_data_CL` |
+| | `ThreatIntelligenceIndicator` |
+| **Connector Definition Files** | [CofenseTriage_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage/Data%20Connectors/CofenseTriageDataConnector/CofenseTriage_API_FunctionApp.json) |
 
-- `Cofense_Triage_failed_indicators_CL`
-- `Report_links_data_CL`
-- `ThreatIntelligenceIndicator`
-
-**Connector Definition Files:**
-
-- [CofenseTriage_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage/Data%20Connectors/CofenseTriageDataConnector/CofenseTriage_API_FunctionApp.json)
+[→ View full connector details](../connectors/cofensetriage.md)
 
 ## Tables Reference
 
@@ -76,4 +77,4 @@ This solution ingests data into **3 table(s)**:
 | `Report_links_data_CL` | Cofense Triage Threat Indicators Ingestion |
 | `ThreatIntelligenceIndicator` | Cofense Triage Threat Indicators Ingestion |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

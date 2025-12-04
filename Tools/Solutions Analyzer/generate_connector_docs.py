@@ -95,7 +95,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         # Generate sections by letter
         for letter in letters:
             f.write(f"### {letter}\n\n")
-            f.write("| Solution | First Published | Support |\n")
+            f.write("| Solution | First Published | Publisher |\n")
             f.write("|----------|----------------|----------|\n")
             
             for solution_name in sorted(by_letter[letter]):
@@ -106,7 +106,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 first_published = connectors[0].get('solution_first_publish_date', 'N/A')
                 
                 solution_link = f"[{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)"
-                f.write(f"| {solution_link} | {first_published} | {support_name} ({support_tier}) |\n")
+                f.write(f"| {solution_link} | {first_published} | {support_name} |\n")
             
             f.write("\n")
     
@@ -197,7 +197,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
                 
-                f.write(f"### {title}\n\n")
+                f.write(f"### [{title}](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
                 f.write(f"**Publisher:** {publisher}\n\n")
                 f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)\n\n")
                 
@@ -212,6 +212,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     description = description.replace('<br>', '\n')
                     f.write(f"{description}\n\n")
                 
+                f.write(f"[→ View full connector details](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
                 f.write("---\n\n")
         
         # Add deprecated connectors section at the end
@@ -226,7 +227,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
                 
-                f.write(f"### {title}\n\n")
+                f.write(f"### [{title}](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
                 f.write(f"**Publisher:** {publisher}\n\n")
                 f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)\n\n")
                 
@@ -241,6 +242,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     description = description.replace('<br>', '\n')
                     f.write(f"{description}\n\n")
                 
+                f.write(f"[→ View full connector details](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
                 f.write("---\n\n")
     
     print(f"Generated connectors index: {index_path}")
@@ -264,9 +266,10 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
             if not table:
                 continue
             
-            connector_title = conn.get('connector_title', conn.get('connector_id', 'Unknown'))
+            connector_id = conn.get('connector_id', 'Unknown')
+            connector_title = conn.get('connector_title', connector_id)
             tables_map[table]['solutions'].add(solution_name)
-            tables_map[table]['connectors'].add(connector_title)
+            tables_map[table]['connectors'].add((connector_id, connector_title))
             
             # Check if unique
             if conn.get('is_unique', 'false') == 'true':
@@ -278,7 +281,7 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         
         # Add navigation
         f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](connector-reference-index.md)\n")
+        f.write("- [Solutions](solutions-index.md)\n")
         f.write("- [Connectors](connectors-index.md)\n")
         f.write("- [Tables](tables-index.md) (this page)\n\n")
         f.write("---\n\n")
@@ -310,7 +313,6 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
             for table in sorted(by_letter[letter]):
                 info = tables_map[table]
                 num_solutions = len(info['solutions'])
-                num_connectors = len(info['connectors'])
                 
                 # Create links to first few solutions
                 solution_links = []
@@ -321,11 +323,90 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 if num_solutions > 3:
                     solutions_cell += f" +{num_solutions - 3} more"
                 
-                f.write(f"| `{table}` | {solutions_cell} | {num_connectors} |\n")
+                # Create links to connectors
+                connector_links = []
+                for connector_id, connector_title in sorted(info['connectors'])[:5]:
+                    connector_links.append(f"[{connector_title}](connectors/{sanitize_anchor(connector_id)}.md)")
+                
+                connectors_cell = ", ".join(connector_links)
+                if len(info['connectors']) > 5:
+                    connectors_cell += f" +{len(info['connectors']) - 5} more"
+                
+                f.write(f"| `{table}` | {solutions_cell} | {connectors_cell} |\n")
             
             f.write("\n")
     
     print(f"Generated tables index: {index_path}")
+
+
+def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> None:
+    """Generate individual connector documentation pages."""
+    
+    connector_dir = output_dir / "connectors"
+    connector_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Group all data by connector_id
+    by_connector: Dict[str, Dict[str, any]] = defaultdict(lambda: {
+        'entries': [],
+        'solutions': set(),
+        'tables': set()
+    })
+    
+    for solution_name, connectors in solutions.items():
+        for conn in connectors:
+            connector_id = conn.get('connector_id', 'Unknown')
+            by_connector[connector_id]['entries'].append(conn)
+            by_connector[connector_id]['solutions'].add(solution_name)
+            by_connector[connector_id]['tables'].add(conn.get('Table', ''))
+    
+    # Generate a page for each connector
+    for connector_id, data in sorted(by_connector.items()):
+        connector_path = connector_dir / f"{sanitize_anchor(connector_id)}.md"
+        entries = data['entries']
+        first_entry = entries[0]
+        
+        connector_title = first_entry.get('connector_title', connector_id)
+        
+        with connector_path.open("w", encoding="utf-8") as f:
+            f.write(f"# {connector_title}\n\n")
+            
+            # Connector metadata table (no column headers)
+            f.write("| | |\n")
+            f.write("|----------|-------|\n")
+            f.write(f"| **Connector ID** | `{connector_id}` |\n")
+            
+            publisher = first_entry.get('connector_publisher', '')
+            if publisher:
+                f.write(f"| **Publisher** | {publisher} |\n")
+            
+            # Tables
+            tables_list = ", ".join([f"[`{table}`](../tables-index.md#{table.lower()})" for table in sorted(data['tables']) if table])
+            f.write(f"| **Tables Ingested** | {tables_list} |\n")
+            
+            # Solutions
+            solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
+            f.write(f"| **Used in Solutions** | {solutions_list} |\n")
+            
+            # Connector files
+            connector_files = first_entry.get('connector_files', '')
+            if connector_files:
+                files = [f.strip() for f in connector_files.split(';') if f.strip()]
+                if files:
+                    files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in files])
+                    f.write(f"| **Connector Definition Files** | {files_list} |\n")
+            
+            f.write("\n")
+            
+            # Description at the bottom
+            description = first_entry.get('connector_description', '')
+            if description:
+                description = description.replace('<br>', '\n\n')
+                f.write(f"{description}\n\n")
+            
+            # Back navigation
+            f.write("[← Back to Connectors Index](../connectors-index.md)\n")
+        
+        print(f"Generated connector page: {connector_path}")
 
 
 def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]], output_dir: Path) -> None:
@@ -344,8 +425,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         # Solution metadata section
         f.write("## Solution Information\n\n")
-        f.write("| Property | Value |\n")
-        f.write("|----------|-------|\n")
+        f.write("| | |\n")
+        f.write("|------------------------|-------|\n")
         f.write(f"| **Publisher** | {metadata.get('solution_support_name', 'N/A')} |\n")
         f.write(f"| **Support Tier** | {metadata.get('solution_support_tier', 'N/A')} |\n")
         
@@ -375,9 +456,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         solution_folder = metadata.get('solution_folder', '')
         if solution_folder:
-            f.write(f"| **Solution Folder** | [{solution_folder}]({solution_folder}) |\\n")
+            f.write(f"| **Solution Folder** | [{solution_folder}]({solution_folder}) |\n")
         
-        f.write("\\n")
+        f.write("\n")
         
         # Group by connector
         by_connector: Dict[str, List[Dict[str, str]]] = defaultdict(list)
@@ -394,7 +475,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             first_conn = conn_entries[0]
             
             connector_title = first_conn.get('connector_title', connector_id)
-            f.write(f"### {connector_title}\n\n")
+            connector_link = f"[{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)"
+            f.write(f"### {connector_link}\n\n")
             
             # Connector metadata
             publisher = first_conn.get('connector_publisher', '')
@@ -407,23 +489,37 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 description = description.replace('<br>', '\n\n')
                 f.write(f"{description}\n\n")
             
-            # Tables ingested
+            # Combined table for Tables Ingested and Connector Definition Files
             tables = sorted(set(conn['Table'] for conn in conn_entries))
-            f.write(f"**Tables Ingested:**\n\n")
-            for table in tables:
-                f.write(f"- `{table}`\n")
+            connector_files = first_conn.get('connector_files', '')
+            files = [f.strip() for f in connector_files.split(';') if f.strip()] if connector_files else []
+            
+            f.write("| | |\n")
+            f.write("|--------------------------|---|\n")
+            
+            # Tables Ingested
+            if len(tables) == 1:
+                f.write(f"| **Tables Ingested** | `{tables[0]}` |\n")
+            else:
+                for i, table in enumerate(tables):
+                    if i == 0:
+                        f.write(f"| **Tables Ingested** | `{table}` |\n")
+                    else:
+                        f.write(f"| | `{table}` |\n")
+            
+            # Connector Definition Files
+            if files:
+                for i, file_url in enumerate(files):
+                    file_name = file_url.split('/')[-1]
+                    if i == 0:
+                        f.write(f"| **Connector Definition Files** | [{file_name}]({file_url}) |\n")
+                    else:
+                        f.write(f"| | [{file_name}]({file_url}) |\n")
+            
             f.write("\n")
             
-            # Connector files
-            connector_files = first_conn.get('connector_files', '')
-            if connector_files:
-                files = [f.strip() for f in connector_files.split(';') if f.strip()]
-                if files:
-                    f.write(f"**Connector Definition Files:**\n\n")
-                    for file_url in files:
-                        file_name = file_url.split('/')[-1]
-                        f.write(f"- [{file_name}]({file_url})\n")
-                    f.write("\n")
+            # Link to connector page
+            f.write(f"[→ View full connector details](../connectors/{sanitize_anchor(connector_id)}.md)\n\n")
         
         # Tables summary section
         all_tables = sorted(set(conn['Table'] for conn in connectors))
@@ -449,8 +545,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         f.write("\n")
         
         # Back navigation
-        f.write("---\\n\\n")
-        f.write("[← Back to Solutions Index](../solutions-index.md)\\n")
+        f.write("[← Back to Solutions Index](../solutions-index.md)\n")
     
     print(f"Generated solution page: {solution_path}")
 
@@ -515,15 +610,27 @@ def main() -> None:
     generate_connectors_index(by_solution, args.output_dir)
     generate_tables_index(by_solution, args.output_dir)
     
+    # Generate individual connector pages
+    generate_connector_pages(by_solution, args.output_dir)
+    
     # Generate individual solution pages
     for solution_name, connectors in sorted(by_solution.items()):
         generate_solution_page(solution_name, connectors, args.output_dir)
+    
+    # Count unique connectors
+    all_connector_ids = set()
+    for connectors in by_solution.values():
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if connector_id:
+                all_connector_ids.add(connector_id)
     
     print(f"\nDocumentation generated successfully in: {args.output_dir}")
     print(f"  - Solutions index: {args.output_dir / 'solutions-index.md'}")
     print(f"  - Connectors index: {args.output_dir / 'connectors-index.md'}")
     print(f"  - Tables index: {args.output_dir / 'tables-index.md'}")
     print(f"  - Solutions: {args.output_dir / 'solutions'}/ ({len(by_solution)} files)")
+    print(f"  - Connectors: {args.output_dir / 'connectors'}/ ({len(all_connector_ids)} files)")
 
 
 if __name__ == "__main__":

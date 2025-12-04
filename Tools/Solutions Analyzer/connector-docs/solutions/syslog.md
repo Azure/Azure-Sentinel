@@ -2,18 +2,20 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
 | **Categories** | domains |
 | **First Published** | 2022-05-23 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### Syslog via Legacy Agent
+### [Syslog via Legacy Agent](../connectors/syslog.md)
 
 **Publisher:** Microsoft
 
@@ -23,15 +25,14 @@ Syslog is an event logging protocol that is common to Linux. Applications will s
 
 [Learn more >](https://aka.ms/sysLogInfo)
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Syslog` |
+| **Connector Definition Files** | [template_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Data%20Connectors/template_Syslog.json) |
 
-- `Syslog`
+[→ View full connector details](../connectors/syslog.md)
 
-**Connector Definition Files:**
-
-- [template_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Data%20Connectors/template_Syslog.json)
-
-### Syslog via AMA
+### [Syslog via AMA](../connectors/syslogama.md)
 
 **Publisher:** Microsoft
 
@@ -41,13 +42,12 @@ Syslog is an event logging protocol that is common to Linux. Applications will s
 
 [Learn more >](https://aka.ms/sysLogInfo)
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Syslog` |
+| **Connector Definition Files** | [template_SyslogAma.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Data%20Connectors/template_SyslogAma.json) |
 
-- `Syslog`
-
-**Connector Definition Files:**
-
-- [template_SyslogAma.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Syslog/Data%20Connectors/template_SyslogAma.json)
+[→ View full connector details](../connectors/syslogama.md)
 
 ## Tables Reference
 
@@ -57,4 +57,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | Syslog via AMA, Syslog via Legacy Agent |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

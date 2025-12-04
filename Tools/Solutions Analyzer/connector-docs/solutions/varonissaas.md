@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Varonis |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.varonis.com/resources/support](https://www.varonis.com/resources/support) |
 | **Categories** | domains |
 | **First Published** | 2023-11-10 |
 | **Last Updated** | 2023-11-10 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Varonis SaaS
+### [Varonis SaaS](../connectors/varonissaas.md)
 
 **Publisher:** Varonis
 
@@ -24,13 +26,12 @@ Varonis SaaS provides the capability to ingest [Varonis Alerts](https://www.varo
 
 Varonis prioritizes deep data visibility, classification capabilities, and automated remediation for data access. Varonis builds a single prioritized view of risk for your data, so you can proactively and systematically eliminate risk from insider threats and cyberattacks.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `VaronisAlerts_CL` |
+| **Connector Definition Files** | [VaronisSaaS_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS/Data%20Connectors/VaronisSaaS_API_FunctionApp.json) |
 
-- `VaronisAlerts_CL`
-
-**Connector Definition Files:**
-
-- [VaronisSaaS_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS/Data%20Connectors/VaronisSaaS_API_FunctionApp.json)
+[→ View full connector details](../connectors/varonissaas.md)
 
 ## Tables Reference
 
@@ -40,4 +41,4 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `VaronisAlerts_CL` | Varonis SaaS |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

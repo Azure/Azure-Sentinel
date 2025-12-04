@@ -2,19 +2,21 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Cofense Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cofense.com/contact-support/](https://cofense.com/contact-support/) |
 | **Categories** | domains |
 | **First Published** | 2023-05-26 |
 | **Last Updated** | 2024-05-26 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence) |
+
+## Data Connectors
 
 This solution provides **1 data connector(s)**.
 
-### Cofense Intelligence Threat Indicators Ingestion
+### [Cofense Intelligence Threat Indicators Ingestion](../connectors/cofenseintelligence.md)
 
 **Publisher:** Cofense
 
@@ -58,14 +60,13 @@ The [Cofense-Intelligence](https://cofense.com/product-services/phishing-intelli
 
 > https://learn.microsoft.com/microsoft-365/security/defender-endpoint/ti-indicator?view=o365-worldwide
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `Malware_Data_CL` |
+| | `ThreatIntelligenceIndicator` |
+| **Connector Definition Files** | [CofenseIntelligence_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence/Data%20Connectors/CofenseIntelligenceDataConnector/CofenseIntelligence_API_FunctionApp.json) |
 
-- `Malware_Data_CL`
-- `ThreatIntelligenceIndicator`
-
-**Connector Definition Files:**
-
-- [CofenseIntelligence_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence/Data%20Connectors/CofenseIntelligenceDataConnector/CofenseIntelligence_API_FunctionApp.json)
+[→ View full connector details](../connectors/cofenseintelligence.md)
 
 ## Tables Reference
 
@@ -76,4 +77,4 @@ This solution ingests data into **2 table(s)**:
 | `Malware_Data_CL` | Cofense Intelligence Threat Indicators Ingestion |
 | `ThreatIntelligenceIndicator` | Cofense Intelligence Threat Indicators Ingestion |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)

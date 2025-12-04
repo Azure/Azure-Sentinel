@@ -2,32 +2,33 @@
 
 ## Solution Information
 
-| Property | Value |
-|----------|-------|
+| | |
+|------------------------|-------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
 | **Categories** | domains |
 | **First Published** | 2022-01-24 |
-| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports) |\n\n## Data Connectors
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports) |
+
+## Data Connectors
 
 This solution provides **2 data connector(s)**.
 
-### Google Workspace Activities (via Codeless Connector Framework)
+### [Google Workspace Activities (via Codeless Connector Framework)](../connectors/googleworkspaceccpdefinition.md)
 
 **Publisher:** Microsoft
 
 The [Google Workspace](https://workspace.google.com/) Activities data connector provides the capability to ingest Activity Events from [Google Workspace API](https://developers.google.com/admin-sdk/reports/reference/rest/v1/activities/list) into Microsoft Sentinel.
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `GoogleWorkspaceReports` |
+| **Connector Definition Files** | [GoogleWorkspaceReports_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports/Data%20Connectors/GoogleWorkspaceTemplate_ccp/GoogleWorkspaceReports_DataConnectorDefinition.json) |
 
-- `GoogleWorkspaceReports`
+[→ View full connector details](../connectors/googleworkspaceccpdefinition.md)
 
-**Connector Definition Files:**
-
-- [GoogleWorkspaceReports_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports/Data%20Connectors/GoogleWorkspaceTemplate_ccp/GoogleWorkspaceReports_DataConnectorDefinition.json)
-
-### [DEPRECATED] Google Workspace (G Suite)
+### [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md)
 
 **Publisher:** Google
 
@@ -37,34 +38,33 @@ The [Google Workspace](https://workspace.google.com/) data connector provides th
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
 
-**Tables Ingested:**
+| | |
+|--------------------------|---|
+| **Tables Ingested** | `GWorkspace_ReportsAPI_access_transparency_CL` |
+| | `GWorkspace_ReportsAPI_admin_CL` |
+| | `GWorkspace_ReportsAPI_calendar_CL` |
+| | `GWorkspace_ReportsAPI_chat_CL` |
+| | `GWorkspace_ReportsAPI_chrome_CL` |
+| | `GWorkspace_ReportsAPI_context_aware_access_CL` |
+| | `GWorkspace_ReportsAPI_data_studio_CL` |
+| | `GWorkspace_ReportsAPI_drive_CL` |
+| | `GWorkspace_ReportsAPI_gcp_CL` |
+| | `GWorkspace_ReportsAPI_gplus_CL` |
+| | `GWorkspace_ReportsAPI_groups_CL` |
+| | `GWorkspace_ReportsAPI_groups_enterprise_CL` |
+| | `GWorkspace_ReportsAPI_jamboard_CL` |
+| | `GWorkspace_ReportsAPI_keep_CL` |
+| | `GWorkspace_ReportsAPI_login_CL` |
+| | `GWorkspace_ReportsAPI_meet_CL` |
+| | `GWorkspace_ReportsAPI_mobile_CL` |
+| | `GWorkspace_ReportsAPI_rules_CL` |
+| | `GWorkspace_ReportsAPI_saml_CL` |
+| | `GWorkspace_ReportsAPI_token_CL` |
+| | `GWorkspace_ReportsAPI_user_accounts_CL` |
+| | `GoogleWorkspaceReports_CL` |
+| **Connector Definition Files** | [GWorkspaceReports_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports/Data%20Connectors/GWorkspaceReports_API_FunctionApp.json) |
 
-- `GWorkspace_ReportsAPI_access_transparency_CL`
-- `GWorkspace_ReportsAPI_admin_CL`
-- `GWorkspace_ReportsAPI_calendar_CL`
-- `GWorkspace_ReportsAPI_chat_CL`
-- `GWorkspace_ReportsAPI_chrome_CL`
-- `GWorkspace_ReportsAPI_context_aware_access_CL`
-- `GWorkspace_ReportsAPI_data_studio_CL`
-- `GWorkspace_ReportsAPI_drive_CL`
-- `GWorkspace_ReportsAPI_gcp_CL`
-- `GWorkspace_ReportsAPI_gplus_CL`
-- `GWorkspace_ReportsAPI_groups_CL`
-- `GWorkspace_ReportsAPI_groups_enterprise_CL`
-- `GWorkspace_ReportsAPI_jamboard_CL`
-- `GWorkspace_ReportsAPI_keep_CL`
-- `GWorkspace_ReportsAPI_login_CL`
-- `GWorkspace_ReportsAPI_meet_CL`
-- `GWorkspace_ReportsAPI_mobile_CL`
-- `GWorkspace_ReportsAPI_rules_CL`
-- `GWorkspace_ReportsAPI_saml_CL`
-- `GWorkspace_ReportsAPI_token_CL`
-- `GWorkspace_ReportsAPI_user_accounts_CL`
-- `GoogleWorkspaceReports_CL`
-
-**Connector Definition Files:**
-
-- [GWorkspaceReports_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports/Data%20Connectors/GWorkspaceReports_API_FunctionApp.json)
+[→ View full connector details](../connectors/googleworkspacereportsapi.md)
 
 ## Tables Reference
 
@@ -96,4 +96,4 @@ This solution ingests data into **23 table(s)**:
 | `GoogleWorkspaceReports` | 1 connector(s) |
 | `GoogleWorkspaceReports_CL` | [DEPRECATED] Google Workspace (G Suite) |
 
----\n\n[← Back to Solutions Index](../solutions-index.md)\n
+[← Back to Solutions Index](../solutions-index.md)
