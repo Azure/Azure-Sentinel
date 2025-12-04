@@ -144,14 +144,16 @@ def getSetsList(epmserver, epmToken, authType, version=None):
         This method enables the user to retrieve the list of Sets.
     """
     # build the URL
-    if version == None:
+    if not version:
         myURL = epmserver + "/EPM/API/Sets"
     else:
         myURL = epmserver + "/EPM/API/" + version + "/Sets"
 
     # build the header
-    hdr = {}
-    hdr['Content-Type'] = 'application/json'
+    hdr = {
+        'Content-Type': 'application/json',
+        'x-cybr-telemetry': 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
+    }
     if authType == 'EPM':
         authToken = 'basic ' + epmToken
         hdr['Authorization'] = authToken

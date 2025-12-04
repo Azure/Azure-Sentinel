@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timedelta
 import json
 from .state_manager import StateManager
-import re
+from .exporter import send_dcr_data
 import azure.functions as func
 
 dispatcher = os.environ['CyberArkEPMServerURL']
@@ -25,19 +25,9 @@ identity_appkey = os.environ['IdentityAppKey']
 log_type = "CyberArkEPM"
 connection_string = os.environ['AzureWebJobsStorage']
 chunksize = 2000
-logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 if dispatcher == "":
     raise Exception("CyberArkEPMServerURL is missing")
-
-if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
-    logging.warning("logAnalyticsUri is None, used default value.")
-    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
-
-pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-match = re.match(pattern, str(logAnalyticsUri))
-if (not match):
-    raise Exception("CyberArkEPM: Invalid Log Analytics Uri.")
 
 
 def generate_date():
@@ -63,38 +53,6 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
     return authorization
 
 
-def post_data(chunk):
-    body = json.dumps(chunk)
-    method = 'POST'
-    content_type = 'application/json'
-    resource = '/api/logs'
-    rfc1123date = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
-    content_length = len(body)
-    signature = build_signature(customer_id, shared_key, rfc1123date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
-
-    headers = {
-        'content-type': content_type,
-        'Authorization': signature,
-        'Log-Type': log_type,
-        'x-ms-date': rfc1123date
-    }
-    try:
-        response = requests.post(uri, data=body, headers=headers)
-
-        if 200 <= response.status_code <= 299:
-            logging.info("{} events was injected".format(len(chunk)))
-            return response.status_code
-        elif response.status_code == 401:
-            logging.error(
-                "The authentication credentials are incorrect or missing. Error code: {}".format(response.status_code))
-        else:
-            logging.error("Something wrong. Error code: {}".format(response.status_code))
-        return None
-    except Exception as err:
-        logging.error("Something wrong. Exception error text: {}".format(err))
-
-
 def gen_chunks_to_object(data, chunk_size=100):
     chunk = []
     for index, line in enumerate(data):
@@ -107,7 +65,7 @@ def gen_chunks_to_object(data, chunk_size=100):
 
 def gen_chunks(data):
     for chunk in gen_chunks_to_object(data, chunk_size=chunksize):
-        post_data(chunk)
+        send_dcr_data(chunk)
 
 
 def get_events(func_name, auth, filter_date, set_id, next_cursor="start"):
@@ -170,7 +128,7 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info("Collecting Admin Audit Data from {}".format(set_id["Name"]))
         admin_audit_data = getAdminAuditEvents(epmserver=dispatcher, epmToken=auth.json()['EPMAuthenticationResult'], authType='EPM', setid=set_id['Id'], start_time=start_time, end_time=end_time, limit=100)
 
-    # Send data via data collector API
+    # Send data via Data Collector Rule
     for aggregated_event in aggregated_events:
         aggregated_event["event_type"] = "aggregated_events"
     for raw_event in raw_events:
