@@ -1,0 +1,79 @@
+name: Update Solutions Analyzer CSV Files
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Solutions/**/*.json'
+      - 'Solutions/**/Parsers/**/*.yaml'
+      - 'Solutions/**/Parsers/**/*.yml'
+      - 'Tools/Solutions Analyzer/solution_connector_tables.py'
+  workflow_dispatch:  # Allow manual trigger
+  schedule:
+    # Run weekly on Monday at 2 AM UTC to catch any missed changes
+    - cron: '0 2 * * 1'
+
+jobs:
+  update-csv:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install json5
+      
+      - name: Run Solutions Analyzer
+        run: |
+          cd "Tools/Solutions Analyzer"
+          python solution_connector_tables.py
+      
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if git diff --quiet "Tools/Solutions Analyzer/solutions_connectors_tables_mapping.csv" "Tools/Solutions Analyzer/solutions_connectors_tables_issues_and_exceptions_report.csv"; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add "Tools/Solutions Analyzer/solutions_connectors_tables_mapping.csv"
+          git add "Tools/Solutions Analyzer/solutions_connectors_tables_issues_and_exceptions_report.csv"
+          git commit -m "chore: Update Solutions Analyzer CSV files [skip ci]"
+          git push
+      
+      - name: Create summary
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          echo "### Solutions Analyzer Updated :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CSV files have been regenerated and committed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Modified files:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Tools/Solutions Analyzer/solutions_connectors_tables_mapping.csv" >> $GITHUB_STEP_SUMMARY
+          echo "- Tools/Solutions Analyzer/solutions_connectors_tables_issues_and_exceptions_report.csv" >> $GITHUB_STEP_SUMMARY
+      
+      - name: No changes summary
+        if: steps.check_changes.outputs.changed == 'false'
+        run: |
+          echo "### Solutions Analyzer :information_source:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No changes detected. CSV files are already up-to-date." >> $GITHUB_STEP_SUMMARY
