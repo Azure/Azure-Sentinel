@@ -122,13 +122,13 @@ def map_indicator_fields(indicator):
         __method_name = inspect.currentframe().f_code.co_name
         parsed_embedded_data = json.loads(indicator.get("_embedded_labels_s"))
         confidence = ""
-        if indicator.get("alertType_id_s", "") == "flash":
+        if indicator.get("alertType_id", "") == "flash":
             confidence = 100
-        elif indicator.get("alertType_id_s", "") == "urgentUpdate":
+        elif indicator.get("alertType_id", "") == "urgentUpdate":
             confidence = 60
-        elif indicator.get("alertType_id_s", "") == "urgent":
+        elif indicator.get("alertType_id", "") == "urgent":
             confidence = 60
-        elif indicator.get("alertType_id_s", "") == "alert":
+        elif indicator.get("alertType_id", "") == "alert":
             confidence = 30
         parsed_patterns = get_pattern_and_values(parsed_embedded_data)
         for parsed_data in parsed_patterns:
@@ -152,9 +152,9 @@ def map_indicator_fields(indicator):
                 "kind": "indicator",
                 "properties": {
                     "source": "Dataminr: {}".format(indicator.get("Source", "")),
-                    "displayName": "Dataminr: {}".format(indicator.get("index_s", "")),
+                    "displayName": "Dataminr: {}".format(indicator.get("index", "")),
                     "confidence": confidence,
-                    "description": indicator.get("headline_s", ""),
+                    "description": indicator.get("headline", ""),
                     "threatTypes": [pattern_type],
                     "pattern": "[{} '{}']".format(
                         (pattern), parsed_data.get("value", "")
@@ -168,7 +168,7 @@ def map_indicator_fields(indicator):
                 consts.LOGS_STARTS_WITH,
                 __method_name,
                 consts.DATAMINR_PULSE_THREAT_INTELLIGENCE,
-                indicator.get("index_s", ""),
+                indicator.get("index", ""),
             )
         )
         return mapped_indicators

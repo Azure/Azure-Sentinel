@@ -2,8 +2,8 @@
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
-  pull_request:
-    types: [opened, edited, reopened, synchronize]
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, labeled]
     branches:
       - master
     paths:
@@ -23,18 +23,182 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
 
+concurrency:
+  group: asim-tests-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs: 
+  # Security gate: Fork PRs require manual approval via "SafeToRun" label
+  # Internal PRs (same repo) can proceed without labels
+  security-gate:
+    name: Security approval gate for fork PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    outputs:
+      approved: ${{ steps.check-approval.outputs.approved }}
+    steps:
+      - name: Check if PR needs approval
+        id: check-approval
+        run: |
+          # Function to log with consistent formatting
+          log_info() { echo "ℹ️  $1"; }
+          log_success() { echo "✅ $1"; }
+          
+          log_info "Starting PR approval check..."
+          
+          # Check if this is a fork PR
+          is_fork="${{ github.event.pull_request.head.repo.fork }}"
+          log_info "Fork PR: $is_fork"
+          
+          if [ "$is_fork" = "true" ]; then
+            log_info "FORK PR DETECTED - Proceeding with security checks"
+            
+            # Check if "SafeToRun" label is present
+            labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+            log_info "Available labels: $labels"
+            
+            if echo "$labels" | grep -q "SafeToRun"; then
+              log_success "'SafeToRun' label found - checking if re-approval needed"
+              
+              # Check if this workflow was triggered by new commits (synchronize event)
+              trigger_event="${{ github.event.action }}"
+              log_info "Workflow triggered by: $trigger_event"
+              
+              if [ "$trigger_event" = "synchronize" ]; then
+                log_info "New commits detected on fork PR with existing 'SafeToRun' label"
+                log_info "Maintainer must remove and re-add the 'SafeToRun' label for security"
+                echo "approved=false" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=true" >> $GITHUB_OUTPUT
+                exit 1
+              else
+                log_success "Label approval granted (no new commits)"
+                echo "approved=true" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
+              fi
+            else
+              log_info "'SafeToRun' label not found - approval required"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=true" >> $GITHUB_OUTPUT
+              echo "comment_needed=true" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          else
+            log_success "Internal PR - auto-approved"
+            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "needs_approval=false" >> $GITHUB_OUTPUT
+            echo "comment_needed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Comment on fork PR for approval guidance
+        if: |
+          always() && 
+          github.event.pull_request.head.repo.fork == true && 
+          steps.check-approval.outputs.comment_needed == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            // Helper function for consistent logging
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+            
+            log('info', 'Comment step triggered for fork PR approval guidance');
+            
+            try {
+              // Fetch existing comments
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              
+              // Look for existing security guidance comments
+              const botComments = comments.filter(comment => 
+                comment.user.login === 'github-actions[bot]' &&
+                (comment.body.includes('🔒 **Security Approval Required**') ||
+                 comment.body.includes('🔒 **Security Re-approval Required**'))
+              );
+              
+              // Create approval message
+              const timestamp = new Date().toISOString();
+              
+              let commentBody;
+              if ('${{ steps.check-approval.outputs.needs_approval }}' === 'true') {
+                // Initial approval scenario
+                commentBody = `🔒 **Security Approval Required**
+              
+              This fork PR requires manual approval before automated testing can run.
+              
+              **For security, a maintainer must:**
+              1. 📝 Review the code changes carefully
+              2. ✅ **Verify file types** - This PR should only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Check for any executable scripts (.ps1, .py, .sh, .exe, etc.) which are not allowed in this context.
+              3. 🏷️ Add the \`SafeToRun\` label if the changes are safe to execute
+              
+              **Note**: If new commits are added later, simply remove and re-add the \`SafeToRun\` label.
+              
+              ---
+              *🤖 Automated security check • Created: ${timestamp}*  
+              *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
+              } else {
+                // Re-approval scenario (new commits with existing label)
+                commentBody = `🔒 **Security Re-approval Required**
+              
+              ⚠️ **New commits detected**: This fork PR has been updated with new commits while the \`SafeToRun\` label was present.
+              
+              **For security, a maintainer must:**
+              1. 📝 Review the latest commits carefully for any security concerns
+              2. ✅ **Verify file types** - Ensure new commits only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.
+              3. 🏷️ Remove the \`SafeToRun\` label
+              4. 🏷️ Re-add the \`SafeToRun\` label if the new commits are safe
+              
+              This simple process ensures that all commits have been properly reviewed before testing with repository secrets.
+              
+              ---
+              *🤖 Automated security check • Updated: ${timestamp}*  
+              *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
+              }
+              
+              // Always create a new comment for maximum visibility
+              // Keep existing comments for audit trail - don't delete them
+              log('info', 'Creating new security guidance comment (preserving audit trail)');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+              log('success', 'Created new security guidance comment');
+              
+              log('success', 'Comment operation completed successfully');
+              
+            } catch (error) {
+              log('error', `Failed to post comment: ${error.message}`);
+              if (error.response) {
+                log('error', `API Response: ${error.response.status} - ${error.response.data?.message || 'Unknown error'}`);
+              }
+              // Don't fail the step if comment posting fails
+              log('warning', 'Comment posting failed, but continuing workflow...');
+            }
+
   Run-ASim-TemplateValidation:
     name: Run ASim Template Validation tests
+    needs: security-gate
+    if: needs.security-gate.outputs.approved == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout pull request branch
         uses: actions/checkout@v3
         with:
-            ref: ${{github.event.pull_request.head.ref}}
+            ref: ${{github.event.pull_request.head.sha}}
             repository: ${{github.event.pull_request.head.repo.full_name}}
             persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
             fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
@@ -78,11 +242,14 @@ jobs:
     needs: Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout pull request branch
         uses: actions/checkout@v4
         with:
-            ref: ${{github.event.pull_request.head.ref}}
+            ref: ${{github.event.pull_request.head.sha}}
             repository: ${{github.event.pull_request.head.repo.full_name}}
             persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
             fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
@@ -136,11 +303,14 @@ jobs:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout pull request branch
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           persist-credentials: false
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
@@ -197,11 +367,14 @@ jobs:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Parser Filtering tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout pull request branch
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
