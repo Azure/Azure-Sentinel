@@ -266,7 +266,10 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
             if not table:
                 continue
             
-            connector_id = conn.get('connector_id', 'Unknown')
+            connector_id = conn.get('connector_id', '')
+            # Skip entries with empty connector_id (solutions without connectors)
+            if not connector_id.strip():
+                continue
             connector_title = conn.get('connector_title', connector_id)
             tables_map[table]['solutions'].add(solution_name)
             tables_map[table]['connectors'].add((connector_id, connector_title))
@@ -354,7 +357,10 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
     
     for solution_name, connectors in solutions.items():
         for conn in connectors:
-            connector_id = conn.get('connector_id', 'Unknown')
+            connector_id = conn.get('connector_id', '')
+            # Skip entries with empty connector_id (solutions without connectors)
+            if not connector_id.strip():
+                continue
             by_connector[connector_id]['entries'].append(conn)
             by_connector[connector_id]['solutions'].add(solution_name)
             by_connector[connector_id]['tables'].add(conn.get('Table', ''))
