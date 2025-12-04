@@ -1,0 +1,242 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "**TacitRed Compromised Credentials** provides real-time detection and monitoring of compromised user credentials, domain takeovers, and identity-based threats. This solution deploys a CCF (Codeless Connector Framework) data connector, analytics rules, and visualization workbooks to help security teams identify and respond to credential compromise incidents.\n\n**Data Connectors:** 1, **Analytic Rules:** 1, **Workbooks:** 1\n\n[Learn more about TacitRed >](https://www.tacitred.com/)",
+        "subscription": {
+          "constraints": {
+            "validations": [
+              {
+                "permission": "Microsoft.OperationalInsights/workspaces/read",
+                "message": "Please ensure you have read permissions for the workspace"
+              }
+            ]
+          },
+          "resourceProviders": [
+            "Microsoft.OperationalInsights/workspaces",
+            "Microsoft.SecurityInsights"
+          ]
+        },
+        "location": {
+          "label": "Location",
+          "toolTip": "Location for all resources",
+          "resourceTypes": [
+            "Microsoft.OperationalInsights/workspaces"
+          ]
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This fetches all workspaces in the subscription",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "Select the Microsoft Sentinel workspace where you want to deploy the solution",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the TacitRed CCF data connector to ingest compromised credential findings into Microsoft Sentinel. After deployment, configure the connector with your TacitRed API key."
+            }
+          },
+          {
+            "name": "tacitRedApiKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "TacitRed API Key",
+              "confirmPassword": "Confirm API Key"
+            },
+            "toolTip": "Enter your TacitRed API key. Obtain this from your TacitRed admin console.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$",
+              "validationMessage": "API key must be a valid UUID format (e.g., a2be534e-6231-4fb0-b8b8-15dbc96e83b7)"
+            },
+            "options": {
+              "hideConfirmation": false
+            },
+            "visible": true
+          },
+          {
+            "name": "deployConnectors",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy TacitRed data connector",
+            "toolTip": "Check to automatically configure the TacitRed CCF connector",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution includes a pre-configured analytics rule to detect repeat compromise patterns indicating persistent threats or inadequate remediation."
+            }
+          },
+          {
+            "name": "deployAnalytics",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy TacitRed analytics rule",
+            "toolTip": "Check to deploy the Repeat Compromise Detection analytics rule",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "name": "security",
+        "label": "Security Options",
+        "bladeTitle": "Security Configuration",
+        "elements": [
+          {
+            "name": "security-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "Configure enhanced security options for credential storage and access control. Azure Key Vault provides encrypted storage for API keys and comprehensive audit logging."
+            }
+          },
+          {
+            "name": "enableKeyVault",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable Azure Key Vault for secure credential storage",
+            "toolTip": "Recommended for production environments. Stores API keys encrypted in Azure Key Vault with audit logging.",
+            "defaultValue": false
+          },
+          {
+            "name": "keyVaultOptions",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault Configuration",
+            "visible": "[steps('security').enableKeyVault]",
+            "elements": [
+              {
+                "name": "keyVaultOption",
+                "type": "Microsoft.Common.DropDown",
+                "label": "Key Vault Option",
+                "defaultValue": "Create new Key Vault",
+                "toolTip": "Choose to create a new Key Vault or use an existing one",
+                "constraints": {
+                  "allowedValues": [
+                    {
+                      "label": "Create new Key Vault",
+                      "value": "new"
+                    },
+                    {
+                      "label": "Use existing Key Vault",
+                      "value": "existing"
+                    }
+                  ],
+                  "required": true
+                }
+              },
+              {
+                "name": "keyVaultName",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Key Vault Name",
+                "defaultValue": "[concat('kv-tacitred-', take(uniqueString(subscription().subscriptionId, resourceGroup().id), 8))]",
+                "toolTip": "Name of the Key Vault (new or existing)",
+                "constraints": {
+                  "required": true,
+                  "regex": "^[a-zA-Z0-9-]{3,24}$",
+                  "validationMessage": "Key Vault name must be 3-24 characters, alphanumeric and hyphens only"
+                }
+              },
+              {
+                "name": "keyVaultResourceGroup",
+                "type": "Microsoft.Solutions.ResourceSelector",
+                "label": "Key Vault Resource Group",
+                "resourceType": "Microsoft.KeyVault/vaults",
+                "visible": "[equals(steps('security').keyVaultOptions.keyVaultOption, 'existing')]",
+                "toolTip": "Select the resource group containing the existing Key Vault"
+              },
+              {
+                "name": "enablePrivateEndpoint",
+                "type": "Microsoft.Common.CheckBox",
+                "label": "Enable Private Endpoint for Key Vault",
+                "toolTip": "Requires VNet integration. Provides network isolation for Key Vault access.",
+                "defaultValue": false
+              },
+              {
+                "name": "subnetSelector",
+                "type": "Microsoft.Solutions.ResourceSelector",
+                "label": "Subnet for Private Endpoint",
+                "resourceType": "Microsoft.Network/virtualNetworks/subnets",
+                "visible": "[steps('security').keyVaultOptions.enablePrivateEndpoint]",
+                "toolTip": "Select the subnet where the private endpoint will be created"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution includes a workbook for visualizing TacitRed compromised credential findings and threat patterns."
+            }
+          },
+          {
+            "name": "deployWorkbooks",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy TacitRed workbook",
+            "toolTip": "Check to deploy the TacitRed Compromised Credentials workbook",
+            "defaultValue": true
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[location()]",
+      "workspace": "[basics('workspace')]",
+      "tacitRedApiKey": "[steps('dataconnectors').tacitRedApiKey]",
+      "deployConnectors": "[steps('dataconnectors').deployConnectors]",
+      "deployAnalytics": "[steps('analytics').deployAnalytics]",
+      "deployWorkbooks": "[steps('workbooks').deployWorkbooks]",
+      "enableKeyVault": "[steps('security').enableKeyVault]",
+      "keyVaultOption": "[steps('security').keyVaultOptions.keyVaultOption]",
+      "keyVaultName": "[steps('security').keyVaultOptions.keyVaultName]",
+      "keyVaultResourceGroup": "[if(equals(steps('security').keyVaultOptions.keyVaultOption, 'existing'), steps('security').keyVaultOptions.keyVaultResourceGroup.resourceGroup, resourceGroup().name)]",
+      "enablePrivateEndpoint": "[steps('security').keyVaultOptions.enablePrivateEndpoint]",
+      "subnetId": "[if(steps('security').keyVaultOptions.enablePrivateEndpoint, steps('security').keyVaultOptions.subnetSelector.id, '')]"
+    }
+  }
+}
