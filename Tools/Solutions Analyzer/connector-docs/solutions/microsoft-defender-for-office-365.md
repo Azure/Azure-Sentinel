@@ -60,6 +60,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SecurityAlert` | Microsoft Defender for Office 365 (Preview) |
+| `SecurityAlert` | [Microsoft Defender for Office 365 (Preview)](../connectors/officeatp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

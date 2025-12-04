@@ -52,8 +52,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `McasShadowItReporting` | Microsoft Defender for Cloud Apps |
-| `SecurityAlert` | Microsoft Defender for Cloud Apps |
-| `discoveryLogs` | Microsoft Defender for Cloud Apps |
+| `McasShadowItReporting` | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) |
+| `SecurityAlert` | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) |
+| `discoveryLogs` | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -33,6 +33,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Tenable_ad_CL` | Tenable.ad |
+| `Tenable_ad_CL` | [Tenable.ad](../connectors/tenable.ad.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

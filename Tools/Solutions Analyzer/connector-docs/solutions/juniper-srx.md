@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Juniper SRX |
+| `Syslog` | [[Deprecated] Juniper SRX](../connectors/junipersrx.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

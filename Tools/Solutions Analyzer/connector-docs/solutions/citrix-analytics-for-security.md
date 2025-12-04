@@ -37,9 +37,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CitrixAnalytics_indicatorEventDetails_CL` | CITRIX SECURITY ANALYTICS |
-| `CitrixAnalytics_indicatorSummary_CL` | CITRIX SECURITY ANALYTICS |
-| `CitrixAnalytics_riskScoreChange_CL` | CITRIX SECURITY ANALYTICS |
-| `CitrixAnalytics_userProfile_CL` | CITRIX SECURITY ANALYTICS |
+| `CitrixAnalytics_indicatorEventDetails_CL` | [CITRIX SECURITY ANALYTICS](../connectors/citrix.md) |
+| `CitrixAnalytics_indicatorSummary_CL` | [CITRIX SECURITY ANALYTICS](../connectors/citrix.md) |
+| `CitrixAnalytics_riskScoreChange_CL` | [CITRIX SECURITY ANALYTICS](../connectors/citrix.md) |
+| `CitrixAnalytics_userProfile_CL` | [CITRIX SECURITY ANALYTICS](../connectors/citrix.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

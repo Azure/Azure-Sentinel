@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyfirmaCompromisedAccounts_CL` | CYFIRMA Compromised Accounts |
+| `CyfirmaCompromisedAccounts_CL` | [CYFIRMA Compromised Accounts](../connectors/cyfirmacompromisedaccountsdataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

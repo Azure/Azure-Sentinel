@@ -38,9 +38,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Rubrik_Anomaly_Data_CL` | Rubrik Security Cloud data connector |
-| `Rubrik_Events_Data_CL` | Rubrik Security Cloud data connector |
-| `Rubrik_Ransomware_Data_CL` | Rubrik Security Cloud data connector |
-| `Rubrik_ThreatHunt_Data_CL` | Rubrik Security Cloud data connector |
+| `Rubrik_Anomaly_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
+| `Rubrik_Events_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
+| `Rubrik_Ransomware_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
+| `Rubrik_ThreatHunt_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

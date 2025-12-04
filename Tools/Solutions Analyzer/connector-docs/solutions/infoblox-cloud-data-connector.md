@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Infoblox
 
-The Infoblox Cloud Data Connector allows you to easily connect your Infoblox BloxOne data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [InfobloxCloudDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20Cloud%20Data%20Connector/Data%20Connectors/InfobloxCloudDataConnector.json) |
-
-[→ View full connector details](../connectors/infobloxclouddataconnector.md)
-
 ### [[Deprecated] Infoblox Cloud Data Connector via AMA](../connectors/infobloxclouddataconnectorama.md)
 
 **Publisher:** Infoblox
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] Infoblox Cloud Data Connector via AMA](../connectors/infobloxclouddataconnectorama.md), [[Deprecated] Infoblox Cloud Data Connector via Legacy Agent](../connectors/infobloxclouddataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

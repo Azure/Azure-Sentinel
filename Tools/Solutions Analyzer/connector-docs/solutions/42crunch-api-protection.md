@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `apifirewall_log_1_CL` | API Protection |
+| `apifirewall_log_1_CL` | [API Protection](../connectors/42crunchapiprotection.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

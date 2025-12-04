@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `F5Telemetry_ASM_CL` | F5 BIG-IP |
-| `F5Telemetry_LTM_CL` | F5 BIG-IP |
-| `F5Telemetry_system_CL` | F5 BIG-IP |
+| `F5Telemetry_ASM_CL` | [F5 BIG-IP](../connectors/f5bigip.md) |
+| `F5Telemetry_LTM_CL` | [F5 BIG-IP](../connectors/f5bigip.md) |
+| `F5Telemetry_system_CL` | [F5 BIG-IP](../connectors/f5bigip.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

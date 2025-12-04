@@ -36,6 +36,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AlsidForADLog_CL` | Alsid for Active Directory |
+| `AlsidForADLog_CL` | [Alsid for Active Directory](../connectors/alsidforad.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

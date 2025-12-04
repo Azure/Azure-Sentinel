@@ -866,9 +866,17 @@ def main() -> None:
     solution_rows_kept: Dict[str, int] = defaultdict(int)
     solution_parser_skipped: Dict[str, Set[str]] = defaultdict(set)
     issues: List[Dict[str, str]] = []
+    
+    # Track all solutions and identify those without any connectors
+    all_solutions_info: Dict[str, Dict[str, str]] = {}
+    solutions_without_connectors: Set[str] = set()
 
     for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
         solution_info = collect_solution_info(solution_dir.resolve())
+        
+        # Store all solution info for later processing
+        all_solutions_info[solution_info["solution_name"]] = solution_info
+        
         has_metadata = (solution_dir / "SolutionMetadata.json").exists()
         parser_names, parser_table_map = collect_parser_metadata(solution_dir.resolve())
         parser_names_lower = {name.lower() for name in parser_names if name}
@@ -1112,6 +1120,35 @@ def main() -> None:
                 reason="missing_solution_metadata",
                 details="Solution contains connectors but is missing SolutionMetadata.json.",
             )
+        
+        # Track solutions that truly have no connectors (no Data Connectors dir or no valid connectors)
+        if not data_connectors_dir.exists() or not has_valid_connector:
+            solutions_without_connectors.add(solution_info["solution_name"])
+
+    # Add rows for solutions without any connectors
+    for solution_name in sorted(solutions_without_connectors):
+        solution_info = all_solutions_info[solution_name]
+        # Create a row with solution info but empty connector and table fields
+        row_key = (
+            solution_info["solution_name"],
+            solution_info["solution_folder"],
+            solution_info["solution_publisher_id"],
+            solution_info["solution_offer_id"],
+            solution_info["solution_first_publish_date"],
+            solution_info["solution_last_publish_date"],
+            solution_info["solution_version"],
+            solution_info["solution_support_name"],
+            solution_info["solution_support_tier"],
+            solution_info["solution_support_link"],
+            solution_info["solution_author_name"],
+            solution_info["solution_categories"],
+            "",  # connector_id
+            "",  # connector_publisher
+            "",  # connector_title
+            "",  # connector_description
+            "",  # table_name
+        )
+        grouped_rows[row_key] = {}  # Empty file map for solutions without connectors
 
     rows: List[Dict[str, str]] = []
     for row_key in sorted(grouped_rows.keys()):

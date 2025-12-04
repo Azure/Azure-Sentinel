@@ -42,6 +42,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SAPLogServ_CL` | SAP LogServ (RISE), S/4HANA Cloud private edition |
+| `SAPLogServ_CL` | [SAP LogServ (RISE), S/4HANA Cloud private edition](../connectors/saplogserv.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

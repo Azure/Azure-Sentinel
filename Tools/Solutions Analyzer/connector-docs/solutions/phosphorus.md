@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Phosphorus_CL` | Phosphorus Devices |
+| `Phosphorus_CL` | [Phosphorus Devices](../connectors/phosphorus-polling.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

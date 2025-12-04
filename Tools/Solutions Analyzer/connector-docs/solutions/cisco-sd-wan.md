@@ -36,7 +36,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoSDWANNetflow_CL` | Cisco Software Defined WAN |
-| `Syslog` | Cisco Software Defined WAN |
+| `CiscoSDWANNetflow_CL` | [Cisco Software Defined WAN](../connectors/ciscosdwan.md) |
+| `Syslog` | [Cisco Software Defined WAN](../connectors/ciscosdwan.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

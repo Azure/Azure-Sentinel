@@ -19,96 +19,29 @@ This solution provides **8 data connector(s)**.
 
 **Publisher:** Microsoft
 
-Deprecated, use the 'ESI-Opt' dataconnectors. You can stream all Exchange Audit events, IIS Logs, HTTP Proxy logs and Security Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This is used by Microsoft Exchange Security Workbooks to provide security insights of your On-Premises Exchange environment
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Event` |
-| | `ExchangeHttpProxy_CL` |
-| | `MessageTrackingLog_CL` |
-| | `SecurityEvent` |
-| | `W3CIISLog` |
-| **Connector Definition Files** | [ESI-ExchangeAdminAuditLogEvents.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-ExchangeAdminAuditLogEvents.json) |
-
-[→ View full connector details](../connectors/esi-exchangeadminauditlogevents.md)
-
 ### [Exchange Security Insights On-Premises Collector](../connectors/esi-exchangeonpremisescollector.md)
 
 **Publisher:** Microsoft
-
-Connector used to push Exchange On-Premises Security configuration for Microsoft Sentinel Analysis
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `ESIExchangeConfig_CL` |
-| **Connector Definition Files** | [ESI-ExchangeOnPremisesCollector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-ExchangeOnPremisesCollector.json) |
-
-[→ View full connector details](../connectors/esi-exchangeonpremisescollector.md)
 
 ### [Microsoft Exchange Admin Audit Logs by Event Logs](../connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md)
 
 **Publisher:** Microsoft
 
-[Option 1] - Using Azure Monitor Agent - You can stream all Exchange Audit events from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This is used by Microsoft Exchange Security Workbooks to provide security insights of your On-Premises Exchange environment
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Event` |
-| **Connector Definition Files** | [ESI-Opt1ExchangeAdminAuditLogsByEventLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-Opt1ExchangeAdminAuditLogsByEventLogs.json) |
-
-[→ View full connector details](../connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md)
-
 ### [Microsoft Exchange Logs and Events](../connectors/esi-opt2exchangeserverseventlogs.md)
 
 **Publisher:** Microsoft
-
-[Option 2] - Using Azure Monitor Agent - You can stream all Exchange Security & Application Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Event` |
-| **Connector Definition Files** | [ESI-Opt2ExchangeServersEventLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-Opt2ExchangeServersEventLogs.json) |
-
-[→ View full connector details](../connectors/esi-opt2exchangeserverseventlogs.md)
 
 ### [ Microsoft Active-Directory Domain Controllers Security Event Logs](../connectors/esi-opt34domaincontrollerssecurityeventlogs.md)
 
 **Publisher:** Microsoft
 
-[Option 3 & 4] - Using Azure Monitor Agent -You can stream a part or all Domain Controllers Security Event logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `SecurityEvent` |
-| **Connector Definition Files** | [ESI-Opt34DomainControllersSecurityEventLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-Opt34DomainControllersSecurityEventLogs.json) |
-
-[→ View full connector details](../connectors/esi-opt34domaincontrollerssecurityeventlogs.md)
-
 ### [IIS Logs of Microsoft Exchange Servers](../connectors/esi-opt5exchangeiislogs.md)
 
 **Publisher:** Microsoft
 
-[Option 5] - Using Azure Monitor Agent - You can stream all IIS Logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `W3CIISLog` |
-| **Connector Definition Files** | [ESI-Opt5ExchangeIISLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-Opt5ExchangeIISLogs.json) |
-
-[→ View full connector details](../connectors/esi-opt5exchangeiislogs.md)
-
 ### [Microsoft Exchange Message Tracking Logs](../connectors/esi-opt6exchangemessagetrackinglogs.md)
 
 **Publisher:** Microsoft
-
-[Option 6] - Using Azure Monitor Agent - You can stream all Exchange Message Tracking from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. Those logs can be used to track the flow of messages in your Exchange environment. This data connector is based on the option 6 of the [Microsoft Exchange Security wiki](https://aka.ms/ESI_DataConnectorOptions).
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `MessageTrackingLog_CL` |
-| **Connector Definition Files** | [ESI-Opt6ExchangeMessageTrackingLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-Opt6ExchangeMessageTrackingLogs.json) |
-
-[→ View full connector details](../connectors/esi-opt6exchangemessagetrackinglogs.md)
 
 ### [Microsoft Exchange HTTP Proxy Logs](../connectors/esi-opt7exchangehttpproxylogs.md)
 
@@ -129,11 +62,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ESIExchangeConfig_CL` | Exchange Security Insights On-Premises Collector |
-| `Event` | 3 connector(s) |
-| `ExchangeHttpProxy_CL` | 2 connector(s) |
-| `MessageTrackingLog_CL` | 2 connector(s) |
-| `SecurityEvent` | 2 connector(s) |
-| `W3CIISLog` | 2 connector(s) |
+| `ESIExchangeConfig_CL` | [Exchange Security Insights On-Premises Collector](../connectors/esi-exchangeonpremisescollector.md) |
+| `Event` | [Microsoft Exchange Admin Audit Logs by Event Logs](../connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md), [Microsoft Exchange Logs and Events](../connectors/esi-opt2exchangeserverseventlogs.md), [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md) |
+| `ExchangeHttpProxy_CL` | [Microsoft Exchange HTTP Proxy Logs](../connectors/esi-opt7exchangehttpproxylogs.md), [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md) |
+| `MessageTrackingLog_CL` | [Microsoft Exchange Message Tracking Logs](../connectors/esi-opt6exchangemessagetrackinglogs.md), [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md) |
+| `SecurityEvent` | [ Microsoft Active-Directory Domain Controllers Security Event Logs](../connectors/esi-opt34domaincontrollerssecurityeventlogs.md), [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md) |
+| `W3CIISLog` | [IIS Logs of Microsoft Exchange Servers](../connectors/esi-opt5exchangeiislogs.md), [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

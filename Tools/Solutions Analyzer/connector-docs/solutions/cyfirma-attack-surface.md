@@ -37,11 +37,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyfirmaASCertificatesAlerts_CL` | CYFIRMA Attack Surface |
-| `CyfirmaASCloudWeaknessAlerts_CL` | CYFIRMA Attack Surface |
-| `CyfirmaASConfigurationAlerts_CL` | CYFIRMA Attack Surface |
-| `CyfirmaASDomainIPReputationAlerts_CL` | CYFIRMA Attack Surface |
-| `CyfirmaASDomainIPVulnerabilityAlerts_CL` | CYFIRMA Attack Surface |
-| `CyfirmaASOpenPortsAlerts_CL` | CYFIRMA Attack Surface |
+| `CyfirmaASCertificatesAlerts_CL` | [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md) |
+| `CyfirmaASCloudWeaknessAlerts_CL` | [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md) |
+| `CyfirmaASConfigurationAlerts_CL` | [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md) |
+| `CyfirmaASDomainIPReputationAlerts_CL` | [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md) |
+| `CyfirmaASDomainIPVulnerabilityAlerts_CL` | [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md) |
+| `CyfirmaASOpenPortsAlerts_CL` | [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

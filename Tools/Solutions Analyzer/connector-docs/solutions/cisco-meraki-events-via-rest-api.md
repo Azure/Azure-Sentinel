@@ -46,8 +46,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ASimAuditEventLogs` | Cisco Meraki (using REST API) |
-| `ASimNetworkSessionLogs` | Cisco Meraki (using REST API) |
-| `ASimWebSessionLogs` | Cisco Meraki (using REST API) |
+| `ASimAuditEventLogs` | [Cisco Meraki (using REST API)](../connectors/ciscomerakimultirule.md) |
+| `ASimNetworkSessionLogs` | [Cisco Meraki (using REST API)](../connectors/ciscomerakimultirule.md) |
+| `ASimWebSessionLogs` | [Cisco Meraki (using REST API)](../connectors/ciscomerakimultirule.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ABNORMAL_CASES_CL` | AbnormalSecurity  |
-| `ABNORMAL_THREAT_MESSAGES_CL` | AbnormalSecurity  |
+| `ABNORMAL_CASES_CL` | [AbnormalSecurity ](../connectors/abnormalsecurity.md) |
+| `ABNORMAL_THREAT_MESSAGES_CL` | [AbnormalSecurity ](../connectors/abnormalsecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

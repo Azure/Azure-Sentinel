@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The [Google Workspace](https://workspace.google.com/) Activities data connector provides the capability to ingest Activity Events from [Google Workspace API](https://developers.google.com/admin-sdk/reports/reference/rest/v1/activities/list) into Microsoft Sentinel.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `GoogleWorkspaceReports` |
-| **Connector Definition Files** | [GoogleWorkspaceReports_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports/Data%20Connectors/GoogleWorkspaceTemplate_ccp/GoogleWorkspaceReports_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/googleworkspaceccpdefinition.md)
-
 ### [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md)
 
 **Publisher:** Google
@@ -72,28 +63,28 @@ This solution ingests data into **23 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GWorkspace_ReportsAPI_access_transparency_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_admin_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_calendar_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_chat_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_chrome_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_context_aware_access_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_data_studio_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_drive_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_gcp_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_gplus_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_groups_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_groups_enterprise_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_jamboard_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_keep_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_login_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_meet_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_mobile_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_rules_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_saml_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_token_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GWorkspace_ReportsAPI_user_accounts_CL` | [DEPRECATED] Google Workspace (G Suite) |
-| `GoogleWorkspaceReports` | 1 connector(s) |
-| `GoogleWorkspaceReports_CL` | [DEPRECATED] Google Workspace (G Suite) |
+| `GWorkspace_ReportsAPI_access_transparency_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_admin_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_calendar_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_chat_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_chrome_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_context_aware_access_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_data_studio_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_drive_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_gcp_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_gplus_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_groups_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_groups_enterprise_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_jamboard_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_keep_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_login_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_meet_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_mobile_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_rules_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_saml_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_token_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GWorkspace_ReportsAPI_user_accounts_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
+| `GoogleWorkspaceReports` | [Google Workspace Activities (via Codeless Connector Framework)](../connectors/googleworkspaceccpdefinition.md) |
+| `GoogleWorkspaceReports_CL` | [[DEPRECATED] Google Workspace (G Suite)](../connectors/googleworkspacereportsapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -37,9 +37,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BetterMTDAppLog_CL` | BETTER Mobile Threat Defense (MTD) |
-| `BetterMTDDeviceLog_CL` | BETTER Mobile Threat Defense (MTD) |
-| `BetterMTDIncidentLog_CL` | BETTER Mobile Threat Defense (MTD) |
-| `BetterMTDNetflowLog_CL` | BETTER Mobile Threat Defense (MTD) |
+| `BetterMTDAppLog_CL` | [BETTER Mobile Threat Defense (MTD)](../connectors/bettermtd.md) |
+| `BetterMTDDeviceLog_CL` | [BETTER Mobile Threat Defense (MTD)](../connectors/bettermtd.md) |
+| `BetterMTDIncidentLog_CL` | [BETTER Mobile Threat Defense (MTD)](../connectors/bettermtd.md) |
+| `BetterMTDNetflowLog_CL` | [BETTER Mobile Threat Defense (MTD)](../connectors/bettermtd.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

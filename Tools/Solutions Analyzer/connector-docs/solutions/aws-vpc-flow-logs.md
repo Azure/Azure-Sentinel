@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AWSVPCFlow` | Amazon Web Services S3 VPC Flow Logs |
+| `AWSVPCFlow` | [Amazon Web Services S3 VPC Flow Logs](../connectors/awss3vpcflowlogsparquetdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -48,19 +48,19 @@ This solution ingests data into **14 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Cymru_Scout_Account_Usage_Data_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_Domain_Data_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Communications_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Details_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Fingerprints_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Foundation_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_OpenPorts_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_PDNS_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Summary_Certs_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Summary_Details_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Summary_Fingerprints_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Summary_OpenPorts_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_Summary_PDNS_CL` | Team Cymru Scout Data Connector |
-| `Cymru_Scout_IP_Data_x509_CL` | Team Cymru Scout Data Connector |
+| `Cymru_Scout_Account_Usage_Data_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_Domain_Data_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Communications_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Details_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Fingerprints_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Foundation_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_OpenPorts_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_PDNS_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Summary_Certs_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Summary_Details_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Summary_Fingerprints_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Summary_OpenPorts_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_Summary_PDNS_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
+| `Cymru_Scout_IP_Data_x509_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

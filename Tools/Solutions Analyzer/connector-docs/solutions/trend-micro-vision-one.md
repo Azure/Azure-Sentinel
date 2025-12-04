@@ -42,9 +42,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `TrendMicro_XDR_OAT_CL` | Trend Vision One |
-| `TrendMicro_XDR_RCA_Result_CL` | Trend Vision One |
-| `TrendMicro_XDR_RCA_Task_CL` | Trend Vision One |
-| `TrendMicro_XDR_WORKBENCH_CL` | Trend Vision One |
+| `TrendMicro_XDR_OAT_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
+| `TrendMicro_XDR_RCA_Result_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
+| `TrendMicro_XDR_RCA_Task_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
+| `TrendMicro_XDR_WORKBENCH_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Illumio
 
-The [Illumio Core](https://www.illumio.com/products/) data connector provides the capability to ingest Illumio Core logs into Microsoft Sentinel.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_IllumioCore_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Data%20Connectors/Connector_IllumioCore_CEF.json) |
-
-[→ View full connector details](../connectors/illumiocore.md)
-
 ### [[Deprecated] Illumio Core via AMA](../connectors/illumiocoreama.md)
 
 **Publisher:** Illumio
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] Illumio Core via AMA](../connectors/illumiocoreama.md), [[Deprecated] Illumio Core via Legacy Agent](../connectors/illumiocore.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

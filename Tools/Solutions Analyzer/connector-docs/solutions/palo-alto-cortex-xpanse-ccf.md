@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CortexXpanseAlerts_CL` | 1 connector(s) |
+| `CortexXpanseAlerts_CL` | [Palo Alto Cortex Xpanse (via Codeless Connector Framework)](../connectors/paloaltoexpanseccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

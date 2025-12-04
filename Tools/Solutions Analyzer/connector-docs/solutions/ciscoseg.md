@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Cisco
 
-The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/security/email-security/index.html) data connector provides the capability to ingest [Cisco SEG Consolidated Event Logs](https://www.cisco.com/c/en/us/td/docs/security/esa/esa14-0/user_guide/b_ESA_Admin_Guide_14-0/b_ESA_Admin_Guide_12_1_chapter_0100111.html#con_1061902) into Microsoft Sentinel.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_Cisco_SEG_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoSEG/Data%20Connectors/Connector_Cisco_SEG_CEF.json) |
-
-[→ View full connector details](../connectors/ciscoseg.md)
-
 ### [[Deprecated] Cisco Secure Email Gateway via AMA](../connectors/ciscosegama.md)
 
 **Publisher:** Cisco
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] Cisco Secure Email Gateway via AMA](../connectors/ciscosegama.md), [[Deprecated] Cisco Secure Email Gateway via Legacy Agent](../connectors/ciscoseg.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

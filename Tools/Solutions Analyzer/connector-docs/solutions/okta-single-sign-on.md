@@ -19,27 +19,9 @@ This solution provides **3 data connector(s)**.
 
 **Publisher:** Okta
 
-The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft Sentinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Okta_CL` |
-| **Connector Definition Files** | [Connector_REST_API_FunctionApp_Okta.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors/OktaSingleSign-On/Connector_REST_API_FunctionApp_Okta.json) |
-
-[→ View full connector details](../connectors/oktasso.md)
-
 ### [Okta Single Sign-On (Polling CCP)](../connectors/oktasso-polling.md)
 
 **Publisher:** Okta
-
-The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft entinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `OktaNativePoller_CL` |
-| **Connector Definition Files** | [azuredeploy_Okta_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors/OktaNativePollerConnector/azuredeploy_Okta_native_poller_connector.json) |
-
-[→ View full connector details](../connectors/oktasso-polling.md)
 
 ### [Okta Single Sign-On](../connectors/oktassov2.md)
 
@@ -62,9 +44,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OktaNativePoller_CL` | Okta Single Sign-On (Polling CCP) |
-| `OktaV2_CL` | Okta Single Sign-On |
-| `Okta_CL` | Okta Single Sign-On |
-| `signIns` | Okta Single Sign-On (Preview) |
+| `OktaNativePoller_CL` | [Okta Single Sign-On (Polling CCP)](../connectors/oktasso-polling.md) |
+| `OktaV2_CL` | [Okta Single Sign-On](../connectors/oktassov2.md) |
+| `Okta_CL` | [Okta Single Sign-On](../connectors/oktasso.md), [Okta Single Sign-On](../connectors/oktassov2.md) |
+| `signIns` | [Okta Single Sign-On (Preview)](../connectors/oktassov2.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `JBossLogs_CL` | [Deprecated] JBoss Enterprise Application Platform |
+| `JBossLogs_CL` | [[Deprecated] JBoss Enterprise Application Platform](../connectors/jbosseap.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `beSECURE_Audit_CL` | Beyond Security beSECURE |
-| `beSECURE_ScanEvent_CL` | Beyond Security beSECURE |
-| `beSECURE_ScanResults_CL` | Beyond Security beSECURE |
+| `beSECURE_Audit_CL` | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) |
+| `beSECURE_ScanEvent_CL` | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) |
+| `beSECURE_ScanResults_CL` | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

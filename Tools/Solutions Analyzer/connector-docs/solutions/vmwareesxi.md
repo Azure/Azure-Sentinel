@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] VMware ESXi |
+| `Syslog` | [[Deprecated] VMware ESXi](../connectors/vmwareesxi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

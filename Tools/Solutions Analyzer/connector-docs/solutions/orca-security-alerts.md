@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OrcaAlerts_CL` | Orca Security Alerts |
+| `OrcaAlerts_CL` | [Orca Security Alerts](../connectors/orcasecurityalerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

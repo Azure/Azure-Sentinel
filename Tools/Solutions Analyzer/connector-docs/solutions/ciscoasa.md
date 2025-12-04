@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Cisco
 
-The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [CiscoASA.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Data%20Connectors/CiscoASA.JSON) |
-
-[→ View full connector details](../connectors/ciscoasa.md)
-
 ### [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md)
 
 **Publisher:** Microsoft
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | Cisco ASA via Legacy Agent, Cisco ASA/FTD via AMA |
+| `CommonSecurityLog` | [Cisco ASA via Legacy Agent](../connectors/ciscoasa.md), [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

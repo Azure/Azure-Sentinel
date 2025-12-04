@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `LinuxAudit_CL` | NXLog LinuxAudit |
+| `LinuxAudit_CL` | [NXLog LinuxAudit](../connectors/nxloglinuxaudit.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -38,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | Silverfort Admin Console |
+| `CommonSecurityLog` | [Silverfort Admin Console](../connectors/silverfortama.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

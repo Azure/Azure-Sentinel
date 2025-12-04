@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** ZeroFox Enterprise
 
-Collects alerts from ZeroFox API.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `ZeroFoxAlertPoller_CL` |
-| **Connector Definition Files** | [ZeroFoxAlerts_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ZeroFox/Data%20Connectors/Alerts/ZeroFoxAlerts_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/zerofoxalertsdefinition.md)
-
 ### [ZeroFox CTI](../connectors/zerofoxctidataconnector.md)
 
 **Publisher:** ZeroFox
@@ -66,26 +57,26 @@ This solution ingests data into **21 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ZeroFoxAlertPoller_CL` | ZeroFox Enterprise - Alerts (Polling CCF) |
-| `ZeroFox_CTI_C2_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_advanced_dark_web_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_botnet_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_breaches_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_compromised_credentials_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_credit_cards_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_dark_web_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_discord_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_disruption_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_email_addresses_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_exploits_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_irc_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_malware_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_national_ids_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_phishing_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_phone_numbers_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_ransomware_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_telegram_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_threat_actors_CL` | ZeroFox CTI |
-| `ZeroFox_CTI_vulnerabilities_CL` | ZeroFox CTI |
+| `ZeroFoxAlertPoller_CL` | [ZeroFox Enterprise - Alerts (Polling CCF)](../connectors/zerofoxalertsdefinition.md) |
+| `ZeroFox_CTI_C2_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_advanced_dark_web_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_botnet_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_breaches_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_compromised_credentials_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_credit_cards_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_dark_web_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_discord_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_disruption_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_email_addresses_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_exploits_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_irc_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_malware_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_national_ids_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_phishing_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_phone_numbers_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_ransomware_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_telegram_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_threat_actors_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
+| `ZeroFox_CTI_vulnerabilities_CL` | [ZeroFox CTI](../connectors/zerofoxctidataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

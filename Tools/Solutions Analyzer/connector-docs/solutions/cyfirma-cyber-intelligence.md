@@ -37,9 +37,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyfirmaCampaigns_CL` | CYFIRMA Cyber Intelligence |
-| `CyfirmaIndicators_CL` | CYFIRMA Cyber Intelligence |
-| `CyfirmaMalware_CL` | CYFIRMA Cyber Intelligence |
-| `CyfirmaThreatActors_CL` | CYFIRMA Cyber Intelligence |
+| `CyfirmaCampaigns_CL` | [CYFIRMA Cyber Intelligence](../connectors/cyfirmacyberintelligencedc.md) |
+| `CyfirmaIndicators_CL` | [CYFIRMA Cyber Intelligence](../connectors/cyfirmacyberintelligencedc.md) |
+| `CyfirmaMalware_CL` | [CYFIRMA Cyber Intelligence](../connectors/cyfirmacyberintelligencedc.md) |
+| `CyfirmaThreatActors_CL` | [CYFIRMA Cyber Intelligence](../connectors/cyfirmacyberintelligencedc.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

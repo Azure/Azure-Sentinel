@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Armorblox_CL` | Armorblox |
+| `Armorblox_CL` | [Armorblox](../connectors/armorblox.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

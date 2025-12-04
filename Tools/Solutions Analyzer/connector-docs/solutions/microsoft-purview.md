@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `PurviewDataSensitivityLogs` | Microsoft Purview |
+| `PurviewDataSensitivityLogs` | [Microsoft Purview](../connectors/microsoftazurepurview.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

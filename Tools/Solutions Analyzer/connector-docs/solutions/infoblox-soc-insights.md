@@ -19,31 +19,9 @@ This solution provides **3 data connector(s)**.
 
 **Publisher:** Infoblox
 
-The Infoblox SOC Insight Data Connector allows you to easily connect your Infoblox BloxOne SOC Insight data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log. 
-
-
-
-This data connector ingests Infoblox SOC Insight CDC logs into your Log Analytics Workspace using the new Azure Monitor Agent. Learn more about ingesting using the new Azure Monitor Agent [here](https://learn.microsoft.com/azure/sentinel/connect-cef-ama). **Microsoft recommends using this Data Connector.**
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [InfobloxSOCInsightsDataConnector_AMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20SOC%20Insights/Data%20Connectors/InfobloxSOCInsightsDataConnector_AMA.json) |
-
-[→ View full connector details](../connectors/infobloxsocinsightsdataconnector-ama.md)
-
 ### [Infoblox SOC Insight Data Connector via REST API](../connectors/infobloxsocinsightsdataconnector-api.md)
 
 **Publisher:** Infoblox
-
-The Infoblox SOC Insight Data Connector allows you to easily connect your Infoblox BloxOne SOC Insight data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `InfobloxInsight_CL` |
-| **Connector Definition Files** | [InfobloxSOCInsightsDataConnector_API.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20SOC%20Insights/Data%20Connectors/InfobloxSOCInsightsDataConnector_API.json) |
-
-[→ View full connector details](../connectors/infobloxsocinsightsdataconnector-api.md)
 
 ### [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md)
 
@@ -76,7 +54,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
-| `InfobloxInsight_CL` | Infoblox SOC Insight Data Connector via REST API |
+| `CommonSecurityLog` | [[Deprecated] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md), [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md) |
+| `InfobloxInsight_CL` | [Infoblox SOC Insight Data Connector via REST API](../connectors/infobloxsocinsightsdataconnector-api.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

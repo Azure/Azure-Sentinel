@@ -20,19 +20,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Cyera Inc
 
-The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once recieced can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CyeraAssets_CL` |
-| | `CyeraAssets_MS_CL` |
-| | `CyeraClassifications_CL` |
-| | `CyeraIdentities_CL` |
-| | `CyeraIssues_CL` |
-| **Connector Definition Files** | [CyeraDSPMLogs_ConnectorDefinitionCCF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyeraDSPM/Data%20Connectors/CyeraDSPM_CCF/CyeraDSPMLogs_ConnectorDefinitionCCF.json) |
-
-[→ View full connector details](../connectors/cyeradspmccf.md)
-
 ### [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
 
 **Publisher:** Cyera Inc
@@ -56,10 +43,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyeraAssets_CL` | 2 connector(s) |
-| `CyeraAssets_MS_CL` | 2 connector(s) |
-| `CyeraClassifications_CL` | 2 connector(s) |
-| `CyeraIdentities_CL` | 2 connector(s) |
-| `CyeraIssues_CL` | 2 connector(s) |
+| `CyeraAssets_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraAssets_MS_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraClassifications_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraIdentities_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraIssues_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

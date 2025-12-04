@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AWSRoute53Resolver` | 1 connector(s) |
+| `AWSRoute53Resolver` | [Amazon Web Services S3 DNS Route53 (via Codeless Connector Framework)](../connectors/awsroute53resolverccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `PostgreSQL_CL` | [Deprecated] PostgreSQL Events |
+| `PostgreSQL_CL` | [[Deprecated] PostgreSQL Events](../connectors/postgresql.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

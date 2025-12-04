@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OneTrustMetadataV3_CL` | OneTrust |
+| `OneTrustMetadataV3_CL` | [OneTrust](../connectors/onetrustpush.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

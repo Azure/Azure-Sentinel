@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ForescoutOtAlert_CL` | Forescout eyeInspect for OT Security |
-| `ForescoutOtAsset_CL` | Forescout eyeInspect for OT Security |
+| `ForescoutOtAlert_CL` | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) |
+| `ForescoutOtAsset_CL` | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

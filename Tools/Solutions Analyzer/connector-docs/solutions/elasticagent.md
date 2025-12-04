@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ElasticAgentLogs_CL` | Elastic Agent |
+| `ElasticAgentLogs_CL` | [Elastic Agent](../connectors/elasticagent.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

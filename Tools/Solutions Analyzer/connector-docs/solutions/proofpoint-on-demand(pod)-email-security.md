@@ -19,16 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Proofpoint
 
-Proofpoint On Demand Email Security data connector provides the capability to get Proofpoint on Demand Email Protection data, allows users to check message traceability, monitoring into email activity, threats,and data exfiltration by attackers and malicious insiders. The connector provides ability to review events in your org on an accelerated basis, get event log files in hourly increments for recent activity.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `ProofpointPODMailLog_CL` |
-| | `ProofpointPODMessage_CL` |
-| **Connector Definition Files** | [ProofpointPOD_Definaton.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Data%20Connectors/ProofPointEmailSecurity_CCP/ProofpointPOD_Definaton.json) |
-
-[→ View full connector details](../connectors/proofpointccpdefinition.md)
-
 ### [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md)
 
 **Publisher:** Proofpoint
@@ -51,10 +41,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ProofpointPODMailLog_CL` | 1 connector(s) |
-| `ProofpointPODMessage_CL` | 2 connector(s) |
-| `ProofpointPOD_maillog_CL` | [Deprecated] Proofpoint On Demand Email Security |
-| `ProofpointPOD_message_CL` | [Deprecated] Proofpoint On Demand Email Security |
-| `maillog_CL` | [Deprecated] Proofpoint On Demand Email Security |
+| `ProofpointPODMailLog_CL` | [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md) |
+| `ProofpointPODMessage_CL` | [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md), [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
+| `ProofpointPOD_maillog_CL` | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
+| `ProofpointPOD_message_CL` | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
+| `maillog_CL` | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

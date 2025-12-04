@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] GitLab |
+| `Syslog` | [[Deprecated] GitLab](../connectors/gitlab.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

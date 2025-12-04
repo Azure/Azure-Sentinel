@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Cisco
 
-The [Cisco Meraki](https://meraki.cisco.com/) connector allows you to easily connect your Cisco Meraki (MX/MR/MS) logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `meraki_CL` |
-| **Connector Definition Files** | [Connector_Syslog_CiscoMeraki.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/Connector_Syslog_CiscoMeraki.json) |
-
-[→ View full connector details](../connectors/ciscomeraki.md)
-
 ### [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md)
 
 **Publisher:** Microsoft
@@ -54,7 +45,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoMerakiNativePoller_CL` | Cisco Meraki (using REST API) |
-| `meraki_CL` | 2 connector(s) |
+| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md) |
+| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

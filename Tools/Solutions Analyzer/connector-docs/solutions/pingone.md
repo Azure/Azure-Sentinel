@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `PingOne_AuditActivitiesV2_CL` | Ping One (via Codeless Connector Framework) |
+| `PingOne_AuditActivitiesV2_CL` | [Ping One (via Codeless Connector Framework)](../connectors/pingoneauditlogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

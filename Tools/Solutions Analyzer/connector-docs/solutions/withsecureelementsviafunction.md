@@ -55,6 +55,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `WsSecurityEvents_CL` | WithSecure Elements API (Azure Function) |
+| `WsSecurityEvents_CL` | [WithSecure Elements API (Azure Function)](../connectors/withsecureelementsviafunction.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

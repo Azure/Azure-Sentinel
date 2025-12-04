@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The Google Cloud Platform Cloud Monitoring data connector ingests Monitoring logs from Google Cloud into Microsoft Sentinel using the Google Cloud Monitoring API. Refer to [Cloud Monitoring API](https://cloud.google.com/monitoring/api/v3) documentation for more details.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `GCPMonitoring` |
-| **Connector Definition Files** | [GCPCloudMonitoringLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Cloud%20Monitoring/Data%20Connectors/GCPMonitoringLogs_CCP/GCPCloudMonitoringLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpmonitorccpdefinition.md)
-
 ### [[DEPRECATED] Google Cloud Platform Cloud Monitoring](../connectors/gcpmonitordataconnector.md)
 
 **Publisher:** Google
@@ -51,7 +42,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPMonitoring` | 1 connector(s) |
-| `GCP_MONITORING_CL` | 1 connector(s) |
+| `GCPMonitoring` | [Google Cloud Platform Cloud Monitoring (via Codeless Connector Framework)](../connectors/gcpmonitorccpdefinition.md) |
+| `GCP_MONITORING_CL` | [[DEPRECATED] Google Cloud Platform Cloud Monitoring](../connectors/gcpmonitordataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

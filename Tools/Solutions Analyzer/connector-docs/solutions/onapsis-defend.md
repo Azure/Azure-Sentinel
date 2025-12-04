@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Onapsis_Defend_CL` | 2 connector(s) |
+| `Onapsis_Defend_CL` | [Onapsis Defend Integration](../connectors/onapsis.md), [Onapsis Defend: Integrate Unmatched SAP Threat Detection & Intel with Microsoft Sentinel](../connectors/onapsis.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

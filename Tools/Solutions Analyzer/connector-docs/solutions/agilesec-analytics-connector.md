@@ -33,6 +33,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `InfoSecAnalytics_CL` | InfoSecGlobal Data Connector |
+| `InfoSecAnalytics_CL` | [InfoSecGlobal Data Connector](../connectors/infosecdataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

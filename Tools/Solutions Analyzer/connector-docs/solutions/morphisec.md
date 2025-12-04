@@ -38,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MorphisecAlerts_CL` | 1 connector(s) |
+| `MorphisecAlerts_CL` | [Morphisec API Data Connector (via Codeless Connector Framework)](../connectors/morphisecccf.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

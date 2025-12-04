@@ -34,7 +34,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SailPointIDN_Events_CL` | SailPoint IdentityNow |
-| `SailPointIDN_Triggers_CL` | SailPoint IdentityNow |
+| `SailPointIDN_Events_CL` | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) |
+| `SailPointIDN_Triggers_CL` | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

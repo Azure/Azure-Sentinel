@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CloudGuard_SecurityEvents_CL` | 1 connector(s) |
+| `CloudGuard_SecurityEvents_CL` | [Check Point CloudGuard CNAPP Connector for Microsoft Sentinel](../connectors/cloudguardccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

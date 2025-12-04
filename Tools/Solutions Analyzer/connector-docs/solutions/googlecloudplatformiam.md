@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The Google Cloud Platform IAM data connector provides the capability to ingest the Audit logs relating to Identity and Access Management (IAM) activities within Google Cloud into Microsoft Sentinel using the Google IAM API. Refer to [GCP IAM API](https://cloud.google.com/iam/docs/reference/rest) documentation for more information.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `GCPIAM` |
-| **Connector Definition Files** | [GCPIAMLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Data%20Connectors/GCPIAMLog_CCP/GCPIAMLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpiamccpdefinition.md)
-
 ### [[DEPRECATED] Google Cloud Platform IAM](../connectors/gcpiamdataconnector.md)
 
 **Publisher:** Google
@@ -51,7 +42,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPIAM` | 1 connector(s) |
-| `GCP_IAM_CL` | [DEPRECATED] Google Cloud Platform IAM |
+| `GCPIAM` | [Google Cloud Platform IAM (via Codeless Connector Framework)](../connectors/gcpiamccpdefinition.md) |
+| `GCP_IAM_CL` | [[DEPRECATED] Google Cloud Platform IAM](../connectors/gcpiamdataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

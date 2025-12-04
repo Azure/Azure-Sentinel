@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | [Deprecated] Trend Micro TippingPoint via Legacy |
+| `CommonSecurityLog` | [[Deprecated] Trend Micro TippingPoint via Legacy](../connectors/trendmicrotippingpoint.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `TheomAlerts_CL` | Theom |
+| `TheomAlerts_CL` | [Theom](../connectors/theom.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

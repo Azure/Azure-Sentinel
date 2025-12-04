@@ -74,7 +74,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Malware_Data_CL` | Cofense Intelligence Threat Indicators Ingestion |
-| `ThreatIntelligenceIndicator` | Cofense Intelligence Threat Indicators Ingestion |
+| `Malware_Data_CL` | [Cofense Intelligence Threat Indicators Ingestion](../connectors/cofenseintelligence.md) |
+| `ThreatIntelligenceIndicator` | [Cofense Intelligence Threat Indicators Ingestion](../connectors/cofenseintelligence.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

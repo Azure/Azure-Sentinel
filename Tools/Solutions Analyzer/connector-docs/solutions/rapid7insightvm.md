@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `NexposeInsightVMCloud_assets_CL` | 1 connector(s) |
-| `NexposeInsightVMCloud_vulnerabilities_CL` | 1 connector(s) |
+| `NexposeInsightVMCloud_assets_CL` | [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md) |
+| `NexposeInsightVMCloud_vulnerabilities_CL` | [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

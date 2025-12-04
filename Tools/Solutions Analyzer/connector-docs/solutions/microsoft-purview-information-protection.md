@@ -36,6 +36,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MicrosoftPurviewInformationProtection` | Microsoft Purview Information Protection |
+| `MicrosoftPurviewInformationProtection` | [Microsoft Purview Information Protection](../connectors/microsoftpurviewinformationprotection.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

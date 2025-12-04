@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Dynamics365Activity` | Dynamics 365 |
+| `Dynamics365Activity` | [Dynamics 365](../connectors/dynamics365.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

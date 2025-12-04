@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `WindowsFirewall` |
-| **Connector Definition Files** | [Windows%20Firewall.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/Windows%20Firewall.JSON) |
-
-[→ View full connector details](../connectors/windowsfirewall.md)
-
 ### [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md)
 
 **Publisher:** Microsoft
@@ -59,7 +50,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ASimNetworkSessionLogs` | Windows Firewall Events via AMA |
-| `WindowsFirewall` | Windows Firewall |
+| `ASimNetworkSessionLogs` | [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md) |
+| `WindowsFirewall` | [Windows Firewall](../connectors/windowsfirewall.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

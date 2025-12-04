@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `NXLogFIM_CL` | NXLog FIM |
+| `NXLogFIM_CL` | [NXLog FIM](../connectors/nxlogfim.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

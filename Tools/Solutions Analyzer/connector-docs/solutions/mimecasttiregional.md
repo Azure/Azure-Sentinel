@@ -44,7 +44,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Event` | 1 connector(s) |
-| `ThreatIntelligenceIndicator` | 1 connector(s) |
+| `Event` | [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md) |
+| `ThreatIntelligenceIndicator` | [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

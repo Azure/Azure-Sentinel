@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPCloudRun` | GCP Cloud Run (via Codeless Connector Framework) |
+| `GCPCloudRun` | [GCP Cloud Run (via Codeless Connector Framework)](../connectors/gcpcloudrunlogs-connectordefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

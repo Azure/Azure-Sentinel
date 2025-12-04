@@ -45,16 +45,16 @@ This solution ingests data into **11 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BitsightAlerts_data_CL` | Bitsight data connector |
-| `BitsightBreaches_data_CL` | Bitsight data connector |
-| `BitsightCompany_details_CL` | Bitsight data connector |
-| `BitsightCompany_rating_details_CL` | Bitsight data connector |
-| `BitsightDiligence_historical_statistics_CL` | Bitsight data connector |
-| `BitsightDiligence_statistics_CL` | Bitsight data connector |
-| `BitsightFindings_data_CL` | Bitsight data connector |
-| `BitsightFindings_summary_CL` | Bitsight data connector |
-| `BitsightGraph_data_CL` | Bitsight data connector |
-| `BitsightIndustrial_statistics_CL` | Bitsight data connector |
-| `BitsightObservation_statistics_CL` | Bitsight data connector |
+| `BitsightAlerts_data_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightBreaches_data_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightCompany_details_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightCompany_rating_details_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightDiligence_historical_statistics_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightDiligence_statistics_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightFindings_data_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightFindings_summary_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightGraph_data_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightIndustrial_statistics_CL` | [Bitsight data connector](../connectors/bitsight.md) |
+| `BitsightObservation_statistics_CL` | [Bitsight data connector](../connectors/bitsight.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

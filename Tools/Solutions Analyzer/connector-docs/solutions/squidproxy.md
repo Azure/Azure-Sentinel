@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SquidProxy_CL` | [Deprecated] Squid Proxy |
+| `SquidProxy_CL` | [[Deprecated] Squid Proxy](../connectors/squidproxy.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

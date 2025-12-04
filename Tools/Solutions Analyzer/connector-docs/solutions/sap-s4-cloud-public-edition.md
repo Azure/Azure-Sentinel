@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ABAPAuditLog` | SAP S/4HANA Cloud Public Edition |
+| `ABAPAuditLog` | [SAP S/4HANA Cloud Public Edition](../connectors/saps4publicalerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

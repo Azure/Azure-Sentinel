@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `NXLog_DNS_Server_CL` | NXLog DNS Logs |
+| `NXLog_DNS_Server_CL` | [NXLog DNS Logs](../connectors/nxlogdnslogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

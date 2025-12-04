@@ -38,10 +38,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `PaloAltoCortexXDR_Alerts_CL` | Palo Alto Cortex XDR |
-| `PaloAltoCortexXDR_Audit_Agent_CL` | Palo Alto Cortex XDR |
-| `PaloAltoCortexXDR_Audit_Management_CL` | Palo Alto Cortex XDR |
-| `PaloAltoCortexXDR_Endpoints_CL` | Palo Alto Cortex XDR |
-| `PaloAltoCortexXDR_Incidents_CL` | Palo Alto Cortex XDR |
+| `PaloAltoCortexXDR_Alerts_CL` | [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
+| `PaloAltoCortexXDR_Audit_Agent_CL` | [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
+| `PaloAltoCortexXDR_Audit_Management_CL` | [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
+| `PaloAltoCortexXDR_Endpoints_CL` | [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
+| `PaloAltoCortexXDR_Incidents_CL` | [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

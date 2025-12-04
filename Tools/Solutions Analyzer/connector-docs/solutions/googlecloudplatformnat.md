@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPNAT` | 1 connector(s) |
-| `GCPNATAudit` | 1 connector(s) |
+| `GCPNAT` | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) |
+| `GCPNATAudit` | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

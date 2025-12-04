@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Box
 
-The Box data connector provides the capability to ingest [Box enterprise's events](https://developer.box.com/guides/events/#admin-events) into Microsoft Sentinel using the Box REST API. Refer to [Box  documentation](https://developer.box.com/guides/events/enterprise-events/for-enterprise/) for more information.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `BoxEvents_CL` |
-| **Connector Definition Files** | [Box_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Box/Data%20Connectors/Box_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/boxdataconnector.md)
-
 ### [Box Events (CCP)](../connectors/boxeventsccpdefinition.md)
 
 **Publisher:** Microsoft
@@ -48,7 +39,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BoxEventsV2_CL` | Box Events (CCP) |
-| `BoxEvents_CL` | Box, Box Events (CCP) |
+| `BoxEventsV2_CL` | [Box Events (CCP)](../connectors/boxeventsccpdefinition.md) |
+| `BoxEvents_CL` | [Box](../connectors/boxdataconnector.md), [Box Events (CCP)](../connectors/boxeventsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

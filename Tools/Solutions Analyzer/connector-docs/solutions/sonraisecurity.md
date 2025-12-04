@@ -33,6 +33,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Sonrai_Tickets_CL` | Sonrai Data Connector |
+| `Sonrai_Tickets_CL` | [Sonrai Data Connector](../connectors/sonraidataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ForescoutComplianceStatus_CL` | Forescout Host Property Monitor |
-| `ForescoutHostProperties_CL` | Forescout Host Property Monitor |
-| `ForescoutPolicyStatus_CL` | Forescout Host Property Monitor |
+| `ForescoutComplianceStatus_CL` | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) |
+| `ForescoutHostProperties_CL` | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) |
+| `ForescoutPolicyStatus_CL` | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] WatchGuard Firebox |
+| `Syslog` | [[Deprecated] WatchGuard Firebox](../connectors/watchguardfirebox.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

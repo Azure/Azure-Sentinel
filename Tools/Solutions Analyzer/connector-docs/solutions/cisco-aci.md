@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | 1 connector(s) |
+| `Syslog` | [[Deprecated] Cisco Application Centric Infrastructure](../connectors/ciscoaci.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

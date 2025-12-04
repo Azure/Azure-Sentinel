@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `vcenter_CL` | [Deprecated] VMware vCenter |
+| `vcenter_CL` | [[Deprecated] VMware vCenter](../connectors/vmwarevcenter.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -37,7 +37,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Microsoft Sysmon For Linux |
-| `vimProcessCreateLinuxSysmon` | [Deprecated] Microsoft Sysmon For Linux |
+| `Syslog` | [[Deprecated] Microsoft Sysmon For Linux](../connectors/microsoftsysmonforlinux.md) |
+| `vimProcessCreateLinuxSysmon` | [[Deprecated] Microsoft Sysmon For Linux](../connectors/microsoftsysmonforlinux.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

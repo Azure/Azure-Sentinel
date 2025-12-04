@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `QscoutAppEvents_CL` | QscoutAppEventsConnector |
+| `QscoutAppEvents_CL` | [QscoutAppEventsConnector](../connectors/qscoutappeventsccfdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

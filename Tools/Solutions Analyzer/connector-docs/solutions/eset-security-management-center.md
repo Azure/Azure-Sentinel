@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `eset_CL` | Eset Security Management Center |
+| `eset_CL` | [Eset Security Management Center](../connectors/esetsmc.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

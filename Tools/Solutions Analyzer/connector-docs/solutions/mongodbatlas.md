@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MDBALogTable_CL` | MongoDB Atlas Logs |
+| `MDBALogTable_CL` | [MongoDB Atlas Logs](../connectors/mongodbatlaslogsazurefunctions.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

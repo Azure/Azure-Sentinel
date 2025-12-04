@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `argsentdc_CL` | 1 connector(s) |
+| `argsentdc_CL` | [Check Point Cyberint Alerts Connector (via Codeless Connector Platform)](../connectors/checkpointcyberintalerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

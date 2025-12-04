@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `varonisresources_CL` | Varonis Purview Push Connector |
+| `varonisresources_CL` | [Varonis Purview Push Connector](../connectors/varonispurviewpush.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

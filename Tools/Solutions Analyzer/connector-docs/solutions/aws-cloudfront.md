@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AWSCloudFront_AccessLog_CL` | 1 connector(s) |
+| `AWSCloudFront_AccessLog_CL` | [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](../connectors/awscloudfrontccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

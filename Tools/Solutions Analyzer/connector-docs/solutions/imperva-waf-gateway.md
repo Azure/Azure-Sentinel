@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | Imperva WAF Gateway |
+| `CommonSecurityLog` | [Imperva WAF Gateway](../connectors/impervawafgateway.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

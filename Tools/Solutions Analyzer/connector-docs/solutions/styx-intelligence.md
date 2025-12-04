@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `StyxViewAlerts_CL` | StyxView Alerts (via Codeless Connector Platform) |
+| `StyxViewAlerts_CL` | [StyxView Alerts (via Codeless Connector Platform)](../connectors/styxviewendpointconnectordefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

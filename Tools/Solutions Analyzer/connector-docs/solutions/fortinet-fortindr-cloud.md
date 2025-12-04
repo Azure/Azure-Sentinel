@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `FncEventsDetections_CL` | Fortinet FortiNDR Cloud |
-| `FncEventsObservation_CL` | Fortinet FortiNDR Cloud |
-| `FncEventsSuricata_CL` | Fortinet FortiNDR Cloud |
+| `FncEventsDetections_CL` | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) |
+| `FncEventsObservation_CL` | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) |
+| `FncEventsSuricata_CL` | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

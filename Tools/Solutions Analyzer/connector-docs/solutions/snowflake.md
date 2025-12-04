@@ -19,19 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Snowflake
 
-The Snowflake data connector provides the capability to ingest Snowflake [login logs](https://docs.snowflake.com/en/sql-reference/account-usage/login_history.html) and [query logs](https://docs.snowflake.com/en/sql-reference/account-usage/query_history.html) into Microsoft Sentinel using the Snowflake Python Connector. Refer to [Snowflake  documentation](https://docs.snowflake.com/en/user-guide/python-connector.html) for more information.
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Snowflake_CL` |
-| **Connector Definition Files** | [Snowflake_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Data%20Connectors/Snowflake_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/snowflakedataconnector.md)
-
 ### [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md)
 
 **Publisher:** Microsoft
@@ -60,16 +47,16 @@ This solution ingests data into **11 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SnowflakeLoad_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeLogin_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeMaterializedView_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeQuery_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeRoleGrant_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeRoles_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeTableStorageMetrics_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeTables_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeUserGrant_CL` | Snowflake (via Codeless Connector Framework) |
-| `SnowflakeUsers_CL` | Snowflake (via Codeless Connector Framework) |
-| `Snowflake_CL` | [DEPRECATED] Snowflake |
+| `SnowflakeLoad_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeLogin_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeMaterializedView_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeQuery_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeRoleGrant_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeRoles_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeTableStorageMetrics_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeTables_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeUserGrant_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `SnowflakeUsers_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
+| `Snowflake_CL` | [[DEPRECATED] Snowflake](../connectors/snowflakedataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

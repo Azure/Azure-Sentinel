@@ -36,7 +36,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SAPETDAlerts_CL` | SAP Enterprise Threat Detection, cloud edition |
-| `SAPETDInvestigations_CL` | SAP Enterprise Threat Detection, cloud edition |
+| `SAPETDAlerts_CL` | [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md) |
+| `SAPETDInvestigations_CL` | [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

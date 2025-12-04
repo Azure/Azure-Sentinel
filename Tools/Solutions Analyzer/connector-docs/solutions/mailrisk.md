@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MailRiskEventEmails_CL` | MailRisk by Secure Practice |
+| `MailRiskEventEmails_CL` | [MailRisk by Secure Practice](../connectors/securepracticemailriskconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

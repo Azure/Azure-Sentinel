@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyberpionActionItems_CL` | IONIX Security Logs |
+| `CyberpionActionItems_CL` | [IONIX Security Logs](../connectors/cyberpionsecuritylogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

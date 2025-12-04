@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Ubiquiti_CL` | [Deprecated] Ubiquiti UniFi |
+| `Ubiquiti_CL` | [[Deprecated] Ubiquiti UniFi](../connectors/ubiquitiunifi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

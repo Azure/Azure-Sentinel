@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SymantecICDx_CL` | Symantec Integrated Cyber Defense Exchange |
+| `SymantecICDx_CL` | [Symantec Integrated Cyber Defense Exchange](../connectors/symantec.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

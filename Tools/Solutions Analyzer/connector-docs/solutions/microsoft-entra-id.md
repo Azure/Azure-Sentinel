@@ -55,27 +55,27 @@ This solution ingests data into **22 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AADManagedIdentitySignInLogs` | Microsoft Entra ID |
-| `AADNonInteractiveUserSignInLogs` | Microsoft Entra ID |
-| `AADProvisioningLogs` | Microsoft Entra ID |
-| `AADRiskyServicePrincipals` | Microsoft Entra ID |
-| `AADRiskyUsers` | Microsoft Entra ID |
-| `AADServicePrincipalRiskEvents` | Microsoft Entra ID |
-| `AADServicePrincipalSignInLogs` | Microsoft Entra ID |
-| `AADUserRiskEvents` | Microsoft Entra ID |
-| `ADFSSignInLogs` | Microsoft Entra ID |
-| `AuditLogs` | Microsoft Entra ID |
-| `ManagedIdentitySignInLogs` | Microsoft Entra ID |
-| `NetworkAccessTraffic` | Microsoft Entra ID |
-| `NetworkAccessTrafficLogs` | Microsoft Entra ID |
-| `NonInteractiveUserSignInLogs` | Microsoft Entra ID |
-| `ProvisioningLogs` | Microsoft Entra ID |
-| `RiskyServicePrincipals` | Microsoft Entra ID |
-| `RiskyUsers` | Microsoft Entra ID |
-| `ServicePrincipalRiskEvents` | Microsoft Entra ID |
-| `ServicePrincipalSignInLogs` | Microsoft Entra ID |
-| `SignInLogs` | Microsoft Entra ID |
-| `SigninLogs` | Microsoft Entra ID |
-| `UserRiskEvents` | Microsoft Entra ID |
+| `AADManagedIdentitySignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADNonInteractiveUserSignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADProvisioningLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADRiskyServicePrincipals` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADRiskyUsers` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADServicePrincipalRiskEvents` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADServicePrincipalSignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AADUserRiskEvents` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `ADFSSignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `AuditLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `ManagedIdentitySignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `NetworkAccessTraffic` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `NetworkAccessTrafficLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `NonInteractiveUserSignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `ProvisioningLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `RiskyServicePrincipals` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `RiskyUsers` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `ServicePrincipalRiskEvents` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `ServicePrincipalSignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `SignInLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `SigninLogs` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
+| `UserRiskEvents` | [Microsoft Entra ID](../connectors/azureactivedirectory.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

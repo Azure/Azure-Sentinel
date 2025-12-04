@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Cisco Web Security Appliance |
+| `Syslog` | [[Deprecated] Cisco Web Security Appliance](../connectors/ciscowsa.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Aruba Networks
 
-The [Aruba ClearPass](https://www.arubanetworks.com/products/security/network-access-control/secure-access/) connector allows you to easily connect your Aruba ClearPass with Microsoft Sentinel, to create custom dashboards, alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_Syslog_ArubaClearPass.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Aruba%20ClearPass/Data%20Connectors/Connector_Syslog_ArubaClearPass.json) |
-
-[→ View full connector details](../connectors/arubaclearpass.md)
-
 ### [[Deprecated] Aruba ClearPass via AMA](../connectors/arubaclearpassama.md)
 
 **Publisher:** Aruba Networks
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] Aruba ClearPass via AMA](../connectors/arubaclearpassama.md), [[Deprecated] Aruba ClearPass via Legacy Agent](../connectors/arubaclearpass.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

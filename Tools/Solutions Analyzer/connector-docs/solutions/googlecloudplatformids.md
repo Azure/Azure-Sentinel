@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPIDS` | 1 connector(s) |
+| `GCPIDS` | [Google Cloud Platform Cloud IDS (via Codeless Connector Framework)](../connectors/gcpcloudidslogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

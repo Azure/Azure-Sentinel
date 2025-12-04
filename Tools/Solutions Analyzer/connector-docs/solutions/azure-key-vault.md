@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AzureDiagnostics` | Azure Key Vault |
+| `AzureDiagnostics` | [Azure Key Vault](../connectors/azurekeyvault.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

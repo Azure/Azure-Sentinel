@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `DoppelTable_CL` | Doppel Data Connector |
+| `DoppelTable_CL` | [Doppel Data Connector](../connectors/doppel-dataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -47,7 +47,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ABAPAuditLog` | 1 connector(s) |
-| `Pathlock_TDnR_CL` | Pathlock Threat Detection and Response Integration |
+| `ABAPAuditLog` | [Pathlock Inc.: Threat Detection and Response for SAP](../connectors/pathlock-tdnr.md) |
+| `Pathlock_TDnR_CL` | [Pathlock Threat Detection and Response Integration](../connectors/pathlock-tdnr.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

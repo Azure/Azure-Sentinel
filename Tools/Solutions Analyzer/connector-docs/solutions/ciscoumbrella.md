@@ -19,26 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Cisco
 
-The Cisco Cloud Security solution for Microsoft Sentinel enables you to ingest [Cisco Secure Access](https://docs.sse.cisco.com/sse-user-guide/docs/welcome-cisco-secure-access) and [Cisco Umbrella](https://docs.umbrella.com/umbrella-user-guide/docs/getting-started) [logs](https://docs.sse.cisco.com/sse-user-guide/docs/manage-your-logs) stored in Amazon S3 into Microsoft Sentinel using the Amazon S3 REST API. Refer to [Cisco Cloud Security log management documentation](https://docs.umbrella.com/deployment-umbrella/docs/log-management) for more information.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Cisco_Umbrella_audit_CL` |
-| | `Cisco_Umbrella_cloudfirewall_CL` |
-| | `Cisco_Umbrella_dlp_CL` |
-| | `Cisco_Umbrella_dns_CL` |
-| | `Cisco_Umbrella_fileevent_CL` |
-| | `Cisco_Umbrella_firewall_CL` |
-| | `Cisco_Umbrella_intrusion_CL` |
-| | `Cisco_Umbrella_ip_CL` |
-| | `Cisco_Umbrella_proxy_CL` |
-| | `Cisco_Umbrella_ravpnlogs_CL` |
-| | `Cisco_Umbrella_ztaflow_CL` |
-| | `Cisco_Umbrella_ztna_CL` |
-| **Connector Definition Files** | [CiscoUmbrella_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Data%20Connectors/CiscoUmbrella_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/ciscoumbrelladataconnector.md)
-
 ### [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md)
 
 **Publisher:** Cisco
@@ -73,17 +53,17 @@ This solution ingests data into **12 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Cisco_Umbrella_audit_CL` | 2 connector(s) |
-| `Cisco_Umbrella_cloudfirewall_CL` | 2 connector(s) |
-| `Cisco_Umbrella_dlp_CL` | 2 connector(s) |
-| `Cisco_Umbrella_dns_CL` | 2 connector(s) |
-| `Cisco_Umbrella_fileevent_CL` | 2 connector(s) |
-| `Cisco_Umbrella_firewall_CL` | 2 connector(s) |
-| `Cisco_Umbrella_intrusion_CL` | 2 connector(s) |
-| `Cisco_Umbrella_ip_CL` | 2 connector(s) |
-| `Cisco_Umbrella_proxy_CL` | 2 connector(s) |
-| `Cisco_Umbrella_ravpnlogs_CL` | 2 connector(s) |
-| `Cisco_Umbrella_ztaflow_CL` | 2 connector(s) |
-| `Cisco_Umbrella_ztna_CL` | 2 connector(s) |
+| `Cisco_Umbrella_audit_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_cloudfirewall_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_dlp_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_dns_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_fileevent_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_firewall_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_intrusion_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_ip_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_proxy_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_ravpnlogs_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_ztaflow_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| `Cisco_Umbrella_ztna_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

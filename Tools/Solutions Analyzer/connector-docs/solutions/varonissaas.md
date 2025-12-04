@@ -39,6 +39,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `VaronisAlerts_CL` | Varonis SaaS |
+| `VaronisAlerts_CL` | [Varonis SaaS](../connectors/varonissaas.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

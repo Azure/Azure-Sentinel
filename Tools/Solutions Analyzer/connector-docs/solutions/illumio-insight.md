@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-Illumio Insights Connector sends workload and security graph data from Illumio Insights into the Azure Microsoft Sentinel Data Lake, providing deep context for threat detection, lateral movement analysis, and real-time investigation.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `IllumioInsights_CL` |
-| **Connector Definition Files** | [IllumioInsight_Definition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Insight/Data%20Connectors/IllumioInsight_CCP/IllumioInsight_Definition.json) |
-
-[→ View full connector details](../connectors/illumioinsightsdefinition.md)
-
 ### [Illumio Insights Summary](../connectors/illumioinsightssummaryccp.md)
 
 **Publisher:** Illumio
@@ -47,7 +38,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `IllumioInsightsSummary_CL` | Illumio Insights Summary |
-| `IllumioInsights_CL` | Illumio Insights |
+| `IllumioInsightsSummary_CL` | [Illumio Insights Summary](../connectors/illumioinsightssummaryccp.md) |
+| `IllumioInsights_CL` | [Illumio Insights](../connectors/illumioinsightsdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

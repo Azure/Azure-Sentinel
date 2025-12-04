@@ -41,6 +41,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MimecastAudit_CL` | Mimecast Audit & Authentication |
+| `MimecastAudit_CL` | [Mimecast Audit & Authentication](../connectors/mimecastauditapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

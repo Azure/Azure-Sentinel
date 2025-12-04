@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `TransmitSecurityActivity_CL` | Transmit Security Connector |
+| `TransmitSecurityActivity_CL` | [Transmit Security Connector](../connectors/transmitsecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

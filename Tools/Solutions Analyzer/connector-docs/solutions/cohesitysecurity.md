@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Cohesity_CL` | Cohesity |
+| `Cohesity_CL` | [Cohesity](../connectors/cohesitydataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

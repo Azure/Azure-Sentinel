@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ESETInspect_CL` | ESET Inspect |
+| `ESETInspect_CL` | [ESET Inspect](../connectors/esetinspect.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

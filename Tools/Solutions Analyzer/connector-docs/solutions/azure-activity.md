@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AzureActivity` | Azure Activity |
+| `AzureActivity` | [Azure Activity](../connectors/azureactivity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

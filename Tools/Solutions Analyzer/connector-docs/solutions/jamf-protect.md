@@ -37,8 +37,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `jamfprotectalerts_CL` | Jamf Protect Push Connector |
-| `jamfprotecttelemetryv2_CL` | Jamf Protect Push Connector |
-| `jamfprotectunifiedlogs_CL` | Jamf Protect Push Connector |
+| `jamfprotectalerts_CL` | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) |
+| `jamfprotecttelemetryv2_CL` | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) |
+| `jamfprotectunifiedlogs_CL` | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

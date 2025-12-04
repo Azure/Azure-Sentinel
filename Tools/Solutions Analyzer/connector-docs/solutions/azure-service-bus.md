@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AzureDiagnostics` | Azure Service Bus |
+| `AzureDiagnostics` | [Azure Service Bus](../connectors/azureservicebus-ccp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

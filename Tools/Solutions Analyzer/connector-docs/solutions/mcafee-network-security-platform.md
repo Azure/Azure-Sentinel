@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] McAfee Network Security Platform |
+| `Syslog` | [[Deprecated] McAfee Network Security Platform](../connectors/mcafeensp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

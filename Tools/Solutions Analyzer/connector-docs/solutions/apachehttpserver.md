@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ApacheHTTPServer_CL` | [Deprecated] Apache HTTP Server |
+| `ApacheHTTPServer_CL` | [[Deprecated] Apache HTTP Server](../connectors/apachehttpserver.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

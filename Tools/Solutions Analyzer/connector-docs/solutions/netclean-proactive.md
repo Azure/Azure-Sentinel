@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Netclean_Incidents_CL` | Netclean ProActive Incidents |
+| `Netclean_Incidents_CL` | [Netclean ProActive Incidents](../connectors/netclean-proactive-incidents.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

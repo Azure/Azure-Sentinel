@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `DragosAlerts_CL` |  Dragos Notifications via Cloud Sitestore |
+| `DragosAlerts_CL` | [ Dragos Notifications via Cloud Sitestore](../connectors/dragossitestoreccp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

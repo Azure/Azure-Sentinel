@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `LastPassNativePoller_CL` | LastPass Enterprise - Reporting (Polling CCP) |
+| `LastPassNativePoller_CL` | [LastPass Enterprise - Reporting (Polling CCP)](../connectors/lastpass-polling.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

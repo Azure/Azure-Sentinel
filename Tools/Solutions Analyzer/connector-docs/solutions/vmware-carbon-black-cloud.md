@@ -19,17 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** VMware
 
-The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-cloud.html) connector provides the capability to ingest Carbon Black data into Microsoft Sentinel. The connector provides visibility into Audit, Notification and Event logs in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CarbonBlackAuditLogs_CL` |
-| | `CarbonBlackEvents_CL` |
-| | `CarbonBlackNotifications_CL` |
-| **Connector Definition Files** | [VMwareCarbonBlack_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlack_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/vmwarecarbonblack.md)
-
 ### [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md)
 
 **Publisher:** Microsoft
@@ -56,15 +45,15 @@ This solution ingests data into **10 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ASimAuthenticationEventLogs` | VMware Carbon Black Cloud via AWS S3 |
-| `ASimFileEventLogs` | VMware Carbon Black Cloud via AWS S3 |
-| `ASimNetworkSessionLogs` | VMware Carbon Black Cloud via AWS S3 |
-| `ASimProcessEventLogs` | VMware Carbon Black Cloud via AWS S3 |
-| `ASimRegistryEventLogs` | VMware Carbon Black Cloud via AWS S3 |
-| `CarbonBlackAuditLogs_CL` | VMware Carbon Black Cloud |
-| `CarbonBlackEvents_CL` | VMware Carbon Black Cloud |
-| `CarbonBlackNotifications_CL` | VMware Carbon Black Cloud |
-| `CarbonBlack_Alerts_CL` | VMware Carbon Black Cloud via AWS S3 |
-| `CarbonBlack_Watchlist_CL` | VMware Carbon Black Cloud via AWS S3 |
+| `ASimAuthenticationEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| `ASimFileEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| `ASimNetworkSessionLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| `ASimProcessEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| `ASimRegistryEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| `CarbonBlackAuditLogs_CL` | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) |
+| `CarbonBlackEvents_CL` | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) |
+| `CarbonBlackNotifications_CL` | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) |
+| `CarbonBlack_Alerts_CL` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| `CarbonBlack_Watchlist_CL` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

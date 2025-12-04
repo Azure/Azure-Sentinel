@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `TrendMicroCAS_CL` | Trend Micro Cloud App Security |
+| `TrendMicroCAS_CL` | [Trend Micro Cloud App Security](../connectors/trendmicrocas.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

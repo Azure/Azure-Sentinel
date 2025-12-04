@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ForcepointDLPEvents_CL` | Forcepoint DLP |
+| `ForcepointDLPEvents_CL` | [Forcepoint DLP](../connectors/forcepoint-dlp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -420,6 +420,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     # Get solution-level metadata from first connector entry
     metadata = connectors[0]
     
+    # Check if this solution has any connectors (connector_id will be empty for all entries if not)
+    has_connectors = any(bool(conn.get('connector_id', '').strip()) for conn in connectors)
+    
     with solution_path.open("w", encoding="utf-8") as f:
         f.write(f"# {solution_name}\n\n")
         
@@ -460,29 +463,36 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         f.write("\n")
         
-        # Group by connector
-        by_connector: Dict[str, List[Dict[str, str]]] = defaultdict(list)
-        for conn in connectors:
-            connector_id = conn.get('connector_id', 'Unknown')
-            by_connector[connector_id].append(conn)
-        
-        # Connectors section
-        f.write("## Data Connectors\n\n")
-        f.write(f"This solution provides **{len(by_connector)} data connector(s)**.\n\n")
-        
-        for connector_id in sorted(by_connector.keys()):
-            conn_entries = by_connector[connector_id]
-            first_conn = conn_entries[0]
+        # Only include connectors section if solution has connectors
+        if not has_connectors:
+            f.write("## Data Connectors\n\n")
+            f.write("**This solution does not include data connectors.**\n\n")
+            f.write("This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.\n\n")
+        else:
+            # Group by connector (filter out empty connector_ids from the row added for solutions without connectors)
+            by_connector: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+            for conn in connectors:
+                connector_id = conn.get('connector_id', '')
+                if connector_id.strip():  # Only include non-empty connector_ids
+                    by_connector[connector_id].append(conn)
             
-            connector_title = first_conn.get('connector_title', connector_id)
-            connector_link = f"[{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)"
-            f.write(f"### {connector_link}\n\n")
+            # Connectors section
+            f.write("## Data Connectors\n\n")
+            f.write(f"This solution provides **{len(by_connector)} data connector(s)**.\n\n")
             
-            # Connector metadata
-            publisher = first_conn.get('connector_publisher', '')
-            if publisher:
-                f.write(f"**Publisher:** {publisher}\n\n")
-            
+            for connector_id in sorted(by_connector.keys()):
+                conn_entries = by_connector[connector_id]
+                first_conn = conn_entries[0]
+                
+                connector_title = first_conn.get('connector_title', connector_id)
+                connector_link = f"[{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)"
+                f.write(f"### {connector_link}\n\n")
+                
+                # Connector metadata
+                publisher = first_conn.get('connector_publisher', '')
+                if publisher:
+                    f.write(f"**Publisher:** {publisher}\n\n")
+                
             description = first_conn.get('connector_description', '')
             if description:
                 # Replace <br> with newlines but preserve markdown formatting
@@ -521,28 +531,34 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             # Link to connector page
             f.write(f"[→ View full connector details](../connectors/{sanitize_anchor(connector_id)}.md)\n\n")
         
-        # Tables summary section
-        all_tables = sorted(set(conn['Table'] for conn in connectors))
-        f.write("## Tables Reference\n\n")
-        f.write(f"This solution ingests data into **{len(all_tables)} table(s)**:\n\n")
-        
-        f.write("| Table | Used By Connectors |\n")
-        f.write("|-------|-------------------|\n")
-        
-        for table in all_tables:
-            table_connectors = set(
-                conn.get('connector_title', conn.get('connector_id', ''))
-                for conn in connectors
-                if conn['Table'] == table
-            )
-            
-            connector_list = ", ".join(sorted(table_connectors))
-            if len(connector_list) > 50:
-                connector_list = f"{len(table_connectors)} connector(s)"
-            
-            f.write(f"| `{table}` | {connector_list} |\n")
-        
-        f.write("\n")
+            # Tables summary section (only for solutions with connectors)
+            all_tables = sorted(set(conn['Table'] for conn in connectors if conn.get('Table', '').strip()))
+            if all_tables:
+                f.write("## Tables Reference\n\n")
+                f.write(f"This solution ingests data into **{len(all_tables)} table(s)**:\n\n")
+                
+                f.write("| Table | Used By Connectors |\n")
+                f.write("|-------|-------------------|\n")
+                
+                for table in all_tables:
+                    # Get connector info (id and title) for this table
+                    table_connectors = []
+                    for conn in connectors:
+                        if conn.get('Table') == table:
+                            connector_id = conn.get('connector_id', '')
+                            connector_title = conn.get('connector_title', connector_id)
+                            table_connectors.append((connector_id, connector_title))
+                    
+                    # Remove duplicates and sort by title
+                    unique_connectors = sorted(set(table_connectors), key=lambda x: x[1])
+                    
+                    # Create links to connector pages
+                    connector_links = [f"[{title}](../connectors/{sanitize_anchor(cid)}.md)" for cid, title in unique_connectors]
+                    connector_list = ", ".join(connector_links)
+                    
+                    f.write(f"| `{table}` | {connector_list} |\n")
+                
+                f.write("\n")
         
         # Back navigation
         f.write("[← Back to Solutions Index](../solutions-index.md)\n")

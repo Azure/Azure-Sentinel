@@ -40,12 +40,12 @@ This solution ingests data into **7 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyfirmaDBWMDarkWebAlerts_CL` | CYFIRMA Digital Risk |
-| `CyfirmaDBWMPhishingAlerts_CL` | CYFIRMA Digital Risk |
-| `CyfirmaDBWMRansomwareAlerts_CL` | CYFIRMA Digital Risk |
-| `CyfirmaSPEConfidentialFilesAlerts_CL` | CYFIRMA Digital Risk |
-| `CyfirmaSPEPIIAndCIIAlerts_CL` | CYFIRMA Digital Risk |
-| `CyfirmaSPESocialThreatAlerts_CL` | CYFIRMA Digital Risk |
-| `CyfirmaSPESourceCodeAlerts_CL` | CYFIRMA Digital Risk |
+| `CyfirmaDBWMDarkWebAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
+| `CyfirmaDBWMPhishingAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
+| `CyfirmaDBWMRansomwareAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
+| `CyfirmaSPEConfidentialFilesAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
+| `CyfirmaSPEPIIAndCIIAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
+| `CyfirmaSPESocialThreatAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
+| `CyfirmaSPESourceCodeAlerts_CL` | [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

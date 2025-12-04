@@ -47,8 +47,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MimecastTTPAttachment_CL` | Mimecast Targeted Threat Protection |
-| `MimecastTTPImpersonation_CL` | Mimecast Targeted Threat Protection |
-| `MimecastTTPUrl_CL` | Mimecast Targeted Threat Protection |
+| `MimecastTTPAttachment_CL` | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) |
+| `MimecastTTPImpersonation_CL` | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) |
+| `MimecastTTPUrl_CL` | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

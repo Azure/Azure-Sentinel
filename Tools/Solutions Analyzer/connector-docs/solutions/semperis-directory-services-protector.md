@@ -36,6 +36,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SecurityEvent` | Semperis Directory Services Protector |
+| `SecurityEvent` | [Semperis Directory Services Protector](../connectors/semperisdsp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

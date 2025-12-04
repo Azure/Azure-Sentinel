@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CynerioEvent_CL` | Cynerio Security Events |
+| `CynerioEvent_CL` | [Cynerio Security Events](../connectors/cyneriosecurityevents.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `RSAIDPlus_AdminLogs_CL` | RSA ID Plus Admin Logs Connector |
+| `RSAIDPlus_AdminLogs_CL` | [RSA ID Plus Admin Logs Connector](../connectors/rsaidplus-adminglogs-connector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

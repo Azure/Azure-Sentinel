@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPResourceManager` | 1 connector(s) |
+| `GCPResourceManager` | [Google Cloud Platform Resource Manager (via Codeless Connector Framework)](../connectors/gcpresourcemanagerlogsccfdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

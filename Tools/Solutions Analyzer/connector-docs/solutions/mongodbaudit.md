@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MongoDBAudit_CL` | [Deprecated] MongoDB Audit |
+| `MongoDBAudit_CL` | [[Deprecated] MongoDB Audit](../connectors/mongodb.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

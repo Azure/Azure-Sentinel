@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Symantec Endpoint Protection |
+| `Syslog` | [[Deprecated] Symantec Endpoint Protection](../connectors/symantecendpointprotection.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

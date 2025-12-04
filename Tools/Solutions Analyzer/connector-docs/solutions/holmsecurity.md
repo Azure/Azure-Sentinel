@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `net_assets_CL` | Holm Security Asset Data |
-| `web_assets_CL` | Holm Security Asset Data |
+| `net_assets_CL` | [Holm Security Asset Data](../connectors/holmsecurityassets.md) |
+| `web_assets_CL` | [Holm Security Asset Data](../connectors/holmsecurityassets.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

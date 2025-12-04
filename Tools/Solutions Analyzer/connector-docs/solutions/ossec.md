@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** OSSEC
 
-OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec.net/) events into Microsoft Sentinel. Refer to [OSSEC documentation](https://www.ossec.net/docs) for more information.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_CEF_OSSEC.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/OSSEC/Data%20Connectors/Connector_CEF_OSSEC.json) |
-
-[→ View full connector details](../connectors/ossec.md)
-
 ### [[Deprecated] OSSEC via AMA](../connectors/ossecama.md)
 
 **Publisher:** OSSEC
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] OSSEC via AMA](../connectors/ossecama.md), [[Deprecated] OSSEC via Legacy Agent](../connectors/ossec.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -37,9 +37,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OfficeActivity` | Microsoft 365 (formerly, Office 365) |
-| `exchange` | Microsoft 365 (formerly, Office 365) |
-| `sharePoint` | Microsoft 365 (formerly, Office 365) |
-| `teams` | Microsoft 365 (formerly, Office 365) |
+| `OfficeActivity` | [Microsoft 365 (formerly, Office 365)](../connectors/office365.md) |
+| `exchange` | [Microsoft 365 (formerly, Office 365)](../connectors/office365.md) |
+| `sharePoint` | [Microsoft 365 (formerly, Office 365)](../connectors/office365.md) |
+| `teams` | [Microsoft 365 (formerly, Office 365)](../connectors/office365.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

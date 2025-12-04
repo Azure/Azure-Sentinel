@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** vArmour
 
-vArmour reduces operational risk and increases cyber resiliency by visualizing and controlling application relationships across the enterprise. This vArmour connector enables streaming of Application Controller Violation Alerts into Microsoft Sentinel, so you can take advantage of search & correlation, alerting, & threat intelligence enrichment for each log.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_vArmour_AppController_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/vArmour%20Application%20Controller/Data%20Connectors/Connector_vArmour_AppController_CEF.json) |
-
-[→ View full connector details](../connectors/varmourac.md)
-
 ### [[Deprecated] vArmour Application Controller via AMA](../connectors/varmouracama.md)
 
 **Publisher:** vArmour
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] vArmour Application Controller via AMA](../connectors/varmouracama.md), [[Deprecated] vArmour Application Controller via Legacy Agent](../connectors/varmourac.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -33,6 +33,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | [Deprecated] Votiro Sanitization Engine Logs |
+| `CommonSecurityLog` | [[Deprecated] Votiro Sanitization Engine Logs](../connectors/votiro.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

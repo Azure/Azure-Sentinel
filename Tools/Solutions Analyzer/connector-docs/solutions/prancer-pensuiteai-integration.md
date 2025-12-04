@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `prancer_CL` | Prancer Data Connector |
+| `prancer_CL` | [Prancer Data Connector](../connectors/prancerlogdata.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

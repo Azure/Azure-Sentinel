@@ -37,9 +37,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `VMware_CWS_DLPLogs_CL` | VMware SD-WAN and SASE Connector |
-| `VMware_CWS_Health_CL` | VMware SD-WAN and SASE Connector |
-| `VMware_CWS_Weblogs_CL` | VMware SD-WAN and SASE Connector |
-| `VMware_VECO_EventLogs_CL` | VMware SD-WAN and SASE Connector |
+| `VMware_CWS_DLPLogs_CL` | [VMware SD-WAN and SASE Connector](../connectors/vmwaresdwan.md) |
+| `VMware_CWS_Health_CL` | [VMware SD-WAN and SASE Connector](../connectors/vmwaresdwan.md) |
+| `VMware_CWS_Weblogs_CL` | [VMware SD-WAN and SASE Connector](../connectors/vmwaresdwan.md) |
+| `VMware_VECO_EventLogs_CL` | [VMware SD-WAN and SASE Connector](../connectors/vmwaresdwan.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

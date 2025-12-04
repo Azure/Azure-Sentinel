@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BSMmacOS_CL` | NXLog BSM macOS |
+| `BSMmacOS_CL` | [NXLog BSM macOS](../connectors/nxlogbsmmacos.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

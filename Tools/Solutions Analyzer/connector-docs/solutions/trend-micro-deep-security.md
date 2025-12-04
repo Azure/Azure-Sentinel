@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | [Deprecated] Trend Micro Deep Security via Legacy |
+| `CommonSecurityLog` | [[Deprecated] Trend Micro Deep Security via Legacy](../connectors/trendmicro.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

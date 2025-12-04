@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommvaultSecurityIQ_CL` | CommvaultSecurityIQ |
+| `CommvaultSecurityIQ_CL` | [CommvaultSecurityIQ](../connectors/commvaultsecurityiq-cl.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

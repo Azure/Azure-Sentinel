@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Blackberry CylancePROTECT |
+| `Syslog` | [[Deprecated] Blackberry CylancePROTECT](../connectors/blackberrycylanceprotect.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

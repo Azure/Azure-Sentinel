@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoDuo_CL` | Cisco Duo Security |
+| `CiscoDuo_CL` | [Cisco Duo Security](../connectors/ciscoduosecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AzureDiagnostics` | Azure Kubernetes Service (AKS) |
-| `ContainerInventory` | Azure Kubernetes Service (AKS) |
-| `KubeEvents` | Azure Kubernetes Service (AKS) |
+| `AzureDiagnostics` | [Azure Kubernetes Service (AKS)](../connectors/azurekubernetes.md) |
+| `ContainerInventory` | [Azure Kubernetes Service (AKS)](../connectors/azurekubernetes.md) |
+| `KubeEvents` | [Azure Kubernetes Service (AKS)](../connectors/azurekubernetes.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

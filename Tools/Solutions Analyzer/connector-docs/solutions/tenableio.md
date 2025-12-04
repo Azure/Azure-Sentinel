@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Tenable_IO_Assets_CL` | Tenable.io Vulnerability Management |
-| `Tenable_IO_Vuln_CL` | Tenable.io Vulnerability Management |
+| `Tenable_IO_Assets_CL` | [Tenable.io Vulnerability Management](../connectors/tenableioapi.md) |
+| `Tenable_IO_Vuln_CL` | [Tenable.io Vulnerability Management](../connectors/tenableioapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

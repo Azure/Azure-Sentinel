@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `EgressDefend_CL` | Egress Defend |
+| `EgressDefend_CL` | [Egress Defend](../connectors/egressdefendpolling.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

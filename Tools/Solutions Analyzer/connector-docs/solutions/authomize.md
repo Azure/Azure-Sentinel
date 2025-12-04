@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Authomize_v2_CL` | Authomize Data Connector |
+| `Authomize_v2_CL` | [Authomize Data Connector](../connectors/authomize.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

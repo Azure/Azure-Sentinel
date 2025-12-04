@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Sophos XG Firewall |
+| `Syslog` | [[Deprecated] Sophos XG Firewall](../connectors/sophosxgfirewall.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

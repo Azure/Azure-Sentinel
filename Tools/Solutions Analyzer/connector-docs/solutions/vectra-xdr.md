@@ -40,11 +40,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Audits_Data_CL` | Vectra XDR |
-| `Detections_Data_CL` | Vectra XDR |
-| `Entities_Data_CL` | Vectra XDR |
-| `Entity_Scoring_Data_CL` | Vectra XDR |
-| `Health_Data_CL` | Vectra XDR |
-| `Lockdown_Data_CL` | Vectra XDR |
+| `Audits_Data_CL` | [Vectra XDR](../connectors/vectraxdr.md) |
+| `Detections_Data_CL` | [Vectra XDR](../connectors/vectraxdr.md) |
+| `Entities_Data_CL` | [Vectra XDR](../connectors/vectraxdr.md) |
+| `Entity_Scoring_Data_CL` | [Vectra XDR](../connectors/vectraxdr.md) |
+| `Health_Data_CL` | [Vectra XDR](../connectors/vectraxdr.md) |
+| `Lockdown_Data_CL` | [Vectra XDR](../connectors/vectraxdr.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SecurityAlert` | Microsoft Defender for Endpoint |
+| `SecurityAlert` | [Microsoft Defender for Endpoint](../connectors/microsoftdefenderadvancedthreatprotection.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -19,16 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Illumio
 
-[Illumio](https://www.illumio.com/) connector provides the capability to ingest events into Microsoft Sentinel. The connector provides ability to ingest auditable and flow events from AWS S3 bucket.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Illumio_Auditable_Events_CL` |
-| | `Illumio_Flow_Events_CL` |
-| **Connector Definition Files** | [IllumioSaaS_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IllumioSaaS/Data%20Connectors/IllumioSaaS_FunctionApp.json) |
-
-[→ View full connector details](../connectors/illumiosaasdataconnector.md)
-
 ### [Illumio Saas](../connectors/illumiosaasccfdefinition.md)
 
 **Publisher:** Microsoft
@@ -48,8 +38,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `IllumioFlowEventsV2_CL` | Illumio Saas |
-| `Illumio_Auditable_Events_CL` | Illumio SaaS |
-| `Illumio_Flow_Events_CL` | Illumio SaaS |
+| `IllumioFlowEventsV2_CL` | [Illumio Saas](../connectors/illumiosaasccfdefinition.md) |
+| `Illumio_Auditable_Events_CL` | [Illumio SaaS](../connectors/illumiosaasdataconnector.md) |
+| `Illumio_Flow_Events_CL` | [Illumio SaaS](../connectors/illumiosaasdataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

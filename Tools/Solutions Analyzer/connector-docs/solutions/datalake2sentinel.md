@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ThreatIntelligenceIndicator` | Datalake2Sentinel |
+| `ThreatIntelligenceIndicator` | [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

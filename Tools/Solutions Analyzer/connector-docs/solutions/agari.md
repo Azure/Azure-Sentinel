@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `agari_apdpolicy_log_CL` | Agari Phishing Defense and Brand Protection |
-| `agari_apdtc_log_CL` | Agari Phishing Defense and Brand Protection |
-| `agari_bpalerts_log_CL` | Agari Phishing Defense and Brand Protection |
+| `agari_apdpolicy_log_CL` | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) |
+| `agari_apdtc_log_CL` | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) |
+| `agari_bpalerts_log_CL` | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

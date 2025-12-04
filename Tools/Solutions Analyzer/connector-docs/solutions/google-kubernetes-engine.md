@@ -39,11 +39,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GKEAPIServer` | 1 connector(s) |
-| `GKEApplication` | 1 connector(s) |
-| `GKEAudit` | 1 connector(s) |
-| `GKEControllerManager` | 1 connector(s) |
-| `GKEHPADecision` | 1 connector(s) |
-| `GKEScheduler` | 1 connector(s) |
+| `GKEAPIServer` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
+| `GKEApplication` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
+| `GKEAudit` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
+| `GKEControllerManager` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
+| `GKEHPADecision` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
+| `GKEScheduler` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

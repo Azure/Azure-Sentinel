@@ -37,8 +37,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BitwardenEventLogs_CL` | Bitwarden Event Logs |
-| `BitwardenGroups_CL` | Bitwarden Event Logs |
-| `BitwardenMembers_CL` | Bitwarden Event Logs |
+| `BitwardenEventLogs_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
+| `BitwardenGroups_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
+| `BitwardenMembers_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

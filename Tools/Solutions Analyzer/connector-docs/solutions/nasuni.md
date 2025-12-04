@@ -36,7 +36,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Nasuni` | [Deprecated] Nasuni Edge Appliance |
-| `Syslog` | [Deprecated] Nasuni Edge Appliance |
+| `Nasuni` | [[Deprecated] Nasuni Edge Appliance](../connectors/nasuniedgeappliance.md) |
+| `Syslog` | [[Deprecated] Nasuni Edge Appliance](../connectors/nasuniedgeappliance.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

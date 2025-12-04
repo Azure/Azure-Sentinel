@@ -36,7 +36,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `IntegrationTableIncidents_CL` | ESET Protect Platform |
-| `IntegrationTable_CL` | ESET Protect Platform |
+| `IntegrationTableIncidents_CL` | [ESET Protect Platform](../connectors/esetprotectplatform.md) |
+| `IntegrationTable_CL` | [ESET Protect Platform](../connectors/esetprotectplatform.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

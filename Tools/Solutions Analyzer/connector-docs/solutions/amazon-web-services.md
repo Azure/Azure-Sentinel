@@ -19,42 +19,9 @@ This solution provides **3 data connector(s)**.
 
 **Publisher:** Amazon
 
-Follow these instructions to connect to AWS and stream your CloudTrail logs into Microsoft Sentinel. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2218883&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `AWSCloudTrail` |
-| **Connector Definition Files** | [template_AWS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/template_AWS.json) |
-
-[→ View full connector details](../connectors/aws.md)
-
 ### [Amazon Web Services S3](../connectors/awss3.md)
 
 **Publisher:** Amazon
-
-This connector allows you to ingest AWS service logs, collected in AWS S3 buckets, to Microsoft Sentinel. The currently supported data types are: 
-
-* AWS CloudTrail
-
-* VPC Flow Logs
-
-* AWS GuardDuty
-
-* AWSCloudWatch
-
-
-
-For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2218883&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `AWSCloudTrail` |
-| | `AWSCloudWatch` |
-| | `AWSGuardDuty` |
-| | `AWSVPCFlow` |
-| **Connector Definition Files** | [template_AwsS3.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/template_AwsS3.json) |
-
-[→ View full connector details](../connectors/awss3.md)
 
 ### [Amazon Web Services S3 WAF](../connectors/awss3wafccpdefinition.md)
 
@@ -75,10 +42,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AWSCloudTrail` | Amazon Web Services, Amazon Web Services S3 |
-| `AWSCloudWatch` | Amazon Web Services S3 |
-| `AWSGuardDuty` | Amazon Web Services S3 |
-| `AWSVPCFlow` | Amazon Web Services S3 |
-| `AWSWAF` | Amazon Web Services S3 WAF |
+| `AWSCloudTrail` | [Amazon Web Services](../connectors/aws.md), [Amazon Web Services S3](../connectors/awss3.md) |
+| `AWSCloudWatch` | [Amazon Web Services S3](../connectors/awss3.md) |
+| `AWSGuardDuty` | [Amazon Web Services S3](../connectors/awss3.md) |
+| `AWSVPCFlow` | [Amazon Web Services S3](../connectors/awss3.md) |
+| `AWSWAF` | [Amazon Web Services S3 WAF](../connectors/awss3wafccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

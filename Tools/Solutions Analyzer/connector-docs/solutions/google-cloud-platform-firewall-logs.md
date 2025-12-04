@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPFirewallLogs` | GCP Pub/Sub Firewall Logs |
+| `GCPFirewallLogs` | [GCP Pub/Sub Firewall Logs](../connectors/gcpfirewalllogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

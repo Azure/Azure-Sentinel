@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `iocsent_CL` | Check Point Cyberint IOC Connector |
+| `iocsent_CL` | [Check Point Cyberint IOC Connector](../connectors/checkpointcyberintioc.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

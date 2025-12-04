@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Anvilogic_Alerts_CL` | Anvilogic |
+| `Anvilogic_Alerts_CL` | [Anvilogic](../connectors/anvilogicccfdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

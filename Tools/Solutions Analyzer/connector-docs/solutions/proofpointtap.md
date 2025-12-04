@@ -19,18 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Proofpoint
 
-The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `ProofPointTAPClicksBlocked_CL` |
-| | `ProofPointTAPClicksPermitted_CL` |
-| | `ProofPointTAPMessagesBlocked_CL` |
-| | `ProofPointTAPMessagesDelivered_CL` |
-| **Connector Definition Files** | [ProofpointTAP_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Data%20Connectors/ProofpointTAP_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/proofpointtap.md)
-
 ### [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md)
 
 **Publisher:** Proofpoint
@@ -53,13 +41,13 @@ This solution ingests data into **8 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ProofPointTAPClicksBlockedV2_CL` | Proofpoint TAP (via Codeless Connector Platform) |
-| `ProofPointTAPClicksBlocked_CL` | [Deprecated] Proofpoint TAP |
-| `ProofPointTAPClicksPermittedV2_CL` | Proofpoint TAP (via Codeless Connector Platform) |
-| `ProofPointTAPClicksPermitted_CL` | [Deprecated] Proofpoint TAP |
-| `ProofPointTAPMessagesBlockedV2_CL` | Proofpoint TAP (via Codeless Connector Platform) |
-| `ProofPointTAPMessagesBlocked_CL` | [Deprecated] Proofpoint TAP |
-| `ProofPointTAPMessagesDeliveredV2_CL` | Proofpoint TAP (via Codeless Connector Platform) |
-| `ProofPointTAPMessagesDelivered_CL` | [Deprecated] Proofpoint TAP |
+| `ProofPointTAPClicksBlockedV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
+| `ProofPointTAPClicksBlocked_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
+| `ProofPointTAPClicksPermittedV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
+| `ProofPointTAPClicksPermitted_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
+| `ProofPointTAPMessagesBlockedV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
+| `ProofPointTAPMessagesBlocked_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
+| `ProofPointTAPMessagesDeliveredV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
+| `ProofPointTAPMessagesDelivered_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

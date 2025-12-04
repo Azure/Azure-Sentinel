@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ProjectActivity` | Microsoft Project |
+| `ProjectActivity` | [Microsoft Project](../connectors/office365project.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

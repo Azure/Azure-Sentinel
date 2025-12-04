@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ValenceAlert_CL` | SaaS Security |
+| `ValenceAlert_CL` | [SaaS Security](../connectors/valencesecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

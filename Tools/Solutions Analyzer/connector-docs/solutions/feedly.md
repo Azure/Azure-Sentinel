@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `feedly_indicators_CL` | Feedly |
+| `feedly_indicators_CL` | [Feedly](../connectors/feedly.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `NGINX_CL` | [Deprecated] NGINX HTTP Server |
+| `NGINX_CL` | [[Deprecated] NGINX HTTP Server](../connectors/nginxhttpserver.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

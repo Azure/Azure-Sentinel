@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ESIExchangeOnlineConfig_CL` | Exchange Security Insights Online Collector |
+| `ESIExchangeOnlineConfig_CL` | [Exchange Security Insights Online Collector](../connectors/esi-exchangeonlinecollector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

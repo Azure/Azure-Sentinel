@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OracleWebLogicServer_CL` | [Deprecated] Oracle WebLogic Server |
+| `OracleWebLogicServer_CL` | [[Deprecated] Oracle WebLogic Server](../connectors/oracleweblogicserver.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

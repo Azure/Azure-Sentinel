@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ZimperiumMitigationLog_CL` | Zimperium Mobile Threat Defense |
-| `ZimperiumThreatLog_CL` | Zimperium Mobile Threat Defense |
+| `ZimperiumMitigationLog_CL` | [Zimperium Mobile Threat Defense](../connectors/zimperiummtdalerts.md) |
+| `ZimperiumThreatLog_CL` | [Zimperium Mobile Threat Defense](../connectors/zimperiummtdalerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

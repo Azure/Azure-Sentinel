@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyberArkAudit` | CyberArkAudit |
-| `CyberArk_AuditEvents_CL` | CyberArkAudit |
+| `CyberArkAudit` | [CyberArkAudit](../connectors/cyberarkaudit.md) |
+| `CyberArk_AuditEvents_CL` | [CyberArkAudit](../connectors/cyberarkaudit.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

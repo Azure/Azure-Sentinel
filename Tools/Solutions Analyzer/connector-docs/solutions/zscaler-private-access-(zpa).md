@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ZPA_CL` | [Deprecated] Zscaler Private Access |
+| `ZPA_CL` | [[Deprecated] Zscaler Private Access](../connectors/zscalerprivateaccess.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

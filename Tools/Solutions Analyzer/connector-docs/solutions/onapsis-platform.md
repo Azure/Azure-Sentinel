@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | [Deprecated] Onapsis Platform |
+| `CommonSecurityLog` | [[Deprecated] Onapsis Platform](../connectors/onapsisplatform.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

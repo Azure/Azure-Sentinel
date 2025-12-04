@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPLoadBalancerLogs_CL` | 1 connector(s) |
+| `GCPLoadBalancerLogs_CL` | [GCP Pub/Sub Load Balancer Logs (via Codeless Connector Platform).](../connectors/gcpfloadbalancerlogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

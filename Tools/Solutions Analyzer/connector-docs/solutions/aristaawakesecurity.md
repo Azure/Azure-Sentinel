@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | [Deprecated] Awake Security via Legacy Agent |
+| `CommonSecurityLog` | [[Deprecated] Awake Security via Legacy Agent](../connectors/aristaawakesecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

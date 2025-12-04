@@ -73,8 +73,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Cofense_Triage_failed_indicators_CL` | Cofense Triage Threat Indicators Ingestion |
-| `Report_links_data_CL` | Cofense Triage Threat Indicators Ingestion |
-| `ThreatIntelligenceIndicator` | Cofense Triage Threat Indicators Ingestion |
+| `Cofense_Triage_failed_indicators_CL` | [Cofense Triage Threat Indicators Ingestion](../connectors/cofensetriage.md) |
+| `Report_links_data_CL` | [Cofense Triage Threat Indicators Ingestion](../connectors/cofensetriage.md) |
+| `ThreatIntelligenceIndicator` | [Cofense Triage Threat Indicators Ingestion](../connectors/cofensetriage.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

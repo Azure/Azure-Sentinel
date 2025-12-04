@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** WireX_Systems
 
-The WireX Systems data connector allows security professional to integrate with Microsoft Sentinel to allow you to further enrich your forensics investigations; to not only encompass the contextual content offered by WireX but to analyze data from other sources, and to create custom dashboards to give the most complete picture during a forensic investigation and to create custom workflows.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [WireXsystemsNFP%281b%29.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WireX%20Network%20Forensics%20Platform/Data%20Connectors/WireXsystemsNFP%281b%29.json) |
-
-[→ View full connector details](../connectors/wirex-systems-nfp.md)
-
 ### [[Deprecated] WireX Network Forensics Platform via AMA](../connectors/wirex-systems-nfpama.md)
 
 **Publisher:** WireX_Systems
@@ -47,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | 2 connector(s) |
+| `CommonSecurityLog` | [[Deprecated] WireX Network Forensics Platform via AMA](../connectors/wirex-systems-nfpama.md), [[Deprecated] WireX Network Forensics Platform via Legacy Agent](../connectors/wirex-systems-nfp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

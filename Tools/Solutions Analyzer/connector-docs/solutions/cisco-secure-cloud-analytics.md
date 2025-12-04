@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Cisco Secure Cloud Analytics |
+| `Syslog` | [[Deprecated] Cisco Secure Cloud Analytics](../connectors/stealthwatch.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

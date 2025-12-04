@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPCloudSQL` | GCP Cloud SQL (via Codeless Connector Framework) |
+| `GCPCloudSQL` | [GCP Cloud SQL (via Codeless Connector Framework)](../connectors/gcpcloudsqlccfdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

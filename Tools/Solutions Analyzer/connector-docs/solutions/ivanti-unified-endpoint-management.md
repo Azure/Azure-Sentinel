@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Ivanti Unified Endpoint Management |
+| `Syslog` | [[Deprecated] Ivanti Unified Endpoint Management](../connectors/ivantiuem.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

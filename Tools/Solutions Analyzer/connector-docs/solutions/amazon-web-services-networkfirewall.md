@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AWSNetworkFirewallAlert` | 1 connector(s) |
-| `AWSNetworkFirewallFlow` | 1 connector(s) |
-| `AWSNetworkFirewallTls` | 1 connector(s) |
+| `AWSNetworkFirewallAlert` | [Amazon Web Services NetworkFirewall (via Codeless Connector Framework)](../connectors/awsnetworkfirewallccpdefinition.md) |
+| `AWSNetworkFirewallFlow` | [Amazon Web Services NetworkFirewall (via Codeless Connector Framework)](../connectors/awsnetworkfirewallccpdefinition.md) |
+| `AWSNetworkFirewallTls` | [Amazon Web Services NetworkFirewall (via Codeless Connector Framework)](../connectors/awsnetworkfirewallccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

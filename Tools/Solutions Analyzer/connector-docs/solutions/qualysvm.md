@@ -20,15 +20,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerability-management/) data connector provides the capability to ingest vulnerability host detection data into Microsoft Sentinel through the Qualys API. The connector provides visibility into host detection data from vulerability scans.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `QualysHostDetectionV3_CL` |
-| **Connector Definition Files** | [QualysVMHostLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Data%20Connectors/QualysVMHostLogs_ccp/QualysVMHostLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/qualysvmlogsccpdefinition.md)
-
 ### [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md)
 
 **Publisher:** Qualys
@@ -53,8 +44,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `QualysHostDetectionV2_CL` | [DEPRECATED] Qualys Vulnerability Management |
-| `QualysHostDetectionV3_CL` | 1 connector(s) |
-| `QualysHostDetection_CL` | [DEPRECATED] Qualys Vulnerability Management |
+| `QualysHostDetectionV2_CL` | [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md) |
+| `QualysHostDetectionV3_CL` | [Qualys Vulnerability Management (via Codeless Connector Framework)](../connectors/qualysvmlogsccpdefinition.md) |
+| `QualysHostDetection_CL` | [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

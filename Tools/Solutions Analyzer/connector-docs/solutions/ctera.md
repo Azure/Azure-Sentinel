@@ -40,6 +40,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | CTERA Syslog |
+| `Syslog` | [CTERA Syslog](../connectors/ctera.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

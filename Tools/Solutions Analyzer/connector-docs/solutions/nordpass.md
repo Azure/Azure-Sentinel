@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `NordPassEventLogs_CL` | NordPass |
+| `NordPassEventLogs_CL` | [NordPass](../connectors/nordpass.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

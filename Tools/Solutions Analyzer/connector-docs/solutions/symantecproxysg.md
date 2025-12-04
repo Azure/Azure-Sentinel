@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Symantec ProxySG |
+| `Syslog` | [[Deprecated] Symantec ProxySG](../connectors/symantecproxysg.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

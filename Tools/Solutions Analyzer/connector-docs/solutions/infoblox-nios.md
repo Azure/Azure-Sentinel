@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Infoblox NIOS |
+| `Syslog` | [[Deprecated] Infoblox NIOS](../connectors/infobloxnios.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

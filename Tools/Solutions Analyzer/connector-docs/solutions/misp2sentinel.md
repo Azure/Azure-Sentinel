@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ThreatIntelligenceIndicator` | MISP2Sentinel |
+| `ThreatIntelligenceIndicator` | [MISP2Sentinel](../connectors/misp2sentinelconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

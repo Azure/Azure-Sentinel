@@ -36,7 +36,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ContrastADRIncident_CL` | ContrastADR |
-| `ContrastADR_CL` | ContrastADR |
+| `ContrastADRIncident_CL` | [ContrastADR](../connectors/contrastadr.md) |
+| `ContrastADR_CL` | [ContrastADR](../connectors/contrastadr.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

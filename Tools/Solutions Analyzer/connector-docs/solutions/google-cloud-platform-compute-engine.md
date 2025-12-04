@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPComputeEngine` | 1 connector(s) |
+| `GCPComputeEngine` | [Google Cloud Platform Compute Engine (via Codeless Connector Framework)](../connectors/gcpcomputeenginelogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -42,7 +42,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MimecastDLP_CL` | Mimecast Secure Email Gateway |
-| `MimecastSIEM_CL` | Mimecast Secure Email Gateway |
+| `MimecastDLP_CL` | [Mimecast Secure Email Gateway](../connectors/mimecastsiemapi.md) |
+| `MimecastSIEM_CL` | [Mimecast Secure Email Gateway](../connectors/mimecastsiemapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

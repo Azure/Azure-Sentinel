@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ObsidianActivity_CL` | Obsidian Datasharing Connector |
-| `ObsidianThreat_CL` | Obsidian Datasharing Connector |
+| `ObsidianActivity_CL` | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) |
+| `ObsidianThreat_CL` | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

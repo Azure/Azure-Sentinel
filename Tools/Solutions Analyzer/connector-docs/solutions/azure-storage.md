@@ -38,10 +38,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AzureMetrics` | Azure Storage Account |
-| `StorageBlobLogs` | Azure Storage Account |
-| `StorageFileLogs` | Azure Storage Account |
-| `StorageQueueLogs` | Azure Storage Account |
-| `StorageTableLogs` | Azure Storage Account |
+| `AzureMetrics` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
+| `StorageBlobLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
+| `StorageFileLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
+| `StorageQueueLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
+| `StorageTableLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

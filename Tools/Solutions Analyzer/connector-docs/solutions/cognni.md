@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CognniIncidents_CL` | Cognni |
+| `CognniIncidents_CL` | [Cognni](../connectors/cognnisentineldataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ADOAuditLogs_CL` | 1 connector(s) |
+| `ADOAuditLogs_CL` | [Azure DevOps Audit Logs (via Codeless Connector Platform)](../connectors/azuredevopsauditlogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

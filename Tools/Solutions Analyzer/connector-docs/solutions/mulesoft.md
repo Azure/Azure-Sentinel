@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `MuleSoft_Cloudhub_CL` | MuleSoft Cloudhub |
+| `MuleSoft_Cloudhub_CL` | [MuleSoft Cloudhub](../connectors/mulesoft.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

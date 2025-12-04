@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Auth0
 
-The [Auth0 Access Management](https://auth0.com/access-management) data connector provides the capability to ingest [Auth0 log events](https://auth0.com/docs/api/management/v2/#!/Logs/get_logs) into Microsoft Sentinel
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `Auth0AM_CL` |
-| **Connector Definition Files** | [Auth0_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Auth0/Data%20Connectors/Auth0_FunctionApp.json) |
-
-[→ View full connector details](../connectors/auth0.md)
-
 ### [Auth0 Logs](../connectors/auth0connectorccpdefinition.md)
 
 **Publisher:** Microsoft
@@ -47,7 +38,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Auth0AM_CL` | Auth0 Access Management |
-| `Auth0Logs_CL` | Auth0 Logs |
+| `Auth0AM_CL` | [Auth0 Access Management](../connectors/auth0.md) |
+| `Auth0Logs_CL` | [Auth0 Logs](../connectors/auth0connectorccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

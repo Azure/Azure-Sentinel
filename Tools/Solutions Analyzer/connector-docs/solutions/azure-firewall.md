@@ -43,15 +43,15 @@ This solution ingests data into **10 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AZFWApplicationRule` | Azure Firewall |
-| `AZFWDnsQuery` | Azure Firewall |
-| `AZFWFatFlow` | Azure Firewall |
-| `AZFWFlowTrace` | Azure Firewall |
-| `AZFWIdpsSignature` | Azure Firewall |
-| `AZFWInternalFqdnResolutionFailure` | Azure Firewall |
-| `AZFWNatRule` | Azure Firewall |
-| `AZFWNetworkRule` | Azure Firewall |
-| `AZFWThreatIntel` | Azure Firewall |
-| `AzureDiagnostics` | Azure Firewall |
+| `AZFWApplicationRule` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWDnsQuery` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWFatFlow` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWFlowTrace` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWIdpsSignature` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWInternalFqdnResolutionFailure` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWNatRule` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWNetworkRule` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AZFWThreatIntel` | [Azure Firewall](../connectors/azurefirewall.md) |
+| `AzureDiagnostics` | [Azure Firewall](../connectors/azurefirewall.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

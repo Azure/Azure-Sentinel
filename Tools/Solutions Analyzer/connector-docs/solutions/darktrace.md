@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `darktrace_model_alerts_CL` | 1 connector(s) |
+| `darktrace_model_alerts_CL` | [Darktrace Connector for Microsoft Sentinel REST API](../connectors/darktracerestconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

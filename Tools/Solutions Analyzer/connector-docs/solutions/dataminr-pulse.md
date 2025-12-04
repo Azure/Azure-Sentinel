@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `DataminrPulse_Alerts_CL` | Dataminr Pulse Alerts Data Connector |
+| `DataminrPulse_Alerts_CL` | [Dataminr Pulse Alerts Data Connector](../connectors/dataminrpulsealerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

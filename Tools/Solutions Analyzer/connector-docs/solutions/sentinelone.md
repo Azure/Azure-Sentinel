@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** SentinelOne
 
-The [SentinelOne](https://www.sentinelone.com/) data connector provides the capability to ingest common SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API. Refer to API documentation: `https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview` for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `SentinelOne_CL` |
-| **Connector Definition Files** | [SentinelOne_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Data%20Connectors/SentinelOne_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/sentinelone.md)
-
 ### [SentinelOne](../connectors/sentineloneccp.md)
 
 **Publisher:** Microsoft
@@ -51,11 +42,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SentinelOneActivities_CL` | SentinelOne |
-| `SentinelOneAgents_CL` | SentinelOne |
-| `SentinelOneAlerts_CL` | SentinelOne |
-| `SentinelOneGroups_CL` | SentinelOne |
-| `SentinelOneThreats_CL` | SentinelOne |
-| `SentinelOne_CL` | SentinelOne |
+| `SentinelOneActivities_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
+| `SentinelOneAgents_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
+| `SentinelOneAlerts_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
+| `SentinelOneGroups_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
+| `SentinelOneThreats_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
+| `SentinelOne_CL` | [SentinelOne](../connectors/sentinelone.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

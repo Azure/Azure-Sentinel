@@ -6,9 +6,9 @@ This directory contains comprehensive reference for Microsoft Sentinel data conn
 
 ### Index Pages
 
-- **[Solutions Index](solutions-index.md)** - Browse all 369 solutions alphabetically, with overview statistics and quick access to solution details
-- **[Connectors Index](connectors-index.md)** - Browse all 503 unique connectors alphabetically, with publisher information, descriptions, and associated tables
-- **[Tables Index](tables-index.md)** - Browse all 811 unique tables alphabetically, with solution references and connector counts
+- **[Solutions Index](solutions-index.md)** - Browse all solutions alphabetically, with overview statistics and quick access to solution details
+- **[Connectors Index](connectors-index.md)** - Browse all unique connectors alphabetically, with publisher information, descriptions, and associated tables
+- **[Tables Index](tables-index.md)** - Browse all unique tables alphabetically, with solution references and connector counts
 
 ### Solution Pages
 
@@ -22,12 +22,7 @@ Individual solution pages are organized in the [`solutions/`](solutions/) direct
 
 ## 📊 Quick Statistics
 
-| Metric | Count |
-|--------|-------|
-| Total Solutions | 369 |
-| Unique Connectors | 503 |
-| Unique Tables | 811 |
-| Total Configurations | 1,054 |
+For current statistics, see the [Solutions Index](solutions-index.md) which displays up-to-date counts of solutions (with and without connectors), connectors, and tables.
 
 ## 🔍 How to Use This Documentation
 
@@ -37,7 +32,7 @@ Start at the [Solutions Index](solutions-index.md) to browse all available solut
 ### Find Information by Connector
 Use the [Connectors Index](connectors-index.md) to find specific connectors. Each connector entry shows:
 - Publisher name
-- Connector description (first 200 characters)
+- Full connector description
 - Associated solution
 - List of tables ingested by the connector
 

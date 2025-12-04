@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `KeeperSecurityEventNewLogs_CL` | Keeper Security Push Connector |
+| `KeeperSecurityEventNewLogs_CL` | [Keeper Security Push Connector](../connectors/keepersecuritypush2.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

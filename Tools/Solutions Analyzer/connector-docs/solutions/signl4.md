@@ -40,7 +40,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SIGNL4_CL` | Derdack SIGNL4 |
-| `SecurityIncident` | Derdack SIGNL4 |
+| `SIGNL4_CL` | [Derdack SIGNL4](../connectors/derdacksignl4.md) |
+| `SecurityIncident` | [Derdack SIGNL4](../connectors/derdacksignl4.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

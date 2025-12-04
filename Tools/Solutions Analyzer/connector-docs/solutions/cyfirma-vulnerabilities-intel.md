@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyfirmaVulnerabilities_CL` | CYFIRMA Vulnerabilities Intelligence |
+| `CyfirmaVulnerabilities_CL` | [CYFIRMA Vulnerabilities Intelligence](../connectors/cyfirmavulnerabilitiesinteldc.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

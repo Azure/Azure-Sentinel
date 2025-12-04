@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] McAfee ePolicy Orchestrator (ePO) |
+| `Syslog` | [[Deprecated] McAfee ePolicy Orchestrator (ePO)](../connectors/mcafeeepo.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

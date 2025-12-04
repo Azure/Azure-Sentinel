@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SeraphicWebSecurity_CL` | Seraphic Web Security |
+| `SeraphicWebSecurity_CL` | [Seraphic Web Security](../connectors/seraphicwebsecurity.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

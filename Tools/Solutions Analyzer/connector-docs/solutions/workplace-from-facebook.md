@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Workplace_Facebook_CL` | Workplace from Facebook |
+| `Workplace_Facebook_CL` | [Workplace from Facebook](../connectors/workplacefacebook.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -39,11 +39,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `WizAuditLogsV2_CL` | Wiz |
-| `WizAuditLogs_CL` | Wiz |
-| `WizIssuesV2_CL` | Wiz |
-| `WizIssues_CL` | Wiz |
-| `WizVulnerabilitiesV2_CL` | Wiz |
-| `WizVulnerabilities_CL` | Wiz |
+| `WizAuditLogsV2_CL` | [Wiz](../connectors/wiz.md) |
+| `WizAuditLogs_CL` | [Wiz](../connectors/wiz.md) |
+| `WizIssuesV2_CL` | [Wiz](../connectors/wiz.md) |
+| `WizIssues_CL` | [Wiz](../connectors/wiz.md) |
+| `WizVulnerabilitiesV2_CL` | [Wiz](../connectors/wiz.md) |
+| `WizVulnerabilities_CL` | [Wiz](../connectors/wiz.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

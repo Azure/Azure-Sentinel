@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] RSA® SecurID (Authentication Manager) |
+| `Syslog` | [[Deprecated] RSA® SecurID (Authentication Manager)](../connectors/rsasecuridam.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

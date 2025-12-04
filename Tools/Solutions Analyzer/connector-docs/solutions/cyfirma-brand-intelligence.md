@@ -36,10 +36,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyfirmaBIDomainITAssetAlerts_CL` | CYFIRMA Brand Intelligence |
-| `CyfirmaBIExecutivePeopleAlerts_CL` | CYFIRMA Brand Intelligence |
-| `CyfirmaBIMaliciousMobileAppsAlerts_CL` | CYFIRMA Brand Intelligence |
-| `CyfirmaBIProductSolutionAlerts_CL` | CYFIRMA Brand Intelligence |
-| `CyfirmaBISocialHandlersAlerts_CL` | CYFIRMA Brand Intelligence |
+| `CyfirmaBIDomainITAssetAlerts_CL` | [CYFIRMA Brand Intelligence](../connectors/cyfirmabrandintelligencealertsdc.md) |
+| `CyfirmaBIExecutivePeopleAlerts_CL` | [CYFIRMA Brand Intelligence](../connectors/cyfirmabrandintelligencealertsdc.md) |
+| `CyfirmaBIMaliciousMobileAppsAlerts_CL` | [CYFIRMA Brand Intelligence](../connectors/cyfirmabrandintelligencealertsdc.md) |
+| `CyfirmaBIProductSolutionAlerts_CL` | [CYFIRMA Brand Intelligence](../connectors/cyfirmabrandintelligencealertsdc.md) |
+| `CyfirmaBISocialHandlersAlerts_CL` | [CYFIRMA Brand Intelligence](../connectors/cyfirmabrandintelligencealertsdc.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

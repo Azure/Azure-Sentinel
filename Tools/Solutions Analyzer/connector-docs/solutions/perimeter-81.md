@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Perimeter81_CL` | Perimeter 81 Activity Logs |
+| `Perimeter81_CL` | [Perimeter 81 Activity Logs](../connectors/perimeter81activitylogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BigIDDSPMCatalog_CL` | BigID DSPM connector |
+| `BigIDDSPMCatalog_CL` | [BigID DSPM connector](../connectors/bigiddspmlogsconnectordefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

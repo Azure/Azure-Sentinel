@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `secRMM_CL` | Squadra Technologies secRMM |
+| `secRMM_CL` | [Squadra Technologies secRMM](../connectors/squadratechnologiessecrmm.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

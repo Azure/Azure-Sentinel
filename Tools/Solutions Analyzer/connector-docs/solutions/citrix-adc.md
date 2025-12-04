@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] Citrix ADC (former NetScaler) |
+| `Syslog` | [[Deprecated] Citrix ADC (former NetScaler)](../connectors/citrixadc.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `JuniperIDP_CL` | [Deprecated] Juniper IDP |
+| `JuniperIDP_CL` | [[Deprecated] Juniper IDP](../connectors/juniperidp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

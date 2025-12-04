@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyberSixgill_Alerts_CL` | Cybersixgill Actionable Alerts |
+| `CyberSixgill_Alerts_CL` | [Cybersixgill Actionable Alerts](../connectors/cybersixgillactionablealerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AIShield_CL` | AIShield |
+| `AIShield_CL` | [AIShield](../connectors/boschaishield.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

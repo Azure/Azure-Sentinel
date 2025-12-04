@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `RedCanaryDetections_CL` | Red Canary Threat Detection |
+| `RedCanaryDetections_CL` | [Red Canary Threat Detection](../connectors/redcanarydataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

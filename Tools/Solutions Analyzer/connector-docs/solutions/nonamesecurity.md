@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `NonameAPISecurityAlert_CL` | Noname Security for Microsoft Sentinel |
+| `NonameAPISecurityAlert_CL` | [Noname Security for Microsoft Sentinel](../connectors/nonamesecuritymicrosoftsentinel.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

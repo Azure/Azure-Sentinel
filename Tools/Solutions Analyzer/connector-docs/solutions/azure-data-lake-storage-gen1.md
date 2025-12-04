@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AzureDiagnostics` | Azure Data Lake Storage Gen1 |
+| `AzureDiagnostics` | [Azure Data Lake Storage Gen1](../connectors/azuredatalakestoragegen1-ccp.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -60,11 +60,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `VeeamAuthorizationEvents_CL` | Veeam Data Connector (using Azure Functions) |
-| `VeeamCovewareFindings_CL` | Veeam Data Connector (using Azure Functions) |
-| `VeeamMalwareEvents_CL` | Veeam Data Connector (using Azure Functions) |
-| `VeeamOneTriggeredAlarms_CL` | Veeam Data Connector (using Azure Functions) |
-| `VeeamSecurityComplianceAnalyzer_CL` | Veeam Data Connector (using Azure Functions) |
-| `VeeamSessions_CL` | Veeam Data Connector (using Azure Functions) |
+| `VeeamAuthorizationEvents_CL` | [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md) |
+| `VeeamCovewareFindings_CL` | [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md) |
+| `VeeamMalwareEvents_CL` | [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md) |
+| `VeeamOneTriggeredAlarms_CL` | [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md) |
+| `VeeamSecurityComplianceAnalyzer_CL` | [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md) |
+| `VeeamSessions_CL` | [Veeam Data Connector (using Azure Functions)](../connectors/veeamcustomtablesdataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

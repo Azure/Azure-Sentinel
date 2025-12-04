@@ -33,6 +33,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoETD_CL` | Cisco ETD |
+| `CiscoETD_CL` | [Cisco ETD](../connectors/ciscoetd.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

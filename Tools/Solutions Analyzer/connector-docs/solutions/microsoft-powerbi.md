@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `PowerBIActivity` | Microsoft PowerBI |
+| `PowerBIActivity` | [Microsoft PowerBI](../connectors/officepowerbi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

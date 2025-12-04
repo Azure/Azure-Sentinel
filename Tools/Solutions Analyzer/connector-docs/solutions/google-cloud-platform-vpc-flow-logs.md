@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPVPCFlow` | 1 connector(s) |
+| `GCPVPCFlow` | [GCP Pub/Sub VPC Flow Logs (via Codeless Connector Framework)](../connectors/gcpvpcflowlogsccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

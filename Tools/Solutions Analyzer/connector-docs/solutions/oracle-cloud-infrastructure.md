@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The Oracle Cloud Infrastructure (OCI) data connector provides the capability to ingest OCI Logs from [OCI Stream](https://docs.oracle.com/iaas/Content/Streaming/Concepts/streamingoverview.htm) into Microsoft Sentinel using the [OCI Streaming REST API](https://docs.oracle.com/iaas/api/#/streaming/streaming/20180418).
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `OCI_LogsV2_CL` |
-| **Connector Definition Files** | [OCI_DataConnector_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Oracle%20Cloud%20Infrastructure/Data%20Connectors/Oracle_Cloud_Infrastructure_CCP/OCI_DataConnector_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/oci-connector-ccp-definition.md)
-
 ### [[DEPRECATED] Oracle Cloud Infrastructure](../connectors/oraclecloudinfrastructurelogsconnector.md)
 
 **Publisher:** Oracle
@@ -51,7 +42,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OCI_LogsV2_CL` | 1 connector(s) |
-| `OCI_Logs_CL` | [DEPRECATED] Oracle Cloud Infrastructure |
+| `OCI_LogsV2_CL` | [Oracle Cloud Infrastructure (via Codeless Connector Framework)](../connectors/oci-connector-ccp-definition.md) |
+| `OCI_Logs_CL` | [[DEPRECATED] Oracle Cloud Infrastructure](../connectors/oraclecloudinfrastructurelogsconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

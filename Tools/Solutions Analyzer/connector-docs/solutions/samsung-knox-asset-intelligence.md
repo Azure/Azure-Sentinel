@@ -39,11 +39,11 @@ This solution ingests data into **6 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Samsung_Knox_Application_CL` | Samsung Knox Asset Intelligence |
-| `Samsung_Knox_Audit_CL` | Samsung Knox Asset Intelligence |
-| `Samsung_Knox_Network_CL` | Samsung Knox Asset Intelligence |
-| `Samsung_Knox_Process_CL` | Samsung Knox Asset Intelligence |
-| `Samsung_Knox_System_CL` | Samsung Knox Asset Intelligence |
-| `Samsung_Knox_User_CL` | Samsung Knox Asset Intelligence |
+| `Samsung_Knox_Application_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
+| `Samsung_Knox_Audit_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
+| `Samsung_Knox_Network_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
+| `Samsung_Knox_Process_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
+| `Samsung_Knox_System_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
+| `Samsung_Knox_User_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

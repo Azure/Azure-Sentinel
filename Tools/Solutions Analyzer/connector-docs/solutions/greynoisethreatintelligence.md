@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ThreatIntelligenceIndicator` | GreyNoise Threat Intelligence |
+| `ThreatIntelligenceIndicator` | [GreyNoise Threat Intelligence](../connectors/greynoise2sentinelapi.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

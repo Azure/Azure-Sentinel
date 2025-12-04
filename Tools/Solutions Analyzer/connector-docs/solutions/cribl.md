@@ -38,9 +38,9 @@ This solution ingests data into **4 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CriblAccess_CL` | Cribl |
-| `CriblAudit_CL` | Cribl |
-| `CriblInternal_CL` | Cribl |
-| `CriblUIAccess_CL` | Cribl |
+| `CriblAccess_CL` | [Cribl](../connectors/cribl.md) |
+| `CriblAudit_CL` | [Cribl](../connectors/cribl.md) |
+| `CriblInternal_CL` | [Cribl](../connectors/cribl.md) |
+| `CriblUIAccess_CL` | [Cribl](../connectors/cribl.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

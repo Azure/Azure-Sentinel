@@ -20,16 +20,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Vectra AI
 
-The AI Vectra Stream connector allows to send Network Metadata collected by Vectra Sensors accross the Network and Cloud to Microsoft Sentinel
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `VectraStream` |
-| | `VectraStream_CL` |
-| **Connector Definition Files** | [Connector_VectraAI_Stream.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Vectra%20AI%20Stream/Data%20Connectors/Connector_VectraAI_Stream.json) |
-
-[→ View full connector details](../connectors/aivectrastream.md)
-
 ### [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md)
 
 **Publisher:** Vectra AI
@@ -65,24 +55,24 @@ This solution ingests data into **19 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `VectraStream` | AI Vectra Stream via Legacy Agent |
-| `VectraStream_CL` | AI Vectra Stream via Legacy Agent |
-| `vectra_beacon_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_dcerpc_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_dhcp_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_dns_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_http_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_isession_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_kerberos_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_ldap_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_ntlm_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_radius_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_rdp_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_smbfiles_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_smbmapping_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_smtp_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_ssh_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_ssl_CL` | [Recommended] Vectra AI Stream via AMA |
-| `vectra_x509_CL` | [Recommended] Vectra AI Stream via AMA |
+| `VectraStream` | [AI Vectra Stream via Legacy Agent](../connectors/aivectrastream.md) |
+| `VectraStream_CL` | [AI Vectra Stream via Legacy Agent](../connectors/aivectrastream.md) |
+| `vectra_beacon_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_dcerpc_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_dhcp_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_dns_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_http_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_isession_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_kerberos_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_ldap_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_ntlm_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_radius_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_rdp_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_smbfiles_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_smbmapping_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_smtp_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_ssh_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_ssl_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
+| `vectra_x509_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

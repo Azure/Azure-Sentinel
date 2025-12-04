@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Garrison_ULTRARemoteLogs_CL` | Garrison ULTRA Remote Logs |
+| `Garrison_ULTRARemoteLogs_CL` | [Garrison ULTRA Remote Logs](../connectors/garrisonultraremotelogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

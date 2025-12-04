@@ -35,7 +35,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `DefendAuditData` | Egress Iris Connector |
-| `EgressEvents_CL` | Egress Iris Connector |
+| `DefendAuditData` | [Egress Iris Connector](../connectors/egresssiempolling.md) |
+| `EgressEvents_CL` | [Egress Iris Connector](../connectors/egresssiempolling.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

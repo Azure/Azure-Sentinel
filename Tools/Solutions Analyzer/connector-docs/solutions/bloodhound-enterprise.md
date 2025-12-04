@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `BHEAttackPathsData_CL` | Bloodhound Enterprise |
+| `BHEAttackPathsData_CL` | [Bloodhound Enterprise](../connectors/bloodhoundenterprise.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

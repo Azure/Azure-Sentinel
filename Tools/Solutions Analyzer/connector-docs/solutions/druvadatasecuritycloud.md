@@ -36,8 +36,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `DruvaInsyncEvents_CL` | Druva Events Connector |
-| `DruvaPlatformEvents_CL` | Druva Events Connector |
-| `DruvaSecurityEvents_CL` | Druva Events Connector |
+| `DruvaInsyncEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
+| `DruvaPlatformEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
+| `DruvaSecurityEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

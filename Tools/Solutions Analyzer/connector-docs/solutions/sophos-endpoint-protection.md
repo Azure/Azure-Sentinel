@@ -19,15 +19,6 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Sophos
 
-The [Sophos Endpoint Protection](https://www.sophos.com/en-us/products/endpoint-antivirus.aspx) data connector provides the capability to ingest [Sophos events](https://docs.sophos.com/central/Customer/help/en-us/central/Customer/common/concepts/Events.html) into Microsoft Sentinel. Refer to [Sophos Central Admin documentation](https://docs.sophos.com/central/Customer/help/en-us/central/Customer/concepts/Logs.html) for more information.
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `SophosEP_CL` |
-| **Connector Definition Files** | [SophosEP_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20Endpoint%20Protection/Data%20Connectors/SophosEP_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/sophosep.md)
-
 ### [Sophos Endpoint Protection (using REST API)](../connectors/sophosendpointprotectionccpdefinition.md)
 
 **Publisher:** Microsoft
@@ -48,8 +39,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SophosEPAlerts_CL` | Sophos Endpoint Protection (using REST API) |
-| `SophosEPEvents_CL` | Sophos Endpoint Protection (using REST API) |
-| `SophosEP_CL` | Sophos Endpoint Protection |
+| `SophosEPAlerts_CL` | [Sophos Endpoint Protection (using REST API)](../connectors/sophosendpointprotectionccpdefinition.md) |
+| `SophosEPEvents_CL` | [Sophos Endpoint Protection (using REST API)](../connectors/sophosendpointprotectionccpdefinition.md) |
+| `SophosEP_CL` | [Sophos Endpoint Protection](../connectors/sophosep.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

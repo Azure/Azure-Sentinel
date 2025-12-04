@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `fluentbit_CL` | Azure CloudNGFW By Palo Alto Networks |
+| `fluentbit_CL` | [Azure CloudNGFW By Palo Alto Networks](../connectors/azurecloudngfwbypaloaltonetworks.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

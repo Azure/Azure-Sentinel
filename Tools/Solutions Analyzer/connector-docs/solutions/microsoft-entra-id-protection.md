@@ -38,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SecurityAlert` | Microsoft Entra ID Protection |
+| `SecurityAlert` | [Microsoft Entra ID Protection](../connectors/azureactivedirectoryidentityprotection.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

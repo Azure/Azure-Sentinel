@@ -33,6 +33,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Gigamon_CL` | Gigamon AMX Data Connector |
+| `Gigamon_CL` | [Gigamon AMX Data Connector](../connectors/gigamondataconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

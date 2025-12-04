@@ -38,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `QualysKB_CL` | Qualys VM KnowledgeBase |
+| `QualysKB_CL` | [Qualys VM KnowledgeBase](../connectors/qualyskb.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

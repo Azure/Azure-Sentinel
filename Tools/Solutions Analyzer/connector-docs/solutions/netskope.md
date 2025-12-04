@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Netskope_CL` | Netskope |
+| `Netskope_CL` | [Netskope](../connectors/netskope.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

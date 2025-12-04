@@ -35,6 +35,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `ThreatIntelIndicators` | Lumen Defender Threat Feed Data Connector |
+| `ThreatIntelIndicators` | [Lumen Defender Threat Feed Data Connector](../connectors/lumenthreatfeedconnector.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

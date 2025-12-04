@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SAPBTPAuditLog_CL` | SAP BTP |
+| `SAPBTPAuditLog_CL` | [SAP BTP](../connectors/sapbtpauditevents.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

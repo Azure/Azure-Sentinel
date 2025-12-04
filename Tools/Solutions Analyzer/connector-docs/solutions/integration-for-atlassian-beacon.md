@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `atlassian_beacon_alerts_CL` | Atlassian Beacon Alerts |
+| `atlassian_beacon_alerts_CL` | [Atlassian Beacon Alerts](../connectors/atlassianbeaconalerts.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

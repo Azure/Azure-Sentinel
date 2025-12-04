@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Syslog` | [Deprecated] OpenVPN Server |
+| `Syslog` | [[Deprecated] OpenVPN Server](../connectors/openvpn.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

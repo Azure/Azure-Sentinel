@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SINECSecurityGuard_CL` | SINEC Security Guard |
+| `SINECSecurityGuard_CL` | [SINEC Security Guard](../connectors/ssg.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

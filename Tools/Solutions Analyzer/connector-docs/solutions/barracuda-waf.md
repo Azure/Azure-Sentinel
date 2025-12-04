@@ -40,8 +40,8 @@ This solution ingests data into **3 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Barracuda_CL` | 1 connector(s) |
-| `CommonSecurityLog` | 1 connector(s) |
-| `barracuda_CL` | 1 connector(s) |
+| `Barracuda_CL` | [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md) |
+| `CommonSecurityLog` | [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md) |
+| `barracuda_CL` | [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

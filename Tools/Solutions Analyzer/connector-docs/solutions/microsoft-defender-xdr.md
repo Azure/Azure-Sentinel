@@ -73,27 +73,27 @@ This solution ingests data into **22 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `AlertEvidence` | Microsoft Defender XDR |
-| `CloudAppEvents` | Microsoft Defender XDR |
-| `DeviceEvents` | Microsoft Defender XDR |
-| `DeviceFileCertificateInfo` | Microsoft Defender XDR |
-| `DeviceFileEvents` | Microsoft Defender XDR |
-| `DeviceImageLoadEvents` | Microsoft Defender XDR |
-| `DeviceInfo` | Microsoft Defender XDR |
-| `DeviceLogonEvents` | Microsoft Defender XDR |
-| `DeviceNetworkEvents` | Microsoft Defender XDR |
-| `DeviceNetworkInfo` | Microsoft Defender XDR |
-| `DeviceProcessEvents` | Microsoft Defender XDR |
-| `DeviceRegistryEvents` | Microsoft Defender XDR |
-| `EmailAttachmentInfo` | Microsoft Defender XDR |
-| `EmailEvents` | Microsoft Defender XDR |
-| `EmailPostDeliveryEvents` | Microsoft Defender XDR |
-| `EmailUrlInfo` | Microsoft Defender XDR |
-| `IdentityDirectoryEvents` | Microsoft Defender XDR |
-| `IdentityLogonEvents` | Microsoft Defender XDR |
-| `IdentityQueryEvents` | Microsoft Defender XDR |
-| `SecurityAlert` | Microsoft Defender XDR |
-| `SecurityIncident` | Microsoft Defender XDR |
-| `UrlClickEvents` | Microsoft Defender XDR |
+| `AlertEvidence` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `CloudAppEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceFileCertificateInfo` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceFileEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceImageLoadEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceInfo` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceLogonEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceNetworkEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceNetworkInfo` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceProcessEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `DeviceRegistryEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `EmailAttachmentInfo` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `EmailEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `EmailPostDeliveryEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `EmailUrlInfo` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `IdentityDirectoryEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `IdentityLogonEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `IdentityQueryEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `SecurityAlert` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `SecurityIncident` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
+| `UrlClickEvents` | [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

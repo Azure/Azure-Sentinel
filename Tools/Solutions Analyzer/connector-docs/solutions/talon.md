@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `Talon_CL` | Talon Insights |
+| `Talon_CL` | [Talon Insights](../connectors/talonlogs.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

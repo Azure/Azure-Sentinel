@@ -38,6 +38,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `FinanceOperationsActivity_CL` | Dynamics 365 Finance and Operations |
+| `FinanceOperationsActivity_CL` | [Dynamics 365 Finance and Operations](../connectors/dynamics365finance.md) |
 
 [← Back to Solutions Index](../solutions-index.md)
