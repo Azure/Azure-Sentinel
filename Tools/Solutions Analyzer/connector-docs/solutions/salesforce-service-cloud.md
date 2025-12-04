@@ -1,0 +1,58 @@
+# Salesforce Service Cloud
+
+## Solution Information
+
+| Property | Value |
+|----------|-------|
+| **Publisher** | Microsoft Corporation |
+| **Support Tier** | Microsoft |
+| **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
+| **Categories** | domains |
+| **First Published** | 2022-05-16 |
+| **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Salesforce%20Service%20Cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Salesforce%20Service%20Cloud) |\n\n## Data Connectors
+
+This solution provides **2 data connector(s)**.
+
+### [DEPRECATED] Salesforce Service Cloud
+
+**Publisher:** Salesforce
+
+The Salesforce Service Cloud data connector provides the capability to ingest information about your Salesforce operational events into Microsoft Sentinel through the REST API. The connector provides ability to review events in your org on an accelerated basis, get [event log files](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/event_log_file_hourly_overview.htm) in hourly increments for recent activity.
+
+
+
+<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+**Tables Ingested:**
+
+- `SalesforceServiceCloudV2_CL`
+- `SalesforceServiceCloud_CL`
+
+**Connector Definition Files:**
+
+- [SalesforceServiceCloud_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesforceServiceCloud_API_FunctionApp.json)
+
+### Salesforce Service Cloud (via Codeless Connector Framework)
+
+**Publisher:** Microsoft
+
+The Salesforce Service Cloud data connector provides the capability to ingest information about your Salesforce operational events into Microsoft Sentinel through the REST API. The connector provides ability to review events in your org on an accelerated basis, get [event log files](https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/event_log_file_hourly_overview.htm) in hourly increments for recent activity.
+
+**Tables Ingested:**
+
+- `SalesforceServiceCloudV2_CL`
+
+**Connector Definition Files:**
+
+- [SalesforceServiceCloud_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesforceSentinelConnector_CCP/SalesforceServiceCloud_DataConnectorDefinition.json)
+
+## Tables Reference
+
+This solution ingests data into **2 table(s)**:
+
+| Table | Used By Connectors |
+|-------|-------------------|
+| `SalesforceServiceCloudV2_CL` | 2 connector(s) |
+| `SalesforceServiceCloud_CL` | [DEPRECATED] Salesforce Service Cloud |
+
+---\n\n[← Back to Solutions Index](../solutions-index.md)\n

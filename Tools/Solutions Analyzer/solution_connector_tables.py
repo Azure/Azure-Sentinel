@@ -7,6 +7,7 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from urllib.parse import quote
 
 try:
     import json5  # type: ignore
@@ -1129,7 +1130,8 @@ def main() -> None:
         for file_path in file_list:
             # Convert backslashes to forward slashes and prepend Solutions/
             normalized = file_path.replace("\\", "/")
-            github_url = f"{GITHUB_REPO_URL}/Solutions/{row_key[1]}/Data Connectors/{normalized}"
+            # URL encode all path components to handle spaces
+            github_url = f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}/{quote('Data Connectors')}/{quote(normalized)}"
             github_urls.append(github_url)
         
         support_info = row_key_metadata.get(row_key, {"table_detection_methods": set()})
@@ -1137,7 +1139,7 @@ def main() -> None:
         row_data = {
             "Table": row_key[16],
             "solution_name": row_key[0],
-            "solution_folder": f"{GITHUB_REPO_URL}/Solutions/{row_key[1]}",
+            "solution_folder": f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}",
             "solution_publisher_id": row_key[2],
             "solution_offer_id": row_key[3],
             "solution_first_publish_date": row_key[4],
@@ -1211,14 +1213,14 @@ def main() -> None:
             continue
         # Convert solution_folder to GitHub URL
         if issue.get("solution_folder"):
-            issue["solution_folder"] = f"{GITHUB_REPO_URL}/Solutions/{issue['solution_folder']}"
+            issue["solution_folder"] = f"{GITHUB_REPO_URL}/Solutions/{quote(issue['solution_folder'])}"
         # Convert connector_file path to GitHub URL if present
         if issue.get("connector_file"):
             solution_name = issue.get("solution_name", "")
             # Extract original folder name from solution_folder URL or use solution_name
             folder_name = solution_name
             normalized = issue["connector_file"].replace("\\", "/")
-            issue["connector_file"] = f"{GITHUB_REPO_URL}/Solutions/{folder_name}/Data Connectors/{normalized}"
+            issue["connector_file"] = f"{GITHUB_REPO_URL}/Solutions/{quote(folder_name)}/Data Connectors/{quote(normalized)}"
         filtered_issues.append(issue)
     
     with report_path.open("w", encoding="utf-8", newline="") as report_file:

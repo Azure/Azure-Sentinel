@@ -4,15 +4,21 @@ This tool analyzes Azure Sentinel Solutions to extract and map data connector de
 
 ## Quick Start
 
-**Pre-generated CSV files are already available in this directory:**
+**Pre-generated CSV files and documentation are already available in this directory:**
 - `solutions_connectors_tables_mapping.csv` - Main mapping of connectors to tables with full metadata
 - `solutions_connectors_tables_issues_and_exceptions_report.csv` - Issues and exceptions report
+- [`connector-docs/`](connector-docs/) - [Microsoft Sentinel Data Connector Reference](connector-docs/README.md) with browsable indexes by solutions, connectors, and tables
 
 You can use these files directly without running the script. They are kept up-to-date with the Solutions directory.
 
 To regenerate the files with the latest data:
 ```bash
 python solution_connector_tables.py
+```
+
+To regenerate the markdown documentation:
+```bash
+python generate_connector_docs.py
 ```
 
 ## Overview
@@ -69,7 +75,18 @@ python solution_connector_tables.py --output custom_output.csv --report custom_r
 
 ## Output Files
 
-### 1. solutions_connectors_tables_mapping.csv (Primary Output)
+### 1. Microsoft Sentinel Data Connector Reference (connector-docs/)
+
+Browsable markdown documentation generated from the CSV data, providing:
+
+- **[Solutions Index](connector-docs/solutions-index.md)** - All 369 solutions organized alphabetically
+- **[Connectors Index](connector-docs/connectors-index.md)** - All 503 unique connectors with metadata
+- **[Tables Index](connector-docs/tables-index.md)** - All 811 unique tables with solution references
+- **Individual Solution Pages** - Detailed pages for each solution with connector and table information
+
+See the [connector-docs README](connector-docs/README.md) for full documentation.
+
+### 2. solutions_connectors_tables_mapping.csv (Primary Output)
 
 The main CSV file containing one row per unique combination of solution, connector, and table.
 
@@ -113,7 +130,7 @@ https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}
 https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}/Data Connectors/{file_path}
 ```
 
-### 2. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 3. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 
