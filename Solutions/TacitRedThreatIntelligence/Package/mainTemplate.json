@@ -112,11 +112,7 @@
     "dceName": "dce-threatintel-feeds",
     "tacitRedDcrName": "dcr-tacitred-findings",
     "uamiName": "uami-ccf-deployment",
-    "keyVaultResourceId": "[if(parameters('enableKeyVault'), if(equals(parameters('keyVaultOption'), 'new'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))), '')]",
-    "_solutionName": "TacitRed Compromised Credentials",
-    "_solutionVersion": "1.0.6",
-    "_solutionId": "tacitred-compromised-credentials-solution",
-    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+    "keyVaultResourceId": "[if(parameters('enableKeyVault'), if(equals(parameters('keyVaultOption'), 'new'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))), '')]"
   },
   "resources": [
     {
@@ -247,7 +243,7 @@
             "destinations": [
               "clv2ws1"
             ],
-            "transformKql": "source | extend f = todynamic(finding) | extend TimeGenerated = todatetime(f['time']), email_s = tostring(iif(isnotempty(f['email']), f['email'], f['supporting_data']['credential'])), domain_s = tostring(f['supporting_data']['domain']), findingType_s = tostring(f['type']), confidence_d = toint(f['confidence']), firstSeen_t = todatetime(f['first_seen']), lastSeen_t = todatetime(f['last_seen']), notes_s = tostring(f['notes']), source_s = tostring(f['source']), severity_s = tostring(f['severity']), status_s = tostring(f['status']), campaign_id_s = tostring(iif(isnotempty(f['campaign_id']), f['campaign_id'], f['campaign']['id'])), user_id_s = tostring(iif(isnotempty(f['user_id']), f['user_id'], f['user']['id'])), username_s = tostring(iif(isnotempty(f['username']), f['username'], f['user']['username'])), detection_ts_t = todatetime(f['detection_ts']), metadata_s = tostring(f) | project TimeGenerated, email_s, domain_s, findingType_s, confidence_d, firstSeen_t, lastSeen_t, notes_s, source_s, severity_s, status_s, campaign_id_s, user_id_s, username_s, detection_ts_t, metadata_s",
+            "transformKql": "source | extend f = todynamic(finding) | extend TimeGenerated = todatetime(f['supporting_data']['date_compromised']), email_s = tostring(f['supporting_data']['credential']), domain_s = tostring(f['supporting_data']['domain']), findingType_s = tostring(f['types'][0]), confidence_d = toint(50), firstSeen_t = todatetime(f['supporting_data']['date_compromised']), lastSeen_t = todatetime(f['supporting_data']['date_compromised']), notes_s = tostring(f['title']), source_s = tostring(f['supporting_data']['stealer']), severity_s = tostring(f['supporting_data']['subtype']), status_s = tostring(f['supporting_data']['subtype']), campaign_id_s = tostring(f['supporting_data']['stealer']), user_id_s = tostring(f['supporting_data']['machine_id']), username_s = tostring(f['supporting_data']['machine_name']), detection_ts_t = todatetime(f['supporting_data']['date_compromised']), metadata_s = tostring(f) | project TimeGenerated, email_s, domain_s, findingType_s, confidence_d, firstSeen_t, lastSeen_t, notes_s, source_s, severity_s, status_s, campaign_id_s, user_id_s, username_s, detection_ts_t, metadata_s",
             "outputStream": "Custom-TacitRed_Findings_CL"
           }
         ]
@@ -585,13 +581,14 @@
       "name": "[guid(resourceGroup().id, 'RepeatCompromise')]",
       "kind": "Scheduled",
       "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))]"
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'TacitRed_Findings_CL')]"
       ],
       "properties": {
         "displayName": "TacitRed - Repeat Compromise Detection",
         "description": "Detects users who have been compromised multiple times within a 7-day window. This may indicate a persistent threat or inadequate remediation.",
         "severity": "High",
-        "enabled": false,
+        "enabled": true,
         "query": "let lookbackPeriod = 7d;\nlet threshold = 2;\nTacitRed_Findings_CL\n| where TimeGenerated >= ago(lookbackPeriod)\n| extend Email = tostring(email_s), Username = tostring(username_s), Domain = tostring(domain_s), FindingType = tostring(findingType_s), Confidence = todouble(confidence_d), FirstSeen = todatetime(firstSeen_t), LastSeen = todatetime(lastSeen_t), Notes = tostring(notes_s)\n| summarize CompromiseCount = count(), FindingTypes = make_set(FindingType), FirstCompromise = min(FirstSeen), LatestCompromise = max(LastSeen), AverageConfidence = avg(Confidence), Domains = make_set(Domain), AllNotes = make_list(Notes) by Email, Username\n| where CompromiseCount >= threshold\n| extend CompromiseWindow = datetime_diff('day', LatestCompromise, FirstCompromise), Severity = case(CompromiseCount >= 5, 'Critical', CompromiseCount >= 3, 'High', 'Medium')\n| project Email, Username, CompromiseCount, Severity, FirstCompromise, LatestCompromise, CompromiseWindow, AverageConfidence, FindingTypes, Domains, AllNotes\n| order by CompromiseCount desc, LatestCompromise desc",
         "queryFrequency": "PT1H",
         "queryPeriod": "P7D",
@@ -649,6 +646,59 @@
       }
     },
     {
+      "type": "Microsoft.SecurityInsights/alertRules",
+      "apiVersion": "2020-01-01",
+      "scope": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+      "name": "[guid(resourceGroup().id, 'NewCompromise')]",
+      "kind": "Scheduled",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'TacitRed_Findings_CL')]"
+      ],
+      "properties": {
+        "displayName": "TacitRed - New Compromised Credential Detected",
+        "description": "Alerts on any new compromised credential finding affecting customers. This ensures immediate awareness of new threats.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "TacitRed_Findings_CL\n| where TimeGenerated >= ago(1h)\n| extend Severity = tostring(severity_s)\n| where Severity == 'customer' or Severity == 'High' or Severity == 'Critical'\n| extend Email = tostring(email_s), Domain = tostring(domain_s), Stealer = tostring(source_s)\n| project TimeGenerated, Email, Domain, Stealer, findingType_s, notes_s\n",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess",
+          "InitialAccess"
+        ],
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT1H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": []
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Email"
+              }
+            ]
+          }
+        ],
+        "customDetails": {
+          "Stealer": "Stealer",
+          "Domain": "Domain"
+        }
+      }
+    },
+    {
       "condition": "[parameters('deployWorkbooks')]",
       "type": "Microsoft.Insights/workbooks",
       "apiVersion": "2022-04-01",
@@ -657,7 +707,7 @@
       "kind": "shared",
       "properties": {
         "displayName": "TacitRed SecOps - Compromised Credentials",
-        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# TacitRed SecOps - Compromised Credentials\\n\\n**Purpose:** Triage and monitor compromised accounts detected by TacitRed.\\n\\n---\"}},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"time-param\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":604800000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":86400000},{\"durationMs\":604800000},{\"durationMs\":2592000000}],\"allowCustom\":true},\"label\":\"Time Range\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| summarize\\n    Total = count(),\\n    HasEmail = countif(isnotempty(email_s)),\\n    HasDomain = countif(isnotempty(domain_s)),\\n    HasConfidence = countif(isnotnull(confidence_d)),\\n    HasStatus = countif(isnotempty(status_s))\\n| extend\\n    EmailPct = round(HasEmail * 100.0 / Total, 2),\\n    DomainPct = round(HasDomain * 100.0 / Total, 2),\\n    ConfidencePct = round(HasConfidence * 100.0 / Total, 2),\\n    StatusPct = round(HasStatus * 100.0 / Total, 2)\\n\",\"size\":0,\"title\":\"Data Quality - TacitRed Findings\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| summarize\\n    TotalFindings = count(),\\n    UniqueEmails = dcount(email_s),\\n    UniqueDomains = dcount(domain_s),\\n    HighConfidence = countif(Confidence >= 80),\\n    MediumConfidence = countif(Confidence >= 60 and Confidence < 80),\\n    LowConfidence = countif(Confidence < 60)\\n\",\"size\":0,\"title\":\"Compromised Credentials Overview\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| where isnotempty(domain_s)\\n| summarize\\n    Count = count(),\\n    MaxConfidence = max(Confidence),\\n    UniqueEmails = dcount(email_s),\\n    EarliestSeen = min(TimeGenerated),\\n    LatestSeen = max(TimeGenerated)\\n    by Domain = tolower(domain_s)\\n| top 20 by Count desc\\n| project Domain, Count, UniqueEmails, MaxConfidence, EarliestSeen, LatestSeen\\n\",\"size\":0,\"title\":\"Top Compromised Domains\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend Account = case(\\n    isnotempty(email_s), email_s,\\n    isnotempty(username_s), username_s,\\n    isnotempty(user_id_s), user_id_s,\\n    'Unknown'\\n)\\n| where Account != 'Unknown'\\n| summarize\\n    Findings = count(),\\n    MaxConfidence = max(Confidence),\\n    DistinctDomains = dcount(domain_s),\\n    Campaigns = dcount(campaign_id_s),\\n    EarliestSeen = min(TimeGenerated),\\n    LatestSeen = max(TimeGenerated),\\n    Statuses = make_set(status_s)\\n  by Account\\n| top 50 by Findings desc\\n| project Account, Findings, DistinctDomains, Campaigns, MaxConfidence, EarliestSeen, LatestSeen, Statuses\\n\",\"size\":0,\"title\":\"Top Compromised Accounts\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend Account = case(\\n    isnotempty(email_s), email_s,\\n    isnotempty(username_s), username_s,\\n    isnotempty(user_id_s), user_id_s,\\n    'Unknown'\\n)\\n| project TimeGenerated,\\n          Account,\\n          domain_s,\\n          findingType_s,\\n          severity_s,\\n          Confidence,\\n          status_s,\\n          campaign_id_s,\\n          source_s\\n| order by TimeGenerated desc\\n| take 100\\n\",\"size\":0,\"title\":\"Latest TacitRed Findings (Triage Queue)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend Account = case(\\n    isnotempty(email_s), email_s,\\n    isnotempty(username_s), username_s,\\n    isnotempty(user_id_s), user_id_s,\\n    'Unknown'\\n)\\n| where Account != 'Unknown'\\n| summarize\\n    TotalFindings = count(),\\n    Last24hFindings = countif(TimeGenerated >= ago(24h)),\\n    MaxConfidence = max(Confidence),\\n    FirstSeen = min(TimeGenerated),\\n    LastSeen = max(TimeGenerated),\\n    DistinctDomains = dcount(domain_s)\\n  by Account\\n| extend LifetimeHours = datetime_diff('hour', LastSeen, FirstSeen)\\n| where TotalFindings >= 2\\n| order by Last24hFindings desc, TotalFindings desc, MaxConfidence desc\\n| take 50\\n\",\"size\":0,\"title\":\"Repeated / Rapid Re-Compromise\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| where isnotempty(campaign_id_s)\\n| extend Confidence = toint(confidence_d)\\n| summarize\\n    TotalFindings = count(),\\n    DistinctAccounts = dcount(email_s),\\n    DistinctDomains = dcount(domain_s),\\n    MaxConfidence = max(Confidence),\\n    Severities = make_set(severity_s),\\n    Statuses = make_set(status_s),\\n    FirstSeen = min(TimeGenerated),\\n    LastSeen = max(TimeGenerated)\\n  by CampaignId = campaign_id_s\\n| order by TotalFindings desc\\n| take 50\\n\",\"size\":0,\"title\":\"Campaign View - TacitRed Campaigns\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where TimeGenerated >= ago(7d)\\n| extend Confidence = toint(confidence_d)\\n| extend ConfidenceBucket = case(\\n    Confidence >= 90, \\\"Critical (90-100)\\\",\\n    Confidence >= 70, \\\"High (70-89)\\\",\\n    Confidence >= 50, \\\"Medium (50-69)\\\",\\n    \\\"Low (<50)\\\"\\n)\\n| summarize Count = count() by ConfidenceBucket, bin(TimeGenerated, 1h)\\n| order by TimeGenerated asc\\n\",\"size\":0,\"title\":\"Confidence Bucket Trend (Last 7 Days)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"}}],\"styleSettings\":{},\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
+        "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# TacitRed SecOps - Compromised Credentials\\n\\n**Purpose:** Triage and monitor compromised accounts detected by TacitRed.\\n\\n---\"},\"name\":\"header\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where isnotempty(domain_s)\\n| summarize Count = count() by Domain = tolower(domain_s)\\n| top 10 by Count desc\",\"size\":0,\"title\":\"Top 10 Targeted Domains\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"chart-domains\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| extend p = parse_json(metadata_s)\\n| extend Stealer = tostring(p.supporting_data.stealer)\\n| extend Subtype = tostring(p.supporting_data.subtype)\\n| summarize TotalFindings = count(), UniqueEmails = dcount(email_s), UniqueDomains = dcount(domain_s), UniqueStealers = dcount(Stealer), CustomerFindings = countif(Subtype == 'customer'), OtherFindings = countif(Subtype != 'customer')\",\"size\":0,\"title\":\"Compromised Credentials Summary\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"summary-table\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| extend p = parse_json(metadata_s)\\n| extend Account = email_s\\n| extend FindingType = tostring(p.types[0])\\n| extend Subtype = tostring(p.supporting_data.subtype)\\n| extend Stealer = tostring(p.supporting_data.stealer)\\n| extend Domain = domain_s\\n| project TimeGenerated, Account, Domain, FindingType, Subtype, Stealer\\n| order by TimeGenerated desc\\n| take 100\",\"size\":0,\"title\":\"Latest Findings (Triage Queue)\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"triage-queue\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where isnotempty(domain_s)\\n| extend p = parse_json(metadata_s)\\n| extend Stealer = tostring(p.supporting_data.stealer)\\n| summarize Count = count(), StealersSet = make_set(Stealer), UniqueEmails = dcount(email_s), EarliestSeen = min(TimeGenerated), LatestSeen = max(TimeGenerated) by Domain = tolower(domain_s)\\n| extend Stealers = strcat_array(StealersSet, ', ')\\n| top 20 by Count desc\\n| project Domain, Count, UniqueEmails, Stealers, EarliestSeen, LatestSeen\",\"size\":0,\"title\":\"Domain Analysis\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"domain-analysis\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| extend p = parse_json(metadata_s)\\n| extend Account = email_s\\n| extend Stealer = tostring(p.supporting_data.stealer)\\n| where isnotempty(Account)\\n| summarize Findings = count(), DistinctDomains = dcount(domain_s), StealersSet = make_set(Stealer), EarliestSeen = min(TimeGenerated), LatestSeen = max(TimeGenerated) by Account\\n| extend Stealers = strcat_array(StealersSet, ', ')\\n| top 50 by Findings desc\\n| project Account, Findings, DistinctDomains, Stealers, EarliestSeen, LatestSeen\",\"size\":0,\"title\":\"Account Analysis\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"account-analysis\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| extend Account = email_s\\n| where isnotempty(Account)\\n| summarize TotalFindings = count(), Last24hFindings = countif(TimeGenerated >= ago(24h)), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), DistinctDomains = dcount(domain_s) by Account\\n| extend LifetimeHours = datetime_diff('hour', LastSeen, FirstSeen)\\n| where TotalFindings >= 2\\n| order by Last24hFindings desc, TotalFindings desc\\n| take 50\",\"size\":0,\"title\":\"Repeat Compromises\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"repeat-compromises\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| where isnotempty(campaign_id_s)\\n| extend p = parse_json(metadata_s)\\n| extend Subtype = tostring(p.supporting_data.subtype)\\n| summarize TotalFindings = count(), DistinctAccounts = dcount(email_s), DistinctDomains = dcount(domain_s), SubtypesSet = make_set(Subtype), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by CampaignId = campaign_id_s\\n| extend Subtypes = strcat_array(SubtypesSet, ', ')\\n| project CampaignId, TotalFindings, DistinctAccounts, DistinctDomains, Subtypes, FirstSeen, LastSeen\\n| order by TotalFindings desc\\n| take 50\",\"size\":0,\"title\":\"Stealer Campaign View\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"campaign-view\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"TacitRed_Findings_CL\\n| extend p = parse_json(metadata_s)\\n| extend FindingType = tostring(p.types[0])\\n| extend Subtype = tostring(p.supporting_data.subtype)\\n| extend Stealer = tostring(p.supporting_data.stealer)\\n| summarize Total = count(), HasEmail = countif(isnotempty(email_s)), HasDomain = countif(isnotempty(domain_s)), HasFindingType = countif(isnotempty(FindingType)), HasStealer = countif(isnotempty(Stealer))\\n| extend EmailPct = round(HasEmail * 100.0 / Total, 2), DomainPct = round(HasDomain * 100.0 / Total, 2), FindingTypePct = round(HasFindingType * 100.0 / Total, 2), StealerPct = round(HasStealer * 100.0 / Total, 2)\",\"size\":0,\"title\":\"Data Quality\",\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\"},\"name\":\"data-quality\"}],\"fallbackResourceIds\":[],\"fromTemplateId\":\"sentinel-TacitRedSecOps\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}",
         "version": "1.0",
         "sourceId": "[variables('workspaceResourceId')]",
         "category": "sentinel",
@@ -667,48 +717,6 @@
           "SecOps",
           "Triage"
         ]
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
-      "apiVersion": "2023-04-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('_solutionId'))]",
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "version": "[variables('_solutionVersion')]",
-        "kind": "Solution",
-        "contentSchemaVersion": "3.0.0",
-        "displayName": "[variables('_solutionName')]",
-        "publisherDisplayName": "TacitRed",
-        "descriptionHtml": "<p><strong>TacitRed Compromised Credentials</strong> provides real-time detection and monitoring of compromised user credentials, domain takeovers, and identity-based threats.</p><p>This solution includes:</p><ul><li><strong>Data Connector:</strong> CCF (Codeless Connector Framework) connector for TacitRed API integration</li><li><strong>Analytics Rule:</strong> Repeat Compromise Detection to identify persistent threats</li><li><strong>Workbook:</strong> Comprehensive visualization of credential compromise patterns</li></ul><p><strong>Key Features:</strong></p><ul><li>Real-time credential compromise detection</li><li>Domain-level threat analysis</li><li>High-risk user identification</li><li>Confidence scoring and trending</li><li>Integration with Microsoft Sentinel incidents</li></ul>",
-        "contentKind": "Solution",
-        "contentProductId": "[variables('_solutioncontentProductId')]",
-        "id": "[variables('_solutioncontentProductId')]",
-        "contentId": "[variables('_solutionId')]",
-        "parentId": "[variables('_solutionId')]",
-        "source": {
-          "kind": "Solution",
-          "name": "[variables('_solutionName')]",
-          "sourceId": "[variables('_solutionId')]"
-        },
-        "author": {
-          "name": "TacitRed"
-        },
-        "support": {
-          "name": "TacitRed",
-          "email": "support@tacitred.com",
-          "tier": "Partner",
-          "link": "https://www.tacitred.com/support"
-        },
-        "providers": [
-          "TacitRed"
-        ],
-        "categories": {
-          "domains": [
-            "Identity",
-            "Security - Threat Protection"
-          ]
-        }
       }
     }
   ],
