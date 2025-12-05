@@ -1,0 +1,256 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "author": "TacitRed",
+        "comments": "TacitRed Defender Threat Intelligence Solution"
+    },
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources"
+            }
+        },
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Microsoft Sentinel"
+            }
+        },
+        "TacitRed_ApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "TacitRed API Key"
+            }
+        },
+        "_artifactsLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "The base URI where artifacts required by this template are located"
+            },
+            "defaultValue": "[if(contains(deployment().properties, 'templateLink'), deployment().properties.templateLink.uri, deployment().properties.template.contentVersion)]"
+        },
+        "_artifactsLocationSasToken": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The sasToken required to access _artifactsLocation"
+            },
+            "defaultValue": ""
+        }
+    },
+    "variables": {
+        "logicAppName": "logic-tacitred-defender",
+        "functionAppName": "[concat('func-tacitred-', uniqueString(resourceGroup().id))]",
+        "hostingPlanName": "[concat('plan-tacitred-', uniqueString(resourceGroup().id))]",
+        "storageAccountName": "[concat('sttac', uniqueString(resourceGroup().id))]",
+        "appInsightsName": "[concat('appi-tacitred-', uniqueString(resourceGroup().id))]",
+        "sentinelContributorRole": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2024-01-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2"
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('appInsightsName')]",
+            "location": "[parameters('location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2024-11-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "reserved": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2023-12-01",
+            "name": "[variables('functionAppName')]",
+            "location": "[parameters('location')]",
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2024-01-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2024-01-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "TACITRED_API_URL",
+                            "value": "https://app.tacitred.com/api/v1/findings"
+                        },
+                        {
+                            "name": "SOURCE_SYSTEM",
+                            "value": "TacitRed"
+                        },
+                        {
+                            "name": "SENTINEL_WORKSPACE_ID",
+                            "value": "[variables('workspaceResourceId')]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "[if(not(empty(parameters('_artifactsLocation'))), uri(parameters('_artifactsLocation'), concat('Package/functionCode.zip', parameters('_artifactsLocationSasToken'))), '1')]"
+                        }
+                    ],
+                    "linuxFxVersion": "PYTHON|3.11"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, variables('functionAppName'), 'SentinelContributor')]",
+            "scope": "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspace'))]",
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('sentinelContributorRole'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[variables('logicAppName')]",
+            "location": "[parameters('location')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "TacitRed_ApiKey": {
+                            "type": "string",
+                            "defaultValue": "[parameters('TacitRed_ApiKey')]"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 6,
+                                "timeZone": "UTC"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Config": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FunctionAppUrl",
+                                        "type": "String",
+                                        "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2023-12-01').defaultHostName, '/api/TacitRedToDefenderTI')]"
+                                    },
+                                    {
+                                        "name": "Domains",
+                                        "type": "Array",
+                                        "value": [
+                                            "usbank.com"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Call_Function_App": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "uri": "@variables('FunctionAppUrl')",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "domains": "@variables('Domains')",
+                                    "date_from": "@{formatDateTime(addMinutes(utcNow(), -600), 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                    "date_until": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                    "tacitred_api_key": "@parameters('TacitRed_ApiKey')"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Config": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+            ]
+        }
+    ],
+    "outputs": {
+        "location": {
+            "type": "string",
+            "value": "[parameters('location')]"
+        },
+        "logicAppId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+        },
+        "functionAppName": {
+            "type": "string",
+            "value": "[variables('functionAppName')]"
+        }
+    }
+}
