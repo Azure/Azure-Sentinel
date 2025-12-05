@@ -39,13 +39,13 @@ After deployment, you can run this playbook manually on an alert or attach it to
     - Select Resource group - where Playbook has been created
     - Select Role - Microsoft Sentinel Responder
     - Click Save (It takes 3-5 minutes to show the added role.)
-3. You will need to grant User.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
+3. You will need to grant User.RevokeSessions.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
 
 $GraphAppId = "00000003-0000-0000-c000-000000000000"
-$PermissionName = "User.ReadWrite.All" 
+$PermissionName = "User.RevokeSessions.All" 
 
 $GraphServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$GraphAppId'"
 $AppRole = $GraphServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
