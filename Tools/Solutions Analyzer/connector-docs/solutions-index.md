@@ -12,19 +12,14 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **477 Microsoft Sentinel solutions**, including **369 solutions with data connectors**, providing access to **503 unique connectors** and **811 unique tables**. Additionally, **108 solutions without data connectors** are documented (these may contain analytics rules, workbooks, hunting queries, or playbooks).
+This documentation covers **478 solutions** with data connectors, providing access to **462 unique connectors** and **744 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 477 |
-| Solutions with Data Connectors | 369 |
-| Solutions without Data Connectors | 108 |
-| Unique Connectors | 503 |
-| Unique Tables | 811 |
-
-## How This Documentation is Organized\n\nEach solution has its own page containing:
+| Total Solutions | 478 |
+| Unique Connectors | 462 |\n| Unique Tables | 744 |\n\n## How This Documentation is Organized\n\nEach solution has its own page containing:
 
 - **Solution Overview**: Publisher, support information, and categories
 - **Connectors**: List of all connectors in the solution
@@ -272,7 +267,7 @@ Browse solutions alphabetically:
 | [Google Cloud Platform Cloud Monitoring](solutions/google-cloud-platform-cloud-monitoring.md) | 2022-07-01 | Microsoft Corporation |
 | [Google Cloud Platform Cloud Run](solutions/google-cloud-platform-cloud-run.md) | 2021-07-30 | Microsoft Corporation |
 | [Google Cloud Platform Compute Engine](solutions/google-cloud-platform-compute-engine.md) | 2022-07-07 | Microsoft Corporation |
-| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) | 2024-11-03 | Microsoft Corporation |
+| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) |  |  |
 | [Google Cloud Platform Load Balancer Logs](solutions/google-cloud-platform-load-balancer-logs.md) | 2025-02-12 | Microsoft Corporation |
 | [Google Cloud Platform Security Command Center](solutions/google-cloud-platform-security-command-center.md) | 2023-09-11 | Microsoft Corporation |
 | [Google Cloud Platform VPC Flow Logs](solutions/google-cloud-platform-vpc-flow-logs.md) | 2025-02-12 | Microsoft Corporation |
@@ -297,6 +292,7 @@ Browse solutions alphabetically:
 | [HIPAA Compliance](solutions/hipaa-compliance.md) | 2025-10-08 | Microsoft Corporation |
 | [HYAS](solutions/hyas.md) | 2021-10-20 | HYAS |
 | [HYAS Protect](solutions/hyas-protect.md) | 2023-09-26 | HYAS |
+| [Halcyon](solutions/halcyon.md) | 2025-10-15 | Halcyon |
 | [HolmSecurity](solutions/holmsecurity.md) | 2022-07-18 | Holm Security |
 | [HoneyTokens](solutions/honeytokens.md) |  |  |
 
