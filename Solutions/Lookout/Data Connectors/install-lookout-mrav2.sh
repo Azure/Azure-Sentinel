@@ -163,7 +163,7 @@ check_prerequisites() {
 
     # Check if Azure CLI is installed
     if ! command -v az &> /dev/null; then
-        log_error "Azure CLI is not installed. Please install it from: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli"
+        log_error "Azure CLI is not installed. Please install it from: https://learn.microsoft.com/cli/azure/install-azure-cli"
         exit 1
     fi
     log_success "✓ Azure CLI found: $(az version --query '"azure-cli"' -o tsv)"
