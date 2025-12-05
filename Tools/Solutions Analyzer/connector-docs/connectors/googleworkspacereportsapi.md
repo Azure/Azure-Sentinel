@@ -1,0 +1,17 @@
+# [DEPRECATED] Google Workspace (G Suite)
+
+| | |
+|----------|-------|
+| **Connector ID** | `GoogleWorkspaceReportsAPI` |
+| **Publisher** | Google |
+| **Tables Ingested** | [`GWorkspace_ReportsAPI_access_transparency_CL`](../tables-index.md#gworkspace_reportsapi_access_transparency_cl), [`GWorkspace_ReportsAPI_admin_CL`](../tables-index.md#gworkspace_reportsapi_admin_cl), [`GWorkspace_ReportsAPI_calendar_CL`](../tables-index.md#gworkspace_reportsapi_calendar_cl), [`GWorkspace_ReportsAPI_chat_CL`](../tables-index.md#gworkspace_reportsapi_chat_cl), [`GWorkspace_ReportsAPI_chrome_CL`](../tables-index.md#gworkspace_reportsapi_chrome_cl), [`GWorkspace_ReportsAPI_context_aware_access_CL`](../tables-index.md#gworkspace_reportsapi_context_aware_access_cl), [`GWorkspace_ReportsAPI_data_studio_CL`](../tables-index.md#gworkspace_reportsapi_data_studio_cl), [`GWorkspace_ReportsAPI_drive_CL`](../tables-index.md#gworkspace_reportsapi_drive_cl), [`GWorkspace_ReportsAPI_gcp_CL`](../tables-index.md#gworkspace_reportsapi_gcp_cl), [`GWorkspace_ReportsAPI_gplus_CL`](../tables-index.md#gworkspace_reportsapi_gplus_cl), [`GWorkspace_ReportsAPI_groups_CL`](../tables-index.md#gworkspace_reportsapi_groups_cl), [`GWorkspace_ReportsAPI_groups_enterprise_CL`](../tables-index.md#gworkspace_reportsapi_groups_enterprise_cl), [`GWorkspace_ReportsAPI_jamboard_CL`](../tables-index.md#gworkspace_reportsapi_jamboard_cl), [`GWorkspace_ReportsAPI_keep_CL`](../tables-index.md#gworkspace_reportsapi_keep_cl), [`GWorkspace_ReportsAPI_login_CL`](../tables-index.md#gworkspace_reportsapi_login_cl), [`GWorkspace_ReportsAPI_meet_CL`](../tables-index.md#gworkspace_reportsapi_meet_cl), [`GWorkspace_ReportsAPI_mobile_CL`](../tables-index.md#gworkspace_reportsapi_mobile_cl), [`GWorkspace_ReportsAPI_rules_CL`](../tables-index.md#gworkspace_reportsapi_rules_cl), [`GWorkspace_ReportsAPI_saml_CL`](../tables-index.md#gworkspace_reportsapi_saml_cl), [`GWorkspace_ReportsAPI_token_CL`](../tables-index.md#gworkspace_reportsapi_token_cl), [`GWorkspace_ReportsAPI_user_accounts_CL`](../tables-index.md#gworkspace_reportsapi_user_accounts_cl), [`GoogleWorkspaceReports_CL`](../tables-index.md#googleworkspacereports_cl) |
+| **Used in Solutions** | [GoogleWorkspaceReports](../solutions/googleworkspacereports.md) |
+| **Connector Definition Files** | [GWorkspaceReports_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleWorkspaceReports/Data%20Connectors/GWorkspaceReports_API_FunctionApp.json) |
+
+The [Google Workspace](https://workspace.google.com/) data connector provides the capability to ingest Google Workspace Activity events into Microsoft Sentinel through the REST API. The connector provides ability to get [events](https://developers.google.com/admin-sdk/reports/v1/reference/activities) which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems, track who signs in and when, analyze administrator activity, understand how users create and share content, and more review events in your org.
+
+
+
+<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+[← Back to Connectors Index](../connectors-index.md)

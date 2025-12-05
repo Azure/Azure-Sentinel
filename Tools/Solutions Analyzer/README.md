@@ -4,15 +4,21 @@ This tool analyzes Azure Sentinel Solutions to extract and map data connector de
 
 ## Quick Start
 
-**Pre-generated CSV files are already available in this directory:**
+**Pre-generated CSV files and documentation are already available in this directory:**
 - `solutions_connectors_tables_mapping.csv` - Main mapping of connectors to tables with full metadata
 - `solutions_connectors_tables_issues_and_exceptions_report.csv` - Issues and exceptions report
+- [`connector-docs/`](connector-docs/) - [Microsoft Sentinel Data Connector Reference](connector-docs/README.md) with browsable indexes by solutions, connectors, and tables
 
 You can use these files directly without running the script. They are kept up-to-date with the Solutions directory.
 
 To regenerate the files with the latest data:
 ```bash
 python solution_connector_tables.py
+```
+
+To regenerate the markdown documentation:
+```bash
+python generate_connector_docs.py
 ```
 
 ## Overview
@@ -22,7 +28,10 @@ The analyzer scans the Solutions directory to:
 - Resolve parser function references to actual tables
 - Flatten solution metadata from SolutionMetadata.json files
 - Generate a comprehensive mapping of connectors to tables with full metadata
+- **Include ALL solutions in the output**, even those without data connectors (e.g., solutions containing only analytics rules, workbooks, hunting queries, or playbooks)
 - Report issues and exceptions for solutions with missing or incomplete definitions
+
+**Note:** Solutions without data connectors are included in the CSV output with empty `connector_id`, `connector_title`, `connector_description`, `connector_publisher`, `connector_files`, and `Table` fields. This ensures complete solution coverage in the documentation while clearly indicating which solutions do not include data ingestion components.
 
 ## Installation and Requirements
 
@@ -69,7 +78,19 @@ python solution_connector_tables.py --output custom_output.csv --report custom_r
 
 ## Output Files
 
-### 1. solutions_connectors_tables_mapping.csv (Primary Output)
+### 1. Microsoft Sentinel Data Connector Reference (connector-docs/)
+
+Browsable markdown documentation generated from the CSV data, providing:
+
+- **[Solutions Index](connector-docs/solutions-index.md)** - All solutions organized alphabetically (with and without connectors)
+- **[Connectors Index](connector-docs/connectors-index.md)** - All unique connectors with metadata
+- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references
+- **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in `solutions/` directory)
+- **Individual Connector Pages** - Detailed pages for each connector with usage information (in `connectors/` directory)
+
+See the [connector-docs README](connector-docs/README.md) for full documentation.
+
+### 2. solutions_connectors_tables_mapping.csv (Primary Output)
 
 The main CSV file containing one row per unique combination of solution, connector, and table.
 
@@ -79,7 +100,7 @@ The main CSV file containing one row per unique combination of solution, connect
 
 | Column | Description |
 |--------|-------------|
-| `Table` | The table name (e.g., Syslog, CommonSecurityLog, CustomLog_CL) |
+| `Table` | The table name (e.g., Syslog, CommonSecurityLog, CustomLog_CL). Empty for solutions without data connectors. |
 | `solution_name` | Solution folder name |
 | `solution_folder` | GitHub URL to the solution's folder |
 | `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
@@ -92,11 +113,11 @@ The main CSV file containing one row per unique combination of solution, connect
 | `solution_support_link` | Support link URL |
 | `solution_author_name` | Author name from metadata |
 | `solution_categories` | Comma-separated list of solution categories |
-| `connector_id` | Unique connector identifier |
-| `connector_publisher` | Connector publisher name |
-| `connector_title` | Connector display title |
-| `connector_description` | Connector description (newlines replaced with `<br>` for GitHub CSV rendering) |
-| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files |
+| `connector_id` | Unique connector identifier. Empty for solutions without data connectors. |
+| `connector_publisher` | Connector publisher name. Empty for solutions without data connectors. |
+| `connector_title` | Connector display title. Empty for solutions without data connectors. |
+| `connector_description` | Connector description (newlines replaced with `<br>` for GitHub CSV rendering). Empty for solutions without data connectors. |
+| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files. Empty for solutions without data connectors. |
 | `is_unique` | `true` if table appears in only one connector file, `false` otherwise |
 | `table_detection_methods` | (Optional, with --show-detection-methods) Semicolon-separated list of methods used to detect this table |
 
@@ -113,7 +134,7 @@ https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}
 https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}/Data Connectors/{file_path}
 ```
 
-### 2. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 3. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 
