@@ -1,0 +1,236 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "**Cyren Threat Intelligence** provides real-time IP reputation and malware URL feeds to detect and block malicious infrastructure. This solution deploys CCF (Codeless Connector Framework) data connectors and visualization workbooks to help security teams identify and respond to network-based threats.\n\n**Data Connectors:** 2, **Workbooks:** 2\n\n[Learn more about Cyren >](https://www.cyren.com/)",
+        "subscription": {
+          "constraints": {
+            "validations": [
+              {
+                "permission": "Microsoft.OperationalInsights/workspaces/read",
+                "message": "Please ensure you have read permissions for the workspace"
+              }
+            ]
+          },
+          "resourceProviders": [
+            "Microsoft.OperationalInsights/workspaces",
+            "Microsoft.SecurityInsights"
+          ]
+        },
+        "location": {
+          "label": "Location",
+          "toolTip": "Location for all resources",
+          "resourceTypes": [
+            "Microsoft.OperationalInsights/workspaces"
+          ]
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This fetches all workspaces in the subscription",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "Select the Microsoft Sentinel workspace where you want to deploy the solution",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs Cyren CCF data connectors to ingest IP reputation and malware URL threat intelligence into Microsoft Sentinel."
+            }
+          },
+          {
+            "name": "cyrenIPJwtToken",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Cyren IP Reputation JWT Token",
+              "confirmPassword": "Confirm JWT Token"
+            },
+            "toolTip": "Enter your Cyren JWT token for IP Reputation feed. Obtain this from Cyren portal.",
+            "constraints": {
+              "required": true
+            },
+            "options": {
+              "hideConfirmation": false
+            },
+            "visible": true
+          },
+          {
+            "name": "cyrenMalwareJwtToken",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "Cyren Malware URLs JWT Token",
+              "confirmPassword": "Confirm JWT Token"
+            },
+            "toolTip": "Enter your Cyren JWT token for Malware URLs feed. Obtain this from Cyren portal.",
+            "constraints": {
+              "required": true
+            },
+            "options": {
+              "hideConfirmation": false
+            },
+            "visible": true
+          },
+          {
+            "name": "deployConnectors",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy Cyren data connectors",
+            "toolTip": "Check to automatically configure the Cyren CCF connectors",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "name": "security",
+        "label": "Security Options",
+        "bladeTitle": "Security Configuration",
+        "elements": [
+          {
+            "name": "security-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "Configure enhanced security options for credential storage and access control. Azure Key Vault provides encrypted storage for JWT tokens and comprehensive audit logging."
+            }
+          },
+          {
+            "name": "enableKeyVault",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable Azure Key Vault for secure credential storage",
+            "toolTip": "Recommended for production environments. Stores JWT tokens encrypted in Azure Key Vault with audit logging.",
+            "defaultValue": false
+          },
+          {
+            "name": "keyVaultOptions",
+            "type": "Microsoft.Common.Section",
+            "label": "Key Vault Configuration",
+            "visible": "[steps('security').enableKeyVault]",
+            "elements": [
+              {
+                "name": "keyVaultOption",
+                "type": "Microsoft.Common.DropDown",
+                "label": "Key Vault Option",
+                "defaultValue": "Create new Key Vault",
+                "toolTip": "Choose to create a new Key Vault or use an existing one",
+                "constraints": {
+                  "allowedValues": [
+                    {
+                      "label": "Create new Key Vault",
+                      "value": "new"
+                    },
+                    {
+                      "label": "Use existing Key Vault",
+                      "value": "existing"
+                    }
+                  ],
+                  "required": true
+                }
+              },
+              {
+                "name": "keyVaultName",
+                "type": "Microsoft.Common.TextBox",
+                "label": "Key Vault Name",
+                "defaultValue": "[concat('kv-cyren-', take(uniqueString(subscription().subscriptionId, resourceGroup().id), 8))]",
+                "toolTip": "Name of the Key Vault (new or existing)",
+                "constraints": {
+                  "required": true,
+                  "regex": "^[a-zA-Z0-9-]{3,24}$",
+                  "validationMessage": "Key Vault name must be 3-24 characters, alphanumeric and hyphens only"
+                }
+              },
+              {
+                "name": "keyVaultResourceGroup",
+                "type": "Microsoft.Solutions.ResourceSelector",
+                "label": "Key Vault Resource Group",
+                "resourceType": "Microsoft.KeyVault/vaults",
+                "visible": "[equals(steps('security').keyVaultOptions.keyVaultOption, 'existing')]",
+                "toolTip": "Select the resource group containing the existing Key Vault"
+              },
+              {
+                "name": "enablePrivateEndpoint",
+                "type": "Microsoft.Common.CheckBox",
+                "label": "Enable Private Endpoint for Key Vault",
+                "toolTip": "Requires VNet integration. Provides network isolation for Key Vault access.",
+                "defaultValue": false
+              },
+              {
+                "name": "subnetSelector",
+                "type": "Microsoft.Solutions.ResourceSelector",
+                "label": "Subnet for Private Endpoint",
+                "resourceType": "Microsoft.Network/virtualNetworks/subnets",
+                "visible": "[steps('security').keyVaultOptions.enablePrivateEndpoint]",
+                "toolTip": "Select the subnet where the private endpoint will be created"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution includes workbooks for visualizing Cyren threat intelligence data including IP reputation scores and malware URL patterns."
+            }
+          },
+          {
+            "name": "deployWorkbooks",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy Cyren workbooks",
+            "toolTip": "Check to deploy Cyren threat intelligence workbooks",
+            "defaultValue": true
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[location()]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]",
+      "cyrenIPJwtToken": "[steps('dataconnectors').cyrenIPJwtToken]",
+      "cyrenMalwareJwtToken": "[steps('dataconnectors').cyrenMalwareJwtToken]",
+      "deployConnectors": "[steps('dataconnectors').deployConnectors]",
+      "deployWorkbooks": "[steps('workbooks').deployWorkbooks]",
+      "enableKeyVault": "[steps('security').enableKeyVault]",
+      "keyVaultOption": "[steps('security').keyVaultOptions.keyVaultOption]",
+      "keyVaultName": "[steps('security').keyVaultOptions.keyVaultName]",
+      "keyVaultResourceGroup": "[if(equals(steps('security').keyVaultOptions.keyVaultOption, 'existing'), steps('security').keyVaultOptions.keyVaultResourceGroup.resourceGroup, resourceGroup().name)]",
+      "enablePrivateEndpoint": "[steps('security').keyVaultOptions.enablePrivateEndpoint]",
+      "subnetId": "[if(steps('security').keyVaultOptions.enablePrivateEndpoint, steps('security').keyVaultOptions.subnetSelector.id, '')]"
+    }
+  }
+}
