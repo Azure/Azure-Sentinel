@@ -14,11 +14,7 @@
 
 ## Data Connectors
 
-This solution provides **5 data connector(s)**.
-
-### [[Recommended] Infoblox Cloud Data Connector via AMA](../connectors/infobloxclouddataconnectorama.md)
-
-**Publisher:** Infoblox
+This solution provides **4 data connector(s)**.
 
 ### [Infoblox Data Connector via REST API](../connectors/infobloxdataconnector.md)
 
@@ -63,7 +59,7 @@ This solution ingests data into **20 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md), [[Recommended] Infoblox Cloud Data Connector via AMA](../connectors/infobloxclouddataconnectorama.md), [[Recommended] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md) |
+| `CommonSecurityLog` | [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md), [[Recommended] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md) |
 | `Failed_Range_To_Ingest_CL` | [Infoblox Data Connector via REST API](../connectors/infobloxdataconnector.md) |
 | `InfobloxInsight_CL` | [Infoblox SOC Insight Data Connector via REST API](../connectors/infobloxsocinsightsdataconnector-api.md) |
 | `Infoblox_Failed_Indicators_CL` | [Infoblox Data Connector via REST API](../connectors/infobloxdataconnector.md) |
