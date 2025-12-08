@@ -13,31 +13,8 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+**This solution does not include data connectors.**
 
-### [[Deprecated] Zscaler via Legacy Agent](../connectors/zscaler.md)
-
-**Publisher:** Zscaler
-
-### [[Deprecated] Zscaler via AMA](../connectors/zscalerama.md)
-
-**Publisher:** Zscaler
-
-The Zscaler data connector allows you to easily connect your Zscaler Internet Access (ZIA) logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.  Using Zscaler on Microsoft Sentinel will provide you more insights into your organization’s Internet usage, and will enhance its security operation capabilities.​
-
-| | |
-|--------------------------|---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_ZscalerAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Zscaler%20Internet%20Access/Data%20Connectors/template_ZscalerAma.JSON) |
-
-[→ View full connector details](../connectors/zscalerama.md)
-
-## Tables Reference
-
-This solution ingests data into **1 table(s)**:
-
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Zscaler via AMA](../connectors/zscalerama.md), [[Deprecated] Zscaler via Legacy Agent](../connectors/zscaler.md) |
+This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
 [← Back to Solutions Index](../solutions-index.md)
