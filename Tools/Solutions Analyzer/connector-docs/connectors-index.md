@@ -3108,7 +3108,7 @@ These alerts can be imported into Microsoft Sentinel with this connector, allowi
 
 **Solution:** [Microsoft Copilot](solutions/microsoft-copilot.md)
 
-**Tables (1):** `LLMActivity`
+**Tables (1):** `CopilotActivity`
 
 The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless ingestion of Copilot-generated activity logs into Microsoft Sentinel for advanced threat detection, investigation, and response. It collects telemetry from Microsoft Copilot services - such as usage data, prompts and system responses - and ingests into Microsoft Sentinel, allowing security teams to monitor for misuse, detect anomalies, and maintain compliance with organizational policies.
 
