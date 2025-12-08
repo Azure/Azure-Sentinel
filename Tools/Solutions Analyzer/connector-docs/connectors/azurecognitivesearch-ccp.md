@@ -1,0 +1,13 @@
+# Azure Cognitive Search
+
+| | |
+|----------|-------|
+| **Connector ID** | `AzureCognitiveSearch_CCP` |
+| **Publisher** | Microsoft |
+| **Tables Ingested** | [`AzureDiagnostics`](../tables-index.md#azurediagnostics) |
+| **Used in Solutions** | [Azure Cognitive Search](../solutions/azure-cognitive-search.md) |
+| **Connector Definition Files** | [AzureCognitiveSearch_CCP.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cognitive%20Search/Data%20Connectors/AzureCognitiveSearch_CCP.JSON) |
+
+Azure Cognitive Search is a cloud search service that gives developers infrastructure, APIs, and tools for building a rich search experience over private, heterogeneous content in web, mobile, and enterprise applications. This connector lets you stream your Azure Cognitive Search diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
+
+[← Back to Connectors Index](../connectors-index.md)

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.6       | 20-11-2025                     | Resolved bug in **CCF Data Connector** related to SQL queries      |
 | 3.0.5       | 13-10-2025                     | Updated Parser to support function app table                       |
 | 3.0.4       | 23-09-2025                     | Updated parser to extend the normalized fields, and updated Analytic Rules, Workbooks to use CCF connector fields.                              |
 | 3.0.3       | 09-09-2025                     | Updated DCR and Poller to prevent redundant data ingestion, improve pagination and handle connection interruptions for **Snowflake CCF connector**|

@@ -393,6 +393,23 @@ if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'moo
 fi
 
 # End of parameter validation
+
+# Deprecation Warning
+echo ''
+echo '************************************************************'
+echo '*** ATTENTION: The Sentinel SAP Agent is now deprecated and will no longer ingest logs in September 2026.'
+echo '*** Customers must now use the Agentless connector for continued support.'
+echo '************************************************************'
+echo ''
+if [ ! "$CONFIRMALL" ]; then
+	read -r -p 'Do you wish to proceed? (Yes/No): ' PROCEED_RESPONSE
+	if [ "${PROCEED_RESPONSE,,}" != "yes" ]; then
+		echo 'Installation cancelled.'
+		exit 0
+	fi
+fi
+echo ''
+
 echo '
 ************************************************************
 THIS INSTALLATION SCRIPT WILL USE ROOT ACCESS TO:
