@@ -123,15 +123,37 @@ function GetOfferVersion($offerId, $mainTemplateUrl)
 
 function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $packageVersionAttribute, $userInputPackageVersion)
 {
+    $setPackageVersion = $defaultPackageVersion
+
     if ($packageVersionAttribute)
     {
         $userInputMajor,$userInputMinor,$userInputBuild,$userInputRevision = $userInputPackageVersion.split(".")
         $defaultMajor,$defaultMinor,$defaultBuild,$defaultRevision = $defaultPackageVersion.split(".")
 
-        if ($userInputMajor -ge '2' -and $userInputMinor -gt $defaultMinor)
-        {
-            #return as is value of package version as middle value is greater
-            return $userInputPackageVersion 
+        # Convert to integers for proper numeric comparison
+        [int]$userInputMajor = $userInputMajor
+        [int]$userInputMinor = $userInputMinor
+        [int]$userInputBuild = $userInputBuild
+        [int]$defaultMajor = $defaultMajor
+        [int]$defaultMinor = $defaultMinor
+        [int]$defaultBuild = $defaultBuild
+
+        if ($userInputMajor -ge 3) {
+            # Version 3.x.x or higher: use user input if minor and build are greater than default
+            if ($userInputMinor -ge $defaultMinor -and $userInputBuild -gt $defaultBuild) {
+                $setPackageVersion = $userInputPackageVersion
+                if ($null -eq $offerDetails) {
+                    Write-Host "Package version set to $setPackageVersion"
+                    return $setPackageVersion
+                }
+            } elseif ($null -eq $offerDetails) {
+                Write-Host "Package version set to $userInputPackageVersion"
+                return $userInputPackageVersion
+            }
+        } elseif ($userInputMajor -le 2) {
+            # Version 2.x.x: always use default
+            Write-Host "Package version set to $defaultPackageVersion"
+            return $defaultPackageVersion
         }
     }
 
@@ -174,13 +196,13 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
                 {
                     $identifiedOfferVersion = $offerMetadataVersion
                     $catalogMajor,$catalogminor,$catalogbuild,$catalogrevision = $identifiedOfferVersion.split(".")
-                    $defaultMajor,$defaultminor,$defaultbuild,$defaultrevision = $defaultPackageVersion.split(".")
+                    $defaultMajor,$defaultminor,$defaultbuild,$defaultrevision = $setPackageVersion.split(".")
 
-                    if ($defaultMajor -gt $catalogMajor)
+                    if ($defaultMajor -gt $catalogMajor -and $defaultminor -gt $catalogminor -and $defaultbuild -ge $catalogbuild)
                     {
-                        # eg: 3.0.0 > 2.0.1 ==> 3.0.0
-                        Write-Host "Default Package version is greater then the CatalogAPI version so $defaultVersionMessage"
-                        return $defaultPackageVersion
+                        # eg: 3.0.0 > 2.0.1 ==> 3.0.0 or 3.1.2 > 3.1.1 ==> 3.1.2
+                        Write-Host "Package version $setPackageVersion greater then the CatalogAPI version so $defaultVersionMessage"
+                        return $setPackageVersion
                     }
                     else 
                     {

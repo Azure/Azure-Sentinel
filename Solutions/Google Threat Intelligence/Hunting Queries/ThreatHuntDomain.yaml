@@ -1,0 +1,35 @@
+id: "34288e97-5194-4f2e-abf2-c2783189f6ae"
+name: Google Threat Intelligence - Threat Hunting Domain
+description: |
+  'Google Threat Intelligence domain correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+tags:
+  - GoogleThreatIntelligence
+query: |
+  _Im_Dns
+  | where isnotempty(Domain)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == 'domain-name:value'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  ) on $left.Domain == $right.ObservableValue
+  | project Domain, DstIpAddr
+  | extend IP_0_Address = DstIpAddr
+  | extend DNS_0_DomainName = Domain
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+version: 1.0.0
