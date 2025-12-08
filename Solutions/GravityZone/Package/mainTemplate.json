@@ -1,0 +1,528 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Bitdefender SRL",
+    "comments": "Solution template for GravityZone"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "GravityZone",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "bitdefendersrl1662990682574.gbarbieru_test_offer_id",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "GravityZoneDataConnector",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "GravityZoneDataConnector",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "73c803aa-1188-45dd-8379-62a3319d3d9f",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '73c803aa-1188-45dd-8379-62a3319d3d9f')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('73c803aa-1188-45dd-8379-62a3319d3d9f')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','73c803aa-1188-45dd-8379-62a3319d3d9f','-', '1.0.0')))]"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "GravityZone data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "GravityZone Data Connector",
+                  "publisher": "Bitdefender",
+                  "descriptionMarkdown": "This connector enables integration between **Bitdefender GravityZone** and **Microsoft Sentinel** through the **Event Push Service API**. Once configured, it streams all GravityZone event types directly into your Sentinel workspace, where they are stored as logs in the `GzSecurityEvents_CL` table.\n\nKey event categories such as **EDR, XDR, ransomware mitigation, network sandboxing, and Exchange malware events** can be automatically correlated and generate incidents through the **NRT GravityZone Incident Alerts** analytics rule.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Events",
+                      "baseQuery": "GzSecurityEvents_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample Events",
+                      "query": "GzSecurityEvents_CL\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "GzSecurityEvents_CL",
+                      "lastDataReceivedQuery": "GzSecurityEvents_CL\n | summarize Time = max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "GzSecurityEvents_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.Insights/DataCollectionRules",
+                        "permissionsDisplayText": "read and write permissions to create data collection rules are required.",
+                        "providerDisplayName": "Data Collection Rule",
+                        "scope": "ResourceGroup",
+                        "requiredPermissions": {
+                          "Write": true,
+                          "Read": true,
+                          "Delete": false
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.Insights/DataCollectionEndpoints",
+                        "permissionsDisplayText": "read and write permissions to create data collection endpoints are required.",
+                        "providerDisplayName": "Data Collection Endpoint",
+                        "scope": "ResourceGroup",
+                        "requiredPermissions": {
+                          "Write": true,
+                          "Read": true,
+                          "Delete": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Azure App Registration",
+                        "description": "Microsoft Entra App Registration with the following details retained Directory (Tenant) ID, Application (Client) ID, Managed Service Principal Object ID (from the Enterprise Applications entry of the app), Client Secret (generated under Certificates & secrets)."
+                      },
+                      {
+                        "name": "GravityZone Cloud Account",
+                        "description": "A GravityZone Cloud account with a generated API key for the Event Push Service endpoint."
+                      },
+                      {
+                        "name": "Read our guide",
+                        "description": "Follow this step-by-step article to set up the integration. [Customers](https://www.bitdefender.com/business/support/en/77209-1455218-integrate-gravityzone-with-azure-sentinel.html) | [Partners](https://www.bitdefender.com/business/support/en/77211-1455218-integrate-gravityzone-with-azure-sentinel.html)"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "1. Click the **Deploy to Azure** button below and fill in the required parameters. \n\n\t\n\n[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-gravityzone-azuredeploy)\n\n2. Collect the **Logs Ingestion** URL from `gz-sentinel-dce` [Data Collection Endpoint](https://portal.azure.com/#view/HubsExtension/BrowseResource.ReactView/resourceType/microsoft.insights%2Fdatacollectionendpoints)\n\n3. Collect the **Immutable ID** from `gz-sentinel-dcr` [Data Collection Rule](https://portal.azure.com/#browse/microsoft.insights%2Fdatacollectionrules)\n\n4. Go to your GravityZone Cloud account and navigate to **My Account**. Create an API key with **Event Push Service** permissions.\n\n5. Configure your **Event Push Service** settings using this article. [Customers](https://www.bitdefender.com/business/support/en/77209-1455218-integrate-gravityzone-with-azure-sentinel.html#UUID-5e8bbfa1-7892[%E2%80%A6]-2427-abd6f930e8c2) | [Partners](https://www.bitdefender.com/business/support/en/77211-1455218-integrate-gravityzone-with-azure-sentinel.html#UUID-5e8bbfa1-7892[%E2%80%A6]-2427-abd6f930e8c2).\n\n**Please note that after the successful deployment of the Data Connector & successful setup of GravityZone's Event Push Service, the system will receive Activity Log data in near-real-time. A short delay may occur between data transmission and its appearance in the Microsoft Sentinel Logs section.**"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "GravityZone",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Bitdefender SRL"
+                },
+                "support": {
+                  "name": "Bitdefender SRL",
+                  "email": "support@bitdefender.com",
+                  "tier": "Partner",
+                  "link": "https://bitdefender.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "GravityZone Data Connector",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "GravityZone",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Bitdefender SRL"
+        },
+        "support": {
+          "name": "Bitdefender SRL",
+          "email": "support@bitdefender.com",
+          "tier": "Partner",
+          "link": "https://bitdefender.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "GravityZone Data Connector",
+          "publisher": "Bitdefender",
+          "descriptionMarkdown": "This connector enables integration between **Bitdefender GravityZone** and **Microsoft Sentinel** through the **Event Push Service API**. Once configured, it streams all GravityZone event types directly into your Sentinel workspace, where they are stored as logs in the `GzSecurityEvents_CL` table.\n\nKey event categories such as **EDR, XDR, ransomware mitigation, network sandboxing, and Exchange malware events** can be automatically correlated and generate incidents through the **NRT GravityZone Incident Alerts** analytics rule.",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Events",
+              "baseQuery": "GzSecurityEvents_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "GzSecurityEvents_CL",
+              "lastDataReceivedQuery": "GzSecurityEvents_CL\n | summarize Time = max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "GzSecurityEvents_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample Events",
+              "query": "GzSecurityEvents_CL\n | take 10"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.Insights/DataCollectionRules",
+                "permissionsDisplayText": "read and write permissions to create data collection rules are required.",
+                "providerDisplayName": "Data Collection Rule",
+                "scope": "ResourceGroup",
+                "requiredPermissions": {
+                  "Write": true,
+                  "Read": true,
+                  "Delete": false
+                }
+              },
+              {
+                "provider": "Microsoft.Insights/DataCollectionEndpoints",
+                "permissionsDisplayText": "read and write permissions to create data collection endpoints are required.",
+                "providerDisplayName": "Data Collection Endpoint",
+                "scope": "ResourceGroup",
+                "requiredPermissions": {
+                  "Write": true,
+                  "Read": true,
+                  "Delete": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Azure App Registration",
+                "description": "Microsoft Entra App Registration with the following details retained Directory (Tenant) ID, Application (Client) ID, Managed Service Principal Object ID (from the Enterprise Applications entry of the app), Client Secret (generated under Certificates & secrets)."
+              },
+              {
+                "name": "GravityZone Cloud Account",
+                "description": "A GravityZone Cloud account with a generated API key for the Event Push Service endpoint."
+              },
+              {
+                "name": "Read our guide",
+                "description": "Follow this step-by-step article to set up the integration. [Customers](https://www.bitdefender.com/business/support/en/77209-1455218-integrate-gravityzone-with-azure-sentinel.html) | [Partners](https://www.bitdefender.com/business/support/en/77211-1455218-integrate-gravityzone-with-azure-sentinel.html)"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "1. Click the **Deploy to Azure** button below and fill in the required parameters. \n\n\t\n\n[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-gravityzone-azuredeploy)\n\n2. Collect the **Logs Ingestion** URL from `gz-sentinel-dce` [Data Collection Endpoint](https://portal.azure.com/#view/HubsExtension/BrowseResource.ReactView/resourceType/microsoft.insights%2Fdatacollectionendpoints)\n\n3. Collect the **Immutable ID** from `gz-sentinel-dcr` [Data Collection Rule](https://portal.azure.com/#browse/microsoft.insights%2Fdatacollectionrules)\n\n4. Go to your GravityZone Cloud account and navigate to **My Account**. Create an API key with **Event Push Service** permissions.\n\n5. Configure your **Event Push Service** settings using this article. [Customers](https://www.bitdefender.com/business/support/en/77209-1455218-integrate-gravityzone-with-azure-sentinel.html#UUID-5e8bbfa1-7892[%E2%80%A6]-2427-abd6f930e8c2) | [Partners](https://www.bitdefender.com/business/support/en/77211-1455218-integrate-gravityzone-with-azure-sentinel.html#UUID-5e8bbfa1-7892[%E2%80%A6]-2427-abd6f930e8c2).\n\n**Please note that after the successful deployment of the Data Connector & successful setup of GravityZone's Event Push Service, the system will receive Activity Log data in near-real-time. A short delay may occur between data transmission and its appearance in the Microsoft Sentinel Logs section.**"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Incidents_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "NRT",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "The query identifies incident-level events received from the GravityZone Data Connector",
+                "displayName": "NRT GravityZone Incident Alerts",
+                "enabled": false,
+                "query": "ASimAlertEventBitdefenderGravityZone\n  | extend IncidentType = case(\n      AdditionalFields.Module == \"new-incident\", \"EDR Incident\",\n      AdditionalFields.Module == \"new-extended-incident\", \"XDR Incident\",\n      AdditionalFields.Module == \"ransomware-mitigation\", \"Ransomware Mitigation\",\n      AdditionalFields.Module == \"network-sandboxing\", \"Sandbox Analyzer Detection\",\n      AdditionalFields.Module == \"exchange-malware\", \"Exchange Malware Detection\",\n      \"Incident\"   // fallback value if null or unmatched\n    ),\n    Tactics = AdditionalFields.AttackTypes\n  | project EventUid, EventSeverity, EventStartTime, IncidentType, Tactics, EventVendor, EventProduct, DvcId, DvcIpAddr, DvcHostname, DvcAction, DvcFQDN\n",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "dataTypes": [
+                      "ASimAlertEventBitdefenderGravityZone"
+                    ],
+                    "connectorId": "GravityZoneDataConnector"
+                  }
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "columnName": "DvcHostname",
+                        "identifier": "HostName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "columnName": "DvcIpAddr",
+                        "identifier": "Address"
+                      }
+                    ]
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                  "alertSeverityColumnName": "EventSeverity",
+                  "alertDescriptionFormat": "Alert generated on {{EventStartTime}} in Bitdefender GravityZone.\\n\\nGravityZone Incident ID / Alert GUID: {{EventUid}}\\n\\nPlease check the source for more information and investigate further.\n",
+                  "alertDynamicProperties": [
+                    {
+                      "value": "EventProduct",
+                      "alertProperty": "ProductName"
+                    },
+                    {
+                      "value": "EventVendor",
+                      "alertProperty": "ProviderName"
+                    }
+                  ],
+                  "alertDisplayNameFormat": "GravityZone: {{IncidentType}}",
+                  "alertTacticsColumnName": "Tactics"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "GravityZone Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "GravityZone",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Bitdefender SRL"
+                },
+                "support": {
+                  "name": "Bitdefender SRL",
+                  "email": "support@bitdefender.com",
+                  "tier": "Partner",
+                  "link": "https://bitdefender.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "NRT GravityZone Incident Alerts",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "GravityZone",
+        "publisherDisplayName": "Bitdefender SRL",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GravityZone/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <strong>Bitdefender GravityZone Solution for Microsoft Sentinel</strong> connects your GravityZone environment to Microsoft Sentinel through the <strong>Event Push Service API</strong>. Once deployed, it streams all GravityZone event types into Sentinel, storing them as logs and automatically generating incidents for selected categories.</p>\n<p>To deploy, complete the fields below and select <strong>Review + create</strong>:</p>\n<ul>\n<li><strong>Subscription</strong>: The Azure subscription where you want to deploy the solution.</li>\n<li><strong>Resource group</strong>: Select an existing resource group or create a new one to organize your Sentinel resources.</li>\n<li><strong>Workspace</strong>: The Microsoft Sentinel workspace that will receive GravityZone data. The workspace needs to be onboarded into Microsoft Sentinel beforehand.</li>\n</ul>\n<p>After deployment, follow the setup steps in this KB article to complete the configuration and start event ingestion.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/GravityZone.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "GravityZone",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Bitdefender SRL"
+        },
+        "support": {
+          "name": "Bitdefender SRL",
+          "email": "support@bitdefender.com",
+          "tier": "Partner",
+          "link": "https://bitdefender.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-07-28",
+        "providers": [
+          "Bitdefender"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Information Protection",
+            "Security - Cloud Security",
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
