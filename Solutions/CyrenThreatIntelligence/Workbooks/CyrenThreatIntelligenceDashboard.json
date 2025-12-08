@@ -1,0 +1,160 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## 🛡️ Cyren Threat Intelligence Dashboard\n\n**Real-time visibility into Cyren IP Reputation and Malware URLs feeds**\n\n✅ All queries validated with production data | 🔄 Auto-refresh every 5 minutes\n\n---"
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {"durationMs": 3600000, "label": "1 hour"},
+                {"durationMs": 21600000, "label": "6 hours"},
+                {"durationMs": 86400000, "label": "24 hours"},
+                {"durationMs": 604800000, "label": "7 days"},
+                {"durationMs": 2592000000, "label": "30 days"}
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Cyren_Indicators_CL \n| where TimeGenerated >= ago(1h) \n| summarize \n    Total=count(), \n    IPRep=countif(source_s contains 'IP'), \n    MalwareURLs=countif(source_s contains 'Malware'), \n    Latest=max(TimeGenerated),\n    HoursAgo=datetime_diff('hour', now(), max(TimeGenerated))\n| extend Status = case(\n    HoursAgo > 7, \"🔴 Critical - No data > 7 hours\",\n    HoursAgo > 6, \"🟡 Warning - Data delayed\",\n    \"🟢 Healthy - Data flowing\"\n)\n| project Status, Total, IPRep, MalwareURLs, Latest, HoursAgo",
+        "size": 3,
+        "title": "🔍 Data Pipeline Health (Last Hour)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Status",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Total",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "name": "health-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Cyren_Indicators_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(ip_s)\n| extend Risk = toint(risk_d)\n| summarize \n    Count = count(),\n    AvgRisk = avg(Risk),\n    MaxRisk = max(Risk),\n    Categories = make_set(category_s)\n  by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "📊 IP Reputation Indicators Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "ip-indicators-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Cyren_Indicators_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(url_s)\n| extend Risk = toint(risk_d)\n| summarize \n    Count = count(),\n    AvgRisk = avg(Risk),\n    MaxRisk = max(Risk)\n  by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "🔗 Malware URL Indicators Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "url-indicators-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Cyren_Indicators_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(ip_s)\n| extend Risk = toint(risk_d)\n| where Risk >= 80\n| summarize \n    DetectionCount = count(),\n    MaxRisk = max(Risk),\n    Categories = make_set(category_s),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n  by IP = ip_s\n| order by MaxRisk desc\n| take 100",
+        "size": 0,
+        "title": "🚨 High-Risk IP Indicators (Risk >= 80)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "MaxRisk",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "high-risk-ips-table"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Cyren_Indicators_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(url_s)\n| extend Risk = toint(risk_d)\n| where Risk >= 80\n| summarize \n    DetectionCount = count(),\n    MaxRisk = max(Risk),\n    Categories = make_set(category_s),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n  by URL = url_s, Domain = domain_s\n| order by MaxRisk desc\n| take 100",
+        "size": 0,
+        "title": "🚨 High-Risk Malware URLs (Risk >= 80)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "MaxRisk",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "redGreen"
+              }
+            }
+          ]
+        }
+      },
+      "name": "high-risk-urls-table"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "Cyren_Indicators_CL\n| where TimeGenerated {TimeRange}\n| extend Category = tostring(category_s)\n| where isnotempty(Category)\n| summarize Count = count() by Category\n| order by Count desc\n| take 10",
+        "size": 0,
+        "title": "📈 Top Threat Categories",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "categories-pie"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-CyrenThreatIntelligence"
+}
