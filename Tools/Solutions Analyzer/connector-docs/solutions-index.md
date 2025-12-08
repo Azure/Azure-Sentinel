@@ -23,8 +23,6 @@ This documentation covers **478 solutions**, of which **335** include data conne
 | Unique Connectors | 462 |
 | Unique Tables | 740 |
 
-## How This Documentation is Organized\n\nEach solution has its own page containing:
-
 - **Solution Overview**: Publisher, support information, and categories
 - **Connectors**: List of all connectors in the solution
 - **Tables**: Data tables ingested by the connectors
