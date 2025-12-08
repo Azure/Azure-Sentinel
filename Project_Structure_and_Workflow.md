@@ -90,7 +90,8 @@
         *   **Packaging**: Zips the appropriate folder (`Data Connectors` or `Playbooks`) into a versioned zip (e.g., `3.0.1.zip`).
         *   **Promote**: Copies all files to the Production folder.
         *   **Git Stage**: Adds changes to git staging area.
-    4.  **Commit & Push**: Commits all changes for all solutions in one go and pushes to GitHub.
+    4.  **Commit & Push**: Commits all changes for all solutions in one go and pushes to GitHub (Microsoft Fork).
+    5.  **Sync to Data443**: Automatically pushes the same changes to the private Data443 repository (`data443` remote) as a backup.
 
 ### 4. CI/CD (Remote)
 - **Action**: Monitor the Pull Request on GitHub.
