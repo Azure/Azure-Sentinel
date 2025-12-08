@@ -8,37 +8,37 @@
 
 ## Active Pull Requests & Status
 
-### 1. Cyren Threat Intelligence
-- **PR #13224**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13224)
-- **Status**: Active / In Review
-- **Source Branch**: [`feature/cyren-threat-intelligence-clean`](https://github.com/mazamizo21/Azure-Sentinel/tree/feature/cyren-threat-intelligence-clean)
+### 1. TacitRed Defender Threat Intelligence (Official)
+- **PR #13266**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13266)
+- **Status**: **Active / Official Data443 Submission**
+- **Source Branch**: `Data443:feature/tacitred-defender-ti`
 
-### 2. TacitRed CrowdStrike IOC
-- **PR #13241**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13241)
-- **Status**: Active / In Review
-- **Source Branch**: [`feature/tacitred-crowdstrike-ioc`](https://github.com/mazamizo21/Azure-Sentinel/tree/feature/tacitred-crowdstrike-ioc)
+### 2. TacitRed SentinelOne IOC Automation (Official)
+- **PR #13267**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13267)
+- **Status**: **Active / Official Data443 Submission**
+- **Source Branch**: `Data443:feature/tacitred-sentinelone-v1`
 
-### 3. TacitRed Threat Intelligence (CCF)
-- **PR #13242**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13242)
-- **Status**: Active / In Review
-- **Source Branch**: [`feature/tacitred-ccf-hub-v2`](https://github.com/mazamizo21/Azure-Sentinel/tree/feature/tacitred-ccf-hub-v2)
+### 3. TacitRed Threat Intelligence (CCF) (Official)
+- **PR #13268**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13268)
+- **Status**: **Active / Official Data443 Submission**
+- **Source Branch**: `Data443:feature/tacitred-ccf-hub-v2`
 
-### 4. TacitRed SentinelOne
-- **PR #13243**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13243)
-- **Status**: Active / In Review
-- **Source Branch**: [`feature/tacitred-sentinelone-v1`](https://github.com/mazamizo21/Azure-Sentinel/tree/feature/tacitred-sentinelone-v1)
+### 4. TacitRed CrowdStrike IOC Automation (Official)
+- **PR #13269**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13269)
+- **Status**: **Active / Official Data443 Submission**
+- **Source Branch**: `Data443:feature/tacitred-crowdstrike-ioc`
 
-### 5. TacitRed Defender Threat Intelligence
-- **PR #13247**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13247)
-- **Status**: **Submitted / Waiting for CI**
-- **Source Branch**: [`feature/tacitred-defender-ti`](https://github.com/mazamizo21/Azure-Sentinel/tree/feature/tacitred-defender-ti)
+### 5. Cyren Threat Intelligence (Official)
+- **PR #13270**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13270)
+- **Status**: **Active / Official Data443 Submission**
+- **Source Branch**: `Data443:feature/cyren-threat-intelligence-clean`
 
-### Guidance
-- Use **“Conversation”** tab on the PR to see reviewer comments.
-- Use **“Checks”** tab to see latest SolutionValidations / arm‑ttk / KQL checks.
-
-### Previous/Related PR
-- **PR #13204**: [Azure-Sentinel Pull Request](https://github.com/Azure/Azure-Sentinel/pull/13204) (Superseded)
+### Previous/Obsolete PRs (Closed)
+- **PR #13247** (Defender TI) -> Replaced by #13266
+- **PR #13243** (SentinelOne) -> Replaced by #13267
+- **PR #13242** (TacitRed CCF) -> Replaced by #13268
+- **PR #13241** (CrowdStrike) -> Replaced by #13269
+- **PR #13224** (Cyren) -> Replaced by #13270
 
 ### Important Links
 
