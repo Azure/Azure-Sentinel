@@ -1,0 +1,52 @@
+id: "89290690-54c4-4196-91c5-d32b1df5d873"
+name: Google Threat Intelligence - Threat Hunting Url
+description: |
+  'Google Threat Intelligence Url correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 30m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Google Threat Intelligence Match'
+  alertDescriptionFormat: 'Correlation found from the {{Type}} table.'
+query: |
+  let ioc_lookBack = 1d;
+  _Im_WebSession
+  | where isnotempty(Url)
+  | extend lowerUrl=tolower(Url)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == 'url:value'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  | extend lowerUrl=tolower(ObservableValue)
+  ) on lowerUrl
+  | project Url=ObservableValue, Description=Data.description, Type, TimeGenerated
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
+kind: Scheduled
