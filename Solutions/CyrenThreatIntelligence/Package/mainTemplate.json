@@ -136,7 +136,7 @@
     "keyVaultResourceId": "[if(parameters('enableKeyVault'), if(equals(parameters('keyVaultOption'), 'new'), resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId(parameters('keyVaultResourceGroup'), 'Microsoft.KeyVault/vaults', parameters('keyVaultName'))), '')]",
     "connectorId": "CyrenThreatIntel",
     "_solutionName": "CyrenThreatIntelligence",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.0.4",
     "_solutionId": "cyrenthreatintelligence",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
@@ -502,33 +502,6 @@
       "location": "[parameters('workspace-location')]"
     },
     {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(variables('workspaceResourceId'), variables('uamiName'), 'sentinel-contributor')]",
-      "scope": "[variables('workspaceResourceId')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
-      ],
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
-        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
-        "principalType": "ServicePrincipal"
-      }
-    },
-    {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(resourceGroup().id, variables('uamiName'), 'rg-contributor')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]"
-      ],
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
-        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
-        "principalType": "ServicePrincipal"
-      }
-    },
-    {
       "condition": "[and(parameters('enableKeyVault'), equals(parameters('keyVaultOption'), 'new'))]",
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2023-07-01",
@@ -760,7 +733,7 @@
           "sampleQueries": [
             {
               "description": "High-risk indicators (last 7 days)",
-              "query": "Cyren_Indicators_CL | where TimeGenerated >= ago(7d) | where risk_d >= 70 | project TimeGenerated, indicator_s, type_s, risk_d, category_s, source_s"
+              "query": "Cyren_Indicators_CL | where TimeGenerated >= ago(1d) | where risk_d >= 70 | project TimeGenerated, indicator_s, type_s, risk_d, category_s, source_s"
             }
           ],
           "dataTypes": [
@@ -924,15 +897,16 @@
       "apiVersion": "2023-02-01",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'CyrenHighRiskIPIndicators')]",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'Cyren_Indicators_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspace'), 'Microsoft.SecurityInsights', 'CyrenIPReputation')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspace'), 'Microsoft.SecurityInsights', 'CyrenMalwareURLs')]",
         "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/onboardingStates', 'default')]"
       ],
       "kind": "Scheduled",
       "properties": {
         "displayName": "Cyren High-Risk IP Indicators (24h)",
-        "description": "Test rule: alerts when Cyren identifies high-risk IP indicators (risk >= 80) in the last 24 hours.",
+        "description": "Alerts when Cyren identifies high-risk IP indicators (risk >= 80). Enable after data starts flowing.",
         "severity": "High",
-        "enabled": true,
+        "enabled": false,
         "query": "Cyren_Indicators_CL | where TimeGenerated > ago(1d) | where isnotempty(ip_s) | extend Risk = toint(risk_d) | where Risk >= 80 | summarize DetectionCount = count(), MaxRisk = max(Risk), Categories = make_set(category_s) by IP = ip_s, Source = source_s | where DetectionCount >= 1",
         "queryFrequency": "PT1H",
         "queryPeriod": "P1D",
@@ -980,15 +954,16 @@
       "apiVersion": "2023-02-01",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'CyrenHighRiskURLIndicators')]",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'Cyren_Indicators_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspace'), 'Microsoft.SecurityInsights', 'CyrenIPReputation')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspace'), 'Microsoft.SecurityInsights', 'CyrenMalwareURLs')]",
         "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/onboardingStates', 'default')]"
       ],
       "kind": "Scheduled",
       "properties": {
         "displayName": "Cyren High-Risk URL Indicators (24h)",
-        "description": "Test rule: alerts when Cyren identifies high-risk URL indicators (risk >= 80) in the last 24 hours.",
+        "description": "Alerts when Cyren identifies high-risk URL indicators (risk >= 80). Enable after data starts flowing.",
         "severity": "High",
-        "enabled": true,
+        "enabled": false,
         "query": "Cyren_Indicators_CL | where TimeGenerated > ago(1d) | where isnotempty(url_s) | extend Risk = toint(risk_d) | where Risk >= 80 | summarize DetectionCount = count(), MaxRisk = max(Risk), Categories = make_set(category_s) by URL = url_s, Domain = domain_s, Source = source_s | where DetectionCount >= 1",
         "queryFrequency": "PT1H",
         "queryPeriod": "P1D",
@@ -1037,15 +1012,16 @@
       "apiVersion": "2023-02-01",
       "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'CyrenFeedOutage6h')]",
       "dependsOn": [
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'Cyren_Indicators_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspace'), 'Microsoft.SecurityInsights', 'CyrenIPReputation')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectors', parameters('workspace'), 'Microsoft.SecurityInsights', 'CyrenMalwareURLs')]",
         "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/onboardingStates', 'default')]"
       ],
       "kind": "Scheduled",
       "properties": {
         "displayName": "Cyren Feed Outage (6h+)",
-        "description": "Test rule: alerts when no Cyren indicators have been ingested for at least 6 hours.",
+        "description": "Alerts when no Cyren indicators have been ingested for 6+ hours. Enable after data starts flowing.",
         "severity": "Medium",
-        "enabled": true,
+        "enabled": false,
         "query": "Cyren_Indicators_CL | where TimeGenerated >= ago(24h) | summarize Total = count(), Latest = max(TimeGenerated) | extend HoursAgo = datetime_diff('hour', now(), Latest) | where isnotempty(Latest) and HoursAgo >= 6 | project Latest, HoursAgo, Total",
         "queryFrequency": "PT1H",
         "queryPeriod": "P1D",
@@ -1084,7 +1060,7 @@
       "kind": "shared",
       "properties": {
         "displayName": "Cyren Threat Intelligence",
-        "serializedData": "{\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\",\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## ✅ Cyren Threat Intelligence\\n\\n**Real-time visibility into Cyren IP Reputation and Malware URLs feeds**\\n\\n✅ All queries validated with production data | ⟳ Auto-refresh every 5 minutes\\n\\n---\"}},{\"type\":3,\"content\":{\"size\":3,\"visualization\":\"tiles\",\"title\":\"👑 Data Pipeline Health (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated >= ago(24h) | summarize Total=count(), Latest=max(TimeGenerated), HoursAgo=datetime_diff('hour', now(), max(TimeGenerated)) | extend Status = case(HoursAgo > 7, '🟠 Critical', HoursAgo > 6, '🟡 Warning', '🟢 Healthy') | project Status, Total, Latest, HoursAgo\"}},{\"type\":3,\"name\":\"query - 1\",\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | summarize Value = count()\\n    | extend Metric = \\\"Total Indicators\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | summarize Value = dcountif(ip_s, isnotempty(ip_s))\\n    | extend Metric = \\\"Unique IPs\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | summarize Value = dcountif(url_s, isnotempty(url_s))\\n    | extend Metric = \\\"Unique URLs\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | extend Risk = iif(isnull(risk_d), 50, toint(risk_d))\\n    | summarize Value = countif(Risk >= 80)\\n    | extend Metric = \\\"High Risk\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | extend Risk = iif(isnull(risk_d), 50, toint(risk_d))\\n    | summarize Value = countif(Risk between (50 .. 79))\\n    | extend Metric = \\\"Medium Risk\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | extend Risk = iif(isnull(risk_d), 50, toint(risk_d))\\n    | summarize Value = countif(Risk < 50)\\n    | extend Metric = \\\"Low Risk\\\"\\n)\\n| project Metric, Value\",\"size\":0,\"title\":\"📈 Threat Intelligence Overview (Last 24h)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"formatter\":1,\"columnMatch\":\"Metric\"},\"secondaryContent\":{\"formatter\":1,\"columnMatch\":\"Metric\"},\"showBorder\":false}}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"table\",\"title\":\"🤩 Top 20 Malicious IPs (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | where isnotempty(ip_s) | summarize DetectionCount=count(), MaxRisk=max(risk_d), Categories=make_set(category_s) by IP=ip_s | order by DetectionCount desc | take 20\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"table\",\"title\":\"🌐 Top 20 Malware URLs (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | where isnotempty(url_s) | extend ShortURL = substring(url_s, 0, 100) | summarize DetectionCount=count(), Categories=make_set(category_s) by ShortURL | order by DetectionCount desc | take 20\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"areachart\",\"title\":\"📦 Risk Distribution Over Time (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Risk = iif(isnull(risk_d), 50, toint(risk_d)) | extend RiskBucket = case(Risk >= 80, 'Critical', Risk >= 60, 'High', Risk >= 40, 'Medium', 'Low') | summarize Count = count() by RiskBucket, bin(TimeGenerated, 1h) | order by TimeGenerated asc\"}},{\"type\":3,\"content\":{\"size\":1,\"visualization\":\"piechart\",\"title\":\"🍿 Threat Categories Distribution (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Category = coalesce(category_s, object_type_s, type_s, 'Uncategorized') | where Category !in ('unknown', '') | summarize Count = count() by Category | order by Count desc\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"table\",\"title\":\"⚠ Recent High-Risk Indicators (Risk ≥ 50, Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Risk = iif(isnull(risk_d), 50, toint(risk_d)) | where Risk >= 50 | project TimeGenerated, Risk, IP=ip_s, URL=url_s, Domain=domain_s, Category=category_s | order by TimeGenerated desc | take 50\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"timechart\",\"title\":\"📦 Ingestion Volume (Last 7 Days)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated >= ago(7d) | summarize Count = count() by bin(TimeGenerated, 1h) | order by TimeGenerated asc\"}}]}",
+        "serializedData": "{\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\",\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## ✅ Cyren Threat Intelligence\\n\\n**Real-time visibility into Cyren IP Reputation and Malware URLs feeds**\\n\\n✅ All queries validated with production data | ⟳ Auto-refresh every 5 minutes\\n\\n---\"}},{\"type\":3,\"content\":{\"size\":3,\"visualization\":\"tiles\",\"title\":\"👑 Data Pipeline Health (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated >= ago(24h) | summarize Total=count(), Latest=max(TimeGenerated), HoursAgo=datetime_diff('hour', now(), max(TimeGenerated)) | extend Status = case(HoursAgo > 7, '🟠 Critical', HoursAgo > 6, '🟡 Warning', '🟢 Healthy') | project Status, Total, Latest, HoursAgo\"}},{\"type\":3,\"name\":\"query - 1\",\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"union\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | summarize Value = count()\\n    | extend Metric = \\\"Total Indicators\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | summarize Value = dcountif(ip_s, isnotempty(ip_s))\\n    | extend Metric = \\\"Unique IPs\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | summarize Value = dcountif(url_s, isnotempty(url_s))\\n    | extend Metric = \\\"Unique URLs\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | extend Risk = iif(isnull(risk_d), 50, toint(risk_d))\\n    | summarize Value = countif(Risk >= 80)\\n    | extend Metric = \\\"High Risk\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | extend Risk = iif(isnull(risk_d), 50, toint(risk_d))\\n    | summarize Value = countif(Risk between (50 .. 79))\\n    | extend Metric = \\\"Medium Risk\\\"\\n),\\n(\\n    Cyren_Indicators_CL\\n    | where TimeGenerated >= ago(24h)\\n    | extend Risk = iif(isnull(risk_d), 50, toint(risk_d))\\n    | summarize Value = countif(Risk < 50)\\n    | extend Metric = \\\"Low Risk\\\"\\n)\\n| project Metric, Value\",\"size\":0,\"title\":\"📈 Threat Intelligence Overview (Last 24h)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"formatter\":1,\"columnMatch\":\"Metric\"},\"secondaryContent\":{\"formatter\":1,\"columnMatch\":\"Metric\"},\"showBorder\":false}}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"table\",\"title\":\"🤩 Top 20 Malicious IPs (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | where isnotempty(ip_s) | summarize DetectionCount=count(), MaxRisk=max(risk_d), Categories=make_set(category_s) by IP=ip_s | order by DetectionCount desc | take 20\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"table\",\"title\":\"🌐 Top 20 Malware URLs (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | where isnotempty(url_s) | extend ShortURL = substring(url_s, 0, 100) | summarize DetectionCount=count(), Categories=make_set(category_s) by ShortURL | order by DetectionCount desc | take 20\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"areachart\",\"title\":\"📦 Risk Distribution Over Time (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Risk = iif(isnull(risk_d), 50, toint(risk_d)) | extend RiskBucket = case(Risk >= 80, 'Critical', Risk >= 60, 'High', Risk >= 40, 'Medium', 'Low') | summarize Count = count() by RiskBucket, bin(TimeGenerated, 1h) | order by TimeGenerated asc\"}},{\"type\":3,\"content\":{\"size\":1,\"visualization\":\"piechart\",\"title\":\"🍿 Threat Categories Distribution (Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Category = coalesce(category_s, object_type_s, type_s, 'Uncategorized') | where Category !in ('unknown', '') | summarize Count = count() by Category | order by Count desc\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"table\",\"title\":\"⚠ Recent High-Risk Indicators (Risk ≥ 50, Last 24h)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Risk = iif(isnull(risk_d), 50, toint(risk_d)) | where Risk >= 50 | project TimeGenerated, Risk, IP=ip_s, URL=url_s, Domain=domain_s, Category=category_s | order by TimeGenerated desc | take 50\"}},{\"type\":3,\"content\":{\"size\":0,\"visualization\":\"timechart\",\"title\":\"📦 Ingestion Volume (Last 7 Days)\",\"queryType\":0,\"version\":\"KqlItem/1.0\",\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated >= ago(1d) | summarize Count = count() by bin(TimeGenerated, 1h) | order by TimeGenerated asc\"}}]}",
         "version": "1.0",
         "sourceId": "[variables('workspaceResourceId')]",
         "category": "sentinel"
@@ -1099,7 +1075,7 @@
       "kind": "shared",
       "properties": {
         "displayName": "Cyren Ingestion & Risk Overview",
-        "serializedData": "{\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\",\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Cyren Ingestion & Risk\\n\\nIngestion volume and risk distribution over time.\\n\\n---\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated >= ago(7d) | summarize Count = count() by bin(TimeGenerated, 1h) | order by TimeGenerated asc\",\"size\":0,\"title\":\"📦 Ingestion Volume (Last 7 Days)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"timechart\"},\"name\":\"query - ingestion\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Risk = iif(isnull(risk_d), 50, toint(risk_d)) | extend RiskBucket = case(Risk >= 80, 'Critical', Risk >= 60, 'High', Risk >= 40, 'Medium', 'Low') | summarize Count = count() by RiskBucket, bin(TimeGenerated, 1h) | order by TimeGenerated asc\",\"size\":0,\"title\":\"📦 Risk Distribution Over Time (Last 24h)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"name\":\"query - risk\"}],\"isLocked\":false}",
+        "serializedData": "{\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\",\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## Cyren Ingestion & Risk\\n\\nIngestion volume and risk distribution over time.\\n\\n---\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated >= ago(1d) | summarize Count = count() by bin(TimeGenerated, 1h) | order by TimeGenerated asc\",\"size\":0,\"title\":\"📦 Ingestion Volume (Last 7 Days)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"timechart\"},\"name\":\"query - ingestion\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Cyren_Indicators_CL | where TimeGenerated > ago(24h) | extend Risk = iif(isnull(risk_d), 50, toint(risk_d)) | extend RiskBucket = case(Risk >= 80, 'Critical', Risk >= 60, 'High', Risk >= 40, 'Medium', 'Low') | summarize Count = count() by RiskBucket, bin(TimeGenerated, 1h) | order by TimeGenerated asc\",\"size\":0,\"title\":\"📦 Risk Distribution Over Time (Last 24h)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"name\":\"query - risk\"}],\"isLocked\":false}",
         "version": "1.0",
         "sourceId": "[variables('workspaceResourceId')]",
         "category": "sentinel"
