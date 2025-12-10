@@ -28,13 +28,7 @@ The Azure DevOps Audit Logs data connector allows you to ingest audit events fro
 - **Keys** (Workspace): Read permissions to shared keys for the workspace are required.
 
 **Custom Permissions:**
-- **Azure DevOps Prerequisite**: Please ensure the following:
- 1. Register an Entra App in Microsoft Entra Admin Center under App Registrations.
- 2.  In 'API permissions' -  add Permissions to 'Azure DevOps - vso.auditlog'.
- 3.  In 'Certificates & secrets' - generate 'Client secret'.
- 4.  In 'Authentication' - add Redirect URI: 'https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights'.
- 5. In the Azure DevOps settings - enable audit log and set **View audit log** for the user. [Azure DevOps Auditing](https://learn.microsoft.com/en-us/azure/devops/organizations/audit/azure-devops-auditing?view=azure-devops&tabs=preview-page).
- 6. Ensure the user assigned to connect the data connector has the View audit logs permission explicitly set to Allow at all times. This permission is essential for successful log ingestion. If the permission is revoked or not granted, data ingestion will fail or be interrupted.
+- **Azure DevOps Prerequisite**: Please ensure the following:<br> 1. Register an Entra App in Microsoft Entra Admin Center under App Registrations.<br> 2.  In 'API permissions' -  add Permissions to 'Azure DevOps - vso.auditlog'.<br> 3.  In 'Certificates & secrets' - generate 'Client secret'.<br> 4.  In 'Authentication' - add Redirect URI: 'https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights'.<br> 5. In the Azure DevOps settings - enable audit log and set **View audit log** for the user. [Azure DevOps Auditing](https://learn.microsoft.com/en-us/azure/devops/organizations/audit/azure-devops-auditing?view=azure-devops&tabs=preview-page).<br> 6. Ensure the user assigned to connect the data connector has the View audit logs permission explicitly set to Allow at all times. This permission is essential for successful log ingestion. If the permission is revoked or not granted, data ingestion will fail or be interrupted.
 
 **Setup Instructions:**
 

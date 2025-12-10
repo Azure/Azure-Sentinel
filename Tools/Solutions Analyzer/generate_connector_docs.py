@@ -517,25 +517,123 @@ def _format_instruction_steps_recursive(instruction_steps: Any, indent_level: in
     return "".join(lines).strip()
 
 
-def format_permissions(permissions: str) -> str:
+def format_permissions(permissions_json: str) -> str:
     """
-    Parse and format permissions from CSV field.
+    Parse and format permissions from JSON-encoded CSV field.
     
-    Similar to instruction steps, ensures proper markdown formatting.
+    Renders permissions based on the official Microsoft Sentinel data connector UI definitions:
+    https://learn.microsoft.com/en-us/azure/sentinel/data-connector-ui-definitions-reference#permissions
+    
+    Args:
+        permissions_json: JSON-encoded permissions object from CSV
+        
+    Returns:
+        Formatted markdown string with permissions
     """
-    if not permissions:
+    if not permissions_json:
         return ""
     
-    # Replace <br> tags with newlines
-    formatted = permissions.replace('<br>', '\n')
+    try:
+        permissions = json.loads(permissions_json)
+    except json.JSONDecodeError:
+        # If it's not JSON, return as-is (backward compatibility)
+        return permissions_json.replace('<br>', '\n').strip()
     
-    # Clean up multiple consecutive newlines
-    formatted = re.sub(r'\n{3,}', '\n\n', formatted)
+    if not isinstance(permissions, dict):
+        return ""
     
-    # Clean up whitespace
-    formatted = formatted.strip()
+    lines = []
     
-    return formatted
+    # Resource Provider permissions
+    resource_providers = permissions.get("resourceProvider", [])
+    if isinstance(resource_providers, list) and resource_providers:
+        lines.append("**Resource Provider Permissions:**\n")
+        for rp in resource_providers:
+            if not isinstance(rp, dict):
+                continue
+            
+            provider = rp.get("provider", "")
+            provider_display = rp.get("providerDisplayName", "")
+            scope = rp.get("scope", "Workspace")
+            perms_text = rp.get("permissionsDisplayText", "")
+            required_perms = rp.get("requiredPermissions", {})
+            
+            # Build permission description
+            display_name = provider_display or provider
+            if not display_name:
+                continue
+                
+            perm_parts = []
+            if isinstance(required_perms, dict):
+                if required_perms.get("read"):
+                    perm_parts.append("read")
+                if required_perms.get("write"):
+                    perm_parts.append("write")
+                if required_perms.get("delete"):
+                    perm_parts.append("delete")
+                if required_perms.get("action"):
+                    perm_parts.append("action")
+            
+            # Use permissionsDisplayText if available, otherwise build from requiredPermissions
+            if perms_text:
+                lines.append(f"- **{display_name}** ({scope}): {perms_text}\n")
+            elif perm_parts:
+                perms_desc = " and ".join(perm_parts) + " permission" + ("s" if len(perm_parts) > 1 else "")
+                lines.append(f"- **{display_name}** ({scope}): {perms_desc} required.\n")
+            else:
+                lines.append(f"- **{display_name}** ({scope})\n")
+    
+    # Custom permissions
+    customs = permissions.get("customs", [])
+    if isinstance(customs, list) and customs:
+        if lines:
+            lines.append("\n")
+        lines.append("**Custom Permissions:**\n")
+        for custom in customs:
+            if not isinstance(custom, dict):
+                continue
+            name = custom.get("name", "")
+            description = custom.get("description", "")
+            
+            if name:
+                if description:
+                    lines.append(f"- **{name}**: {description}\n")
+                else:
+                    lines.append(f"- **{name}**\n")
+    
+    # Licenses
+    licenses = permissions.get("licenses", [])
+    if isinstance(licenses, list) and licenses:
+        if lines:
+            lines.append("\n")
+        lines.append("**Licenses:**\n")
+        # Map license codes to friendly names
+        license_names = {
+            "OfficeIRM": "Office Information Rights Management",
+            "OfficeATP": "Office Advanced Threat Protection",
+            "Office365": "Office 365",
+            "AadP1P2": "Azure AD Premium P1/P2",
+            "Mcas": "Microsoft Defender for Cloud Apps",
+            "Aatp": "Microsoft Defender for Identity",
+            "Mdatp": "Microsoft Defender for Endpoint",
+            "Mtp": "Microsoft Threat Protection",
+            "IoT": "Azure IoT"
+        }
+        for license in licenses:
+            if isinstance(license, str):
+                license_name = license_names.get(license, license)
+                lines.append(f"- {license_name}\n")
+    
+    # Tenant permissions
+    tenant = permissions.get("tenant", [])
+    if isinstance(tenant, list) and tenant:
+        if lines:
+            lines.append("\n")
+        lines.append("**Tenant Permissions:**\n")
+        tenant_roles = ", ".join(tenant)
+        lines.append(f"Requires {tenant_roles} on the workspace's tenant\n")
+    
+    return "".join(lines).strip()
 
 
 def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> None:

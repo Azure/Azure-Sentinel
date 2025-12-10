@@ -16,6 +16,9 @@ Gain insights into Microsoft Entra ID by connecting Audit and Sign-in logs to Mi
 - **Workspace** (Workspace): read and write permissions.
 - **Diagnostic Settings** (/providers/microsoft.aadiam): read and write permissions to AAD diagnostic settings.
 
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
 ## Setup Instructions
 
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.

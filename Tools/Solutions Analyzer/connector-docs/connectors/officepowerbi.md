@@ -18,6 +18,9 @@ Microsoft PowerBI is a collection of software services, apps, and connectors tha
 **Custom Permissions:**
 - **License**: Microsoft Power BI eligible license is required.
 
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
 ## Setup Instructions
 
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.

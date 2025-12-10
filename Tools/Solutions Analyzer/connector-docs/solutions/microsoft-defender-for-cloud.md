@@ -30,6 +30,9 @@ Microsoft Defender for Cloud is a security management tool that allows you to de
 **Resource Provider Permissions:**
 - **Workspace** (Workspace): read and write permissions.
 
+**Tenant Permissions:**
+Requires SecurityAdmin, GlobalAdmin on the workspace's tenant
+
 **Setup Instructions:**
 
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.

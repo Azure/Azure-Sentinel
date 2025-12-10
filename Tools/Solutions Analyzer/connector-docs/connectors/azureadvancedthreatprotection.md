@@ -37,6 +37,12 @@ For more information, see the [Microsoft Sentinel documentation >](https://go.mi
 **Resource Provider Permissions:**
 - **Workspace** (Workspace): read and write permissions.
 
+**Licenses:**
+- Microsoft Defender for Identity
+
+**Tenant Permissions:**
+Requires SecurityAdmin, GlobalAdmin on the workspace's tenant
+
 ## Setup Instructions
 
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.

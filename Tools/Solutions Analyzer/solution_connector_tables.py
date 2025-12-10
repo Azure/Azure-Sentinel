@@ -538,48 +538,6 @@ def extract_tables(data: Any) -> Dict[str, Dict[str, Any]]:
     return tables
 
 
-def format_permissions_to_markdown(permissions: Any) -> str:
-    """Convert permissions object to markdown format with <br> for line breaks."""
-    if not isinstance(permissions, dict):
-        return ""
-    
-    lines = []
-    
-    # Resource Provider permissions
-    resource_providers = permissions.get("resourceProvider", [])
-    if isinstance(resource_providers, list) and resource_providers:
-        lines.append("**Resource Provider Permissions:**<br>")
-        for rp in resource_providers:
-            if not isinstance(rp, dict):
-                continue
-            provider = rp.get("provider", "")
-            display = rp.get("providerDisplayName", "")
-            scope = rp.get("scope", "")
-            perms_text = rp.get("permissionsDisplayText", "")
-            
-            if provider or display:
-                lines.append(f"- **{display or provider}** ({scope or 'Workspace'}): {perms_text}<br>")
-    
-    # Custom permissions
-    customs = permissions.get("customs", [])
-    if isinstance(customs, list) and customs:
-        if lines:
-            lines.append("<br>")
-        lines.append("**Custom Permissions:**<br>")
-        for custom in customs:
-            if not isinstance(custom, dict):
-                continue
-            name = custom.get("name", "")
-            description = custom.get("description", "")
-            
-            if name:
-                lines.append(f"- **{name}**: {description}<br>")
-    
-    return "".join(lines)
-
-
-
-
 
 def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
     """Find connector objects and extract description, instructionSteps, and permissions if present."""
@@ -603,10 +561,11 @@ def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
                     if "descriptionMarkdown" in current:
                         connector_copy["description"] = current["descriptionMarkdown"]
                     if "instructionSteps" in current:
-                        # Store instructionSteps as escaped JSON string
+                        # Store instructionSteps as JSON-encoded string
                         connector_copy["instructionSteps"] = json.dumps(current["instructionSteps"])
                     if "permissions" in current:
-                        connector_copy["permissions"] = format_permissions_to_markdown(current["permissions"])
+                        # Store permissions as JSON-encoded string
+                        connector_copy["permissions"] = json.dumps(current["permissions"])
                     connectors.append(connector_copy)
             stack.extend(current.values())
         elif isinstance(current, list):
