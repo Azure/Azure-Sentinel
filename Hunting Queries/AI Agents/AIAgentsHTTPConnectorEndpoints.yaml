@@ -1,0 +1,40 @@
+id: 8b3c7d9e-0f1a-2b3c-4d5e-6f7a8b9c0d1e
+name: AI Agents - HTTP Requests to Connector Endpoints
+description: |
+  This query identifies Copilot Studio AI agents that use HTTP actions to endpoints where Power Platform connectors are available (e.g., graph.microsoft.com, management.azure.com). 
+  Using direct HTTP calls instead of built-in connectors can indicate inefficient implementation and may introduce security risks, such as bypassing connector-level authentication and governance controls.
+  Recommended Action: Verify with the agent owner whether direct HTTP calls are necessary. 
+  If not, replace them with the appropriate Power Platform connector to ensure secure, managed integration and reduce complexity.
+requiredDataConnectors: []
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  AIAgentsInfo 
+  | summarize arg_max(Timestamp, *) by AIAgentId 
+  | where AgentStatus != "Deleted" 
+  | mvexpand Topic = AgentTopicsDetails 
+  | where Topic has "HttpRequestAction" 
+  | extend TopicActions = Topic.beginDialog.actions 
+  | mvexpand action = TopicActions 
+  | where action['$kind'] == "HttpRequestAction" 
+  | extend Url = tostring(action.url.literalValue) 
+  | extend ParsedUrl = parse_url(Url) 
+  | extend Host = tostring(ParsedUrl["Host"]) 
+  | where Host has_any("graph.microsoft.com", "management.azure.com") 
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, ParsedUrl, Url, Host, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, Topic
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
