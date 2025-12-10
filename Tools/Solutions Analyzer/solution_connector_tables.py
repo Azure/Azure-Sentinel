@@ -538,8 +538,51 @@ def extract_tables(data: Any) -> Dict[str, Dict[str, Any]]:
     return tables
 
 
+def format_permissions_to_markdown(permissions: Any) -> str:
+    """Convert permissions object to markdown format with <br> for line breaks."""
+    if not isinstance(permissions, dict):
+        return ""
+    
+    lines = []
+    
+    # Resource Provider permissions
+    resource_providers = permissions.get("resourceProvider", [])
+    if isinstance(resource_providers, list) and resource_providers:
+        lines.append("**Resource Provider Permissions:**<br>")
+        for rp in resource_providers:
+            if not isinstance(rp, dict):
+                continue
+            provider = rp.get("provider", "")
+            display = rp.get("providerDisplayName", "")
+            scope = rp.get("scope", "")
+            perms_text = rp.get("permissionsDisplayText", "")
+            
+            if provider or display:
+                lines.append(f"- **{display or provider}** ({scope or 'Workspace'}): {perms_text}<br>")
+    
+    # Custom permissions
+    customs = permissions.get("customs", [])
+    if isinstance(customs, list) and customs:
+        if lines:
+            lines.append("<br>")
+        lines.append("**Custom Permissions:**<br>")
+        for custom in customs:
+            if not isinstance(custom, dict):
+                continue
+            name = custom.get("name", "")
+            description = custom.get("description", "")
+            
+            if name:
+                lines.append(f"- **{name}**: {description}<br>")
+    
+    return "".join(lines)
+
+
+
+
+
 def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
-    """Find connector objects and extract description if present."""
+    """Find connector objects and extract description, instructionSteps, and permissions if present."""
     connectors: List[Dict[str, Any]] = []
     stack = [data]
     while stack:
@@ -555,10 +598,15 @@ def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
                     and isinstance(title_value, str)
                     and not any("[variables(" in value.lower() for value in (id_value, publisher_value, title_value))
                 ):
-                    # Extract description if available
+                    # Extract description, instructionSteps, and permissions if available
                     connector_copy = current.copy()
                     if "descriptionMarkdown" in current:
                         connector_copy["description"] = current["descriptionMarkdown"]
+                    if "instructionSteps" in current:
+                        # Store instructionSteps as escaped JSON string
+                        connector_copy["instructionSteps"] = json.dumps(current["instructionSteps"])
+                    if "permissions" in current:
+                        connector_copy["permissions"] = format_permissions_to_markdown(current["permissions"])
                     connectors.append(connector_copy)
             stack.extend(current.values())
         elif isinstance(current, list):
@@ -931,6 +979,8 @@ def main() -> None:
                     connector_title = entry.get("title", "")
                     # Replace newlines with <br> for GitHub CSV rendering
                     connector_description = entry.get("description", "").replace("\n", "<br>").replace("\r", "")
+                    connector_instruction_steps = entry.get("instructionSteps", "")
+                    connector_permissions = entry.get("permissions", "")
                     had_table_definitions = had_raw_table_definitions
                     parser_filtered_tables: Set[str] = set()
                     parser_expansion_details: Dict[str, Set[str]] = {}
@@ -1035,6 +1085,8 @@ def main() -> None:
                             connector_publisher,
                             connector_title,
                             connector_description,
+                            connector_instruction_steps,
+                            connector_permissions,
                             table_name,
                         )
                         combo_key = (solution_info["solution_name"], connector_id, table_name)
@@ -1146,6 +1198,8 @@ def main() -> None:
             "",  # connector_publisher
             "",  # connector_title
             "",  # connector_description
+            "",  # connector_instruction_steps
+            "",  # connector_permissions
             "",  # table_name
         )
         grouped_rows[row_key] = {}  # Empty file map for solutions without connectors
@@ -1153,7 +1207,7 @@ def main() -> None:
     rows: List[Dict[str, str]] = []
     for row_key in sorted(grouped_rows.keys()):
         path_map = grouped_rows[row_key]
-        combo_key = (row_key[0], row_key[12], row_key[16])
+        combo_key = (row_key[0], row_key[12], row_key[18])
         non_azure_files = sorted([path for path, is_azure in path_map.items() if not is_azure])
         if non_azure_files:
             file_list = non_azure_files
@@ -1174,7 +1228,7 @@ def main() -> None:
         support_info = row_key_metadata.get(row_key, {"table_detection_methods": set()})
         
         row_data = {
-            "Table": row_key[16],
+            "Table": row_key[18],
             "solution_name": row_key[0],
             "solution_folder": f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}",
             "solution_publisher_id": row_key[2],
@@ -1191,6 +1245,8 @@ def main() -> None:
             "connector_publisher": row_key[13],
             "connector_title": row_key[14],
             "connector_description": row_key[15],
+            "connector_instruction_steps": row_key[16],
+            "connector_permissions": row_key[17],
             "connector_files": ";".join(github_urls),
             "is_unique": "true" if len(file_list) == 1 else "false",
         }
@@ -1220,6 +1276,8 @@ def main() -> None:
         "connector_publisher",
         "connector_title",
         "connector_description",
+        "connector_instruction_steps",
+        "connector_permissions",
         "connector_files",
         "is_unique",
     ]
