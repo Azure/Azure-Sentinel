@@ -3328,8 +3328,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     'contentSchemaVersion' = '3.0.0'
                     'apiVersion' = '3.0.0'
 
-                    'metadataApiVersion' = '2023-04-01-preview'
-                    'templateSpecsVersionApiVersion' = '2023-04-01-preview'
+                    'metadataApiVersion' = '2025-09-01'
+                    'templateSpecsVersionApiVersion' = '2025-09-01'
                     'summaryRulesApiVersion' = '2023-01-01-preview'
                     'resources' = @("Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                                     "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -3351,8 +3351,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     'contentSchemaVersion' = '2.0.0'
                     'apiVersion' = '2.0.0'
 
-                    'metadataApiVersion' = '2022-01-01-preview'
-                    'templateSpecsVersionApiVersion' = '2022-02-01'
+                    'metadataApiVersion' = '2025-09-01'
+                    'templateSpecsVersionApiVersion' = '2025-09-01'
 
                     'resources' = @("Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                                     "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -3371,14 +3371,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             if ($null -ne $dict)
             {
                 # ADD COMMON API VERSION
-                $dict.Add('templateSpecsApiVersion', '2022-02-01')
-                $dict.Add('dataConnectorsApiVersion', '2021-03-01-preview')
+                $dict.Add('templateSpecsApiVersion', '2025-09-01')
+                $dict.Add('dataConnectorsApiVersion', '2025-09-01')
                 $dict.Add('huntingOperationalInsightsWorkspacesApiVersion', '2021-06-01')
                 $dict.Add('parserOperationalInsightsWorkspacesApiVersion', '2020-08-01')
-                $dict.Add('savedSearchesApiVersion', '2022-10-01')
-                $dict.Add('alertRuleApiVersion', '2023-02-01-preview')
-                $dict.Add('commonResourceMetadataApiVersion', '2022-01-01-preview')
-                $dict.Add('insightsWorkbookApiVersion', '2021-08-01')
+                $dict.Add('savedSearchesApiVersion', '2025-07-01')
+                $dict.Add('alertRuleApiVersion', '2025-09-01')
+                $dict.Add('commonResourceMetadataApiVersion', '2025-09-01')
+                $dict.Add('insightsWorkbookApiVersion', '2023-06-01')
             }
 
             return $dict
