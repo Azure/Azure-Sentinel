@@ -23,7 +23,7 @@ The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless 
 
 | | |
 |--------------------------|---|
-| **Tables Ingested** | `CopilotActivity` |
+| **Tables Ingested** | `LLMActivity` |
 | **Connector Definition Files** | [MicrosoftCopilot_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Copilot/Data%20Connectors/MicrosoftCopilot_ConnectorDefinition.json) |
 
 [→ View full connector details](../connectors/microsoftcopilot.md)
@@ -34,6 +34,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CopilotActivity` | [Microsoft Copilot](../connectors/microsoftcopilot.md) |
+| `LLMActivity` | [Microsoft Copilot](../connectors/microsoftcopilot.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

@@ -601,7 +601,7 @@ This page lists **811 unique tables** ingested by connectors.
 
 | Table | Solutions | Connectors |
 |-------|-----------|------------|
-| `CopilotActivity` | [Microsoft Copilot](solutions/microsoft-copilot.md) | [Microsoft Copilot](connectors/microsoftcopilot.md) |
+| `LLMActivity` | [Microsoft Copilot](solutions/microsoft-copilot.md) | [Microsoft Copilot](connectors/microsoftcopilot.md) |
 | `LastPassNativePoller_CL` | [LastPass](solutions/lastpass.md) | [LastPass Enterprise - Reporting (Polling CCP)](connectors/lastpass-polling.md) |
 | `LinuxAudit_CL` | [NXLog LinuxAudit](solutions/nxlog-linuxaudit.md) | [NXLog LinuxAudit](connectors/nxloglinuxaudit.md) |
 | `Lockdown_Data_CL` | [Vectra XDR](solutions/vectra-xdr.md) | [Vectra XDR](connectors/vectraxdr.md) |
