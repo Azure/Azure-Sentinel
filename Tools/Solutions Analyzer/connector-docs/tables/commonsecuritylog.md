@@ -2,13 +2,13 @@
 
 **Table:** `CommonSecurityLog`
 
-This table is ingested by **58 solution(s)** using **99 connector(s)**.
+This table is ingested by **54 solution(s)** using **91 connector(s)**.
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
 ---
 
-## Solutions (58)
+## Solutions (54)
 
 This table is used by the following solutions:
 
@@ -19,12 +19,10 @@ This table is used by the following solutions:
 - [Barracuda WAF](../solutions/barracuda-waf.md)
 - [Broadcom SymantecDLP](../solutions/broadcom-symantecdlp.md)
 - [Cisco Firepower EStreamer](../solutions/cisco-firepower-estreamer.md)
-- [CiscoASA](../solutions/ciscoasa.md)
 - [CiscoSEG](../solutions/ciscoseg.md)
 - [Citrix Web App Firewall](../solutions/citrix-web-app-firewall.md)
 - [Claroty](../solutions/claroty.md)
 - [Claroty xDome](../solutions/claroty-xdome.md)
-- [Common Event Format](../solutions/common-event-format.md)
 - [Contrast Protect](../solutions/contrast-protect.md)
 - [CrowdStrike Falcon Endpoint Protection](../solutions/crowdstrike-falcon-endpoint-protection.md)
 - [CyberArk Enterprise Password Vault (EPV) Events](../solutions/cyberark-enterprise-password-vault-(epv)-events.md)
@@ -48,7 +46,6 @@ This table is used by the following solutions:
 - [NozomiNetworks](../solutions/nozominetworks.md)
 - [OSSEC](../solutions/ossec.md)
 - [Onapsis Platform](../solutions/onapsis-platform.md)
-- [OneIdentity](../solutions/oneidentity.md)
 - [Palo Alto - XDR (Cortex)](../solutions/palo-alto---xdr-(cortex).md)
 - [PaloAlto-PAN-OS](../solutions/paloalto-pan-os.md)
 - [PaloAltoCDL](../solutions/paloaltocdl.md)
@@ -67,11 +64,10 @@ This table is used by the following solutions:
 - [Votiro](../solutions/votiro.md)
 - [WireX Network Forensics Platform](../solutions/wirex-network-forensics-platform.md)
 - [WithSecureElementsViaConnector](../solutions/withsecureelementsviaconnector.md)
-- [Zscaler Internet Access](../solutions/zscaler-internet-access.md)
 - [iboss](../solutions/iboss.md)
 - [vArmour Application Controller](../solutions/varmour-application-controller.md)
 
-## Connectors (99)
+## Connectors (91)
 
 This table is ingested by the following connectors:
 
@@ -85,10 +81,6 @@ This table is ingested by the following connectors:
 - [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md)
 - [[Deprecated] Broadcom Symantec DLP via Legacy Agent](../connectors/broadcomsymantecdlp.md)
 - [[Deprecated] Broadcom Symantec DLP via AMA](../connectors/broadcomsymantecdlpama.md)
-- [Common Event Format (CEF)](../connectors/cef.md)
-- [Common Event Format (CEF) via AMA](../connectors/cefama.md)
-- [Cisco ASA via Legacy Agent](../connectors/ciscoasa.md)
-- [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md)
 - [[Deprecated] Cisco Firepower eStreamer via Legacy Agent](../connectors/ciscofirepowerestreamer.md)
 - [[Deprecated] Cisco Firepower eStreamer via AMA](../connectors/ciscofirepowerestreamerama.md)
 - [[Deprecated] Cisco Secure Email Gateway via Legacy Agent](../connectors/ciscoseg.md)
@@ -130,7 +122,6 @@ This table is ingested by the following connectors:
 - [Imperva WAF Gateway](../connectors/impervawafgateway.md)
 - [[Deprecated] Infoblox Cloud Data Connector via Legacy Agent](../connectors/infobloxclouddataconnector.md)
 - [[Deprecated] Infoblox Cloud Data Connector via AMA](../connectors/infobloxclouddataconnectorama.md)
-- [[Recommended] Infoblox Cloud Data Connector via AMA](../connectors/infobloxclouddataconnectorama.md)
 - [[Deprecated] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md)
 - [[Recommended] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md)
 - [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md)
@@ -141,7 +132,6 @@ This table is ingested by the following connectors:
 - [[Deprecated] OSSEC via Legacy Agent](../connectors/ossec.md)
 - [[Deprecated] OSSEC via AMA](../connectors/ossecama.md)
 - [[Deprecated] Onapsis Platform](../connectors/onapsisplatform.md)
-- [One Identity Safeguard](../connectors/oneidentity.md)
 - [[Deprecated] Palo Alto Networks Cortex Data Lake (CDL) via Legacy Agent](../connectors/paloaltocdl.md)
 - [[Deprecated] Palo Alto Networks Cortex Data Lake (CDL) via AMA](../connectors/paloaltocdlama.md)
 - [[Deprecated] Palo Alto Networks (Firewall) via Legacy Agent](../connectors/paloaltonetworks.md)
@@ -166,8 +156,6 @@ This table is ingested by the following connectors:
 - [[Deprecated] WireX Network Forensics Platform via Legacy Agent](../connectors/wirex-systems-nfp.md)
 - [[Deprecated] WireX Network Forensics Platform via AMA](../connectors/wirex-systems-nfpama.md)
 - [[Deprecated] WithSecure Elements via Connector](../connectors/withsecureelementsviaconnector.md)
-- [[Deprecated] Zscaler via Legacy Agent](../connectors/zscaler.md)
-- [[Deprecated] Zscaler via AMA](../connectors/zscalerama.md)
 - [[Deprecated] iboss via Legacy Agent](../connectors/iboss.md)
 - [iboss via AMA](../connectors/ibossama.md)
 - [[Deprecated] Illusive Platform via Legacy Agent](../connectors/illusiveattackmanagementsystem.md)
