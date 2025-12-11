@@ -32,4 +32,26 @@ Connect Microsoft Defender for Identity to gain visibility into the events and u
 
 For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2220069&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+
+**Licenses:**
+- Microsoft Defender for Identity
+
+**Tenant Permissions:**
+Requires SecurityAdmin, GlobalAdmin on the workspace's tenant
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Connect Microsoft Defender for Identity to Microsoft Sentinel**
+
+If your tenant is running [Microsoft Defender for Identity](https://aka.ms/Sentinel/MDI/Preview)  in Microsoft Defender for Cloud Apps, connect here to stream your Microsoft Defender for Identity alerts into Microsoft Sentinel
+
+> In order to integrate with Microsoft Defender for Identity alerts, use  **global administrator**, or  **security administrator**  permission.
+- Connect Microsoft Defender for Identity
+
 [← Back to Connectors Index](../connectors-index.md)

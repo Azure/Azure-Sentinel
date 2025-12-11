@@ -12,15 +12,14 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **477 Microsoft Sentinel solutions**, including **369 solutions with data connectors**, providing access to **503 unique connectors** and **811 unique tables**. Additionally, **108 solutions without data connectors** are documented (these may contain analytics rules, workbooks, hunting queries, or playbooks).
+This documentation covers **477 solutions**, of which **369** include data connectors, providing access to **503 unique connectors** and **811 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
 | Total Solutions | 477 |
-| Solutions with Data Connectors | 369 |
-| Solutions without Data Connectors | 108 |
+| Solutions with Connectors | 369 (77%) |
 | Unique Connectors | 503 |
 | Unique Tables | 811 |
 

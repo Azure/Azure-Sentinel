@@ -25,6 +25,28 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 [Get Microsoft Entra ID Premium P1/P2 ](https://aka.ms/asi-ipcconnectorgetlink)
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+
+**Licenses:**
+- Azure AD Premium P1/P2
+
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Microsoft Entra ID Protection alerts to Microsoft Sentinel**
+
+Connect Microsoft Entra ID Protection to Microsoft Sentinel. 
+            
+> The alerts are sent to this Microsoft Sentinel workspace.
+- Connect Microsoft Entra ID Protection
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `SecurityAlert` |

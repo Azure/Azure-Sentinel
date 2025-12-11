@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                   |
 |-------------|--------------------------------|------------------------------------------------------|
+| 3.1.2       | 08-12-2025                     | Update **ProofpointPOD_PollingConfig.json** to remove start and end time query params, it impacts time frames at server side and causes duplicate data ingestion.|  
 | 3.1.1       | 03-11-2025                     | Update support url in **SolutionMetadata.json**.|  
 | 3.1.0       | 31-07-2025                     | Updated Support details and publisherId in **SolutionMetadata.json**, updated Author details and Logo in **Solution_ProofPointPOD.json** from Microsoft to Proofpoint.|
 | 3.0.5       | 28-07-2025                     | Removed Deprecated **Data Connector**.							|  
