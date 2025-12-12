@@ -16,34 +16,32 @@ The Infoblox Cloud Data Connector allows you to easily connect your Infoblox Blo
 - **Workspace** (Workspace): read and write permissions are required.
 - **Keys** (Workspace): read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).
 
-**Custom Permissions:**
-
 ## Setup Instructions
 
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
 
->**IMPORTANT:** This data connector depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser) which is deployed with the Microsoft Sentinel Solution.
+>**IMPORTANT:** This Microsoft Sentinel data connector assumes an Infoblox Data Connector host has already been created and configured in the Infoblox Cloud Services Portal (CSP). As the [**Infoblox Data Connector**](https://docs.infoblox.com/display/BloxOneThreatDefense/Deploying+the+Data+Connector+Solution) is a feature of Threat Defense, access to an appropriate Threat Defense subscription is required. See this [**quick-start guide**](https://www.infoblox.com/wp-content/uploads/infoblox-deployment-guide-data-connector.pdf) for more information and licensing requirements.
 
->**IMPORTANT:** This Microsoft Sentinel data connector assumes an Infoblox Data Connector host has already been created and configured in the Infoblox Cloud Services Portal (CSP). As the [**Infoblox Data Connector**](https://docs.infoblox.com/display/BloxOneThreatDefense/Deploying+the+Data+Connector+Solution) is a feature of BloxOne Threat Defense, access to an appropriate BloxOne Threat Defense subscription is required. See this [**quick-start guide**](https://www.infoblox.com/wp-content/uploads/infoblox-deployment-guide-data-connector.pdf) for more information and licensing requirements.
-**1. Follow the steps to configure the data connector**
+**1. Linux Syslog agent configuration**
 
-**Step A. Configure the Common Event Format (CEF) via AMA data connector**
+Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.
 
-  _Note: CEF logs are collected only from Linux Agents_
+> Notice that the data from all regions will be stored in the selected workspace
+**1.1 Select or create a Linux machine**
 
-1. Navigate to your **Microsoft Sentinel workspace > Data connectors** blade.
+  Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds.
 
-2. Search for the **Common Event Format (CEF) via AMA** data connector and open it.
+  **1.2 Install the CEF collector on the Linux machine**
 
-3. Ensure there is no existing DCR configured to collect required facility of logs as it may cause log duplication. Create a new **DCR (Data Collection Rule)**.
+  Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.
 
-	_Note: It is recommended to install the AMA agent v1.27 at minimum. [Learn more](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal ) and ensure there is no duplicate DCR as it can cause log duplication._
+> 1. Make sure that you have Python on your machine using the following command: python -version.
 
-4. Run the command provided in the **CEF via AMA data connector** page to configure the CEF collector on the machine.
+> 2. You must have elevated permissions (sudo) on your machine.
+  - **Run the following command to install and apply the CEF collector:**: `sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}`
+**2. Configure Infoblox to send Syslog data to the Infoblox Cloud Data Connector to forward to the Syslog agent**
 
-  **Step B. Configure Infoblox BloxOne to send Syslog data to the Infoblox Cloud Data Connector to forward to the Syslog agent**
-
-  Follow the steps below to configure the Infoblox CDC to send BloxOne data to Microsoft Sentinel via the Linux Syslog agent.
+Follow the steps below to configure the Infoblox CDC to send  data to Microsoft Sentinel via the Linux Syslog agent.
 1. Navigate to **Manage > Data Connector**.
 2. Click the **Destination Configuration** tab at the top.
 3. Click **Create > Syslog**. 
@@ -74,22 +72,22 @@ The Infoblox Cloud Data Connector allows you to easily connect your Infoblox Blo
  - Click **Save & Close**. 
 6. Allow the configuration some time to activate.
 
-  **Step C. Validate connection**
+**3. Validate connection**
 
-  Follow the instructions to validate your connectivity:
+Follow the instructions to validate your connectivity:
 
 Open Log Analytics to check if the logs are received using the CommonSecurityLog schema.
 
-It may take about 20 minutes until the connection streams data to your workspace.
+>It may take about 20 minutes until the connection streams data to your workspace.
 
 If the logs are not received, run the following connectivity validation script:
 
- 1. Make sure that you have Python on your machine using the following command: python -version
+> 1. Make sure that you have Python on your machine using the following command: python -version
 
-2. You must have elevated permissions (sudo) on your machine
-  - **Run the following command to validate your connectivity:**: `sudo wget -O Sentinel_AMA_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Syslog/Sentinel_AMA_troubleshoot.py&&sudo python Sentinel_AMA_troubleshoot.py --cef`
+>2. You must have elevated permissions (sudo) on your machine
+- **Run the following command to validate your connectivity:**: `sudo wget  -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}`
 
-**2. Secure your machine**
+**4. Secure your machine**
 
 Make sure to configure the machine's security according to your organization's security policy
 
