@@ -1,0 +1,238 @@
+// Lookout Mobile Risk API v2 - Quick Start Validation Queries
+// Run these queries in Microsoft Sentinel to validate your deployment
+
+// =============================================================================
+// STEP 1: VERIFY DATA INGESTION
+// =============================================================================
+
+// Check if Lookout data is being ingested
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| summarize 
+    RecordCount = count(),
+    FirstRecord = min(TimeGenerated),
+    LastRecord = max(TimeGenerated),
+    DataSizeMB = round(sum(estimate_data_size(*)) / 1024.0 / 1024.0, 2)
+| extend Status = case(
+    RecordCount > 0, "✅ SUCCESS: Data is being ingested",
+    "❌ FAILED: No data found - check data connector"
+)
+
+// =============================================================================
+// STEP 2: VALIDATE EVENT TYPES
+// =============================================================================
+
+// Verify all event types are present
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| summarize Count = count() by EventType
+| extend Status = case(
+    Count > 0, strcat("✅ ", EventType, " events: ", Count),
+    strcat("❌ ", EventType, " events: 0")
+)
+| project EventType, Count, Status
+
+// =============================================================================
+// STEP 3: VALIDATE V2 FIELD EXTRACTION
+// =============================================================================
+
+// Check THREAT event field extraction
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| where EventType == "THREAT"
+| project TimeGenerated, ThreatId, ThreatType, ThreatSeverity, ThreatClassifications,
+          DeviceGuid, DevicePlatform, DeviceEmailAddress, ClientLookoutSDKVersion
+| extend ValidationStatus = case(
+    isnotempty(ThreatId) and isnotempty(ThreatType), "✅ THREAT fields extracted correctly",
+    "❌ THREAT field extraction issues"
+)
+| take 5
+
+// Check DEVICE event field extraction
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| where EventType == "DEVICE"
+| project TimeGenerated, DeviceGuid, DeviceActivationStatus, DeviceSecurityStatus,
+          DeviceComplianceStatus, MDMConnectorId, MDMExternalId
+| extend ValidationStatus = case(
+    isnotempty(DeviceGuid) and isnotempty(DeviceActivationStatus), "✅ DEVICE fields extracted correctly",
+    "❌ DEVICE field extraction issues"
+)
+| take 5
+
+// Check SMISHING_ALERT event field extraction (if available)
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| where EventType == "SMISHING_ALERT"
+| project TimeGenerated, SmishingAlertId, SmishingAlertType, SmishingAlertSeverity,
+          SmishingAlertDescription, DeviceGuid
+| extend ValidationStatus = case(
+    isnotempty(SmishingAlertId) and isnotempty(SmishingAlertType), "✅ SMISHING fields extracted correctly",
+    "❌ SMISHING field extraction issues"
+)
+| take 5
+
+// Check AUDIT event field extraction (if available)
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| where EventType == "AUDIT"
+| project TimeGenerated, AuditType, AuditAttributeChanges, ActorType, ActorGuid
+| extend ValidationStatus = case(
+    isnotempty(AuditType) and isnotempty(ActorType), "✅ AUDIT fields extracted correctly",
+    "❌ AUDIT field extraction issues"
+)
+| take 5
+
+// =============================================================================
+// STEP 4: TEST ANALYTICS RULES
+// =============================================================================
+
+// Check if analytics rules are enabled and triggering
+SecurityAlert
+| where TimeGenerated > ago(24h)
+| where AlertName contains "Lookout"
+| summarize 
+    AlertCount = count(),
+    UniqueRules = dcount(AlertName),
+    Severities = make_set(AlertSeverity)
+    by AlertName
+| extend Status = case(
+    AlertCount > 0, strcat("✅ ", AlertName, " triggered ", AlertCount, " times"),
+    strcat("⚠️ ", AlertName, " not triggered (may be normal if no threats)")
+)
+
+// =============================================================================
+// STEP 5: VALIDATE WORKBOOK DATA SOURCES
+// =============================================================================
+
+// Test key workbook queries
+// Security Overview Metrics
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| summarize 
+    TotalEvents = count(),
+    ThreatEvents = countif(EventType == "THREAT"),
+    SmishingAlerts = countif(EventType == "SMISHING_ALERT"),
+    DeviceEvents = countif(EventType == "DEVICE"),
+    AuditEvents = countif(EventType == "AUDIT"),
+    UniqueDevices = dcount(DeviceGuid)
+| extend WorkbookStatus = case(
+    TotalEvents > 0, "✅ Workbook data sources ready",
+    "❌ No data for workbook visualization"
+)
+
+// Device Platform Distribution
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| where isnotempty(DevicePlatform)
+| summarize DeviceCount = dcount(DeviceGuid) by DevicePlatform
+| extend Status = strcat("✅ ", DevicePlatform, " devices: ", DeviceCount)
+
+// =============================================================================
+// STEP 6: TEST HUNTING QUERIES
+// =============================================================================
+
+// Multi-Vector Attack Correlation (simplified test)
+let timeWindow = 24h;
+LookoutEvents
+| where TimeGenerated > ago(timeWindow)
+| where EventType in ("THREAT", "SMISHING_ALERT")
+| where (EventType == "THREAT" and ThreatSeverity in ("CRITICAL", "HIGH")) or
+        (EventType == "SMISHING_ALERT" and SmishingAlertSeverity in ("CRITICAL", "HIGH"))
+| summarize 
+    EventTypes = make_set(EventType),
+    EventCount = count()
+    by DeviceGuid
+| where array_length(EventTypes) > 1 or EventCount > 1
+| extend HuntingStatus = case(
+    EventCount > 0, "✅ Multi-vector correlation data available",
+    "ℹ️ No multi-vector attacks detected (normal)"
+)
+| take 10
+
+// =============================================================================
+// STEP 7: PERFORMANCE VALIDATION
+// =============================================================================
+
+// Check query performance
+let startTime = now();
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| summarize count() by EventType;
+let endTime = now();
+print QueryDuration = endTime - startTime,
+      PerformanceStatus = case(
+          (endTime - startTime) < 30s, "✅ Query performance excellent (<30s)",
+          (endTime - startTime) < 60s, "⚠️ Query performance acceptable (30-60s)",
+          "❌ Query performance poor (>60s) - consider optimization"
+      )
+
+// =============================================================================
+// STEP 8: DATA QUALITY VALIDATION
+// =============================================================================
+
+// Check for data quality issues
+LookoutEvents
+| where TimeGenerated > ago(24h)
+| extend QualityIssues = pack_array(
+    iff(isempty(EventId), "Missing EventId", ""),
+    iff(isempty(EnterpriseGuid), "Missing EnterpriseGuid", ""),
+    iff(EventType == "THREAT" and isempty(ThreatId), "Missing ThreatId", ""),
+    iff(EventType == "DEVICE" and isempty(DeviceGuid), "Missing DeviceGuid", "")
+)
+| extend QualityIssues = array_strcat(array_slice(QualityIssues, 0, array_length(QualityIssues)), ", ")
+| where QualityIssues != ""
+| summarize IssueCount = count() by QualityIssues
+| extend DataQualityStatus = case(
+    IssueCount == 0, "✅ No data quality issues",
+    strcat("⚠️ Data quality issues found: ", QualityIssues)
+)
+
+// =============================================================================
+// STEP 9: COMPREHENSIVE HEALTH CHECK
+// =============================================================================
+
+// Overall solution health summary
+let dataIngestion = LookoutEvents | where TimeGenerated > ago(24h) | count;
+let threatEvents = LookoutEvents | where TimeGenerated > ago(24h) and EventType == "THREAT" | count;
+let deviceEvents = LookoutEvents | where TimeGenerated > ago(24h) and EventType == "DEVICE" | count;
+let alerts = SecurityAlert | where TimeGenerated > ago(24h) and AlertName contains "Lookout" | count;
+print 
+    "=== LOOKOUT V2 SOLUTION HEALTH CHECK ===",
+    "",
+    strcat("📊 Data Ingestion: ", iff(dataIngestion > 0, "✅ HEALTHY", "❌ NO DATA")),
+    strcat("🛡️ Threat Detection: ", iff(threatEvents > 0, "✅ ACTIVE", "ℹ️ NO THREATS")),
+    strcat("📱 Device Monitoring: ", iff(deviceEvents > 0, "✅ ACTIVE", "ℹ️ NO DEVICE EVENTS")),
+    strcat("🚨 Alert Generation: ", iff(alerts > 0, "✅ WORKING", "ℹ️ NO ALERTS")),
+    "",
+    "=== NEXT STEPS ===",
+    "1. If data ingestion shows ❌, check data connector configuration",
+    "2. If no threats/alerts, this may be normal - monitor over time",
+    "3. Review workbooks for detailed analysis",
+    "4. Execute hunting queries for advanced threat detection",
+    "5. Configure alert notifications and response playbooks"
+
+// =============================================================================
+// TROUBLESHOOTING QUERIES
+// =============================================================================
+
+// If no data is showing, check raw table
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| take 5
+| project TimeGenerated, Type, RawData
+
+// Check parser function
+LookoutEvents
+| where TimeGenerated > ago(1h)
+| take 1
+| project *
+
+// Verify data connector logs (if available)
+LookoutMtdV2_CL
+| where TimeGenerated > ago(1h)
+| extend ParsedCorrectly = case(
+    isnotempty(column_ifexists("id_s", "")), "✅ Parsing successful",
+    "❌ Parsing issues detected"
+)
+| summarize count() by ParsedCorrectly

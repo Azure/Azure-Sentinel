@@ -1,0 +1,548 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Lookout Mobile Risk API v2 - Comprehensive Data Connector",
+    "description": "Complete deployment template for Lookout MRA v2 including DCE, DCR, custom table, codeless connector, and parser function",
+    "author": "Lookout Inc.",
+    "version": "2.0.0",
+    "lastUpdated": "2025-09-15",
+    "support": {
+      "tier": "Partner",
+      "name": "Lookout Inc.",
+      "email": "support@lookout.com",
+      "link": "https://support.lookout.com"
+    }
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "lookoutApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Lookout API key for authentication"
+      }
+    },
+    "dataCollectionEndpointName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('workspace'), '-lookout-dce')]",
+      "metadata": {
+        "description": "Name for the Data Collection Endpoint"
+      }
+    },
+    "dataCollectionRuleName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('workspace'), '-lookout-dcr')]",
+      "metadata": {
+        "description": "Name for the Data Collection Rule"
+      }
+    },
+    "connectorName": {
+      "type": "string",
+      "defaultValue": "[concat('LookoutMRAv2-', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Name for the data connector instance"
+      }
+    },
+    "enableDebugLogging": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable debug logging for troubleshooting"
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+    "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+    "dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]",
+    "tableName": "LookoutMtdV2_CL",
+    "streamName": "Custom-LookoutMtdV2_CL",
+    "connectorDefinitionName": "LookoutMRAv2_Definition",
+    "parserName": "LookoutEvents",
+    "parserDisplayName": "Lookout Events Parser v2"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[parameters('dataCollectionEndpointName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "Data Collection Endpoint for Lookout Mobile Risk API v2",
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+      "dependsOn": [],
+      "properties": {
+        "totalRetentionInDays": 90,
+        "plan": "Analytics",
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "enterprise_guid",
+              "type": "string"
+            },
+            {
+              "name": "actor_device_guid",
+              "type": "string"
+            },
+            {
+              "name": "created_time",
+              "type": "datetime"
+            },
+            {
+              "name": "log_type",
+              "type": "string"
+            },
+            {
+              "name": "change_type",
+              "type": "string"
+            },
+            {
+              "name": "device",
+              "type": "dynamic"
+            },
+            {
+              "name": "threat",
+              "type": "dynamic"
+            },
+            {
+              "name": "audit",
+              "type": "dynamic"
+            },
+            {
+              "name": "smishing_alert",
+              "type": "dynamic"
+            },
+            {
+              "name": "target",
+              "type": "dynamic"
+            },
+            {
+              "name": "actor",
+              "type": "dynamic"
+            },
+            {
+              "name": "event_type",
+              "type": "string"
+            },
+            {
+              "name": "device_guid",
+              "type": "string"
+            },
+            {
+              "name": "device_activated_at",
+              "type": "datetime"
+            },
+            {
+              "name": "device_activation_status",
+              "type": "string"
+            },
+            {
+              "name": "device_checkin_time",
+              "type": "datetime"
+            },
+            {
+              "name": "device_customer_id",
+              "type": "string"
+            },
+            {
+              "name": "device_deactivated_at",
+              "type": "datetime"
+            },
+            {
+              "name": "device_group_guid",
+              "type": "string"
+            },
+            {
+              "name": "device_platform",
+              "type": "string"
+            },
+            {
+              "name": "device_os_version",
+              "type": "string"
+            },
+            {
+              "name": "device_manufacturer",
+              "type": "string"
+            },
+            {
+              "name": "device_model",
+              "type": "string"
+            },
+            {
+              "name": "device_email_address",
+              "type": "string"
+            },
+            {
+              "name": "device_security_status",
+              "type": "string"
+            },
+            {
+              "name": "client_lookout_sdk_version",
+              "type": "string"
+            },
+            {
+              "name": "client_ota_version",
+              "type": "string"
+            },
+            {
+              "name": "client_package_name",
+              "type": "string"
+            },
+            {
+              "name": "client_package_version",
+              "type": "string"
+            },
+            {
+              "name": "mdm_connector_id",
+              "type": "int"
+            },
+            {
+              "name": "mdm_connector_uuid",
+              "type": "string"
+            },
+            {
+              "name": "mdm_external_id",
+              "type": "string"
+            },
+            {
+              "name": "threat_id",
+              "type": "string"
+            },
+            {
+              "name": "threat_type",
+              "type": "string"
+            },
+            {
+              "name": "threat_action",
+              "type": "string"
+            },
+            {
+              "name": "threat_severity",
+              "type": "string"
+            },
+            {
+              "name": "threat_classification",
+              "type": "string"
+            },
+            {
+              "name": "threat_classifications",
+              "type": "string"
+            },
+            {
+              "name": "threat_risk",
+              "type": "string"
+            },
+            {
+              "name": "threat_status",
+              "type": "string"
+            },
+            {
+              "name": "threat_assessments",
+              "type": "string"
+            },
+            {
+              "name": "threat_description",
+              "type": "string"
+            },
+            {
+              "name": "threat_application_name",
+              "type": "string"
+            },
+            {
+              "name": "threat_package_name",
+              "type": "string"
+            },
+            {
+              "name": "threat_package_sha",
+              "type": "string"
+            },
+            {
+              "name": "threat_file_name",
+              "type": "string"
+            },
+            {
+              "name": "threat_file_path",
+              "type": "string"
+            },
+            {
+              "name": "threat_pcp_reporting_reason",
+              "type": "string"
+            },
+            {
+              "name": "threat_pcp_device_response",
+              "type": "string"
+            },
+            {
+              "name": "audit_type",
+              "type": "string"
+            },
+            {
+              "name": "actor_type",
+              "type": "string"
+            },
+            {
+              "name": "actor_guid",
+              "type": "string"
+            },
+            {
+              "name": "target_type",
+              "type": "string"
+            },
+            {
+              "name": "target_guid",
+              "type": "string"
+            },
+            {
+              "name": "target_email_address",
+              "type": "string"
+            },
+            {
+              "name": "target_platform",
+              "type": "string"
+            },
+            {
+              "name": "target_os_version",
+              "type": "string"
+            },
+            {
+              "name": "target_manufacturer",
+              "type": "string"
+            },
+            {
+              "name": "target_model",
+              "type": "string"
+            },
+            {
+              "name": "smishing_alert_id",
+              "type": "string"
+            },
+            {
+              "name": "smishing_alert_type",
+              "type": "string"
+            },
+            {
+              "name": "smishing_alert_severity",
+              "type": "string"
+            },
+            {
+              "name": "smishing_alert_description",
+              "type": "string"
+            },
+            {
+              "name": "device_permissions",
+              "type": "dynamic"
+            },
+            {
+              "name": "device_settings",
+              "type": "dynamic"
+            },
+            {
+              "name": "device_vulns",
+              "type": "dynamic"
+            },
+            {
+              "name": "risky_config",
+              "type": "dynamic"
+            },
+            {
+              "name": "audit_attribute_changes",
+              "type": "dynamic"
+            },
+            {
+              "name": "smishing_detections",
+              "type": "dynamic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[parameters('dataCollectionRuleName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('dataCollectionEndpointId')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+      ],
+      "properties": {
+        "description": "Data Collection Rule for Lookout Mobile Risk API v2 with field extraction",
+        "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+        "streamDeclarations": {
+          "[variables('streamName')]": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "RawData",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "clv2ws1"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('streamName')]"
+            ],
+            "destinations": [
+              "clv2ws1"
+            ],
+            "transformKql": "source | extend RawDataParsed = parse_json(RawData) | extend TimeGenerated = todatetime(RawDataParsed.created_time), id = tostring(RawDataParsed.id), enterprise_guid = tostring(RawDataParsed.enterprise_guid), actor_device_guid = tostring(RawDataParsed.actor.guid), created_time = todatetime(RawDataParsed.created_time), log_type = tostring(RawDataParsed.type), change_type = tostring(RawDataParsed.change_type), device = RawDataParsed.device, threat = RawDataParsed.threat, audit = RawDataParsed.audit, smishing_alert = RawDataParsed.smishing_alert, target = RawDataParsed.target, actor = RawDataParsed.actor, event_type = tostring(RawDataParsed.type), device_guid = tostring(RawDataParsed.device.guid), device_activated_at = todatetime(RawDataParsed.device.activated_at), device_activation_status = tostring(RawDataParsed.device.activation_status), device_checkin_time = todatetime(RawDataParsed.device.checkin_time), device_customer_id = tostring(RawDataParsed.device.customer_device_id), device_deactivated_at = todatetime(RawDataParsed.device.deactivated_at), device_group_guid = tostring(RawDataParsed.device.device_group_guid), device_platform = tostring(RawDataParsed.device.platform), device_os_version = tostring(RawDataParsed.device.os_version), device_manufacturer = tostring(RawDataParsed.device.manufacturer), device_model = tostring(RawDataParsed.device.model), device_email_address = tostring(RawDataParsed.device.email_address), device_security_status = tostring(RawDataParsed.device.security_status), client_lookout_sdk_version = tostring(RawDataParsed.device.client.lookout_sdk_version), client_ota_version = tostring(RawDataParsed.device.client.ota_version), client_package_name = tostring(RawDataParsed.device.client.package_name), client_package_version = tostring(RawDataParsed.device.client.package_version), mdm_connector_id = toint(RawDataParsed.device.details.mdm_connector_id), mdm_connector_uuid = tostring(RawDataParsed.device.details.mdm_connector_uuid), mdm_external_id = tostring(RawDataParsed.device.details.external_id), threat_id = tostring(RawDataParsed.threat.id), threat_type = tostring(RawDataParsed.threat.type), threat_action = tostring(RawDataParsed.threat.action), threat_severity = tostring(RawDataParsed.threat.severity), threat_classification = tostring(RawDataParsed.threat.classification), threat_classifications = tostring(RawDataParsed.threat.classifications), threat_risk = tostring(RawDataParsed.threat.risk), threat_status = tostring(RawDataParsed.threat.status), threat_assessments = tostring(RawDataParsed.threat.assessments), threat_description = tostring(RawDataParsed.threat.description), threat_application_name = tostring(RawDataParsed.threat.application_name), threat_package_name = tostring(RawDataParsed.threat.package_name), threat_package_sha = tostring(RawDataParsed.threat.package_sha), threat_file_name = tostring(RawDataParsed.threat.file_name), threat_file_path = tostring(RawDataParsed.threat.path), threat_pcp_reporting_reason = tostring(RawDataParsed.threat.pcp_reporting_reason), threat_pcp_device_response = tostring(RawDataParsed.threat.pcp_device_response), audit_type = tostring(RawDataParsed.audit.type), actor_type = tostring(RawDataParsed.actor.type), actor_guid = tostring(RawDataParsed.actor.guid), target_type = tostring(RawDataParsed.target.type), target_guid = tostring(RawDataParsed.target.guid), target_email_address = tostring(RawDataParsed.target.email_address), target_platform = tostring(RawDataParsed.target.platform), target_os_version = tostring(RawDataParsed.target.os_version), target_manufacturer = tostring(RawDataParsed.target.manufacturer), target_model = tostring(RawDataParsed.target.model), smishing_alert_id = tostring(RawDataParsed.smishing_alert.id), smishing_alert_type = tostring(RawDataParsed.smishing_alert.type), smishing_alert_severity = tostring(RawDataParsed.smishing_alert.severity), smishing_alert_description = tostring(RawDataParsed.smishing_alert.description), device_permissions = RawDataParsed.device.device_permissions, device_settings = RawDataParsed.device.device_settings, device_vulns = RawDataParsed.device.device_vulns, risky_config = RawDataParsed.device.risky_config, audit_attribute_changes = RawDataParsed.audit.attribute_changes, smishing_detections = RawDataParsed.detections | project-away RawData, RawDataParsed",
+            "outputStream": "[variables('streamName')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-05-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', parameters('connectorName'))]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('dataCollectionRuleId')]"
+      ],
+      "kind": "SSE",
+      "properties": {
+        "dataType": "[variables('tableName')]",
+        "dcrConfig": {
+          "dataCollectionEndpoint": "[reference(variables('dataCollectionEndpointId')).logsIngestion.endpoint]",
+          "dataCollectionRuleImmutableId": "[reference(variables('dataCollectionRuleId')).immutableId]",
+          "streamName": "[variables('streamName')]"
+        },
+        "auth": {
+          "type": "OAuth2",
+          "isCredentialsInHeaders": true,
+          "ClientId": "NA",
+          "ClientSecret": "NA",
+          "APIKey": "[parameters('lookoutApiKey')]",
+          "grantType": "client_credentials",
+          "tokenEndpoint": "https://api.lookout.com/oauth2/token",
+          "tokenEndpointHeaders": {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+            "Kind": "SSE"
+          },
+          "TokenEndpointQueryParameters": {}
+        },
+        "request": {
+          "apiEndpoint": "https://api.lookout.com/mra/stream/v2/events",
+          "httpMethod": "GET",
+          "queryWindowInMin": 3,
+          "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ss",
+          "rateLimitQps": 10,
+          "retryCount": 5,
+          "logResponseContent": "[parameters('enableDebugLogging')]",
+          "startTimeAttributeName": "start_time",
+          "timeoutInSeconds": 120,
+          "queryParameters": {
+            "types": "THREAT,DEVICE,SMISHING_ALERT,AUDIT"
+          },
+          "headers": {
+            "Accept": "text/event-stream",
+            "User-Agent": "Microsoft-Sentinel-Lookout-v2",
+            "X-Priority-Filter": "THREAT,DEVICE,SMISHING_ALERT,AUDIT",
+            "X-Event-Version": "v2"
+          }
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.events"
+          ],
+          "format": "json"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('workspace'), '/', variables('parserName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+      ],
+      "properties": {
+        "displayName": "[variables('parserDisplayName')]",
+        "category": "Function",
+        "functionAlias": "[variables('parserName')]",
+        "query": "let LookoutEvents = () {\n    LookoutMtdV2_CL\n    | extend \n        // Normalize event types\n        EventType = case(\n            event_type == \"THREAT\", \"ThreatEvent\",\n            event_type == \"DEVICE\", \"DeviceEvent\", \n            event_type == \"AUDIT\", \"AuditEvent\",\n            event_type == \"SMISHING_ALERT\", \"SmishingAlert\",\n            \"Unknown\"\n        ),\n        // Extract key identifiers\n        DeviceId = coalesce(device_guid, tostring(device.guid)),\n        UserId = coalesce(device_email_address, tostring(device.email_address)),\n        ThreatId = coalesce(threat_id, tostring(threat.id)),\n        // Normalize severity levels\n        SeverityLevel = case(\n            threat_severity == \"CRITICAL\" or smishing_alert_severity == \"CRITICAL\", \"Critical\",\n            threat_severity == \"HIGH\" or smishing_alert_severity == \"HIGH\", \"High\",\n            threat_severity == \"MEDIUM\" or smishing_alert_severity == \"MEDIUM\", \"Medium\",\n            threat_severity == \"LOW\" or smishing_alert_severity == \"LOW\", \"Low\",\n            \"Unknown\"\n        ),\n        // Extract platform information\n        DevicePlatform = coalesce(device_platform, tostring(device.platform)),\n        DeviceOS = coalesce(device_os_version, tostring(device.os_version)),\n        DeviceManufacturer = coalesce(device_manufacturer, tostring(device.manufacturer)),\n        DeviceModel = coalesce(device_model, tostring(device.model)),\n        // Extract threat information\n        ThreatType = coalesce(threat_type, tostring(threat.type)),\n        ThreatAction = coalesce(threat_action, tostring(threat.action)),\n        ThreatDescription = coalesce(threat_description, tostring(threat.description)),\n        // Extract audit information\n        AuditType = coalesce(audit_type, tostring(audit.type)),\n        ActorType = coalesce(actor_type, tostring(actor.type)),\n        // Extract smishing information\n        SmishingAlertType = coalesce(smishing_alert_type, tostring(smishing_alert.type)),\n        SmishingDescription = coalesce(smishing_alert_description, tostring(smishing_alert.description))\n    | project \n        TimeGenerated,\n        EventType,\n        DeviceId,\n        UserId,\n        ThreatId,\n        SeverityLevel,\n        DevicePlatform,\n        DeviceOS,\n        DeviceManufacturer,\n        DeviceModel,\n        ThreatType,\n        ThreatAction,\n        ThreatDescription,\n        AuditType,\n        ActorType,\n        SmishingAlertType,\n        SmishingDescription,\n        // Include original fields for detailed analysis\n        *\n};\nLookoutEvents",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "Parser function for Lookout Mobile Risk API v2 events with normalized fields and enhanced querying capabilities"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "dataCollectionEndpointId": {
+      "type": "string",
+      "value": "[variables('dataCollectionEndpointId')]"
+    },
+    "dataCollectionRuleId": {
+      "type": "string",
+      "value": "[variables('dataCollectionRuleId')]"
+    },
+    "dataCollectionRuleImmutableId": {
+      "type": "string",
+      "value": "[reference(variables('dataCollectionRuleId')).immutableId]"
+    },
+    "tableName": {
+      "type": "string",
+      "value": "[variables('tableName')]"
+    },
+    "connectorName": {
+      "type": "string",
+      "value": "[parameters('connectorName')]"
+    },
+    "parserFunction": {
+      "type": "string",
+      "value": "[variables('parserName')]"
+    },
+    "deploymentStatus": {
+      "type": "string",
+      "value": "Successfully deployed Lookout MRA v2 comprehensive data connector"
+    }
+  }
+}
