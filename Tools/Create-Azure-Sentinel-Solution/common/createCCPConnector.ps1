@@ -161,7 +161,7 @@ function Get-MetaDataBaseResource($resourceName, $parentId, $contentId, $kind, $
 
     return [PSCustomObject]@{
         name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',$resourceName)]";
-        apiVersion = "2025-09-01"
+        apiVersion = "2022-01-01-preview"
         type       = "Microsoft.OperationalInsights/workspaces/providers/metadata"
         properties = $properties;
     }
@@ -246,10 +246,10 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
 
 function Get-ArmResource($name, $type, $kind, $properties) {
     [hashtable]$apiVersion = @{
-        "Microsoft.SecurityInsights/dataConnectors"           = "2025-09-01";
-        "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2025-09-01";
-        "Microsoft.OperationalInsights/workspaces/tables"     = "2025-07-01";
-        "Microsoft.Insights/dataCollectionRules"              = "2024-03-11";
+        "Microsoft.SecurityInsights/dataConnectors"           = "2023-02-01-preview";
+        "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2022-09-01-preview";
+        "Microsoft.OperationalInsights/workspaces/tables"     = "2022-10-01";
+        "Microsoft.Insights/dataCollectionRules"              = "2022-06-01";
     }
 
     return [PSCustomObject]@{
