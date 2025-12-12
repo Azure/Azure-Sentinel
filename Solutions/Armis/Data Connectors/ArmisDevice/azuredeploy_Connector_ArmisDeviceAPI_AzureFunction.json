@@ -8,18 +8,18 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace ID of Log Analytics Workspace"
-            }
-        },
-        "WorkspaceKey": {
-            "type": "securestring",
-            "minLength": 1,
-            "metadata": {
-                "description": "Enter Primary Key of Log Analytics Workspace"
+                "description": "Log analytics workspace name. Can be found under Log analytics \"Settings\"."
             }
         },
         "ArmisSecretKey": {
@@ -28,20 +28,21 @@
                 "description": "Enter Armis Secret Key for Authentication"
             }
         },
-        "ArmisBaseURL":{
+        "ArmisBaseURL": {
             "type": "string",
             "metadata": {
                 "description": "Enter Base URL starting with \"https://\" followed by hostname(Example: https://[armis-instance].armis.com/api/v1)"
             }
         },
-        "ArmisDeviceTableName":{
+        "ArmisDeviceTableName": {
             "type": "string",
-            "defaultValue": "Armis_Devices_CL",
+            "defaultValue": "Armis_Devices",
+            "maxLength": 52,
             "metadata": {
-                "description": "Enter name of the table used to store Armis Devices logs. Default is 'Armis_Devices_CL'"
+                "description": "Enter name of the table used to store Armis Devices logs. Default is 'Armis_Devices'"
             }
         },
-        "ArmisSchedule":{
+        "ArmisSchedule": {
             "type": "string",
             "defaultValue": "0 */25 * * * *",
             "metadata": {
@@ -68,7 +69,14 @@
                 "description": "Enter Azure Client Secret that you have created during creating the client secret"
             }
         },
-        "TenantId":{
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
+            }
+        },
+        "TenantId": {
             "type": "string",
             "minLength": 1,
             "metadata": {
@@ -84,10 +92,490 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-         "StorageSuffix": "[environment().suffixes.storage]",
-         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "dataRuleName": "[concat(toLower(parameters('FunctionName')),'dataCollectionRule', variables('suffix'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('ArmisDeviceTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('ArmisDeviceTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "accessSwitch",
+                            "type": "string"
+                        },
+                        {
+                            "name": "boundaries",
+                            "type": "string"
+                        },
+                        {
+                            "name": "boundaryObjects",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "businessImpact",
+                            "type": "string"
+                        },
+                        {
+                            "name": "category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "customProperties",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "dataSources",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "displayTitle",
+                            "type": "string"
+                        },
+                        {
+                            "name": "firstSeen",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "id",
+                            "type": "real"
+                        },
+                        {
+                            "name": "ipAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ipAddresses",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "ipv6",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "armis_device_time",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "lastSeen",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "macAddress",
+                            "type": "string"
+                        },
+                        {
+                            "name": "macAddresses",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "manufacturer",
+                            "type": "string"
+                        },
+                        {
+                            "name": "model",
+                            "type": "string"
+                        },
+                        {
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "names",
+                            "type": "string"
+                        },
+                        {
+                            "name": "namesList",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "operatingSystem",
+                            "type": "string"
+                        },
+                        {
+                            "name": "operatingSystemVersion",
+                            "type": "string"
+                        },
+                        {
+                            "name": "protections",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "purdueLevel",
+                            "type": "real"
+                        },
+                        {
+                            "name": "riskLevel",
+                            "type": "real"
+                        },
+                        {
+                            "name": "sensor",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "sensor_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sensor_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "site",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "site_location",
+                            "type": "string"
+                        },
+                        {
+                            "name": "site_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "siteObject",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "siteObject_id",
+                            "type": "real"
+                        },
+                        {
+                            "name": "siteObject_location",
+                            "type": "string"
+                        },
+                        {
+                            "name": "siteObject_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "siteObject_tier",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "tier",
+                            "type": "string"
+                        },
+                        {
+                            "name": "device_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "typeEnum",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userIds",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "visibility",
+                            "type": "string"
+                        },
+                        {
+                            "name": "firmwareVersion",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "plcModule",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dataRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('ArmisDeviceTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('ArmisDeviceTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "accessSwitch",
+                                "type": "string"
+                            },
+                            {
+                                "name": "boundaries",
+                                "type": "string"
+                            },
+                            {
+                                "name": "boundaryObjects",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "businessImpact",
+                                "type": "string"
+                            },
+                            {
+                                "name": "category",
+                                "type": "string"
+                            },
+                            {
+                                "name": "customProperties",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "dataSources",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "displayTitle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "firstSeen",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "id",
+                                "type": "real"
+                            },
+                            {
+                                "name": "ipAddress",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ipAddresses",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "ipv6",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "armis_device_time",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "lastSeen",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "macAddress",
+                                "type": "string"
+                            },
+                            {
+                                "name": "macAddresses",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "manufacturer",
+                                "type": "string"
+                            },
+                            {
+                                "name": "model",
+                                "type": "string"
+                            },
+                            {
+                                "name": "name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "names",
+                                "type": "string"
+                            },
+                            {
+                                "name": "namesList",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "operatingSystem",
+                                "type": "string"
+                            },
+                            {
+                                "name": "operatingSystemVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "protections",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "purdueLevel",
+                                "type": "real"
+                            },
+                            {
+                                "name": "riskLevel",
+                                "type": "real"
+                            },
+                            {
+                                "name": "sensor",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "sensor_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sensor_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "site",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "site_location",
+                                "type": "string"
+                            },
+                            {
+                                "name": "site_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "siteObject",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "siteObject_id",
+                                "type": "real"
+                            },
+                            {
+                                "name": "siteObject_location",
+                                "type": "string"
+                            },
+                            {
+                                "name": "siteObject_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "siteObject_tier",
+                                "type": "string"
+                            },
+                            {
+                                "name": "tags",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "tier",
+                                "type": "string"
+                            },
+                            {
+                                "name": "device_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "typeEnum",
+                                "type": "string"
+                            },
+                            {
+                                "name": "userIds",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "visibility",
+                                "type": "string"
+                            },
+                            {
+                                "name": "firmwareVersion",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "plcModule",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "[concat('Custom-', parameters('ArmisDeviceTableName'))]" ],
+                        "destinations": [ "[concat('RuleDest', variables('suffix'))]" ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_sensor = parse_json(sensor), json_site = parse_json(site), json_siteObject = parse_json(siteObject)\n| extend sensor_name = tostring(json_sensor.name), sensor_type = tostring(json_sensor.type), site_location = tostring(json_site.location), site_name = tostring(json_site.name), siteObject_id = toreal(json_siteObject.id), siteObject_location = tostring(json_siteObject.location), siteObject_name = tostring(json_siteObject.name), siteObject_tier = tostring(json_siteObject.tier)\n| project-away json_sensor, sensor, json_site, site, json_siteObject, siteObject",
+                        "outputStream": "[concat('Custom-', parameters('ArmisDeviceTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Non Statistics DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [ "[variables('dcrRoleId')]", "[variables('dataRuleName')]" ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -191,7 +679,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -208,9 +696,6 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
-                        "WorkspaceID": "[parameters('WorkspaceID')]",
-                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
                         "ArmisSecretKey": "[parameters('ArmisSecretKey')]",
                         "ArmisURL": "[parameters('ArmisBaseURL')]",
                         "ArmisDeviceTableName": "[parameters('ArmisDeviceTableName')]",
@@ -219,7 +704,10 @@
                         "AZURE_CLIENT_ID": "[parameters('AzureClientId')]",
                         "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
                         "AZURE_TENANT_ID": "[parameters('TenantId')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ArmisDevice311-functionapp"
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))).immutableId]",
+                        "SCOPE": "[variables('scope')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ArmisDevice320-functionapp"
                     }
                 }
             ]
