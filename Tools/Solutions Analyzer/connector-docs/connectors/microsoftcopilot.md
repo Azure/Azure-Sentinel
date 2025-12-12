@@ -4,7 +4,7 @@
 |----------|-------|
 | **Connector ID** | `MicrosoftCopilot` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`LLMActivity`](../tables-index.md#llmactivity) |
+| **Tables Ingested** | [`LLMActivity`](../tables-index.md#LLMActivity) |
 | **Used in Solutions** | [Microsoft Copilot](../solutions/microsoft-copilot.md) |
 | **Connector Definition Files** | [MicrosoftCopilot_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Copilot/Data%20Connectors/MicrosoftCopilot_ConnectorDefinition.json) |
 
