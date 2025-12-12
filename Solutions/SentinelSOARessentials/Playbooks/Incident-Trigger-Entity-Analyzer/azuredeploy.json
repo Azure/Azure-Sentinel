@@ -1,0 +1,310 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Incident Trigger Entity Analyzer",
+        "description": "This playbook is triggered by Microsoft Sentinel incidents and performs automated investigation and enrichment of URL and User entities associated with the incident.",
+        "prerequisites": [
+            "1. A Microsoft Sentinel workspace must be configured.",
+            "2. The user deploying this Logic App needs to have a Contributor Role.",
+            "3. The user has permissions to access Microsoft Sentinel workspace.",
+            "4. The SentinelMCP connector is available in your environment."
+        ],
+        "postDeployment": [
+            "1. Authenticate the connections: Go to the Logic App → API connections and authenticate Microsoft Sentinel connection with a user that has Sentinel permissions.",
+            "2. Authenticate the SentinelMCP connection with Microsoft Sentinel MCP permissions.",
+            "3. The playbook will automatically trigger when new incidents are created.",
+            "4. Consider creating an automation rule to run this playbook automatically on specific incident types."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2025-12-07T00:00:00.000Z",
+        "entities": [
+            "URL",
+            "Account"
+        ],
+        "tags": [
+            "Enrichment",
+            "Utilities",
+            "Entity Analysis"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "yaniv shasha"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Entity-Analyzer-Incident-Trigger",
+            "type": "string"
+        },
+        "lookBackDays": {
+            "defaultValue": 60,
+            "type": "int",
+            "metadata": {
+                "description": "Number of days to look back for entity analysis"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "SentinelMCPConnectionName": "[concat('SentinelMCP-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "Created By": "ARM Template"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('SentinelMCPConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each_URL": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "URL_Analyzer": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "workspaceId": "@triggerBody()?['workspaceId']",
+                                            "lookBackDays": "[parameters('lookBackDays')]",
+                                            "properties": {
+                                                "entityType": "Url",
+                                                "url": "@{item()?['Url']}"
+                                            }
+                                        },
+                                        "path": "/aiprimitives/analysis",
+                                        "queries": {
+                                            "api-version": "2025-08-01-preview"
+                                        }
+                                    }
+                                },
+                                "Compose_Url": {
+                                    "runAfter": {
+                                        "URL_Analyzer": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@concat(\r\n'🔗 **URL Analysis for: ', item()?['Url'], '**\\n\\n',\r\n'🏷️ **Classification**\\n\\n',\r\nbody('URL_Analyzer')?['classification'], '\\n\\n',\r\n'🔍 **Analysis Result**\\n\\n',\r\nbody('URL_Analyzer')?['analysis'], '\\n\\n',\r\n'✅ **Recommendation**\\n\\n',\r\nbody('URL_Analyzer')?['recommendation'], '\\n\\n',\r\n'⚠️ **Disclaimer**\\n\\n',\r\n'🤖 ', body('URL_Analyzer')?['disclaimer']\r\n)"
+                                },
+                                "Add_Url_comment_to_incident": {
+                                    "runAfter": {
+                                        "Compose_Url": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p class=\"editor-paragraph\">@{outputs('Compose_Url')}</p>"
+                                        },
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each_User": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "User_Analyzer": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "workspaceId": "@triggerBody()?['workspaceId']",
+                                            "lookBackDays": "[parameters('lookBackDays')]",
+                                            "properties": {
+                                                "entityType": "User",
+                                                "userId": "@{item()?['AadUserId']}"
+                                            }
+                                        },
+                                        "path": "/aiprimitives/analysis",
+                                        "queries": {
+                                            "api-version": "2025-08-01-preview"
+                                        }
+                                    }
+                                },
+                                "Compose_User": {
+                                    "runAfter": {
+                                        "User_Analyzer": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "@concat(\r\n'👤 **User Analysis for: ', item()?['Name'], '**\\n\\n',\r\n'🏷️ **Classification**\\n\\n',\r\nbody('User_Analyzer')?['classification'], '\\n\\n',\r\n'🔍 **Analysis Result**\\n\\n',\r\nbody('User_Analyzer')?['analysis'], '\\n\\n',\r\n'✅ **Recommendation**\\n\\n',\r\nbody('User_Analyzer')?['recommendation'], '\\n\\n',\r\n'⚠️ **Disclaimer**\\n\\n',\r\n'🤖 ', body('User_Analyzer')?['disclaimer']\r\n)"
+                                },
+                                "Add_User_comment_to_incident": {
+                                    "runAfter": {
+                                        "Compose_User": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p class=\"editor-paragraph\">@{outputs('Compose_User')}</p>"
+                                        },
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "sentinelmcp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelMCPConnectionName'))]",
+                                "connectionName": "[variables('SentinelMCPConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sentinelmcp')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SentinelMCPConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('SentinelMCPConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sentinelmcp')]"
+                }
+            }
+        }
+    ]
+}

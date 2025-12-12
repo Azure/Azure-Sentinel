@@ -1,0 +1,329 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "HTTP Trigger Entity Analyzer",
+        "description": "This playbook is triggered by HTTP POST requests with entity information and performs automated investigation and enrichment of URL and User entities with asynchronous processing.",
+        "prerequisites": [
+            "1. The user deploying this Logic App needs to have a Contributor Role.",
+            "2. The user has permissions to access Microsoft Sentinel workspace.",
+            "3. Microsoft Sentinel data connector lake must be enabled in your workspace for entity data collection.",
+            "4. The SentinelMCP connector is available in your environment.",
+            "5. You need to provide a valid Sentinel workspace ID during deployment.",
+            "6. Authentication support for the Entity Analyzer connection includes Entra ID Authentication (OAuth), Service Principal (Application ID and Secret), or Managed Identity (System-assigned or User-assigned)."
+        ],
+        "postDeployment": [
+            "1. Authenticate the connections: Go to the Logic App → API connections and authenticate SentinelMCP connection with Microsoft Sentinel MCP permissions.",
+            "2. Authenticate the Entity Analyzer connection using one of the supported methods: Entra ID Auth, Service Principal, or Managed Identity.",
+            "3. Get the HTTP endpoint URL: Open the Logic App → Go to Logic app designer → Click on the HTTP trigger → Copy the HTTP POST URL.",
+            "4. The playbook will trigger when POST requests are sent to the HTTP endpoint."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2025-12-07T00:00:00.000Z",
+        "entities": [
+            "URL",
+            "Account"
+        ],
+        "tags": [
+            "Enrichment",
+            "Utilities",
+            "Entity Analysis",
+            "API Integration"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "yaniv shasha"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Http-Trigger-Entity-Analyzer",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App playbook"
+            }
+        },
+        "workspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Microsoft Sentinel workspace ID"
+            }
+        },
+        "lookBackDays": {
+            "defaultValue": 40,
+            "type": "int",
+            "metadata": {
+                "description": "Number of days to look back for entity analysis"
+            }
+        }
+    },
+    "variables": {
+        "SentinelMCPConnectionName": "[concat('SentinelMCP-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SentinelMCPConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('SentinelMCPConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sentinelmcp')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Created By": "ARM Template"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('SentinelMCPConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_an_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "Type": {
+                                            "type": "string"
+                                        },
+                                        "Value": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Response_Accepted": {
+                            "runAfter": {},
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 202,
+                                "headers": {
+                                    "Retry-After": "10"
+                                },
+                                "body": {
+                                    "status": "Accepted",
+                                    "message": "Entity analysis started. Processing in background.",
+                                    "runId": "@{workflow().run.name}",
+                                    "entityType": "@{triggerBody()?['Type']}",
+                                    "entityValue": "@{triggerBody()?['Value']}"
+                                }
+                            }
+                        },
+                        "Condition": {
+                            "actions": {
+                                "User_Analyzer": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "workspaceId": "[parameters('workspaceId')]",
+                                            "lookBackDays": "[parameters('lookBackDays')]",
+                                            "properties": {
+                                                "entityType": "User",
+                                                "userId": "@{triggerBody()?['Value']}"
+                                            }
+                                        },
+                                        "path": "/aiprimitives/analysis",
+                                        "queries": {
+                                            "api-version": "2025-08-01-preview"
+                                        }
+                                    }
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                        "User_Analyzer": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('User_Analyzer')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "classification": {
+                                                    "type": "string"
+                                                },
+                                                "analysis": {
+                                                    "type": "string"
+                                                },
+                                                "recommendation": {
+                                                    "type": "string"
+                                                },
+                                                "disclaimer": {
+                                                    "type": "string"
+                                                },
+                                                "dataSourceList": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "properties": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "entityType": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Response_Accepted": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Url_Analyzer": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                                "workspaceId": "[parameters('workspaceId')]",
+                                                "lookBackDays": "[parameters('lookBackDays')]",
+                                                "properties": {
+                                                    "entityType": "@{triggerBody()?['Type']}",
+                                                    "url": "@{triggerBody()?['Value']}"
+                                                }
+                                            },
+                                            "path": "/aiprimitives/analysis",
+                                            "queries": {
+                                                "api-version": "2025-08-01-preview"
+                                            }
+                                        }
+                                    },
+                                    "Parse_JSON_1": {
+                                        "runAfter": {
+                                            "Url_Analyzer": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ParseJson",
+                                        "inputs": {
+                                            "content": "@body('Url_Analyzer')",
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "classification": {
+                                                        "type": "string"
+                                                    },
+                                                    "analysis": {
+                                                        "type": "string"
+                                                    },
+                                                    "recommendation": {
+                                                        "type": "string"
+                                                    },
+                                                    "disclaimer": {
+                                                        "type": "string"
+                                                    },
+                                                    "dataSourceList": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "properties": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "entityType": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['Type']",
+                                            "User"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "sentinelmcp": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelMCPConnectionName'))]",
+                                "connectionName": "[variables('SentinelMCPConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sentinelmcp')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "logicAppUrl": {
+            "type": "string",
+            "value": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '/triggers/When_an_HTTP_request_is_received'), '2017-07-01').value]"
+        }
+    }
+}
