@@ -12,7 +12,7 @@ Browse all data connectors available in Microsoft Sentinel Solutions.
 
 ## Overview
 
-This page lists **462 unique connectors** across all solutions.
+This page lists **463 unique connectors** across all solutions.
 
 **Jump to:** [#](##) | [A](#a) | [B](#b) | [C](#c) | [D](#d) | [E](#e) | [F](#f) | [G](#g) | [H](#h) | [I](#i) | [J](#j) | [K](#k) | [L](#l) | [M](#m) | [N](#n) | [O](#o) | [P](#p) | [Q](#q) | [R](#r) | [S](#s) | [T](#t) | [V](#v) | [W](#w) | [Z](#z)
 
@@ -1321,7 +1321,7 @@ Follow the steps to gain access to Cyborg Security's Community and setup the 'Op
 
 ---
 
-### [Cyera DSPM Azure Functions Sentinel Data Connector](connectors/cyerafunctionsconnector.md)
+### [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](connectors/cyerafunctionsconnector.md)
 
 **Publisher:** Cyera Inc
 
@@ -1329,13 +1329,13 @@ Follow the steps to gain access to Cyborg Security's Community and setup the 'Op
 
 **Tables (5):** `CyeraAssets_CL`, `CyeraAssets_MS_CL`, `CyeraClassifications_CL`, `CyeraIdentities_CL`, `CyeraIssues_CL`
 
-The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Sentinel.
+The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Microsoft Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Microsoft Sentinel.
 
 [→ View full connector details](connectors/cyerafunctionsconnector.md)
 
 ---
 
-### [Cyera DSPM Azure Sentinel Data Connector](connectors/cyeradspmccf.md)
+### [Cyera DSPM Microsoft Sentinel Data Connector](connectors/cyeradspmccf.md)
 
 **Publisher:** Cyera Inc
 
@@ -1343,7 +1343,7 @@ The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera�
 
 **Tables (5):** `CyeraAssets_CL`, `CyeraAssets_MS_CL`, `CyeraClassifications_CL`, `CyeraIdentities_CL`, `CyeraIssues_CL`
 
-The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once recieced can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
+The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once received can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
 [→ View full connector details](connectors/cyeradspmccf.md)
 
@@ -3838,6 +3838,20 @@ The SAP S/4HANA Cloud Public Edition (GROW with SAP) data connector enables inge
 The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest security events of your industrial networks from the [SINEC Security Guard](https://siemens.com/sinec-security-guard) into Microsoft Sentinel
 
 [→ View full connector details](connectors/ssg.md)
+
+---
+
+### [SOC Prime Platform Audit Logs Data Connector](connectors/socprimeauditlogsdataconnector.md)
+
+**Publisher:** Microsoft
+
+**Solution:** [SOC Prime CCF](solutions/soc-prime-ccf.md)
+
+**Tables (1):** `SOCPrimeAuditLogs_CL`
+
+The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
+
+[→ View full connector details](connectors/socprimeauditlogsdataconnector.md)
 
 ---
 

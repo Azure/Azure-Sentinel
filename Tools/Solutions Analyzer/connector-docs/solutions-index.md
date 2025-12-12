@@ -12,16 +12,16 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **477 solutions**, of which **369** include data connectors, providing access to **503 unique connectors** and **811 unique tables**.
+This documentation covers **479 solutions**, of which **336** include data connectors, providing access to **463 unique connectors** and **742 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 477 |
-| Solutions with Connectors | 369 (77%) |
-| Unique Connectors | 503 |
-| Unique Tables | 811 |
+| Total Solutions | 479 |
+| Solutions with Connectors | 336 (70%) |
+| Unique Connectors | 463 |
+| Unique Tables | 742 |
 
 ## How This Documentation is Organized\n\nEach solution has its own page containing:
 
@@ -112,6 +112,7 @@ Browse solutions alphabetically:
 | [Barracuda CloudGen Firewall](solutions/barracuda-cloudgen-firewall.md) | 2021-05-02 | Community |
 | [Barracuda WAF](solutions/barracuda-waf.md) | 2022-05-13 | Barracuda |
 | [Beyond Security beSECURE](solutions/beyond-security-besecure.md) | 2022-05-02 | Beyond Security |
+| [BeyondTrustPMCloud](solutions/beyondtrustpmcloud.md) | 2025-10-31 | BeyondTrust |
 | [BigID](solutions/bigid.md) | 2025-10-07 | BigID |
 | [BitSight](solutions/bitsight.md) | 2023-02-20 | BitSight Support |
 | [Bitglass](solutions/bitglass.md) | 2021-10-23 | Microsoft Corporation |
@@ -271,7 +272,7 @@ Browse solutions alphabetically:
 | [Google Cloud Platform Cloud Monitoring](solutions/google-cloud-platform-cloud-monitoring.md) | 2022-07-01 | Microsoft Corporation |
 | [Google Cloud Platform Cloud Run](solutions/google-cloud-platform-cloud-run.md) | 2021-07-30 | Microsoft Corporation |
 | [Google Cloud Platform Compute Engine](solutions/google-cloud-platform-compute-engine.md) | 2022-07-07 | Microsoft Corporation |
-| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) | 2024-11-03 | Microsoft Corporation |
+| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) |  |  |
 | [Google Cloud Platform Load Balancer Logs](solutions/google-cloud-platform-load-balancer-logs.md) | 2025-02-12 | Microsoft Corporation |
 | [Google Cloud Platform Security Command Center](solutions/google-cloud-platform-security-command-center.md) | 2023-09-11 | Microsoft Corporation |
 | [Google Cloud Platform VPC Flow Logs](solutions/google-cloud-platform-vpc-flow-logs.md) | 2025-02-12 | Microsoft Corporation |
@@ -506,6 +507,7 @@ Browse solutions alphabetically:
 | [SIGNL4](solutions/signl4.md) | 2021-12-10 | Derdack |
 | [SINEC Security Guard](solutions/sinec-security-guard.md) | 2024-07-15 | Siemens AG |
 | [SOC Handbook](solutions/soc-handbook.md) | 2022-11-30 | Community |
+| [SOC Prime CCF](solutions/soc-prime-ccf.md) | 2025-09-25 | SOC Prime |
 | [SOC-Process-Framework](solutions/soc-process-framework.md) | 2022-04-08 | Microsoft Corporation |
 | [SailPointIdentityNow](solutions/sailpointidentitynow.md) | 2021-10-26 | SailPoint |
 | [SalemCyber](solutions/salemcyber.md) | 2023-07-21 | Salem Cyber |
