@@ -1,0 +1,48 @@
+id: 73c803aa-1188-45dd-8379-62a3319d3d9f
+name: NRT GravityZone Incident Alerts
+description: The query identifies incident-level events received from the GravityZone Data Connector
+version: 1.0.0
+kind: NRT
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GravityZoneDataConnector
+    dataTypes:
+      - ASimAlertEventBitdefenderGravityZone
+tactics:
+relevantTechniques:
+query: |
+  ASimAlertEventBitdefenderGravityZone
+    | extend IncidentType = case(
+        AdditionalFields.Module == "new-incident", "EDR Incident",
+        AdditionalFields.Module == "new-extended-incident", "XDR Incident",
+        AdditionalFields.Module == "ransomware-mitigation", "Ransomware Mitigation",
+        AdditionalFields.Module == "network-sandboxing", "Sandbox Analyzer Detection",
+        AdditionalFields.Module == "exchange-malware", "Exchange Malware Detection",
+        "Incident"   // fallback value if null or unmatched
+      ),
+      Tactics = AdditionalFields.AttackTypes
+    | project EventUid, EventSeverity, EventStartTime, IncidentType, Tactics, EventVendor, EventProduct, DvcId, DvcIpAddr, DvcHostname, DvcAction, DvcFQDN
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DvcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DvcIpAddr
+alertDetailsOverride:
+  alertSeverityColumnName: EventSeverity
+  alertDisplayNameFormat: 'GravityZone: {{IncidentType}}'
+  alertDescriptionFormat: |
+    Alert generated on {{EventStartTime}} in Bitdefender GravityZone.\n\nGravityZone Incident ID / Alert GUID: {{EventUid}}\n\nPlease check the source for more information and investigate further.
+  alertTacticsColumnName: Tactics
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: EventProduct
+    - alertProperty: ProviderName
+      value: EventVendor
+

@@ -12,7 +12,7 @@ Browse all data connectors available in Microsoft Sentinel Solutions.
 
 ## Overview
 
-This page lists **503 unique connectors** across all solutions.
+This page lists **462 unique connectors** across all solutions.
 
 **Jump to:** [#](##) | [A](#a) | [B](#b) | [C](#c) | [D](#d) | [E](#e) | [F](#f) | [G](#g) | [H](#h) | [I](#i) | [J](#j) | [K](#k) | [L](#l) | [M](#m) | [N](#n) | [O](#o) | [P](#p) | [Q](#q) | [R](#r) | [S](#s) | [T](#t) | [V](#v) | [W](#w) | [Z](#z)
 
@@ -91,20 +91,6 @@ This solution takes a dependency on the following technologies, and some of thes
 The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & ItemUsage events into Microsoft Sentinel.
 
 [→ View full connector details](connectors/1passwordccpdefinition.md)
-
----
-
-### [[Recommended] Infoblox Cloud Data Connector via AMA](connectors/infobloxclouddataconnectorama.md)
-
-**Publisher:** Infoblox
-
-**Solution:** [Infoblox](solutions/infoblox.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-The Infoblox Cloud Data Connector allows you to easily connect your Infoblox data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
-
-[→ View full connector details](connectors/infobloxclouddataconnectorama.md)
 
 ---
 
@@ -595,20 +581,6 @@ Azure Activity Log is a subscription log that provides insight into subscription
 
 ---
 
-### [Azure Batch Account](connectors/azurebatchaccount-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Batch Account](solutions/azure-batch-account.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Batch Account is a uniquely identified entity within the Batch service. Most Batch solutions use Azure Storage for storing resource files and output files, so each Batch account is usually associated with a corresponding storage account. This connector lets you stream your Azure Batch account diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2224103&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azurebatchaccount-ccp.md)
-
----
-
 ### [Azure CloudNGFW By Palo Alto Networks](connectors/azurecloudngfwbypaloaltonetworks.md)
 
 **Publisher:** Palo Alto Networks
@@ -623,48 +595,6 @@ Cloud Next-Generation Firewall by Palo Alto Networks - an Azure Native ISV Servi
 
 ---
 
-### [Azure Cognitive Search](connectors/azurecognitivesearch-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Cognitive Search](solutions/azure-cognitive-search.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Cognitive Search is a cloud search service that gives developers infrastructure, APIs, and tools for building a rich search experience over private, heterogeneous content in web, mobile, and enterprise applications. This connector lets you stream your Azure Cognitive Search diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
-
-[→ View full connector details](connectors/azurecognitivesearch-ccp.md)
-
----
-
-### [Azure DDoS Protection](connectors/ddos.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure DDoS Protection](solutions/azure-ddos-protection.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Connect to Azure DDoS Protection Standard logs via Public IP Address Diagnostic Logs. In addition to the core DDoS protection in the platform, Azure DDoS Protection Standard provides advanced DDoS mitigation capabilities against network attacks. It's automatically tuned to protect your specific Azure resources. Protection is simple to enable during the creation of new virtual networks. It can also be done after creation and requires no application or resource changes. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219760&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/ddos.md)
-
----
-
-### [Azure Data Lake Storage Gen1](connectors/azuredatalakestoragegen1-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Data Lake Storage Gen1](solutions/azure-data-lake-storage-gen1.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Data Lake Storage Gen1 is an enterprise-wide hyper-scale repository for big data analytic workloads. Azure Data Lake enables you to capture data of any size, type, and ingestion speed in one single place for operational and exploratory analytics. This connector lets you stream your Azure Data Lake Storage Gen1 diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223812&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azuredatalakestoragegen1-ccp.md)
-
----
-
 ### [Azure DevOps Audit Logs (via Codeless Connector Platform)](connectors/azuredevopsauditlogs.md)
 
 **Publisher:** Microsoft
@@ -676,146 +606,6 @@ Azure Data Lake Storage Gen1 is an enterprise-wide hyper-scale repository for bi
 The Azure DevOps Audit Logs data connector allows you to ingest audit events from Azure DevOps into Microsoft Sentinel. This data connector is built using the Microsoft Sentinel Codeless Connector Platform, ensuring seamless integration. It leverages the Azure DevOps Audit Logs API to fetch detailed audit events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview). These transformations enable parsing of the received audit data into a custom table during ingestion, improving query performance by eliminating the need for additional parsing. By using this connector, you can gain enhanced visibility into your Azure DevOps environment and streamline your security operations.
 
 [→ View full connector details](connectors/azuredevopsauditlogs.md)
-
----
-
-### [Azure Event Hub](connectors/azureeventhub-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Event Hubs](solutions/azure-event-hubs.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Event Hubs is a big data streaming platform and event ingestion service. It can receive and process millions of events per second. This connector lets you stream your Azure Event Hub diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
-
-[→ View full connector details](connectors/azureeventhub-ccp.md)
-
----
-
-### [Azure Firewall](connectors/azurefirewall.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Firewall](solutions/azure-firewall.md)
-
-**Tables (10):** `AZFWApplicationRule`, `AZFWDnsQuery`, `AZFWFatFlow`, `AZFWFlowTrace`, `AZFWIdpsSignature`, `AZFWInternalFqdnResolutionFailure`, `AZFWNatRule`, `AZFWNetworkRule`, `AZFWThreatIntel`, `AzureDiagnostics`
-
-Connect to Azure Firewall. Azure Firewall is a managed, cloud-based network security service that protects your Azure Virtual Network resources. It's a fully stateful firewall as a service with built-in high availability and unrestricted cloud scalability. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220124&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azurefirewall.md)
-
----
-
-### [Azure Key Vault](connectors/azurekeyvault.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Key Vault](solutions/azure-key-vault.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Key Vault is a cloud service for securely storing and accessing secrets. A secret is anything that you want to tightly control access to, such as API keys, passwords, certificates, or cryptographic keys.   This connector lets you stream your Azure Key Vault diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220125&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azurekeyvault.md)
-
----
-
-### [Azure Kubernetes Service (AKS)](connectors/azurekubernetes.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure kubernetes Service](solutions/azure-kubernetes-service.md)
-
-**Tables (3):** `AzureDiagnostics`, `ContainerInventory`, `KubeEvents`
-
-Azure Kubernetes Service (AKS) is an open-source, fully-managed container orchestration service that allows you to deploy, scale, and manage Docker containers and container-based applications in a cluster environment. This connector lets you stream your Azure Kubernetes Service (AKS) diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219762&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azurekubernetes.md)
-
----
-
-### [Azure Logic Apps](connectors/azurelogicapps-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Logic Apps](solutions/azure-logic-apps.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Logic Apps is a cloud-based platform for creating and running automated workflows that integrate your apps, data, services, and systems. This connector lets you stream your Azure Logic Apps diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
-
-[→ View full connector details](connectors/azurelogicapps-ccp.md)
-
----
-
-### [Azure SQL Databases](connectors/azuresql.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure SQL Database solution for sentinel](solutions/azure-sql-database-solution-for-sentinel.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure SQL is a fully managed, Platform-as-a-Service (PaaS) database engine that handles most database management functions, such as upgrading, patching, backups, and monitoring, without necessitating user involvement. This connector lets you stream your Azure SQL databases audit and diagnostic logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances.
-
-[→ View full connector details](connectors/azuresql.md)
-
----
-
-### [Azure Service Bus](connectors/azureservicebus-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Service Bus](solutions/azure-service-bus.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Service Bus is a fully managed enterprise message broker with message queues and publish-subscribe topics (in a namespace). This connector lets you stream your Azure Service Bus diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
-
-[→ View full connector details](connectors/azureservicebus-ccp.md)
-
----
-
-### [Azure Storage Account](connectors/azurestorageaccount.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Storage](solutions/azure-storage.md)
-
-**Tables (5):** `AzureMetrics`, `StorageBlobLogs`, `StorageFileLogs`, `StorageQueueLogs`, `StorageTableLogs`
-
-Azure Storage account is a cloud solution for modern data storage scenarios. It contains all your data objects: blobs, files, queues, tables, and disks. This connector lets you stream Azure Storage accounts diagnostics logs into your Microsoft Sentinel workspace, allowing you to continuously monitor activity in all your instances, and detect malicious activity in your organization. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220068&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azurestorageaccount.md)
-
----
-
-### [Azure Stream Analytics](connectors/azurestreamanalytics-ccp.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Stream Analytics](solutions/azure-stream-analytics.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure Stream Analytics is a real-time analytics and complex event-processing engine that is designed to analyze and process high volumes of fast streaming data from multiple sources simultaneously. This connector lets you stream your Azure Stream Analytics hub diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
-
-[→ View full connector details](connectors/azurestreamanalytics-ccp.md)
-
----
-
-### [Azure Web Application Firewall (WAF)](connectors/waf.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-(waf).md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Connect to the Azure Web Application Firewall (WAF) for Application Gateway, Front Door, or CDN. This WAF protects your applications from common web vulnerabilities such as SQL injection and cross-site scripting, and lets you customize rules to reduce false positives. Follow these instructions to stream your Microsoft Web application firewall logs into Microsoft Sentinel. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223546&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/waf.md)
 
 ---
 
@@ -1102,34 +892,6 @@ This is data connector for Check Point Cyberint IOC.
 
 ---
 
-### [Cisco ASA via Legacy Agent](connectors/ciscoasa.md)
-
-**Publisher:** Cisco
-
-**Solution:** [CiscoASA](solutions/ciscoasa.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-[→ View full connector details](connectors/ciscoasa.md)
-
----
-
-### [Cisco ASA/FTD via AMA](connectors/ciscoasaama.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [CiscoASA](solutions/ciscoasa.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-[→ View full connector details](connectors/ciscoasaama.md)
-
----
-
 ### [Cisco Cloud Security](connectors/ciscoumbrelladataconnector.md)
 
 **Publisher:** Cisco
@@ -1373,34 +1135,6 @@ The Cohesity function apps provide the ability to ingest Cohesity Datahawk ranso
 
 ---
 
-### [Common Event Format (CEF)](connectors/cef.md)
-
-**Publisher:** Any
-
-**Solution:** [Common Event Format](solutions/common-event-format.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by many security vendors to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223902&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/cef.md)
-
----
-
-### [Common Event Format (CEF) via AMA](connectors/cefama.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Common Event Format](solutions/common-event-format.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by many security vendors to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223547&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/cefama.md)
-
----
-
 ### [CommvaultSecurityIQ](connectors/commvaultsecurityiq-cl.md)
 
 **Publisher:** Commvault
@@ -1571,7 +1305,7 @@ Follow the steps to gain access to Cyborg Security's Community and setup the 'Op
 
 ---
 
-### [Cyera DSPM Azure Functions Sentinel Data Connector](connectors/cyerafunctionsconnector.md)
+### [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](connectors/cyerafunctionsconnector.md)
 
 **Publisher:** Cyera Inc
 
@@ -1579,13 +1313,13 @@ Follow the steps to gain access to Cyborg Security's Community and setup the 'Op
 
 **Tables (5):** `CyeraAssets_CL`, `CyeraAssets_MS_CL`, `CyeraClassifications_CL`, `CyeraIdentities_CL`, `CyeraIssues_CL`
 
-The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Sentinel.
+The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Microsoft Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Microsoft Sentinel.
 
 [→ View full connector details](connectors/cyerafunctionsconnector.md)
 
 ---
 
-### [Cyera DSPM Azure Sentinel Data Connector](connectors/cyeradspmccf.md)
+### [Cyera DSPM Microsoft Sentinel Data Connector](connectors/cyeradspmccf.md)
 
 **Publisher:** Cyera Inc
 
@@ -1593,7 +1327,7 @@ The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera�
 
 **Tables (5):** `CyeraAssets_CL`, `CyeraAssets_MS_CL`, `CyeraClassifications_CL`, `CyeraIdentities_CL`, `CyeraIssues_CL`
 
-The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once recieced can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
+The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once received can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
 [→ View full connector details](connectors/cyeradspmccf.md)
 
@@ -1614,29 +1348,6 @@ The [Cynerio](https://www.cynerio.com/) connector allows you to easily connect y
 ---
 
 ## D
-
-### [DNS](connectors/dns.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Server DNS](solutions/windows-server-dns.md)
-
-**Tables (2):** `DnsEvents`, `DnsInventory`
-
-The DNS log connector allows you to easily connect your DNS analytic and audit logs with Microsoft Sentinel, and other related data, to improve investigation.
-
-**When you enable DNS log collection you can:**
--   Identify clients that try to resolve malicious domain names.
--   Identify stale resource records.
--   Identify frequently queried domain names and talkative DNS clients.
--   View request load on DNS servers.
--   View dynamic DNS registration failures.
-
-For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220127&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/dns.md)
-
----
 
 ### [Darktrace Connector for Microsoft Sentinel REST API](connectors/darktracerestconnector.md)
 
@@ -3064,44 +2775,6 @@ The MailRisk by Secure Practice connector allows you to ingest email threat inte
 
 ---
 
-### [Microsoft 365 (formerly, Office 365)](connectors/office365.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft 365](solutions/microsoft-365.md)
-
-**Tables (4):** `OfficeActivity`, `exchange`, `sharePoint`, `teams`
-
-The Microsoft 365 (formerly, Office 365) activity log connector provides insight into ongoing user activities. You will get details of operations such as file downloads, access requests sent, changes to group events, set-mailbox and details of the user who performed the actions. By connecting Microsoft 365 logs into Microsoft Sentinel you can use this data to view dashboards, create custom alerts, and improve your investigation process. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219943&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/office365.md)
-
----
-
-### [Microsoft 365 Insider Risk Management](connectors/officeirm.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [MicrosoftPurviewInsiderRiskManagement](solutions/microsoftpurviewinsiderriskmanagement.md)
-
-**Tables (1):** `SecurityAlert`
-
-Microsoft 365 Insider Risk Management is a compliance solution in Microsoft 365 that helps minimize internal risks by enabling you to detect, investigate, and act on malicious and inadvertent activities in your organization. Risk analysts in your organization can quickly take appropriate actions to make sure users are compliant with your organization's compliance standards.
-
-Insider risk policies allow you to:
-
--   define the types of risks you want to identify and detect in your organization.
--   decide on what actions to take in response, including escalating cases to Microsoft Advanced eDiscovery if needed.
-
-This solution produces alerts that can be seen by Office customers in the Insider Risk Management solution in Microsoft 365 Compliance Center.
-[Learn More](https://aka.ms/OfficeIRMConnector) about Insider Risk Management.
-
-These alerts can be imported into Microsoft Sentinel with this connector, allowing you to see, investigate, and respond to them in a broader organizational threat context. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223721&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/officeirm.md)
-
----
-
 ### [Microsoft Copilot](connectors/microsoftcopilot.md)
 
 **Publisher:** Microsoft
@@ -3130,90 +2803,6 @@ Microsoft Sentinel provides you the capability to import threat intelligence gen
 
 ---
 
-### [Microsoft Defender XDR](connectors/microsoftthreatprotection.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Defender XDR](solutions/microsoft-defender-xdr.md)
-
-**Tables (22):** `AlertEvidence`, `CloudAppEvents`, `DeviceEvents`, `DeviceFileCertificateInfo`, `DeviceFileEvents`, `DeviceImageLoadEvents`, `DeviceInfo`, `DeviceLogonEvents`, `DeviceNetworkEvents`, `DeviceNetworkInfo`, `DeviceProcessEvents`, `DeviceRegistryEvents`, `EmailAttachmentInfo`, `EmailEvents`, `EmailPostDeliveryEvents`, `EmailUrlInfo`, `IdentityDirectoryEvents`, `IdentityLogonEvents`, `IdentityQueryEvents`, `SecurityAlert`, `SecurityIncident`, `UrlClickEvents`
-
-Microsoft Defender XDR is a unified, natively integrated, pre- and post-breach enterprise defense suite that protects endpoint, identity, email, and applications and helps you detect, prevent, investigate, and automatically respond to sophisticated threats.
-
-Microsoft Defender XDR suite includes: 
-- Microsoft Defender for Endpoint
-- Microsoft Defender for Identity
-- Microsoft Defender for Office 365
-- Threat & Vulnerability Management
-- Microsoft Defender for Cloud Apps
-
-For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220004&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/microsoftthreatprotection.md)
-
----
-
-### [Microsoft Defender for Cloud Apps](connectors/microsoftcloudappsecurity.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Defender for Cloud Apps](solutions/microsoft-defender-for-cloud-apps.md)
-
-**Tables (3):** `McasShadowItReporting`, `SecurityAlert`, `discoveryLogs`
-
-By connecting with [Microsoft Defender for Cloud Apps](https://aka.ms/asi-mcas-connector-description) you will gain visibility into your cloud apps, get sophisticated analytics to identify and combat cyberthreats, and control how your data travels.
-
--   Identify shadow IT cloud apps on your network.
--   Control and limit access based on conditions and session context.
--   Use built-in or custom policies for data sharing and data loss prevention.
--   Identify high-risk use and get alerts for unusual user activities with Microsoft behavioral analytics and anomaly detection capabilities, including ransomware activity, impossible travel, suspicious email forwarding rules, and mass download of files.
--   Mass download of files
-
-[Deploy now >](https://aka.ms/asi-mcas-connector-deploynow)
-
-[→ View full connector details](connectors/microsoftcloudappsecurity.md)
-
----
-
-### [Microsoft Defender for Endpoint](connectors/microsoftdefenderadvancedthreatprotection.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [MicrosoftDefenderForEndpoint](solutions/microsoftdefenderforendpoint.md)
-
-**Tables (1):** `SecurityAlert`
-
-Microsoft Defender for Endpoint is a security platform designed to prevent, detect, investigate, and respond to advanced threats. The platform creates alerts when suspicious security events are seen in an organization. Fetch alerts generated in Microsoft Defender for Endpoint to Microsoft Sentinel so that you can effectively analyze security events. You can create rules, build dashboards and author playbooks for immediate response. For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2220128&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/microsoftdefenderadvancedthreatprotection.md)
-
----
-
-### [Microsoft Defender for Identity](connectors/azureadvancedthreatprotection.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Defender For Identity](solutions/microsoft-defender-for-identity.md)
-
-**Tables (1):** `SecurityAlert`
-
-Connect Microsoft Defender for Identity to gain visibility into the events and user analytics. Microsoft Defender for Identity identifies, detects, and helps you investigate advanced threats, compromised identities, and malicious insider actions directed at your organization. Microsoft Defender for Identity enables SecOp analysts and security professionals struggling to detect advanced attacks in hybrid environments to:
-
--   Monitor users, entity behavior, and activities with learning-based analytics​
--   Protect user identities and credentials stored in Active Directory
--   Identify and investigate suspicious user activities and advanced attacks throughout the kill chain
--   Provide clear incident information on a simple timeline for fast triage
-
-[Try now >](https://aka.ms/AtpTryNow)
-
-[Deploy now >](https://aka.ms/AzureATP_Deploy)
-
-For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2220069&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azureadvancedthreatprotection.md)
-
----
-
 ### [Microsoft Defender for Office 365 (Preview)](connectors/officeatp.md)
 
 **Publisher:** Microsoft
@@ -3238,36 +2827,6 @@ These alerts can be seen by Office customers in the ** Office Security and Compl
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219942&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
 [→ View full connector details](connectors/officeatp.md)
-
----
-
-### [Microsoft Entra ID](connectors/azureactivedirectory.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Entra ID](solutions/microsoft-entra-id.md)
-
-**Tables (22):** `AADManagedIdentitySignInLogs`, `AADNonInteractiveUserSignInLogs`, `AADProvisioningLogs`, `AADRiskyServicePrincipals`, `AADRiskyUsers`, `AADServicePrincipalRiskEvents`, `AADServicePrincipalSignInLogs`, `AADUserRiskEvents`, `ADFSSignInLogs`, `AuditLogs`, `ManagedIdentitySignInLogs`, `NetworkAccessTraffic`, `NetworkAccessTrafficLogs`, `NonInteractiveUserSignInLogs`, `ProvisioningLogs`, `RiskyServicePrincipals`, `RiskyUsers`, `ServicePrincipalRiskEvents`, `ServicePrincipalSignInLogs`, `SignInLogs`, `SigninLogs`, `UserRiskEvents`
-
-Gain insights into Microsoft Entra ID by connecting Audit and Sign-in logs to Microsoft Sentinel to gather insights around Microsoft Entra ID scenarios. You can learn about app usage, conditional access policies, legacy auth relate details using our Sign-in logs. You can get information on your Self Service Password Reset (SSPR) usage, Microsoft Entra ID Management activities like user, group, role, app management using our Audit logs table. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2219715&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azureactivedirectory.md)
-
----
-
-### [Microsoft Entra ID Protection](connectors/azureactivedirectoryidentityprotection.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Entra ID Protection](solutions/microsoft-entra-id-protection.md)
-
-**Tables (1):** `SecurityAlert`
-
-Microsoft Entra ID Protection provides a consolidated view at risk users, risk events and vulnerabilities, with the ability to remediate risk immediately, and set policies to auto-remediate future events. The service is built on Microsoft’s experience protecting consumer identities and gains tremendous accuracy from the signal from over 13 billion logins a day. Integrate Microsoft Microsoft Entra ID Protection alerts with Microsoft Sentinel to view dashboards, create custom alerts, and improve investigation. For more information, see the [Microsoft Sentinel documentation ](https://go.microsoft.com/fwlink/p/?linkid=2220065&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[Get Microsoft Entra ID Premium P1/P2 ](https://aka.ms/asi-ipcconnectorgetlink)
-
-[→ View full connector details](connectors/azureactivedirectoryidentityprotection.md)
 
 ---
 
@@ -3338,20 +2897,6 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 Microsoft PowerBI is a collection of software services, apps, and connectors that work together to turn your unrelated sources of data into coherent, visually immersive, and interactive insights. Your data may be an Excel spreadsheet, a collection of cloud-based and on-premises hybrid data warehouses, or a data store of some other type. This connector lets you stream PowerBI audit logs into Microsoft Sentinel, allowing you to track user activities in your PowerBI environment. You can filter the audit data by date range, user, dashboard, report, dataset, and activity type.
 
 [→ View full connector details](connectors/officepowerbi.md)
-
----
-
-### [Microsoft Project](connectors/office365project.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Project](solutions/microsoft-project.md)
-
-**Tables (1):** `ProjectActivity`
-
-Microsoft Project (MSP) is a project management software solution. Depending on your plan, Microsoft Project lets you plan projects, assign tasks, manage resources, create reports and more. This connector allows you to stream your Azure Project audit logs into Microsoft Sentinel in order to track your project activities.
-
-[→ View full connector details](connectors/office365project.md)
 
 ---
 
@@ -3727,28 +3272,6 @@ The [Netskope Web Transactions](https://docs.netskope.com/en/netskope-help/data-
 
 ---
 
-### [Network Security Groups](connectors/azurensg.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Azure Network Security Groups](solutions/azure-network-security-groups.md)
-
-**Tables (1):** `AzureDiagnostics`
-
-Azure network security groups (NSG) allow you to filter network traffic to and from Azure resources in an Azure virtual network. A network security group includes rules that allow or deny traffic to a virtual network subnet, network interface, or both.
-
-When you enable logging for an NSG, you can gather the following types of resource log information:
-
-- **Event:** Entries are logged for which NSG rules are applied to VMs, based on MAC address.
-- **Rule counter:** Contains entries for how many times each NSG rule is applied to deny or allow traffic. The status for these rules is collected every 300 seconds.
-
-
-This connector lets you stream your NSG diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223718&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/azurensg.md)
-
----
-
 ### [Noname Security for Microsoft Sentinel](connectors/nonamesecuritymicrosoftsentinel.md)
 
 **Publisher:** Noname Security
@@ -3846,20 +3369,6 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 Onapsis Defend Integration is aimed at forwarding alerts and logs collected and detected by Onapsis Platform into Microsoft Sentinel SIEM
 
 [→ View full connector details](connectors/onapsis.md)
-
----
-
-### [One Identity Safeguard](connectors/oneidentity.md)
-
-**Publisher:** One Identity LLC.
-
-**Solution:** [OneIdentity](solutions/oneidentity.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-The One Identity Safeguard (CEF) Sentinel data connector enhances the standard Common Event Format (CEF) connector with Safeguard for Privileged Sessions-specific dashboards. Use this connector to easily start utilizing the events generated by your device for visualization, alerts, investigations and more.
-
-[→ View full connector details](connectors/oneidentity.md)
 
 ---
 
@@ -4316,6 +3825,20 @@ The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest se
 
 ---
 
+### [SOC Prime Platform Audit Logs Data Connector](connectors/socprimeauditlogsdataconnector.md)
+
+**Publisher:** Microsoft
+
+**Solution:** [SOC Prime CCF](solutions/soc-prime-ccf.md)
+
+**Tables (1):** `SOCPrimeAuditLogs_CL`
+
+The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
+
+[→ View full connector details](connectors/socprimeauditlogsdataconnector.md)
+
+---
+
 ### [SaaS Security](connectors/valencesecurity.md)
 
 **Publisher:** Valence Security
@@ -4369,20 +3892,6 @@ The Salesforce Service Cloud data connector provides the capability to ingest in
 Samsung Knox Asset Intelligence Data Connector lets you centralize your mobile security events and logs in order to view customized insights using the Workbook template, and identify incidents based on Analytics Rules templates.
 
 [→ View full connector details](connectors/samsungdcdefinition.md)
-
----
-
-### [Security Events via Legacy Agent](connectors/securityevents.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Security Events](solutions/windows-security-events.md)
-
-**Tables (1):** `SecurityEvent`
-
-You can stream all security events from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220093&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/securityevents.md)
 
 ---
 
@@ -4685,36 +4194,6 @@ The [StyxView Alerts](https://styxintel.com/) data connector enables seamless in
 
 ---
 
-### [Subscription-based Microsoft Defender for Cloud (Legacy)](connectors/azuresecuritycenter.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Microsoft Defender for Cloud](solutions/microsoft-defender-for-cloud.md)
-
-**Tables (1):** `SecurityAlert`
-
-Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your security alerts from Microsoft Defender for Cloud into Microsoft Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
-
-[For more information>](https://aka.ms/ASC-Connector)
-
-[→ View full connector details](connectors/azuresecuritycenter.md)
-
----
-
-### [Symantec Integrated Cyber Defense Exchange](connectors/symantec.md)
-
-**Publisher:** Symantec
-
-**Solution:** [Symantec Integrated Cyber Defense](solutions/symantec-integrated-cyber-defense.md)
-
-**Tables (1):** `SymantecICDx_CL`
-
-Symantec ICDx connector allows you to easily connect your Symantec security solutions logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.
-
-[→ View full connector details](connectors/symantec.md)
-
----
-
 ### [Syslog via AMA](connectors/syslogama.md)
 
 **Publisher:** Microsoft
@@ -4932,20 +4411,6 @@ Microsoft Sentinel integrates with TAXII 2.1 servers to enable exporting of your
 
 ---
 
-### [Transmit Security Connector](connectors/transmitsecurity.md)
-
-**Publisher:** TransmitSecurity
-
-**Solution:** [TransmitSecurity](solutions/transmitsecurity.md)
-
-**Tables (1):** `TransmitSecurityActivity_CL`
-
-The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. [Refer to API documentation for more information](https://developer.transmitsecurity.com/). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-[→ View full connector details](connectors/transmitsecurity.md)
-
----
-
 ### [Trend Micro Cloud App Security](connectors/trendmicrocas.md)
 
 **Publisher:** Trend Micro
@@ -5146,97 +4611,6 @@ VirtualMetric Director Proxy deploys an Azure Function App to securely bridge Vi
 
 ## W
 
-### [Windows DNS Events via AMA](connectors/asimdnsactivitylogs.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Server DNS](solutions/windows-server-dns.md)
-
-**Tables (1):** `ASimDnsActivityLogs`
-
-The Windows DNS log connector allows you to easily filter and stream all analytics logs from your Windows DNS servers to your Microsoft Sentinel workspace using the Azure Monitoring agent (AMA). Having this data in Microsoft Sentinel helps you identify issues and security threats such as:
-- Trying to resolve malicious domain names.
-- Stale resource records.
-- Frequently queried domain names and talkative DNS clients.
-- Attacks performed on DNS server.
-
-You can get the following insights into your Windows DNS servers from Microsoft Sentinel:
-- All logs centralized in a single place.
-- Request load on DNS servers.
-- Dynamic DNS registration failures.
-
-Windows DNS events are supported by Advanced SIEM Information Model (ASIM) and stream data into the ASimDnsActivityLogs table. [Learn more](https://docs.microsoft.com/azure/sentinel/normalization).
-
-For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2225993&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/asimdnsactivitylogs.md)
-
----
-
-### [Windows Firewall](connectors/windowsfirewall.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Firewall](solutions/windows-firewall.md)
-
-**Tables (1):** `WindowsFirewall`
-
-Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/windowsfirewall.md)
-
----
-
-### [Windows Firewall Events via AMA](connectors/windowsfirewallama.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Firewall](solutions/windows-firewall.md)
-
-**Tables (1):** `ASimNetworkSessionLogs`
-
-Windows Firewall is a Microsoft Windows application that filters information coming to your system from the internet and blocking potentially harmful programs. The firewall software blocks most programs from communicating through the firewall. To stream your Windows Firewall application logs collected from your machines, use the Azure Monitor agent (AMA) to stream those logs to the Microsoft Sentinel workspace.
-
-A configured data collection endpoint (DCE) is required to be linked with the data collection rule (DCR) created for the AMA to collect logs. For this connector, a DCE is automatically created in the same region as the workspace. If you already use a DCE stored in the same region, it's possible to change the default created DCE and use your existing one through the API. DCEs can be located in your resources with **SentinelDCE** prefix in the resource name.
-
-For more information, see the following articles:
-- [Data collection endpoints in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview?tabs=portal)
-- [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
-
-[→ View full connector details](connectors/windowsfirewallama.md)
-
----
-
-### [Windows Forwarded Events](connectors/windowsforwardedevents.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Forwarded Events](solutions/windows-forwarded-events.md)
-
-**Tables (1):** `WindowsEvent`
-
-You can stream all Windows Event Forwarding (WEF) logs from the Windows Servers connected to your Microsoft Sentinel workspace using Azure Monitor Agent (AMA).
-	This connection enables you to view dashboards, create custom alerts, and improve investigation.
-	This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219963&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/windowsforwardedevents.md)
-
----
-
-### [Windows Security Events via AMA](connectors/windowssecurityevents.md)
-
-**Publisher:** Microsoft
-
-**Solution:** [Windows Security Events](solutions/windows-security-events.md)
-
-**Tables (1):** `SecurityEvent`
-
-You can stream all security events from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220225&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-[→ View full connector details](connectors/windowssecurityevents.md)
-
----
-
 ### [WithSecure Elements API (Azure Function)](connectors/withsecureelementsviafunction.md)
 
 **Publisher:** WithSecure
@@ -5377,7 +4751,7 @@ The [Zoom](https://zoom.us/) Reports data connector provides the capability to i
 
 ## Deprecated Connectors
 
-The following **142 connector(s)** are deprecated:
+The following **140 connector(s)** are deprecated:
 
 ### [[DEPRECATED] Cisco Secure Endpoint (AMP)](connectors/ciscosecureendpoint.md)
 
@@ -5784,20 +5158,6 @@ The Barracuda Web Application Firewall (WAF) connector allows you to easily conn
 [For more information >​](https://aka.ms/CEF-Barracuda)
 
 [→ View full connector details](connectors/barracuda.md)
-
----
-
-### [[Deprecated] Blackberry CylancePROTECT](connectors/blackberrycylanceprotect.md)
-
-**Publisher:** Blackberry
-
-**Solution:** [Blackberry CylancePROTECT](solutions/blackberry-cylanceprotect.md)
-
-**Tables (1):** `Syslog`
-
-The [Blackberry CylancePROTECT](https://www.blackberry.com/us/en/products/blackberry-protect) connector allows you to easily connect your CylancePROTECT logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-[→ View full connector details](connectors/blackberrycylanceprotect.md)
 
 ---
 
@@ -6520,6 +5880,20 @@ The Illusive Platform Connector allows you to share Illusive's attack surface an
 The Illusive Platform Connector allows you to share Illusive's attack surface analysis data and incident logs with Microsoft Sentinel and view this information in dedicated dashboards that offer insight into your organization's attack surface risk (ASM Dashboard) and track unauthorized lateral movement in your organization's network (ADS Dashboard).
 
 [→ View full connector details](connectors/illusiveattackmanagementsystem.md)
+
+---
+
+### [[Deprecated] Infoblox Cloud Data Connector via AMA](connectors/infobloxclouddataconnectorama.md)
+
+**Publisher:** Infoblox
+
+**Solution:** [Infoblox Cloud Data Connector](solutions/infoblox-cloud-data-connector.md)
+
+**Tables (1):** `CommonSecurityLog`
+
+The Infoblox Cloud Data Connector allows you to easily connect your Infoblox BloxOne data with Microsoft Sentinel. By connecting your logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
+
+[→ View full connector details](connectors/infobloxclouddataconnectorama.md)
 
 ---
 
@@ -7342,34 +6716,6 @@ The Common Event Format (CEF) provides natively search & correlation, alerting a
 The [Zscaler Private Access (ZPA)](https://help.zscaler.com/zpa/what-zscaler-private-access) data connector provides the capability to ingest [Zscaler Private Access events](https://help.zscaler.com/zpa/log-streaming-service) into Microsoft Sentinel. Refer to [Zscaler Private Access documentation](https://help.zscaler.com/zpa) for more information.
 
 [→ View full connector details](connectors/zscalerprivateaccess.md)
-
----
-
-### [[Deprecated] Zscaler via AMA](connectors/zscalerama.md)
-
-**Publisher:** Zscaler
-
-**Solution:** [Zscaler Internet Access](solutions/zscaler-internet-access.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-The Zscaler data connector allows you to easily connect your Zscaler Internet Access (ZIA) logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.  Using Zscaler on Microsoft Sentinel will provide you more insights into your organization’s Internet usage, and will enhance its security operation capabilities.​
-
-[→ View full connector details](connectors/zscalerama.md)
-
----
-
-### [[Deprecated] Zscaler via Legacy Agent](connectors/zscaler.md)
-
-**Publisher:** Zscaler
-
-**Solution:** [Zscaler Internet Access](solutions/zscaler-internet-access.md)
-
-**Tables (1):** `CommonSecurityLog`
-
-The Zscaler data connector allows you to easily connect your Zscaler Internet Access (ZIA) logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.  Using Zscaler on Microsoft Sentinel will provide you more insights into your organization’s Internet usage, and will enhance its security operation capabilities.​
-
-[→ View full connector details](connectors/zscaler.md)
 
 ---
 

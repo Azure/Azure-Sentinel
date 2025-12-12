@@ -18,8 +18,8 @@ This table is used by the following solutions:
 
 This table is ingested by the following connectors:
 
-- [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md)
-- [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
+- [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md)
+- [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
 
 ---
 
