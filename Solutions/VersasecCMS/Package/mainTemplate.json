@@ -1,0 +1,808 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Versasec AB - info@versasec.com",
+    "comments": "Solution template for VersasecCMS"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "info@versasec.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "VersasecCMS",
+    "_solutionVersion": "3.0.0",
+    "solutionId": ".",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "VersasecCmsCCP",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "VersasecCmsCCPConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "VersasecCms",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "VersasecCmsCCP",
+                  "title": "VersasecCms",
+                  "publisher": "Versasec AB",
+                  "descriptionMarkdown": "The VersasecCms data connector allows ingesting logs into Microsoft Sentinel.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total System Logs",
+                      "legend": "Versasec Cms SysLog",
+                      "baseQuery": "VersasecCmsSysLogs_CL"
+                    },
+                    {
+                      "metricName": "Total Error Logs",
+                      "legend": "Versasec Cms ErrorLog",
+                      "baseQuery": "VersasecCmsErrorLogs_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "View last 50 System Logs",
+                      "query": "VersasecCmsSysLogs_CL | take 50"
+                    },
+                    {
+                      "description": "View last 50 Error Logs",
+                      "query": "VersasecCmsErrorLogs_CL | take 50"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "VersasecCmsSysLogs_CL",
+                      "lastDataReceivedQuery": "VersasecCmsSysLogs_CL | summarize Time = max(TimeGenerated)"
+                    },
+                    {
+                      "name": "VersasecCmsErrorLogs_CL",
+                      "lastDataReceivedQuery": "VersasecCmsErrorLogs_CL | summarize Time = max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "VersasecCmsSysLogs_CL | summarize count() by TimeGenerated"
+                      ]
+                    }
+                  ],
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Configuration",
+                      "description": "Enter credentials for VersasecCms.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "label": "Management URL",
+                            "type": "text",
+                            "name": "managementUrl"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "API Base Path",
+                            "type": "text",
+                            "name": "apiBasePath"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "API Token",
+                            "type": "securestring",
+                            "name": "apiToken"
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Polling Interval (Minutes)",
+                            "type": "int",
+                            "name": "pollingInterval",
+                            "defaultValue": 5
+                          },
+                          "type": "Textbox"
+                        },
+                        {
+                          "parameters": {
+                            "label": "connect",
+                            "name": "connectButton"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Versasec AB",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "Tier": "Partner",
+                  "Name": "Versasec Support",
+                  "Email": "support@example.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "VersasecCms-DCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[resourceId(parameters('subscription'), parameters('resourceGroupName'), 'Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+                "streamDeclarations": {
+                  "Custom-VersasecCmsSysLogs_API": {
+                    "columns": [
+                      {
+                        "name": "rowData",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-VersasecCmsErrorLogs_API": {
+                    "columns": [
+                      {
+                        "name": "rowData",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "ws"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-VersasecCmsSysLogs_API"
+                    ],
+                    "destinations": [
+                      "ws"
+                    ],
+                    "transformKql": "source | project SyslogID = toreal(rowData[0]), SyslogIDCode = tostring(rowData[1]), SyslogIDStrg = tostring(rowData[2]), TimeGenerated = todatetime(rowData[3]), ID = toreal(rowData[4]), ComputerName = tostring(rowData[5]), CLID = tostring(rowData[6]), Param1 = tostring(rowData[7]), UserID = toreal(rowData[8]), TicketRef = tostring(rowData[9])",
+                    "outputStream": "[concat('Custom-', variables('syslogTableName'))]"
+                  },
+                  {
+                    "streams": [
+                      "Custom-VersasecCmsErrorLogs_API"
+                    ],
+                    "destinations": [
+                      "ws"
+                    ],
+                    "transformKql": "source | project CmsErrorID = toreal(rowData[0]), CmsErrorIDCode = tostring(rowData[1]), CmsErrorIDStrg = tostring(rowData[2]), TimeGenerated = todatetime(rowData[3]), ID = toreal(rowData[4]), ComputerName = tostring(rowData[5]), CLID = tostring(rowData[6]), ErrorStrg = tostring(rowData[7]), UserID = toreal(rowData[8]), SupportTicket = tostring(rowData[9]), TicketRef = tostring(rowData[10])",
+                    "outputStream": "[concat('Custom-', variables('errorlogTableName'))]"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "VersasecCmsErrorLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "VersasecCmsErrorLogs_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "CmsErrorID",
+                      "type": "real"
+                    },
+                    {
+                      "name": "CmsErrorIDCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CmsErrorIDStrg",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ID",
+                      "type": "real"
+                    },
+                    {
+                      "name": "ComputerName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CLID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ErrorStrg",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserID",
+                      "type": "real"
+                    },
+                    {
+                      "name": "SupportTicket",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TicketRef",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "VersasecCmsSysLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "VersasecCmsSysLogs_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SyslogID",
+                      "type": "real"
+                    },
+                    {
+                      "name": "SyslogIDCode",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SyslogIDStrg",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ID",
+                      "type": "real"
+                    },
+                    {
+                      "name": "ComputerName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CLID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Param1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserID",
+                      "type": "real"
+                    },
+                    {
+                      "name": "TicketRef",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "VersasecCmsCCP",
+          "title": "VersasecCms",
+          "publisher": "Versasec AB",
+          "descriptionMarkdown": "The VersasecCms data connector allows ingesting logs into Microsoft Sentinel.",
+          "graphQueries": [
+            {
+              "metricName": "Total System Logs",
+              "legend": "Versasec Cms SysLog",
+              "baseQuery": "VersasecCmsSysLogs_CL"
+            },
+            {
+              "metricName": "Total Error Logs",
+              "legend": "Versasec Cms ErrorLog",
+              "baseQuery": "VersasecCmsErrorLogs_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "View last 50 System Logs",
+              "query": "VersasecCmsSysLogs_CL | take 50"
+            },
+            {
+              "description": "View last 50 Error Logs",
+              "query": "VersasecCmsErrorLogs_CL | take 50"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "VersasecCmsSysLogs_CL",
+              "lastDataReceivedQuery": "VersasecCmsSysLogs_CL | summarize Time = max(TimeGenerated)"
+            },
+            {
+              "name": "VersasecCmsErrorLogs_CL",
+              "lastDataReceivedQuery": "VersasecCmsErrorLogs_CL | summarize Time = max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "VersasecCmsSysLogs_CL | summarize count() by TimeGenerated"
+              ]
+            }
+          ],
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Configuration",
+              "description": "Enter credentials for VersasecCms.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "label": "Management URL",
+                    "type": "text",
+                    "name": "managementUrl"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "API Base Path",
+                    "type": "text",
+                    "name": "apiBasePath"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "API Token",
+                    "type": "securestring",
+                    "name": "apiToken"
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "Polling Interval (Minutes)",
+                    "type": "int",
+                    "name": "pollingInterval",
+                    "defaultValue": 5
+                  },
+                  "type": "Textbox"
+                },
+                {
+                  "parameters": {
+                    "label": "connect",
+                    "name": "connectButton"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Versasec AB",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "Tier": "Partner",
+          "Name": "Versasec Support",
+          "Email": "support@example.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "VersasecCms",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "VersasecCms",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "managementUrl": {
+              "defaultValue": "managementUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiBasePath": {
+              "defaultValue": "apiBasePath",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apiToken": {
+              "defaultValue": "apiToken",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "pollingInterval": {
+              "defaultValue": "pollingInterval",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Versasec AB",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "Tier": "Partner",
+                  "Name": "Versasec Support",
+                  "Email": "support@example.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'VersasecCmsPoller_syslogs_created_events', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "VersasecCmsCCP",
+                "dataType": "VersasecCms API",
+                "dcrConfig": {
+                  "streamName": "Custom-VersasecCmsSysLogs_API",
+                  "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2022-06-01').logsIngestion.endpoint]",
+                  "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'VersasecCms-DCR'), '2022-06-01').immutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[parameters('apiToken')]",
+                  "ApiKeyName": "X-VSECCMS-AUTHTICKET"
+                },
+                "request": {
+                  "apiEndpoint": "[concat(parameters('managementUrl'), parameters('apiBasePath'), 'QueryCmsPersistenceData')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": "[parameters('pollingInterval')]",
+                  "httpMethod": "POST",
+                  "contentType": "application/json",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss",
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "[format('{{\"tableName\": \"CvSysLog\", \"queryStatement\": \"StartOperationAnd false AddOperationGreaterEqual false TimeStamp false \\\"T{0}\\\" FinishLogicalOperation\", \"flags\": 0, \"resultPosition\": 0, \"resultAmount\": 100}}', '{_QueryWindowStartTime}')]"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "NextPageTokenJsonPath": "$.pagination.nextCursor",
+                  "NextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.rows"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'VersasecCmsPoller_errorlogs_created_events', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "VersasecCmsCCP",
+                "dataType": "VersasecCms API",
+                "dcrConfig": {
+                  "streamName": "Custom-VersasecCmsErrorLogs_API",
+                  "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2022-06-01').logsIngestion.endpoint]",
+                  "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'VersasecCms-DCR'), '2022-06-01').immutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[parameters('apiToken')]",
+                  "ApiKeyName": "X-VSECCMS-AUTHTICKET"
+                },
+                "request": {
+                  "apiEndpoint": "[concat(parameters('managementUrl'), parameters('apiBasePath'), 'QueryCmsPersistenceData')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": "[parameters('pollingInterval')]",
+                  "httpMethod": "POST",
+                  "contentType": "application/json",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss",
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                  },
+                  "isPostPayloadJson": true,
+                  "queryParametersTemplate": "[format('{{\"tableName\": \"CvErrorLog\", \"queryStatement\": \"StartOperationAnd false AddOperationGreaterEqual false TimeStamp false \\\"T{0}\\\" FinishLogicalOperation\", \"flags\": 0, \"resultPosition\": 0, \"resultAmount\": 100}}', '{_QueryWindowStartTime}')]"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "NextPageTokenJsonPath": "$.pagination.nextCursor",
+                  "NextPageParaName": "cursor"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.rows"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "VersasecCMS",
+        "publisherDisplayName": "Versasec Support",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VersasecCMS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Ingests Versasec Cms system logs into Microsoft Sentinel using a REST API poller (CCF).</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://versasec.com/wp-content/uploads/2025/09/versasec-logo.png\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "VersasecCMS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Versasec AB",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Versasec Support",
+          "email": "support@example.com",
+          "tier": "Partner"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "categories": {
+          "domains": [
+            "Identity and Access Management"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
