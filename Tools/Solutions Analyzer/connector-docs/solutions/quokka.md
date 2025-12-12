@@ -21,6 +21,26 @@ This solution provides **1 data connector(s)**.
 
 Ingest Qscout application events into Microsoft Sentinel
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): Read and Write permissions are required
+
+**Custom Permissions:**
+- **Qscout organization id**: The API requires your organization ID in Qscout.
+- **Qscout organization API key**: The API requires your organization API key in Qscout.
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+>**NOTE:** This connector uses Codeless Connector Framework (CCF) to connect to the Qscout app events feed and ingest data into Microsoft Sentinel
+
+Provide the required values below:
+- **Qscout Organization ID**: 123456
+- **Qscout Organization API Key**: abcdxyz
+- Click 'Connect' to establish connection
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `QscoutAppEvents_CL` |

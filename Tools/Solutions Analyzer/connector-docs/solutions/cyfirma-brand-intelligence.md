@@ -19,6 +19,23 @@ This solution provides **1 data connector(s)**.
 
 **Publisher:** Microsoft
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): Read and Write permissions are required.
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. CYFIRMA Brand Intelligence**
+
+Connect to CYFIRMA Brand Intelligence to ingest alerts data into Microsoft Sentinel. This connector uses the DeCYFIR/DeTCT Alerts API to retrieve logs and supports DCR-based ingestion time transformations, parsing security data into custom tables during ingestion. This enhances performance and efficiency by eliminating the need for query-time parsing.
+- **CYFIRMA API URL**: https://decyfir.cyfirma.com
+- **CYFIRMA API Key**: (password field)
+- **API Delta**: API Delta
+- Click 'Connect' to establish connection
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `CyfirmaBIDomainITAssetAlerts_CL` |
