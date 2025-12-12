@@ -37,6 +37,24 @@ For more information, see the following articles:
 
 - [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace data sources** (Workspace): read and write permissions.
+
+**Custom Permissions:**
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Enable data collection rule**
+
+> Windows Firewall events are collected only from Windows agents.
+- Configure WindowsFirewallAma data connector
+
+- **Create data collection rule**
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `ASimNetworkSessionLogs` |
