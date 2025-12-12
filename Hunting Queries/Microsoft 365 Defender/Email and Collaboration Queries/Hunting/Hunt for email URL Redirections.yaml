@@ -1,0 +1,46 @@
+
+id: 7f2c9a4e-8d61-4b6e-9e33-4d2a7c5e91af
+name: Hunt for email URL Redirections
+description: |
+  This KQL Query helps to understand all the URL Redirections from URLs received by Email.
+description-detailed: |
+ This KQL Query helps to understand all the URL Redirections from URLs received by Email using the UrlChainId identifier on KQL that groups together all URLs that belong to the same “click/redirect chain”. When an message contains a URL, that URL may redirect through several intermediate URLs (trackers, shorteners, phishing, etc.) before land on the final site. KQL builds a URL chain from the original URL in the email through each redirect hop. All URLs that are part of a single chain share the same UrlChainId and for each hop. On the other hand, UrlChainPosition register the position of every URL, the original one = value 0 and the other redirections tagged with next numbers(1, 2, etc. ) The following query includes different options to classify the insights into four categories:
+  - Tracking Domains
+  - Redirecting to Different Countries
+  - Redirecting to Different Domains
+  - Number of Redirections
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - PHishing
+relevantTechniques:
+  - T1566
+query: |
+let TrackingDomains = dynamic(["click/","bit.ly","bitly.com","tinyurl.com","goo.gl","t.co","ow.ly","is.gd","buff.ly","lnk.click","lnk.to","mjt.lu","mailjet.com","list-manage.com","mailchimp.com","mcsv.net","mailgun.org","sendgrid.net","sendgrid.com","createsend.com","createsend1.com","rs6.net","campaignsapp.com","mlsend.com","sendinblue.com","sibautomation.com","mailerlite.com","hs-sites.com","hscta.net","hubspot.com","hubspotlinks.com","mkto.com","mktg.com","pardot.com","eloqua.com","eloquaservice.com","activehosted.com","acems.ac","getvero.com","iterable.com","inflection.io","bnc.lt","app.link","substack.com","substackcdn.com","getrevue.co","shop.app","shopifyemail.com","klaviyo-mail.com","klaviyo.com","knowbe4.com","kb4.io","phishme.com","cofense.com"]);
+EmailEvents 
+ | where Timestamp > ago(1d)
+ | extend IPSender = iff(isnotempty(SenderIPv4),SenderIPv4,SenderIPv6) 
+ | extend GeoIPData = tostring(geo_info_from_ip_address(IPSender).country)
+ | join kind=inner ( EmailUrlInfo | where isnotempty(UrlChainId)) on NetworkMessageId
+// Pivot URLs by position
+| summarize
+    UrlPos_0  = anyif(Url, UrlChainPosition == 0),UrlPos_1= anyif(Url, UrlChainPosition == 1),UrlPos_2= anyif(Url, UrlChainPosition == 2),UrlPos_3   = anyif(Url, UrlChainPosition == 3),
+    IP_Url_0  = anyif(IPSender, UrlChainPosition == 0),IP_Url_1= anyif(IPSender, UrlChainPosition == 1),IP_Url_2= anyif(IPSender, UrlChainPosition == 2),IP_Url_3= anyif(IPSender, UrlChainPosition == 3),
+    C_Url_0   = anyif(GeoIPData, UrlChainPosition == 0),C_Url_1= anyif(GeoIPData, UrlChainPosition == 1),C_Url_2= anyif(GeoIPData, UrlChainPosition == 2),C_Url_3= anyif(GeoIPData, UrlChainPosition == 3),
+    URL_Redirections  = dcount(UrlChainPosition),Senders=dcount(SenderFromAddress),Recipients = dcount(RecipientEmailAddress),IP_Country= make_set(strcat(SenderIPv4, " ", GeoIPData)) by UrlChainId,ThreatTypes
+    | where isnotempty(UrlPos_0)
+    | extend Tracking_Marketing_URL0 = (iff(UrlPos_0 has_any (TrackingDomains),"Yes","Not")),Tracking_Marketing_URL1 =(iff(UrlPos_1 has_any (TrackingDomains),"Yes","Not")),Tracking_Marketing_URL2 = (iff(UrlPos_2 has_any (TrackingDomains),"Yes","Not")),Tracking_Marketing_URL3 = (iff(UrlPos_3 has_any (TrackingDomains),"Yes","Not"))
+    | summarize  by Senders,URL_Redirections,UrlPos_0,IP_Url_0,C_Url_0,Tracking_Marketing_URL0, UrlPos_1,IP_Url_1,C_Url_1,Tracking_Marketing_URL1, UrlPos_2,IP_Url_2,C_Url_2,Tracking_Marketing_URL2, UrlPos_3,IP_Url_3,C_Url_3,Tracking_Marketing_URL3,Recipients,tostring(IP_Country),UrlChainId,ThreatTypes
+    | extend Domain_URL0 = tostring(parse_url(UrlPos_0).Host), Domain_URL1 = tostring(parse_url(UrlPos_1).Host), Domain_URL2 = tostring(parse_url(UrlPos_2).Host), Domain_URL3 = tostring(parse_url(UrlPos_3).Host)
+    | extend Info="ℹ️",0_ = "0️⃣",1_ = "1️⃣",2_ = "2️⃣",3_ ="3️⃣" //Icons
+//Search for specific URL | extend URL = "office" | where UrlPos_0 contains URL or UrlPos_1 contains URL or UrlPos_2 contains URL or UrlPos_3 contains URL
+//Search for URL on distinct countries | where (C_Url_0 !has C_Url_1 or C_Url_0 !has C_Url_2 or C_Url_0 !has C_Url_3 or C_Url_1 !has C_Url_2 or C_Url_1 !has C_Url_3 or C_Url_2 !has C_Url_3) 
+//Search for URL that contains specific countries | where   (C_Url_0  !in ("Switzerland","Germany")) or (C_Url_1 in ("Russia","Singapore"))
+//Search for URL on distinct domains | where (Domain_URL0 !has Domain_URL1 or Domain_URL0 !has Domain_URL1 or Domain_URL0 !has Domain_URL3 or Domain_URL1 !has Domain_URL2 or Domain_URL1 !has Domain_URL3 or Domain_URL2 !has Domain_URL3) 
+//Search for number of redirections | where URL_Redirections > 2 
+   | project Info,URL_Redirections,ThreatTypes,Senders, Recipients,0_,Domain_URL0,UrlPos_0,IP_Url_0,C_Url_0, Tracking_Marketing_URL0,1_,Domain_URL1,UrlPos_1,IP_Url_1,C_Url_1,Tracking_Marketing_URL1,2_,Domain_URL2,UrlPos_2,IP_Url_2,C_Url_2, Tracking_Marketing_URL2,3_,Domain_URL3,UrlPos_3,IP_Url_3,C_Url_3,Tracking_Marketing_URL3
+version: 1.0.0
+
+
