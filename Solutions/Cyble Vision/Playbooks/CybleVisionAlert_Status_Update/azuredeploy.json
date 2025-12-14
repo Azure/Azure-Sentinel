@@ -10,11 +10,13 @@
         ],
         "prerequisitesDeployTemplateFile": "None",
         "lastUpdateTime": "2025-12-12T10:02:00.000Z",
-        "entities": [ "Malware" ],
-        "tags": [ 
+        "entities": [
+            "Malware"
+        ],
+        "tags": [
             "Alerts",
             "Cyble Vision"
-            ],
+        ],
         "support": {
             "tier": "Partner",
             "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
@@ -23,14 +25,14 @@
             "name": "Cyble Inc."
         },
         "releaseNotes": [
-      {
-        "version": "1.0.0",
-        "title": "Cyble-Vision-Alert-Status",
-        "notes": [
-          "Initial version"
+            {
+                "version": "1.0.0",
+                "title": "Cyble-Vision-Alert-Status",
+                "notes": [
+                    "Initial version"
+                ]
+            }
         ]
-      }
-    ]
     },
     "parameters": {
         "PlaybookName": {
@@ -47,6 +49,19 @@
     },
     "resources": [
         {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                }
+            }
+        },
+        {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
@@ -56,12 +71,30 @@
             },
             "properties": {
                 "state": "Enabled",
+                "parameters": {
+                    "CybleAPIkey": {
+                        "type": "SecureString",
+                        "value": "[parameters('CybleAPIkey')]"
+                    },
+                    "$connections": {
+                        "type": "Object",
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "alternativeParameterValues": {
+                                    "authenticationType": "ManagedServiceIdentity"
+                                }
+                            }
+                        }
+                    }
+                },
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "CybleAPIkey": {
-                            "defaultValue": "[parameters('CybleAPIkey')]",
                             "type": "SecureString"
                         },
                         "$connections": {
@@ -176,7 +209,7 @@
                             },
                             "type": "If"
                         },
-                        "Status_Active_UNREVIEWED": {
+                        "Status_New_UNREVIEWED": {
                             "actions": {
                                 "UNREVIEWED": {
                                     "type": "SetVariable",
@@ -197,16 +230,16 @@
                             "expression": {
                                 "and": [
                                     {
-                                        "equals": [
+                                        "contains": [
                                             "@triggerBody()?['object']?['properties']?['status']",
-                                            "Active"
+                                            "New"
                                         ]
                                     }
                                 ]
                             },
                             "type": "If"
                         },
-                        "Status_Open_UNDERREVIEW": {
+                         "Status_Active_UNDERREVIEW": {
                             "actions": {
                                 "UNDER_REVIEW": {
                                     "type": "SetVariable",
@@ -217,7 +250,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Status_Active_UNREVIEWED": [
+                                "Status_New_UNREVIEWED": [
                                     "Succeeded"
                                 ]
                             },
@@ -227,9 +260,9 @@
                             "expression": {
                                 "and": [
                                     {
-                                        "equals": [
+                                        "contains": [
                                             "@triggerBody()?['object']?['properties']?['status']",
-                                            "Open"
+                                            "Active"
                                         ]
                                     }
                                 ]
@@ -247,7 +280,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Status_Open_UNDERREVIEW": [
+                                "Status_Active_UNDERREVIEW": [
                                     "Succeeded"
                                 ]
                             },
@@ -265,23 +298,6 @@
                                 ]
                             },
                             "type": "If"
-                        },
-                        "Get_Current_Cyble-copy": {
-                            "runAfter": {
-                                "Status_Closed_RESOLVED": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "uri": "https://bifrost.cyble.ai/ar-apollo-v2/api/v2/y/alerts/@{variables('var_alertId')}////",
-                                "method": "PUT",
-                                "headers": {
-                                    "Accept": "application/json",
-                                    "Authorization": "@{concat('Bearer', parameters('CybleAPIkey'))}"
-                                },
-                                "body": "\"alerts\": [\n                    {\n                      \"id\": \"@{variables('var_alertId')}\",\n                      \"status\": \"@{variables('var_cybleStatus')}\",\n                      \"service\": \"@{variables('var_service')}\"\n                      \"severity\": \"@{variables('var_MappedSeverity')}\" \n                    }\n                  ]"
-                            }
                         },
                         "For_each_": {
                             "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
@@ -361,6 +377,18 @@
                                         "name": "var_alertId",
                                         "value": "@body('Parse_additional_data')?['AlertID'][0]"
                                     }
+                                },
+                                "set_service": {
+                                    "runAfter": {
+                                        "Set_AlertID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_service",
+                                        "value": "@body('Parse_additional_data')?['Service'][0]"
+                                    }
                                 }
                             },
                             "runAfter": {
@@ -393,23 +421,70 @@
                                         "name": "var_MappedSeverity",
                                         "type": "string",
                                         "value": "@{triggerBody()?['object']?['properties']?['severity']}"
+                                    },
+                                    {
+                                        "name": "var_comm",
+                                        "type": "string"
                                     }
                                 ]
+                            }
+                            },
+                        "post_comment-copy": {
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://bifrost.cyble.ai/ar-apollo-v2/api/v2/y/alerts/@{variables('var_alertId')}//",
+                                "method": "POST",
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Authorization": "@{concat('Bearer', parameters('CybleAPIkey'))}"
+                                },
+                                "body": {
+                                    "content": "@{variables('var_comm')}",
+                                    "service": "@{variables('var_service')}"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "update_alert_details": {
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://bifrost.cyble.ai/ar-apollo-v2/api/v2/y/alerts/@{variables('var_alertId')}////",
+                                "method": "PUT",
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Authorization": "@{concat('Bearer', parameters('CybleAPIkey'))}"
+                                },
+                                "body": "\"alerts\": [\n                    {\n                      \"id\": \"@{variables('var_alertId')}\",\n                      \"status\": \"@{variables('var_cybleStatus')}\",\n                      \"service\": \"@{variables('var_service')}\"\n                      \"severity\": \"@{variables('var_MappedSeverity')}\" \n                    }\n                  ]"
+                            }
+                        },
+                        "Set_variable": {
+                            "runAfter": {
+                                "Status_Closed_RESOLVED": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "var_comm",
+                                "value": "@concat(\n  'This alert was updated by ',\n  coalesce(triggerBody()?['object']?['properties']?['owner']?['assignedTo'], 'Unknown'),\n  '. Status updated to ',\n  variables('var_cybleStatus'),\n  '. Comment: ',\n  coalesce(\n    triggerBody()?['incidentUpdates']?['comments']?[0]?['properties']?['message'],\n    ''\n  )\n)"
                             }
                         }
                     },
                     "outputs": {}
-                },
-                "parameters": {
-                    "$connections": {
-                        "value": {
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftsentinelConnectionName'))]",
-                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
-                                "connectionProperties": {}
-                            }
-                        }
-                    }
                 }
             }
         }
