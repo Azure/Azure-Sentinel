@@ -317,14 +317,16 @@ The solution creates a User-Assigned Managed Identity with:
 
 ## Support
 
-### Cyren Support
-- **Email:** support@cyren.com
-- **Website:** https://www.cyren.com/support
-- **Documentation:** https://www.cyren.com/docs
+### Data443 Support
+- **Email:** support@data443.com
+- **Website:** https://www.data443.com
+- **Documentation:** https://www.data443.com
 
-### Microsoft Sentinel Support
-- **Documentation:** https://learn.microsoft.com/azure/sentinel/
-- **Community:** https://techcommunity.microsoft.com/t5/microsoft-sentinel/bd-p/MicrosoftSentinel
+## Additional Resources
+
+- [Cyren Threat Intelligence Platform](https://www.cyren.com/)
+- [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel/)
+- [CCF Data Connector Reference](https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference)
 
 ## Version History
 
