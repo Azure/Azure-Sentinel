@@ -1,86 +1,252 @@
 id: 37da203d-4edd-429e-83cd-fccf11e60c20
 Function:
   Title: Parser for LookoutEvents
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '3.0.0'
+  LastUpdated: '2025-11-07'
 Category: Microsoft Sentinel Parser
 FunctionName: LookoutEvents
 FunctionAlias: LookoutEvents
 FunctionQuery: |
-    let LookoutEvents_view  = view () { 
-        Lookout_CL
+    let LookoutEvents_view = view () { 
+        LookoutMtdV2_CL
         | extend 
-            EventVendor="Lookout",
-            EventProduct="Lookout Sentinel",
-    		EnterpriseName=column_ifexists('enterprise_name_s', ''),
-    		DetailsActivationStatus=column_ifexists('details_activationStatus_s', ''),
-    		DetailsSecurityStatus=column_ifexists('details_securityStatus_s', ''),
-    		DetailsProtectionStatus=column_ifexists('details_protectionStatus_s', ''),
-    		UpdatedDetails=column_ifexists('updatedDetails_s', ''),
-    		DetailsDescription=column_ifexists('details_description_s', ''),
-    		DetailsApplicationName=column_ifexists('details_applicationName_s', ''),
-    		DetailsPackageName=column_ifexists('details_packageName_s', ''),
-    		DetailsPath=column_ifexists('details_path_s', ''),
-    		DetailsFileName=column_ifexists('details_fileName_s', ''),
-    		DetailsPackageSha=column_ifexists('details_packageSha_s', ''),
-    		DetailsAttributeChanges=column_ifexists('details_attributeChanges_s', ''),
-    		Type=column_ifexists('type_s', ''),
-    		ID=column_ifexists('id_s', ''),
-            EventStartTime=column_ifexists('eventTime_t', ''),
-    		EventEndTime=column_ifexists('eventTime_t', ''),
-    		ChangeType=column_ifexists('changeType_s', ''),
-    		ActorType=column_ifexists('actor_type_s', ''),
-    		ActorId=column_ifexists('actor_id_g', ''),
-    		DetailsType=column_ifexists('details_type_s', ''),
-    		DetailsId=column_ifexists('details_id_g', ''),
-    		DetailsAction=column_ifexists('details_action_s', ''),
-    		DetailsSeverity=column_ifexists('details_severity_s', ''),
-    		DetailsClassifications=column_ifexists('details_classifications_s', ''),
-    		DetailsAssessments=column_ifexists('details_assessments_s', ''),
-    		DetailsPcpReportingReason=column_ifexists('details_pcpReportingReason_s', ''),
-    		DetailsPcpDeviceResponse=column_ifexists('details_pcpDeviceResponse_s', ''),
-    		TargetType=column_ifexists('target_type_s', ''),
-    		TargetId=column_ifexists('target_id_g', ''),
-    		TargetEmailAddress=column_ifexists('target_emailAddress_s', ''),
-    		TargetPlatform=column_ifexists('target_platform_s', ''),
-    		TargetOSVersion=column_ifexists('target_osVersion_s', ''),
-    		TargetManufacturer=column_ifexists('target_manufacturer_s', ''),
-    		TargetModel=column_ifexists('target_model_s', '')
+            // Core Event Fields
+            EventVendor = "Lookout",
+            EventProduct = "Lookout Mobile Risk API v2",
+            EventType = coalesce(log_type, event_type),  // Support both v1 and v2 API field names
+            EventId = id,
+            EventTime = TimeGenerated,
+            EventStartTime = TimeGenerated,
+            EventEndTime = TimeGenerated,
+            ChangeType = change_type,
+            
+            // Threat Information (from nested threat object)
+            ThreatId = tostring(threat.guid),
+            ThreatType = tostring(threat.type),
+            ThreatAction = tostring(threat.action),
+            ThreatSeverity = tostring(threat.severity),
+            ThreatClassification = tostring(threat.classification),
+            ThreatClassifications = tostring(threat.classifications),
+            ThreatRisk = tostring(threat.risk),
+            ThreatStatus = tostring(threat.status),
+            ThreatAssessments = tostring(threat.assessments),
+            ThreatDescription = tostring(threat.description),
+            ThreatApplicationName = tostring(threat.application_name),
+            ThreatPackageName = tostring(threat.package_name),
+            ThreatPackageSha = tostring(threat.package_sha),
+            ThreatFileName = tostring(threat.file_name),
+            ThreatFilePath = tostring(threat.file_path),
+            ThreatDetectedAt = todatetime(threat.detected_at),
+            ThreatPcpReportingReason = tostring(threat.pcp_reporting_reason),
+            ThreatPcpDeviceResponse = tostring(threat.pcp_device_response),
+            
+            // Device Information (from nested threat.device object)
+            DeviceGuid = coalesce(tostring(threat.device.guid), tostring(device.guid)),
+            DeviceEmailAddress = coalesce(tostring(threat.device.email), tostring(device.email)),
+            DevicePlatform = coalesce(tostring(threat.device.platform), tostring(device.platform)),
+            DeviceOSVersion = coalesce(tostring(threat.device.os_version), tostring(device.os_version)),
+            DeviceManufacturer = coalesce(tostring(threat.device.manufacturer), tostring(device.manufacturer)),
+            DeviceModel = coalesce(tostring(threat.device.model), tostring(device.model)),
+            DeviceSecurityStatus = coalesce(tostring(threat.device.security_status), tostring(device.security_status)),
+            DeviceActivationStatus = coalesce(tostring(threat.device.activation_status), tostring(device.activation_status)),
+            DeviceSeverity = tostring(threat.device.severity),
+            DeviceStatus = tostring(threat.device.status),
+            DeviceType = tostring(threat.device.type),
+            
+            // Threat Details (from nested threat.details object)
+            ThreatNetworkSSID = tostring(threat.details.network_ssid),
+            ThreatDNSIpAddresses = tostring(threat.details.dns_ip_addresses),
+            ThreatMacAddress = tostring(threat.details.mac_address),
+            ThreatProxyPort = tostring(threat.details.proxy_port),
+            
+            // Actor Information (from nested actor object)
+            ActorType = tostring(actor.type),
+            ActorGuid = tostring(actor.guid),
+            ActorDeviceGuid = tostring(actor.device_guid),
+            
+            // Target Information (from nested target object)
+            TargetType = tostring(target.type),
+            TargetGuid = tostring(target.guid),
+            TargetEmailAddress = tostring(target.email_address),
+            TargetPlatform = tostring(target.platform),
+            TargetOSVersion = tostring(target.os_version),
+            TargetManufacturer = tostring(target.manufacturer),
+            TargetModel = tostring(target.model),
+            
+            // Audit Information (from nested audit object)
+            AuditType = tostring(audit.type),
+            AuditAttributeChanges = tostring(audit.attribute_changes),
+            
+            // Smishing Alert Information (from nested smishing_alert object)
+            SmishingAlertId = tostring(smishing_alert.id),
+            SmishingAlertType = tostring(smishing_alert.type),
+            SmishingAlertSeverity = tostring(smishing_alert.severity),
+            SmishingAlertDescription = tostring(smishing_alert.description),
+            SmishingAlertCategory = tostring(smishing_alert.category),
+            SmishingAlertURL = tostring(smishing_alert.url),
+            SmishingDetections = tostring(smishing_alert.detections),
+            
+            // Legacy field mappings for backward compatibility
+            Type = coalesce(log_type, event_type),
+            ID = id,
+            EnterpriseName = enterprise_guid,
+            DetailsSeverity = tostring(threat.severity),
+            DetailsClassifications = tostring(threat.classifications),
+            DetailsActivationStatus = tostring(threat.device.activation_status),
+            DetailsSecurityStatus = tostring(threat.device.security_status),
+            DetailsDescription = tostring(threat.description),
+            DetailsApplicationName = tostring(threat.application_name),
+            DetailsPackageName = tostring(threat.package_name),
+            DetailsFileName = tostring(threat.file_name),
+            DetailsPath = tostring(threat.file_path),
+            DetailsPackageSha = tostring(threat.package_sha),
+            DetailsType = tostring(threat.type),
+            DetailsId = tostring(threat.guid),
+            DetailsAction = tostring(threat.action),
+            DetailsAssessments = tostring(threat.assessments),
+            DetailsPcpReportingReason = tostring(threat.pcp_reporting_reason),
+            DetailsPcpDeviceResponse = tostring(threat.pcp_device_response),
+            ActorId = tostring(actor.guid)
+            
+        // Event Type Classification for Priority Processing
+        | extend EventPriority = case(
+            coalesce(log_type, event_type) == "THREAT", 1,
+            coalesce(log_type, event_type) == "DEVICE", 2,
+            coalesce(log_type, event_type) == "SMISHING_ALERT", 3,
+            coalesce(log_type, event_type) == "AUDIT", 4,
+            5
+        )
+        
+        // Security Risk Classification
+        | extend SecurityRiskLevel = case(
+            tostring(threat.severity) in ("CRITICAL", "HIGH") or tostring(threat.device.security_status) == "THREATS_HIGH", "High",
+            tostring(threat.severity) == "MEDIUM" or tostring(threat.device.security_status) == "THREATS_MEDIUM", "Medium",
+            tostring(threat.severity) == "LOW" or tostring(threat.device.security_status) == "THREATS_LOW", "Low",
+            "Unknown"
+        )
+        
+        // Device Compliance Status
+        | extend DeviceComplianceStatus = case(
+            device_activation_status == "ACTIVE" and isnotempty(device_checkin_time), "Compliant",
+            device_activation_status == "INACTIVE", "Non-Compliant",
+            isempty(device_checkin_time), "Unknown",
+            "Partial"
+        )
+        
         | project
-            TimeGenerated, 
-            Type,
-    		EnterpriseName,
-    		ID,
-    		EventStartTime,
-    		EventEndTime,
-    		ChangeType,
-    		ActorType,
-    		ActorId,
+            // Core Event Information
+            TimeGenerated,
+            EventVendor,
+            EventProduct,
+            EventType,
+            EventId,
+            EventTime,
+            EventStartTime,
+            EventEndTime,
+            ChangeType,
+            EventPriority,
+            SecurityRiskLevel,
+            EnterpriseGuid = enterprise_guid,
+            
+            // Device Information
+            DeviceGuid,
+            DeviceActivatedAt = device_activated_at,
+            DeviceActivationStatus,
+            DeviceCheckinTime = device_checkin_time,
+            DeviceCustomerId = device_customer_id,
+            DeviceDeactivatedAt = device_deactivated_at,
+            DeviceGroupGuid = device_group_guid,
+            DevicePlatform,
+            DeviceOSVersion,
+            DeviceManufacturer,
+            DeviceModel,
+            DeviceEmailAddress,
+            DeviceSecurityStatus,
+            DeviceComplianceStatus,
+            
+            // Client Application Information
+            ClientLookoutSDKVersion = client_lookout_sdk_version,
+            ClientOTAVersion = client_ota_version,
+            ClientPackageName = client_package_name,
+            ClientPackageVersion = client_package_version,
+            
+            // MDM Integration
+            MDMConnectorId = mdm_connector_id,
+            MDMConnectorUuid = mdm_connector_uuid,
+            MDMExternalId = mdm_external_id,
+            
+            // Threat Information
+            ThreatId,
+            ThreatType,
+            ThreatAction,
+            ThreatSeverity,
+            ThreatClassification,
+            ThreatClassifications,
+            ThreatRisk,
+            ThreatStatus,
+            ThreatAssessments,
+            ThreatDescription,
+            ThreatApplicationName,
+            ThreatPackageName,
+            ThreatPackageSha,
+            ThreatFileName,
+            ThreatFilePath,
+            ThreatPcpReportingReason,
+            ThreatPcpDeviceResponse,
+            
+            // Actor Information
+            ActorType,
+            ActorGuid,
+            ActorDeviceGuid,
+            
+            // Target Information
             TargetType,
+            TargetGuid,
+            
+            // Audit Information
+            AuditType,
+            AuditAttributeChanges,
+            
+            // Smishing Alert Information
+            SmishingAlertId,
+            SmishingAlertType,
+            SmishingAlertSeverity,
+            SmishingAlertDescription,
+            
+            // Dynamic Objects (preserved for advanced analysis)
+            device,
+            threat,
+            audit,
+            smishing_alert,
+            target,
+            actor,
+            device_permissions,
+            device_settings,
+            device_vulns,
+            risky_config,
+            audit_attribute_changes,
+            smishing_detections,
+            
+            // Legacy field mappings for backward compatibility
+            Type,
+            ID,
+            EnterpriseName,
             DetailsSeverity,
-    		DetailsClassifications,
+            DetailsClassifications,
             DetailsActivationStatus,
-    		DetailsSecurityStatus,
-    		DetailsProtectionStatus,
-    		UpdatedDetails,
-    		DetailsDescription,
-    		DetailsApplicationName,
-    		DetailsPackageName,
-    		DetailsPath,
-    		DetailsFileName,
-    		DetailsPackageSha,
-    		DetailsAttributeChanges,
-    		DetailsType,
-    		DetailsId,
-    		DetailsAction,
-    		DetailsAssessments,
-    		DetailsPcpReportingReason,
-    		DetailsPcpDeviceResponse,
-    		TargetId,
-    		TargetEmailAddress,
-    		TargetPlatform,
-    		TargetOSVersion,
-    		TargetManufacturer,
-    		TargetModel
+            DetailsSecurityStatus,
+            DetailsDescription,
+            DetailsApplicationName,
+            DetailsPackageName,
+            DetailsFileName,
+            DetailsPath,
+            DetailsPackageSha,
+            DetailsType,
+            DetailsId,
+            DetailsAction,
+            DetailsAssessments,
+            DetailsPcpReportingReason,
+            DetailsPcpDeviceResponse,
+            ActorId
     };
     LookoutEvents_view
