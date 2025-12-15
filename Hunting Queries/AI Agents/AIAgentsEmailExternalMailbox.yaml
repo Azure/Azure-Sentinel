@@ -1,0 +1,65 @@
+id: 0d5e9f1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a
+name: AI Agents - Sending email to external mailboxes
+description: |
+  This query identifies Copilot Studio AI agents configured to send emails to external mailboxes (outside the organization`s domains). 
+  Such configurations can lead to sensitive or internal data being exfiltrated beyond organizational boundaries, creating compliance and security risks. 
+  Attackers could exploit this to leak confidential information or use compromised agents as a channel for data exfiltration.
+  Recommended Action: Verify with the agent owner whether sending emails externally is necessary for the business scenario. 
+  Confirm what data is being sent and ensure the external domain is authorized to receive it. If not required, remove or restrict this capability.
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1041
+query: |
+  let OrgDomains = 
+    IdentityInfo 
+    | extend domains = tostring(split(AccountUPN, "@")[1]) 
+    | distinct domains; 
+  let SendOps = dynamic([ 
+    "SendEmailV2",             // Office 365 Outlook 
+    "SharedMailboxSendEmailV2",// Office 365 Outlook 
+    "| w",                     // Outlook.com 
+    "SendEmailV2",             // Gmail 
+    "SendEmailV3",             // SMTP 
+    "SendEmailV3",             // Mail 
+    "SendEmailGAVersion",      // Azure Communication Email 
+    "PostAntTextEmail",        // Ant Text Automation 
+    "SendEmailV4"              // SendGrid 
+  ]); 
+  let FromActions = 
+    AIAgentsInfo 
+    | summarize arg_max(Timestamp, *) by AIAgentId 
+    | where AgentStatus != "Deleted" 
+    | mv-expand ActionDetail = todynamic(AgentToolsDetails) 
+    | where tostring(ActionDetail.action.operationId) in~ (SendOps) 
+    | mv-expand ActionInput = ActionDetail.inputs 
+    | where tostring(ActionInput.propertyName) == "To" 
+    | extend ToAddress = tostring(ActionInput.value.literalValue) 
+    | extend Domain = tostring(split(ToAddress, "@")[1]), MailConeector = tostring(ActionDetail.action.operationId), source = "AgentToolsDetails" 
+    | where isnotempty(Domain) and Domain !in (OrgDomains) 
+    | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, ToAddress, Domain, source, MailConeector; 
+  let FromTopics = 
+    AIAgentsInfo 
+    | summarize arg_max(Timestamp, *) by AIAgentId 
+    | where AgentStatus != "Deleted" 
+    | mv-expand TopicDetail = todynamic(AgentTopicsDetails) 
+    | mv-expand TopicAction = TopicDetail.beginDialog.actions 
+    | where tostring(TopicAction.operationId) in~ (SendOps) 
+    | extend ToAddress = tostring(coalesce(TopicAction.input.binding.To.literalValue, TopicAction.input.binding['to'].literalValue)) 
+    | extend Domain = tostring(split(ToAddress, "@")[1]), MailConeector = tostring(TopicAction.operationId), source = "AgentTopicsDetails" 
+    | where isnotempty(Domain) and Domain !in (OrgDomains) 
+    | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, ToAddress, Domain, source, MailConeector; 
+  FromActions 
+  | union FromTopics 
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0
