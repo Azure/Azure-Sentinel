@@ -27,7 +27,7 @@ Note: If you are a first time contributor to this repository, [General GitHub Fo
 
 ## General Steps
 Brand new or update to a contribution via these methods:
-* Submit for review directly on GitHub website 
+* Submit for review directly on GitHub website test
     * Browse to the folder you want to upload your file to
     * Choose Upload Files and browse to your file. 
     * You will be required to create your own branch and then submit the Pull Request for review.
