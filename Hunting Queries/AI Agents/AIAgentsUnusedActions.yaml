@@ -1,0 +1,40 @@
+id: 3b6c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
+name: AI Agents - Unused Actions
+description: |
+  This query identifies Copilot Studio AI agents with classic orchestration that include Actions not referenced in any Topic. 
+  While unused Actions may not pose an immediate security risk, they can introduce unnecessary exposure and potential maintenance issues. 
+  In some cases, these orphaned Actions might still hold sensitive connection details or credentials, creating an indirect exposure risk if overlooked.
+  Recommended Action: Review and remove unused Actions to reduce attack surface, simplify agent logic, and prevent accidental execution of outdated or unnecessary operations.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let TopicsConnectionReference =
+      AIAgentsInfo
+      | summarize arg_max(Timestamp, *) by AIAgentId
+      | where AgentStatus != "Deleted"
+      | mv-expand topic = AgentTopicsDetails
+      | mv-expand actionTopic = topic.beginDialog.actions
+      | where isnotempty(actionTopic.connectionReference)
+      | extend TopicConnectionReference = tostring(actionTopic.connectionReference)
+      | distinct TopicConnectionReference;
+  AIAgentsInfo
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | where AgentStatus != "Deleted"
+  | where not(IsGenerativeOrchestrationEnabled) 
+  | where isnotempty(AgentToolsDetails)
+  | mv-expand tool = AgentToolsDetails
+  | extend ToolConnectionReference = tostring(tool.action.connectionReference)
+  | where isnotempty(ToolConnectionReference)
+  | where ToolConnectionReference !in (TopicsConnectionReference)
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, tool, ToolConnectionReference
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0
