@@ -1,0 +1,142 @@
+id: 9c5b6d8f-3a02-4e9b-af4c-2d7e9b1f5a8c
+name: Lookout - Device Compliance and Security Status Changes (v2)
+description: |
+  'Monitors device compliance status changes and security posture degradation using Lookout Mobile Risk API v2 enhanced device fields. Detects devices becoming non-compliant, security status changes, and potential device compromise indicators with detailed device context and MDM integration data.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: LookoutAPI
+    dataTypes:
+      - LookoutEvents
+queryFrequency: 10m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1418
+  - T1629
+  - T1655
+query: |
+  LookoutEvents
+  | where EventType == "DEVICE"
+  | where DeviceComplianceStatus in ("Non-Compliant", "Partial") 
+     or DeviceSecurityStatus in ("THREATS_HIGH", "THREATS_MEDIUM")
+     or ChangeType == "UPDATE"
+  | extend 
+      DeviceRiskScore = case(
+          DeviceSecurityStatus == "THREATS_HIGH", 9,
+          DeviceSecurityStatus == "THREATS_MEDIUM", 6,
+          DeviceSecurityStatus == "THREATS_LOW", 3,
+          DeviceComplianceStatus == "Non-Compliant", 7,
+          DeviceComplianceStatus == "Partial", 4,
+          1
+      ),
+      ComplianceReason = case(
+          isempty(DeviceCheckinTime), "No Recent Check-in",
+          DeviceActivationStatus != "ACTIVE", "Inactive Device",
+          isempty(ClientLookoutSDKVersion), "Missing Security Client",
+          "Configuration Issue"
+      ),
+      PlatformRisk = case(
+          DevicePlatform == "ANDROID" and DeviceOSVersion matches regex @"^[1-9]\..*", "Outdated Android",
+          DevicePlatform == "IOS" and DeviceOSVersion matches regex @"^1[0-4]\..*", "Outdated iOS",
+          DevicePlatform == "UNKNOWN", "Unknown Platform",
+          "Current"
+      )
+  | extend MDMIntegrationStatus = case(
+      isnotempty(MDMConnectorId) and isnotempty(MDMExternalId), "Fully Integrated",
+      isnotempty(MDMConnectorId), "Partial Integration", 
+      "Not Integrated"
+  )
+  | extend SecurityPosture = case(
+      DeviceRiskScore >= 8, "Critical",
+      DeviceRiskScore >= 6, "High",
+      DeviceRiskScore >= 4, "Medium",
+      "Low"
+  )
+  | project
+      TimeGenerated,
+      EventId,
+      DeviceGuid,
+      DevicePlatform,
+      DeviceOSVersion,
+      DeviceManufacturer,
+      DeviceModel,
+      DeviceEmailAddress,
+      DeviceActivationStatus,
+      DeviceSecurityStatus,
+      DeviceComplianceStatus,
+      DeviceRiskScore,
+      SecurityPosture,
+      ComplianceReason,
+      PlatformRisk,
+      DeviceCheckinTime,
+      DeviceActivatedAt,
+      DeviceDeactivatedAt,
+      DeviceGroupGuid,
+      ClientLookoutSDKVersion,
+      ClientOTAVersion,
+      ClientPackageName,
+      ClientPackageVersion,
+      MDMConnectorId,
+      MDMConnectorUuid,
+      MDMExternalId,
+      MDMIntegrationStatus,
+      ActorType,
+      ActorGuid,
+      ChangeType
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceEmailAddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceGuid
+      - identifier: OSFamily
+        columnName: DevicePlatform
+      - identifier: OSVersion
+        columnName: DeviceOSVersion
+customDetails:
+  DevicePlatform: DevicePlatform
+  DeviceSecStatus: DeviceSecurityStatus
+  DevCompliance: DeviceComplianceStatus
+  DeviceRiskScore: DeviceRiskScore
+  SecurityPosture: SecurityPosture
+  ComplianceReason: ComplianceReason
+  PlatformRisk: PlatformRisk
+  MDMIntegration: MDMIntegrationStatus
+  ClientSDKVersion: ClientLookoutSDKVersion
+  DeviceManufacturer: DeviceManufacturer
+  DeviceModel: DeviceModel
+alertDetailsOverride:
+  alertDisplayNameFormat: "Device Compliance Issue: {{SecurityPosture}} Risk on {{DevicePlatform}} Device"
+  alertDescriptionFormat: "{{SecurityPosture}} posture with {{DeviceComplianceStatus}} compliance"
+  alertTacticsColumnName: SecurityPosture
+  alertSeverityColumnName: SecurityPosture
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+      - Host
+    groupByAlertDetails:
+      - DeviceGuid
+    groupByCustomDetails:
+      - SecurityPosture
+      - DevicePlatform
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionEnabled: false
+suppressionDuration: PT30M
+version: 2.0.3
+kind: Scheduled
