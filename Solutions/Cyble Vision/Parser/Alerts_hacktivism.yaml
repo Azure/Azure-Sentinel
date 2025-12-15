@@ -12,7 +12,7 @@ FunctionQuery: |
     | extend AlertID = ID
     | where Service == "hacktivism"
     | extend Data = parse_json(Data)
-    // --- Common parsed fields (root-level) ---
+    // Common parsed fields (root level)
     | extend
         HK_ChannelName        = tostring(Channel_Name),
         HK_Source             = tostring(Source),
@@ -20,7 +20,7 @@ FunctionQuery: |
         HK_ContentAddedOn     = tostring(Content_Added_On),
         HK_BucketName         = tostring(BucketName),
         HK_Marketplace        = tostring(marketplace) // if present in other records
-    // --- Variant A: Telegram / feed style fields inside data
+    // Variant A: Telegram / feed style fields inside data
     | extend
         HK_ChannelLink        = tostring(Data.channel_link),
         HK_Data_ChannelName   = tostring(Data.channel_name),
@@ -37,7 +37,7 @@ FunctionQuery: |
         HK_PostedAt           = tostring(Data.posted_at),
         HK_SourceType         = tostring(Data.source),
         HK_UpdatedAt_Data     = tostring(Data.updated_at)
-    // --- Variant B: defacedWebsite / domain-based fields inside data
+    // Variant B: defacedWebsite / domainbased fields inside data
     | extend
         HK_Attacker           = tostring(Data.attacker),
         HK_AttackerTeam       = tostring(Data.team),
@@ -50,7 +50,7 @@ FunctionQuery: |
         HK_WebsiteURL         = tostring(Data.website_url),
         HK_CountryName        = tostring(Data.country_name),
         HK_CountryCode        = tostring(Data.country_code)
-    // --- Normalize lists: ensure arrays for links/domains/photos
+    // Normalize lists: ensure arrays for links/domains/photos
     | extend
         HK_PostLinksArray     = iif(isnull(HK_PostLinks) or HK_PostLinks == "", dynamic([]), todynamic(HK_PostLinks)),
         HK_PostDomainsArray   = iif(isnull(HK_PostDomains) or HK_PostDomains == "", dynamic([]), todynamic(HK_PostDomains)),
@@ -64,12 +64,12 @@ FunctionQuery: |
     | extend HK_Urls_In_Text = extract_all(@"(https?://[^\s,]+)", HK_PostData)
     // Combine arrays (array_concat exists in Kusto)
     | extend HK_CombinedUrls = array_concat(HK_PostLinksArray, HK_Urls_In_Text)
-    // mv-apply to dedupe and create HK_All_URLs per original row
+    // mvapply to dedupe and create HK_All_URLs per original row
     | mv-apply url = HK_CombinedUrls on (
         where isnotempty(tostring(url))
         | summarize HK_All_URLs = make_set(tostring(url))
     )
-    // --- Extract domains from HK_All_URLs using mv-apply (works per-row) ---
+    // Extract domains from HK_All_URLs using mvapply (works per row) 
     | mv-apply url = HK_All_URLs on (
         where isnotempty(tostring(url))
         | extend host = tostring(parse_url(tostring(url)).Host)
@@ -82,7 +82,7 @@ FunctionQuery: |
         HK_Emails = extract_all(@"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})", HK_PostData)
     // Tags to string
     | extend HK_Tags = tostring(Tags)
-    // --- Final projection: keep original table columns + parsed HK_* columns
+    // Final projection: keep original table columns + parsed HK_* columns
     | project
         // Original base columns (kept for context)
         TimeGenerated,
