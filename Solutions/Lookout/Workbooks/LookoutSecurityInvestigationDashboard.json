@@ -1,0 +1,334 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Lookout Mobile Security - Investigation Dashboard\n\n**Real-time mobile threat investigation and incident response**"
+      },
+      "name": "text - title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "time-range-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - time range"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🚨 Critical Alerts - Requires Immediate Action"
+      },
+      "name": "text - critical section"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend \n    EventType = log_type,\n    ThreatSeverity = tostring(threat.severity),\n    DeviceEmail = tostring(device.email),\n    ThreatType = tostring(threat.type),\n    ThreatDescription = tostring(threat.description)\n| where EventType == \"THREAT\" and ThreatSeverity in (\"HIGH\", \"CRITICAL\")\n| summarize \n    Count = count(),\n    LatestThreat = max(TimeGenerated),\n    Devices = dcount(DeviceEmail)\n| extend Status = case(\n    Count > 10, \"🔴 Critical\",\n    Count > 5, \"🟠 High\", \n    \"🟡 Medium\"\n)\n| project Status, ActiveThreats = Count, AffectedDevices = Devices, LastDetected = LatestThreat",
+        "size": 3,
+        "title": "High Severity Threats",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "Status",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "ActiveThreats",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "redBright"
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "AffectedDevices",
+            "formatter": 1
+          },
+          "showBorder": true
+        }
+      },
+      "name": "query - critical threats"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend EventType = log_type\n| where EventType == \"SMISHING_ALERT\"\n| summarize SmishingAlerts = count()\n| extend Status = case(SmishingAlerts > 0, \"⚠️ Active\", \"✅ None\")\n| project Status, SmishingAlerts",
+        "size": 3,
+        "title": "Smishing Campaigns",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "Status",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "SmishingAlerts",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "orange"
+            }
+          }
+        }
+      },
+      "name": "query - smishing"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 📊 Recent Threat Activity - Last 24 Hours"
+      },
+      "name": "text - recent activity"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Devices = LookoutMtdV2_CL\n| where TimeGenerated > ago(30d)\n| where log_type == \"DEVICE\"\n| extend DeviceEmail = tostring(device.info.email)\n| where isnotempty(DeviceEmail)\n| summarize arg_max(TimeGenerated, *) by DeviceEmail\n| project DeviceEmail, DevicePlatform = tostring(device.platform), DeviceOS = tostring(device.info.os_version), DeviceManufacturer = tostring(device.info.manufacturer), DeviceModel = tostring(device.info.model);\nLookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend EventType = log_type\n| where EventType == \"THREAT\"\n| extend \n    ThreatType = tostring(threat.type),\n    ThreatSeverity = tostring(threat.severity),\n    ThreatDescription = tostring(threat.description),\n    DeviceEmail = tostring(threat.device.email),\n    ThreatStatus = tostring(threat.status),\n    ThreatID = tostring(threat.guid)\n| join kind=leftouter (Devices) on DeviceEmail\n| project \n    TimeGenerated,\n    Severity = ThreatSeverity,\n    Type = ThreatType,\n    Description = ThreatDescription,\n    [\"User Email\"] = DeviceEmail,\n    Platform = strcat(DevicePlatform, \" \", DeviceOS),\n    Device = strcat(DeviceManufacturer, \" \", DeviceModel),\n    Status = ThreatStatus,\n    ThreatID\n| order by TimeGenerated desc\n| take 50",
+        "size": 0,
+        "title": "Latest Threats Detected",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Severity",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "CRITICAL",
+                    "representation": "redBright",
+                    "text": "CRITICAL"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "HIGH",
+                    "representation": "red",
+                    "text": "HIGH"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "MEDIUM",
+                    "representation": "orange",
+                    "text": "MEDIUM"
+                  },
+                  {
+                    "operator": "Default",
+                    "representation": "yellow",
+                    "text": "LOW"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "Status",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "RESOLVED",
+                    "representation": "green",
+                    "text": "RESOLVED"
+                  },
+                  {
+                    "operator": "Default",
+                    "representation": "orange",
+                    "text": "ACTIVE"
+                  }
+                ]
+              }
+            }
+          ],
+          "filter": true,
+          "sortBy": [
+            {
+              "itemKey": "TimeGenerated",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "TimeGenerated",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "name": "query - recent threats table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 📱 Device Risk Analysis"
+      },
+      "name": "text - device section"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend \n    EventType = log_type,\n    DeviceEmail = coalesce(tostring(threat.device.email), tostring(device.info.email)),\n    DevicePlatform = coalesce(tostring(threat.device.platform), tostring(device.platform)),\n    DeviceManufacturer = coalesce(tostring(threat.device.manufacturer), tostring(device.info.manufacturer)),\n    DeviceModel = coalesce(tostring(threat.device.model), tostring(device.info.model)),\n    DeviceOS = coalesce(tostring(threat.device.os_version), tostring(device.info.os_version)),\n    SecurityStatus = coalesce(tostring(threat.device.security_status), tostring(device.security_status))\n| where isnotempty(DeviceEmail)\n| summarize \n    ThreatCount = countif(EventType == \"THREAT\"),\n    LastSeen = max(TimeGenerated),\n    Platform = any(DevicePlatform),\n    OS = any(DeviceOS),\n    DeviceType = any(strcat(DeviceManufacturer, \" \", DeviceModel)),\n    SecurityStatus = any(SecurityStatus)\n    by DeviceEmail\n| extend RiskLevel = case(\n    ThreatCount >= 5, \"🔴 High Risk\",\n    ThreatCount >= 2, \"🟠 Medium Risk\",\n    \"🟢 Low Risk\"\n)\n| project [\"User Email\"] = DeviceEmail, RiskLevel, Threats = ThreatCount, Platform, OS, DeviceType, SecurityStatus, LastSeen\n| order by Threats desc\n| take 20",
+        "size": 0,
+        "title": "Top Devices by Risk",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "query - device risk"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend \n    EventType = log_type,\n    DevicePlatform = tostring(device.platform)\n| where isnotempty(DevicePlatform)\n| summarize Count = count() by DevicePlatform, EventType\n| order by Count desc",
+        "size": 0,
+        "title": "Events by Platform",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "query - platform distribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend \n    EventType = log_type,\n    ThreatType = tostring(threat.type)\n| where EventType == \"THREAT\" and isnotempty(ThreatType)\n| summarize Count = count() by ThreatType\n| order by Count desc",
+        "size": 0,
+        "title": "Threat Types",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query - threat types"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 📈 Trend Analysis"
+      },
+      "name": "text - trends"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend EventType = log_type\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType\n| render timechart",
+        "size": 0,
+        "title": "Event Volume Over Time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "query - timeline"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🔍 Investigation Tools"
+      },
+      "name": "text - investigation"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutMtdV2_CL\n| where TimeGenerated {TimeRange}\n| extend EventType = log_type\n| where EventType == \"AUDIT\"\n| extend \n    AuditType = tostring(audit.type),\n    ActorEmail = tostring(actor.guid),\n    TargetEmail = tostring(target.email_address)\n| project TimeGenerated, AuditType, Actor = ActorEmail, Target = TargetEmail\n| order by TimeGenerated desc\n| take 25",
+        "size": 0,
+        "title": "Recent Audit Events - Configuration Changes",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "query - audit log"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-LookoutInvestigation",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

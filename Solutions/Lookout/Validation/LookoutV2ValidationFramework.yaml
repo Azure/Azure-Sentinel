@@ -1,0 +1,274 @@
+id: lookout-v2-validation-framework
+name: Lookout Mobile Risk API v2 Validation Framework
+description: Comprehensive validation framework for testing Lookout solution components with v2 API data
+version: 2.0.0
+category: Validation Framework
+
+validation_strategy:
+  approach: "Multi-layered validation covering data ingestion, field extraction, analytics rules, and workbook functionality"
+  test_data_source: "TEST_DATA_SAMPLES.json with comprehensive v2 event samples"
+  validation_levels:
+    - "Data Ingestion Validation"
+    - "Field Extraction Validation" 
+    - "Analytics Rule Validation"
+    - "Workbook Visualization Validation"
+    - "Hunting Query Validation"
+    - "End-to-End Integration Validation"
+
+test_scenarios:
+  data_ingestion:
+    - name: "THREAT Event Ingestion"
+      description: "Validates THREAT event data ingestion and basic field population"
+      test_data: "THREAT sample from TEST_DATA_SAMPLES.json"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "THREAT"
+        | where EventId == "0190bc7e-77f3-7ddc-b828-4ee717b57d5e"
+        | project TimeGenerated, EventId, EventType, ThreatId, ThreatType, ThreatSeverity,
+                  DeviceGuid, DevicePlatform, DeviceEmailAddress
+      expected_results:
+        - field: "EventType"
+          value: "THREAT"
+        - field: "ThreatType" 
+          value: "MALWARE"
+        - field: "ThreatSeverity"
+          value: "HIGH"
+        - field: "DevicePlatform"
+          value: "ANDROID"
+
+    - name: "SMISHING_ALERT Event Ingestion"
+      description: "Validates SMISHING_ALERT event data ingestion and smishing-specific fields"
+      test_data: "SMISHING_ALERT sample from TEST_DATA_SAMPLES.json"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "SMISHING_ALERT"
+        | where EventId == "0190bc7f-88a4-7eef-c939-5ff828c7ghi9"
+        | project TimeGenerated, EventId, EventType, SmishingAlertId, SmishingAlertType,
+                  SmishingAlertSeverity, SmishingAlertDescription, DeviceGuid
+      expected_results:
+        - field: "EventType"
+          value: "SMISHING_ALERT"
+        - field: "SmishingAlertType"
+          value: "PHISHING_DETECTION"
+        - field: "SmishingAlertSeverity"
+          value: "CRITICAL"
+
+    - name: "AUDIT Event Ingestion"
+      description: "Validates AUDIT event data ingestion and audit-specific fields"
+      test_data: "AUDIT sample from TEST_DATA_SAMPLES.json"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "AUDIT"
+        | where EventId == "0190bc80-99b5-7ff0-da4a-600939d8jkl0"
+        | project TimeGenerated, EventId, EventType, AuditType, AuditAttributeChanges,
+                  ActorType, ActorGuid, TargetType, TargetGuid
+      expected_results:
+        - field: "EventType"
+          value: "AUDIT"
+        - field: "AuditType"
+          value: "POLICY_CHANGE"
+        - field: "ActorType"
+          value: "ADMIN_USER"
+
+    - name: "DEVICE Event Ingestion"
+      description: "Validates DEVICE event data ingestion and enhanced device fields"
+      test_data: "DEVICE sample from TEST_DATA_SAMPLES.json"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "DEVICE"
+        | where EventId == "0190bc7d-974b-7b64-9fa6-5b9ecca6fbc6"
+        | project TimeGenerated, EventId, EventType, DeviceGuid, DevicePlatform,
+                  DeviceSecurityStatus, DeviceActivationStatus, ClientLookoutSDKVersion,
+                  MDMConnectorId, MDMExternalId
+      expected_results:
+        - field: "EventType"
+          value: "DEVICE"
+        - field: "DeviceSecurityStatus"
+          value: "THREATS_HIGH"
+        - field: "DeviceActivationStatus"
+          value: "ACTIVE"
+
+  field_extraction:
+    - name: "Enhanced Device Field Extraction"
+      description: "Validates extraction of all v2 device fields from device object"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "DEVICE"
+        | where isnotempty(DeviceGuid)
+        | project DeviceGuid, DeviceActivatedAt, DeviceActivationStatus, DeviceCheckinTime,
+                  DeviceCustomerId, DeviceDeactivatedAt, DeviceGroupGuid, DevicePlatform,
+                  DeviceOSVersion, DeviceManufacturer, DeviceModel, DeviceEmailAddress,
+                  ClientLookoutSDKVersion, ClientOTAVersion, ClientPackageName, ClientPackageVersion,
+                  MDMConnectorId, MDMConnectorUuid, MDMExternalId
+        | where isnotempty(DeviceGuid) and isnotempty(DevicePlatform)
+      validation_criteria:
+        - "All device fields should be populated when present in source data"
+        - "DateTime fields should parse correctly"
+        - "MDM fields should extract properly when available"
+
+    - name: "Threat Field Extraction"
+      description: "Validates extraction of all v2 threat fields from threat object"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "THREAT"
+        | where isnotempty(ThreatId)
+        | project ThreatId, ThreatType, ThreatAction, ThreatSeverity, ThreatClassifications,
+                  ThreatAssessments, ThreatDescription, ThreatApplicationName, ThreatPackageName,
+                  ThreatPackageSha, ThreatFileName, ThreatFilePath, ThreatPcpReportingReason,
+                  ThreatPcpDeviceResponse
+        | where isnotempty(ThreatId) and isnotempty(ThreatType)
+      validation_criteria:
+        - "All threat fields should be extracted correctly"
+        - "Classification and assessment fields should be preserved"
+        - "File and package information should be accurate"
+
+    - name: "Smishing Alert Field Extraction"
+      description: "Validates extraction of smishing alert fields"
+      validation_query: |
+        LookoutEvents
+        | where EventType == "SMISHING_ALERT"
+        | where isnotempty(SmishingAlertId)
+        | project SmishingAlertId, SmishingAlertType, SmishingAlertSeverity, SmishingAlertDescription
+        | where isnotempty(SmishingAlertId) and isnotempty(SmishingAlertType)
+      validation_criteria:
+        - "Smishing alert fields should be extracted correctly"
+        - "Alert severity should map properly"
+        - "Description field should preserve content"
+
+  analytics_rules:
+    - name: "Threat Event V2 Rule Validation"
+      description: "Validates LookoutThreatEventV2 analytics rule with test data"
+      rule_file: "Analytic Rules/LookoutThreatEventV2.yaml"
+      test_query: |
+        LookoutEvents
+        | where EventType == "THREAT"
+        | where ThreatSeverity in ("CRITICAL", "HIGH")
+        | where ThreatAction == "DETECTED"
+        | where ThreatStatus in ("OPEN", "ACTIVE")
+        | take 10
+      validation_criteria:
+        - "Rule should trigger on high severity threats"
+        - "Risk scoring should calculate correctly"
+        - "Entity mappings should populate properly"
+        - "Custom details should be accurate"
+
+    - name: "Smishing Alert V2 Rule Validation"
+      description: "Validates LookoutSmishingAlertV2 analytics rule with test data"
+      rule_file: "Analytic Rules/LookoutSmishingAlertV2.yaml"
+      test_query: |
+        LookoutEvents
+        | where EventType == "SMISHING_ALERT"
+        | where SmishingAlertSeverity in ("CRITICAL", "HIGH")
+        | where SmishingAlertType in ("PHISHING_DETECTION", "FRAUD_DETECTION", "CREDENTIAL_HARVESTING")
+        | take 10
+      validation_criteria:
+        - "Rule should trigger on critical smishing alerts"
+        - "Impersonation risk classification should work"
+        - "Campaign indicators should be calculated"
+        - "Alert formatting should be correct"
+
+    - name: "Audit Event V2 Rule Validation"
+      description: "Validates LookoutAuditEventV2 analytics rule with test data"
+      rule_file: "Analytic Rules/LookoutAuditEventV2.yaml"
+      test_query: |
+        LookoutEvents
+        | where EventType == "AUDIT"
+        | where AuditType in ("POLICY_CHANGE", "SECURITY_SETTING_CHANGE", "USER_MANAGEMENT", "CONFIGURATION_CHANGE")
+        | take 10
+      validation_criteria:
+        - "Rule should trigger on critical audit events"
+        - "Security implications should be classified correctly"
+        - "Compliance risk should be assessed properly"
+        - "Change details should be captured"
+
+    - name: "Device Compliance V2 Rule Validation"
+      description: "Validates LookoutDeviceComplianceV2 analytics rule with test data"
+      rule_file: "Analytic Rules/LookoutDeviceComplianceV2.yaml"
+      test_query: |
+        LookoutEvents
+        | where EventType == "DEVICE"
+        | where DeviceComplianceStatus in ("Non-Compliant", "Partial") 
+           or DeviceSecurityStatus in ("THREATS_HIGH", "THREATS_MEDIUM")
+           or ChangeType == "UPDATE"
+        | take 10
+      validation_criteria:
+        - "Rule should trigger on compliance issues"
+        - "Device risk scoring should be accurate"
+        - "Platform risk assessment should work"
+        - "MDM integration status should be correct"
+
+  hunting_queries:
+    - name: "Multi-Vector Attack Correlation Validation"
+      description: "Validates multi-vector attack hunting query"
+      test_query: "Query from LookoutAdvancedThreatHunting.yaml - Multi-Vector Attack Correlation"
+      validation_criteria:
+        - "Query should identify devices with multiple threat types"
+        - "Time correlation should work correctly"
+        - "Risk scoring should be accurate"
+
+    - name: "Enterprise Campaign Detection Validation"
+      description: "Validates enterprise-wide threat campaign detection"
+      test_query: "Query from LookoutAdvancedThreatHunting.yaml - Enterprise-Wide Threat Campaign Detection"
+      validation_criteria:
+        - "Query should identify coordinated attacks"
+        - "Device count thresholds should work"
+        - "Campaign risk assessment should be correct"
+
+  performance_validation:
+    - name: "Query Performance Testing"
+      description: "Validates query performance with large datasets"
+      test_scenarios:
+        - "1K events performance test"
+        - "10K events performance test" 
+        - "100K events performance test"
+      performance_criteria:
+        - "Analytics rules should complete within 5 minutes"
+        - "Hunting queries should complete within 10 minutes"
+        - "Workbook queries should complete within 2 minutes"
+
+  integration_validation:
+    - name: "End-to-End Data Flow Validation"
+      description: "Validates complete data flow from ingestion to visualization"
+      test_steps:
+        1. "Ingest test data samples"
+        2. "Verify field extraction"
+        3. "Trigger analytics rules"
+        4. "Validate incident creation"
+        5. "Test workbook visualizations"
+        6. "Execute hunting queries"
+      success_criteria:
+        - "All test data should be ingested successfully"
+        - "All fields should be extracted correctly"
+        - "Analytics rules should trigger appropriately"
+        - "Incidents should be created with correct details"
+        - "Workbooks should display data correctly"
+        - "Hunting queries should return expected results"
+
+validation_automation:
+  test_execution:
+    - "Automated test data injection"
+    - "Scheduled validation runs"
+    - "Performance monitoring"
+    - "Result comparison and reporting"
+  
+  reporting:
+    - "Validation test results dashboard"
+    - "Performance metrics tracking"
+    - "Field extraction accuracy reports"
+    - "Analytics rule effectiveness metrics"
+
+compliance_validation:
+  data_retention:
+    - "Verify data retention policies"
+    - "Test data purging mechanisms"
+    - "Validate backup and recovery"
+  
+  security:
+    - "Test data encryption in transit and at rest"
+    - "Validate access controls"
+    - "Test audit logging"
+  
+  privacy:
+    - "Verify PII handling"
+    - "Test data anonymization"
+    - "Validate consent management"

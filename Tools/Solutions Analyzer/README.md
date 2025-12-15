@@ -11,6 +11,14 @@ This directory contains two complementary tools for analyzing Microsoft Sentinel
 - [`solutions_connectors_tables_mapping.csv`](solutions_connectors_tables_mapping.csv) - Main mapping of connectors to tables with full metadata
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
 
+**Connector Reference documentation in the connector-docs/ directory:**
+
+- **[Solutions Index](connector-docs/solutions-index.md)** - All solutions organized alphabetically (with and without connectors)
+- **[Connectors Index](connector-docs/connectors-index.md)** - All unique connectors with metadata
+- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references
+- **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](connector-docs/solutions/) directory)
+- **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](connector-docs/connectors/) directory)
+
 You can use these files directly without running the scripts. They are kept up-to-date with the Solutions directory.
 
 ---
