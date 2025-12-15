@@ -1,0 +1,127 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "TacitRed to Defender TI - Playbook",
+        "description": "This playbook orchestrates the ingestion of TacitRed threat intelligence into Microsoft Sentinel using the Upload API. Includes Logic App and Azure Function for API integration.",
+        "prerequisites": ["TacitRed API Key", "Microsoft Sentinel workspace", "Azure Function deployment"],
+        "postDeployment": ["Configure TacitRed API Key in Logic App parameters", "Update domain list in Logic App"],
+        "lastUpdateTime": "2025-12-09T00:00:00.000Z",
+        "tags": ["TacitRed", "Threat Intelligence", "Automation", "Azure Function"],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Data443 Risk Mitigation, Inc."
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "TacitRedToDefenderTI",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "TacitRed_ApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "TacitRed API Key for authentication"
+            }
+        },
+        "FunctionAppName": {
+            "type": "string",
+            "defaultValue": "tacitreddefenderti",
+            "metadata": {
+                "description": "Prefix for the Azure Function App name"
+            }
+        }
+    },
+    "variables": {
+        "logicAppName": "[parameters('PlaybookName')]",
+        "functionAppName": "[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[variables('logicAppName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "TacitRed_ApiKey": {
+                            "type": "securestring"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 6,
+                                "timeZone": "UTC"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Config": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FunctionAppUrl",
+                                        "type": "String",
+                                        "value": "[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2024-04-01').defaultHostName, '/api/TacitRedToDefenderTI')]"
+                                    },
+                                    {
+                                        "name": "Domains",
+                                        "type": "Array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Call_Function_App": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "uri": "@variables('FunctionAppUrl')",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "domains": "@variables('Domains')",
+                                    "date_from": "@{formatDateTime(addDays(utcNow(), -30), 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                    "date_until": "@{formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ssZ')}",
+                                    "tacitred_api_key": "@parameters('TacitRed_ApiKey')"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Config": ["Succeeded"]
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "TacitRed_ApiKey": {
+                        "value": "[parameters('TacitRed_ApiKey')]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "logicAppId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+        }
+    }
+}
