@@ -23,38 +23,33 @@ Two main zip files are automatically maintained:
 The automation is implemented via a GitHub Actions workflow (`.github/workflows/aws-s3-bundle-update.yaml`) that:
 
 1. **Triggers automatically** on:
-   - **Pull Requests** targeting the `master` branch (validation mode)
-   - **Pushes** to the `master` branch (auto-update mode)
+   - **Pull Requests** targeting the `master` branch
    - When changes affect:
      - `*.ps1` files in the AWS-S3 directory
      - `*.py` files in the AWS-S3 directory
      - `*.md` files in the AWS-S3 directory
      - Files in `CloudFormation/`, `Enviornment/`, or `Utils/` subdirectories
 
-2. **Validation Mode (Pull Requests)**:
+2. **PR Validation Mode**:
    - Runs the bundling script to regenerate zip files
    - Checks if the zip files in the PR match the generated ones
    - **Fails the PR** if zip bundles are out of sync with source files
    - Provides clear instructions on how to update the bundles locally
+   - PRs cannot be merged until bundles are up-to-date
 
-3. **Auto-Update Mode (Master Branch)**:
-   - Runs the bundling script to regenerate zip files
-   - Automatically commits updated zip files back to master
-   - Uses `[skip ci]` to prevent workflow recursion
-
-4. **Prevents recursion** by:
+3. **Prevents recursion** by:
    - Excluding zip file changes from triggering the workflow
    - Checking if the commit already contains zip updates
-   - Using `[skip ci]` in the commit message
 
 ### Bundling Script
 
 The `.script/bundleAwsS3Scripts.sh` script:
 
-- Creates temporary working directories
-- Copies the appropriate source files for each bundle variant
+- Extracts existing zip files to preserve unchanged content
+- Only replaces files that have been created or modified in the source directory
 - Creates the nested zip file structure
 - Handles the difference between Commercial (V2 Lambda) and Government (V1 Lambda) versions
+- Ensures nothing is replaced that shouldn't be - only new/modified files are updated
 - Cleans up temporary files after completion
 
 ## Files Included in Bundles

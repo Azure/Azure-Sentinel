@@ -1,6 +1,7 @@
 #!/bin/bash
 # Script to bundle AWS-S3 DataConnector scripts into zip files
 # This script creates the ConfigAwsS3DataConnectorScripts.zip and ConfigAwsS3DataConnectorScriptsGov.zip files
+# It extracts existing zips and only replaces modified files to preserve unchanged content
 
 set -e
 
@@ -44,8 +45,23 @@ FILES_TO_BUNDLE=(
     "Utils/HelperFunctions.ps1"
 )
 
-# Function to copy files to a destination directory
-copy_files() {
+# Function to extract existing zip if it exists, or create empty directory
+extract_or_create() {
+    local zip_path="$1"
+    local extract_dir="$2"
+    
+    mkdir -p "$extract_dir"
+    
+    if [ -f "$zip_path" ]; then
+        echo "  Extracting existing $zip_path..."
+        unzip -q "$zip_path" -d "$extract_dir" 2>/dev/null || true
+    else
+        echo "  Creating new bundle (no existing zip found)..."
+    fi
+}
+
+# Function to update files in directory (only replace if source exists and is different)
+update_files() {
     local dest_dir="$1"
     shift
     local files=("$@")
@@ -54,52 +70,91 @@ copy_files() {
         if [ -f "$AWS_S3_DIR/$file" ]; then
             local dir_path=$(dirname "$dest_dir/$file")
             mkdir -p "$dir_path"
-            cp "$AWS_S3_DIR/$file" "$dest_dir/$file"
+            # Only copy if file doesn't exist or is different
+            if [ ! -f "$dest_dir/$file" ] || ! cmp -s "$AWS_S3_DIR/$file" "$dest_dir/$file"; then
+                cp "$AWS_S3_DIR/$file" "$dest_dir/$file"
+                echo "  Updated: $file"
+            fi
         else
-            echo "Warning: File not found: $file"
+            echo "  Warning: File not found in source: $file"
         fi
     done
 }
 
 # Function to create a nested zip file
 create_nested_zip() {
-    local zip_name="$1"
-    local work_dir="$2"
-    local lambda_version="$3"  # "v1" or "v2"
+    local parent_zip="$1"
+    local nested_zip_name="$2"
+    local work_dir="$3"
+    local lambda_version="$4"  # "v1" or "v2"
     
-    echo "Creating $zip_name..."
+    echo "Processing $nested_zip_name..."
     
-    # Create temporary directory for this zip
-    local nested_dir="$work_dir/${zip_name%.zip}"
-    mkdir -p "$nested_dir"
+    # Create temporary directory for this nested zip
+    local nested_dir="$work_dir/${nested_zip_name%.zip}"
     
-    # Copy common files
-    copy_files "$nested_dir" "${FILES_TO_BUNDLE[@]}"
-    
-    # Copy appropriate Lambda function version
-    if [ "$lambda_version" = "v2" ]; then
-        cp "$AWS_S3_DIR/CloudWatchLambdaFunction.py" "$nested_dir/CloudWatchLambdaFunction.py"
-        cp "$AWS_S3_DIR/CloudWatchLambdaFunction_V2.py" "$nested_dir/CloudWatchLambdaFunction_V2.py"
+    # Extract existing nested zip from parent if it exists
+    if [ -f "$AWS_S3_DIR/$parent_zip" ]; then
+        local parent_extract="$work_dir/parent_extract"
+        mkdir -p "$parent_extract"
+        unzip -q "$AWS_S3_DIR/$parent_zip" -d "$parent_extract" 2>/dev/null || true
+        
+        if [ -f "$parent_extract/$nested_zip_name" ]; then
+            extract_or_create "$parent_extract/$nested_zip_name" "$nested_dir"
+        else
+            mkdir -p "$nested_dir"
+        fi
+        rm -rf "$parent_extract"
     else
-        cp "$AWS_S3_DIR/CloudWatchLambdaFunction.py" "$nested_dir/CloudWatchLambdaFunction.py"
+        mkdir -p "$nested_dir"
     fi
     
-    # Create the zip file (using backslashes for Windows compatibility)
+    # Update common files (only replace modified ones)
+    update_files "$nested_dir" "${FILES_TO_BUNDLE[@]}"
+    
+    # Update appropriate Lambda function version
+    if [ "$lambda_version" = "v2" ]; then
+        if [ -f "$AWS_S3_DIR/CloudWatchLambdaFunction.py" ]; then
+            if [ ! -f "$nested_dir/CloudWatchLambdaFunction.py" ] || ! cmp -s "$AWS_S3_DIR/CloudWatchLambdaFunction.py" "$nested_dir/CloudWatchLambdaFunction.py"; then
+                cp "$AWS_S3_DIR/CloudWatchLambdaFunction.py" "$nested_dir/CloudWatchLambdaFunction.py"
+                echo "  Updated: CloudWatchLambdaFunction.py"
+            fi
+        fi
+        if [ -f "$AWS_S3_DIR/CloudWatchLambdaFunction_V2.py" ]; then
+            if [ ! -f "$nested_dir/CloudWatchLambdaFunction_V2.py" ] || ! cmp -s "$AWS_S3_DIR/CloudWatchLambdaFunction_V2.py" "$nested_dir/CloudWatchLambdaFunction_V2.py"; then
+                cp "$AWS_S3_DIR/CloudWatchLambdaFunction_V2.py" "$nested_dir/CloudWatchLambdaFunction_V2.py"
+                echo "  Updated: CloudWatchLambdaFunction_V2.py"
+            fi
+        fi
+    else
+        if [ -f "$AWS_S3_DIR/CloudWatchLambdaFunction.py" ]; then
+            if [ ! -f "$nested_dir/CloudWatchLambdaFunction.py" ] || ! cmp -s "$AWS_S3_DIR/CloudWatchLambdaFunction.py" "$nested_dir/CloudWatchLambdaFunction.py"; then
+                cp "$AWS_S3_DIR/CloudWatchLambdaFunction.py" "$nested_dir/CloudWatchLambdaFunction.py"
+                echo "  Updated: CloudWatchLambdaFunction.py"
+            fi
+        fi
+        # Remove V2 if it exists (shouldn't be in gov bundles)
+        if [ -f "$nested_dir/CloudWatchLambdaFunction_V2.py" ]; then
+            rm "$nested_dir/CloudWatchLambdaFunction_V2.py"
+            echo "  Removed: CloudWatchLambdaFunction_V2.py (not needed for gov)"
+        fi
+    fi
+    
+    # Create the zip file
     cd "$nested_dir"
-    # Use zip with -r for recursive and preserve directory structure
-    zip -q -r "$work_dir/$zip_name" . -i "*"
+    zip -q -r "$work_dir/$nested_zip_name" . -i "*"
     
     # Clean up nested directory
     rm -rf "$nested_dir"
     
-    echo "✓ Created $zip_name"
+    echo "✓ Created $nested_zip_name"
 }
 
 # Create ConfigAwsS3DataConnectorScripts.zip (Commercial Azure - includes V2)
 echo ""
 echo "Building ConfigAwsS3DataConnectorScripts.zip..."
-create_nested_zip "ConfigAwsComToAzureCom.zip" "$TEMP_DIR/com" "v2"
-create_nested_zip "ConfigAwsGovToAzureCom.zip" "$TEMP_DIR/com" "v2"
+create_nested_zip "ConfigAwsS3DataConnectorScripts.zip" "ConfigAwsComToAzureCom.zip" "$TEMP_DIR/com" "v2"
+create_nested_zip "ConfigAwsS3DataConnectorScripts.zip" "ConfigAwsGovToAzureCom.zip" "$TEMP_DIR/com" "v2"
 
 cd "$TEMP_DIR/com"
 zip -q "ConfigAwsS3DataConnectorScripts.zip" ConfigAwsComToAzureCom.zip ConfigAwsGovToAzureCom.zip
@@ -109,8 +164,8 @@ echo "✓ Created ConfigAwsS3DataConnectorScripts.zip"
 # Create ConfigAwsS3DataConnectorScriptsGov.zip (Government Azure - no V2)
 echo ""
 echo "Building ConfigAwsS3DataConnectorScriptsGov.zip..."
-create_nested_zip "ConfigAwsComToAzureGov.zip" "$TEMP_DIR/gov" "v1"
-create_nested_zip "ConfigAwsGovToAzureGov.zip" "$TEMP_DIR/gov" "v1"
+create_nested_zip "ConfigAwsS3DataConnectorScriptsGov.zip" "ConfigAwsComToAzureGov.zip" "$TEMP_DIR/gov" "v1"
+create_nested_zip "ConfigAwsS3DataConnectorScriptsGov.zip" "ConfigAwsGovToAzureGov.zip" "$TEMP_DIR/gov" "v1"
 
 cd "$TEMP_DIR/gov"
 zip -q "ConfigAwsS3DataConnectorScriptsGov.zip" ConfigAwsComToAzureGov.zip ConfigAwsGovToAzureGov.zip
