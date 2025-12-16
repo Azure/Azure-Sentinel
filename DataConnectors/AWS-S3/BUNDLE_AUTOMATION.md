@@ -22,20 +22,30 @@ Two main zip files are automatically maintained:
 
 The automation is implemented via a GitHub Actions workflow (`.github/workflows/aws-s3-bundle-update.yaml`) that:
 
-1. **Triggers automatically** when changes are pushed to the `master` branch that affect:
-   - `*.ps1` files in the AWS-S3 directory
-   - `*.py` files in the AWS-S3 directory
-   - `*.md` files in the AWS-S3 directory
-   - Files in `CloudFormation/`, `Enviornment/`, or `Utils/` subdirectories
+1. **Triggers automatically** on:
+   - **Pull Requests** targeting the `master` branch (validation mode)
+   - **Pushes** to the `master` branch (auto-update mode)
+   - When changes affect:
+     - `*.ps1` files in the AWS-S3 directory
+     - `*.py` files in the AWS-S3 directory
+     - `*.md` files in the AWS-S3 directory
+     - Files in `CloudFormation/`, `Enviornment/`, or `Utils/` subdirectories
 
-2. **Prevents recursion** by:
+2. **Validation Mode (Pull Requests)**:
+   - Runs the bundling script to regenerate zip files
+   - Checks if the zip files in the PR match the generated ones
+   - **Fails the PR** if zip bundles are out of sync with source files
+   - Provides clear instructions on how to update the bundles locally
+
+3. **Auto-Update Mode (Master Branch)**:
+   - Runs the bundling script to regenerate zip files
+   - Automatically commits updated zip files back to master
+   - Uses `[skip ci]` to prevent workflow recursion
+
+4. **Prevents recursion** by:
    - Excluding zip file changes from triggering the workflow
    - Checking if the commit already contains zip updates
    - Using `[skip ci]` in the commit message
-
-3. **Rebuilds the bundles** using the `.script/bundleAwsS3Scripts.sh` script
-
-4. **Commits the changes** automatically with a bot account
 
 ### Bundling Script
 
@@ -93,10 +103,27 @@ Or trigger the workflow manually:
 
 ## Troubleshooting
 
+### PR validation fails with "bundles are out of sync"
+
+If your PR fails validation:
+
+1. Run the bundling script locally:
+   ```bash
+   .script/bundleAwsS3Scripts.sh
+   ```
+2. Commit the updated zip files:
+   ```bash
+   git add DataConnectors/AWS-S3/*.zip
+   git commit -m "Update AWS-S3 bundles"
+   git push
+   ```
+3. The PR validation will pass on the next run
+
 ### Workflow doesn't trigger
 
 - Ensure changes are in the monitored paths (see above)
-- Check that the changes were pushed to the `master` branch
+- For PRs: Check that the PR targets the `master` branch
+- For auto-updates: Check that the changes were pushed to the `master` branch
 - Verify the workflow file exists and is valid YAML
 
 ### Bundles are outdated

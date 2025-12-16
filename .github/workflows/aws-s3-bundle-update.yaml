@@ -2,6 +2,21 @@ name: AWS-S3 DataConnector Bundle Update
 run-name: AWS-S3 DataConnector Bundle Update running on ${{ github.ref_name }}
 
 on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      # Trigger when any of these files in AWS-S3 directory change
+      - 'DataConnectors/AWS-S3/*.ps1'
+      - 'DataConnectors/AWS-S3/*.py'
+      - 'DataConnectors/AWS-S3/*.md'
+      - 'DataConnectors/AWS-S3/CloudFormation/**'
+      - 'DataConnectors/AWS-S3/Enviornment/**'
+      - 'DataConnectors/AWS-S3/Utils/**'
+      - 'DataConnectors/AWS-S3/README.md'
+      # Don't trigger on zip file changes (to avoid recursion)
+      - '!DataConnectors/AWS-S3/*.zip'
+  
   push:
     branches:
       - master
@@ -64,8 +79,21 @@ jobs:
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
       
-      - name: Commit and push updated bundles
-        if: steps.check_changes.outputs.skip != 'true' && steps.check_zip_changes.outputs.has_changes == 'true'
+      - name: Validate bundles are up-to-date (PR check)
+        if: github.event_name == 'pull_request' && steps.check_changes.outputs.skip != 'true' && steps.check_zip_changes.outputs.has_changes == 'true'
+        run: |
+          echo "❌ ERROR: AWS-S3 DataConnector zip bundles are out of sync with source files!"
+          echo ""
+          echo "The following files have changed but the zip bundles were not updated:"
+          git diff --cached --name-only
+          echo ""
+          echo "Please run the following command locally and commit the updated zip files:"
+          echo "  .script/bundleAwsS3Scripts.sh"
+          echo ""
+          exit 1
+      
+      - name: Commit and push updated bundles (master only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.check_changes.outputs.skip != 'true' && steps.check_zip_changes.outputs.has_changes == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
