@@ -1,5 +1,7 @@
 # AWS S3 Microsoft Sentinel Connector
 
+<!-- Sanity Check: Bundle updated on 2025-12-16 19:45 UTC - Commit f39379c0 -->
+
 ## Introduction
 
 AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Watch, Cloud Trail (management and data events). 
