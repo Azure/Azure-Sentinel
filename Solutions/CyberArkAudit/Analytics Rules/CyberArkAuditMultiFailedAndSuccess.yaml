@@ -1,0 +1,57 @@
+kind: Scheduled
+name: CyberArk - Multiple Failed Actions Followed by Success (15m)
+description: >
+  Detects 3+ failed actions against an account followed by a success in a short window,
+  indicating brute-force or credential guessing.
+severity: Medium
+tactics:
+  - CredentialAccess
+queryFrequency: 5M
+queryPeriod: 15M
+triggerOperator: GreaterThan
+triggerThreshold: 0
+query: |
+  let window = 15m;
+  let fails =
+      CyberArk_AuditEvents_CL
+      | where TimeGenerated > ago(window)
+      | where actionType has_any ("Fail","Failed","Denied","Error")
+          or message has_any ("fail","failed","denied","unauthorized")
+      | summarize Fails=count(), firstFail=min(TimeGenerated), lastFail=max(TimeGenerated) by username, targetAccount;
+  let success =
+      CyberArk_AuditEvents_CL
+      | where TimeGenerated > ago(window)
+      | where actionType has_any ("Success","Succeeded","Allow","Allowed")
+          or message has_any ("success","allowed")
+      | summarize Successes=count(), firstSuccess=min(TimeGenerated) by username, targetAccount;
+  fails
+  | where Fails >= 3
+  | join kind=inner success on username, targetAccount
+  | join kind=inner (
+      CyberArk_AuditEvents_CL
+      | extend cd = parse_json(customData)
+      | extend cd_client_ip = tostring(cd.client_ip_address),
+               cd_source_ip = tostring(cd.source_ip_address),
+               cd_device_os = tostring(cd.device_os),
+               cd_browser = tostring(cd.browser_name),
+               cd_geo_city = tostring(cd.geoip_city_name),
+               cd_geo_country = tostring(cd.geoip_country_name),
+               cd_target = coalesce(tostring(cd.target), tostring(cd.target_resource), tostring(cd.new_target))
+      | project username, targetAccount, any_cd_client_ip = cd_client_ip, any_cd_source_ip = cd_source_ip,
+                any_cd_device_os = cd_device_os, any_cd_browser = cd_browser,
+                any_cd_geo_city = cd_geo_city, any_cd_geo_country = cd_geo_country, any_cd_target = cd_target
+    ) on username, targetAccount
+  | project username, targetAccount, Fails, Successes, firstFail, lastFail, firstSuccess,
+            any_cd_source_ip, any_cd_client_ip, any_cd_device_os, any_cd_browser,
+            any_cd_geo_city, any_cd_geo_country, any_cd_target
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: username
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: targetAccount
+suppressionEnabled: false
+version: 1.0.0

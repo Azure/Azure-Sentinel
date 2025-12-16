@@ -1,0 +1,113 @@
+[
+  {
+    "name": "BigIDDSPMCatalog",
+    "apiVersion": "2025-09-01",
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "connectorDefinitionName": "BigIDDSPMLogsConnectorDefinition",
+      "dcrConfig": {
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+        "streamName": "Custom-BigIDDSPMCatalog_CL"
+      },
+      "dataType": "BigIDDSPMCatalog_CL",
+      "auth": {
+        "type": "JwtToken",
+        "UserToken": "{{bigidToken}}",
+        "UserTokenPrepend": "",
+        "TokenEndpoint": "https://{{bigidFqdn}}/api/v1/refresh-access-token",
+        "TokenEndpointHttpMethod": "GET",
+        "NoAccessTokenPrepend": true,
+        "JwtTokenJsonPath": "$.systemToken"
+      },
+      "request": {
+        "apiEndpoint": "https://{{bigidFqdn}}/api/v1/actionable-insights/all-cases",
+        "rateLimitQPS": 20,
+        "queryWindowInMin": 10,
+        "httpMethod": "GET",
+        "retryCount": 3,
+        "timeoutInSeconds": 10,
+        "headers": {
+          "Accept": "application/json",
+          "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector (all-cases)"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.data.cases"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "Offset",
+        "PageSize": 50,
+        "PageSizeParameterName": "limit",
+        "OffsetParaName": "offset"
+      },
+      "shouldJoinNestedData": true,
+      "joinedDataStepName": "case",
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetchDataSourceDetails",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project dataSourceName = res.dataSourceName, policyName = res.policyName"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetchDataSourceDetails": {
+          "shouldJoinNestedData": true,
+          "joinedDataStepName": "datasource",
+          "stepInfo": {
+            "stepType": "Nested",
+            "nextSteps": [
+              {
+                "stepId": "fetchObjectsDetails",
+                "stepPlaceholdersParsingKql": "source"
+              }
+            ]
+          },
+          "request": {
+            "httpMethod": "GET",
+            "apiEndpoint": "https://{{bigidFqdn}}/api/v1/ds_connections/$dataSourceName$",
+            "queryParameters": {
+              "withoutCredentialValue": "true"
+            },
+            "headers": {
+              "Accept": "application/json",
+              "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector (datasources)"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": ["$.ds_connection"],
+            "format": "json"
+          }
+        },
+        "fetchObjectsDetails": {
+          "shouldJoinNestedData": true,
+          "joinedDataStepName": "affectedObjects",
+          "request": {
+            "httpMethod": "GET",
+            "apiEndpoint": "https://{{bigidFqdn}}/api/v1/data-catalog/",
+            "queryParameters": {
+              "limit": 32,
+              "requireTotalCount": "true",
+              "filter": "SYSTEM = \"$dataSourceName$\" AND policy IN (\"$policyName$\")"
+            },
+            "headers": {
+              "Accept": "application/json",
+              "User-Agent": "BigID-MSFT-Sentinel-CCF-Connector (data-catalog)"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": ["$.results"],
+            "format": "json"
+          }
+        }
+      }
+    }
+  }
+]

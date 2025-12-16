@@ -25,7 +25,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         host_entity_obj = HostEntityCollector(
-            applogger,
+            start_time,
             consts.HOST_ENTITIES_NAME,
             consts.HOST_ENTITY_CLIENT_ID,
             consts.HOST_ENTITY_CLIENT_SECRET,

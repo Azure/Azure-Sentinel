@@ -1,0 +1,66 @@
+id: 395f3ced-3923-4b83-b05d-8d077fd48c1e
+name: GCP Security Command Center - Detect projects with API Keys present
+description: |
+  Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.
+  Projects with API Keys may expose credentials that enable unauthorized access if keys are leaked.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1552
+tags:
+  - CIS GCP Foundation 3.0 1.12
+  - NIST 800-53 R5 PL-8, SA-8
+  - PCI-DSS v4.0 2.2.2, 6.2.1
+  - ISO-27001 v2022 A.8.27
+  - Cloud Controls Matrix 4 DSP-07
+  - NIST Cybersecurity Framework 1.0 PR-IP-2
+  - CIS Controls 8.0 16.10
+query: |
+ GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory == "API_KEY_EXISTS"
+  | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)
+  | extend ResourceName = tostring(FindingsJson.resourceName)
+  | extend ProjectId = extract(@"projects/([^/]+)", 1, ResourceName)
+  | extend ProjectName = tostring(FindingsResourceJson.displayName)
+  | extend Severity = tostring(FindingsJson.severity),
+           FindingName = tostring(FindingsJson.name),
+           ExternalUri = tostring(FindingsJson.externalUri),
+           Description = tostring(FindingsJson.description)
+  // Produce one row per project with an API key finding
+  | summarize TimeGenerated = max(TimeGenerated),
+              FindingsCount = count(),
+              ExternalUri = any(ExternalUri),
+              Description = any(Description)
+    by ProjectId, ProjectName, Severity, ResourceName
+  | project TimeGenerated, ProjectId, ProjectName, ResourceName, FindingsCount, Severity, ExternalUri, Description
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectName
+      - identifier: AppId
+        columnName: ProjectId
+customDetails:
+  ProjectId: ProjectId
+  ProjectName: ProjectName
+  FindingsCount: FindingsCount
+  SampleExternalUri: ExternalUri
+  SampleDescription: Description
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP project {{ProjectName}} has API key(s) present"
+  alertDescriptionFormat: |-
+    Project {{ProjectName}} ({{ProjectId}}) has {{FindingsCount}} API key finding(s). Review API keys and consider rotating or removing keys and using IAM-based authentication.
+version: 1.0.0
+kind: Scheduled
