@@ -2,6 +2,8 @@
 
 Browse all data connectors available in Microsoft Sentinel Solutions.
 
+> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. A small number of connectors (such as Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) are not managed via Solutions and are therefore not included here.
+
 **Browse by:**
 
 - [Solutions](connector-reference-index.md)

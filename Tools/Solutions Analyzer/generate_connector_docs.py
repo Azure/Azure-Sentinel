@@ -646,6 +646,12 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write("This reference documentation provides detailed information about data connectors ")
         f.write("available in Microsoft Sentinel Solutions.\n\n")
         
+        # Add coverage note
+        f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
+        f.write("GitHub repository. A small number of connectors (such as Microsoft Dataverse, ")
+        f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
+        f.write("are not managed via Solutions and are therefore not included here.\n\n")
+        
         # Add navigation to other indexes
         f.write("**Browse by:**\n\n")
         f.write("- [Solutions](solutions-index.md) (this page)\n")
@@ -786,6 +792,12 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
     with index_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Connectors Index\n\n")
         f.write("Browse all data connectors available in Microsoft Sentinel Solutions.\n\n")
+        
+        # Add coverage note
+        f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
+        f.write("GitHub repository. A small number of connectors (such as Microsoft Dataverse, ")
+        f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
+        f.write("are not managed via Solutions and are therefore not included here.\n\n")
         
         # Add navigation
         f.write("**Browse by:**\n\n")
