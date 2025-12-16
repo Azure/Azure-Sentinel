@@ -24,26 +24,62 @@ cd "$AWS_S3_DIR"
 # Create temporary directories for building zips
 mkdir -p "$TEMP_DIR/com" "$TEMP_DIR/gov"
 
-# List of files to include in all bundles (relative paths from AWS_S3_DIR)
-FILES_TO_BUNDLE=(
-    "AwsRequiredPolicies.md"
-    "AwsRequiredPoliciesForGov.md"
-    "CloudFormation/cloudformationtemplateforAWSS3.txt"
-    "ConfigAwsConnector.ps1"
-    "ConfigCloudTrailDataConnector.ps1"
-    "ConfigCloudWatchDataConnector.ps1"
-    "ConfigCustomLogDataConnector.ps1"
-    "ConfigGuardDutyDataConnector.ps1"
-    "ConfigVpcFlowDataConnector.ps1"
-    "ConfigVpcFlowLogs.ps1"
-    "Enviornment/EnviornmentConstants.ps1"
-    "README.md"
-    "Utils/AwsPoliciesUpdate.ps1"
-    "Utils/AwsResourceCreator.ps1"
-    "Utils/AwsSentinelTag.ps1"
-    "Utils/CommonAwsPolicies.ps1"
-    "Utils/HelperFunctions.ps1"
-)
+# Get list of changed files in the AWS-S3 directory from the last commit
+get_changed_files() {
+    local base_ref="${GITHUB_BASE_REF:-HEAD~1}"  # Use GitHub base ref or previous commit
+    local changed_files=()
+    
+    # Get all changed files in the AWS-S3 directory, excluding zip files
+    while IFS= read -r file; do
+        # Skip if no file (empty output from git diff)
+        [[ -z "$file" ]] && continue
+        
+        # Skip zip files and BUNDLE_AUTOMATION.md (documentation only)
+        [[ "$file" == *.zip ]] && continue
+        [[ "$file" == *"BUNDLE_AUTOMATION.md" ]] && continue
+        
+        # Remove the DataConnectors/AWS-S3/ prefix to get relative path
+        local relative_file="${file#DataConnectors/AWS-S3/}"
+        if [[ "$relative_file" != "$file" ]] && [[ -n "$relative_file" ]]; then  # File is in AWS-S3 directory and not empty
+            changed_files+=("$relative_file")
+        fi
+    done < <(git diff --name-only "$base_ref" HEAD -- "DataConnectors/AWS-S3/" 2>/dev/null || true)
+    
+    # Only output if we have files
+    if [[ ${#changed_files[@]} -gt 0 ]]; then
+        printf '%s\n' "${changed_files[@]}"
+    fi
+}
+
+# Replace the hardcoded FILES_TO_BUNDLE with dynamic detection
+mapfile -t FILES_TO_BUNDLE < <(get_changed_files)
+
+# Fallback: if no files changed, include all relevant files
+if [[ ${#FILES_TO_BUNDLE[@]} -eq 0 ]]; then
+    echo "No changes detected, including all files..."
+    FILES_TO_BUNDLE=(
+        "AwsRequiredPolicies.md"
+        "AwsRequiredPoliciesForGov.md"
+        "CloudFormation/cloudformationtemplateforAWSS3.txt"
+        "ConfigAwsConnector.ps1"
+        "ConfigCloudTrailDataConnector.ps1"
+        "ConfigCloudWatchDataConnector.ps1"
+        "ConfigCustomLogDataConnector.ps1"
+        "ConfigGuardDutyDataConnector.ps1"
+        "ConfigVpcFlowDataConnector.ps1"
+        "ConfigVpcFlowLogs.ps1"
+        "Enviornment/EnviornmentConstants.ps1"
+        "README.md"
+        "Utils/AwsPoliciesUpdate.ps1"
+        "Utils/AwsResourceCreator.ps1"
+        "Utils/AwsSentinelTag.ps1"
+        "Utils/CommonAwsPolicies.ps1"
+        "Utils/HelperFunctions.ps1"
+    )
+else
+    echo "Detected ${#FILES_TO_BUNDLE[@]} changed file(s) to update in bundles:"
+    printf '  - %s\n' "${FILES_TO_BUNDLE[@]}"
+fi
 
 # Function to extract existing zip if it exists, or create empty directory
 extract_or_create() {
