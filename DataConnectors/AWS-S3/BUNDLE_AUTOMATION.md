@@ -30,16 +30,17 @@ The automation is implemented via a GitHub Actions workflow (`.github/workflows/
      - `*.md` files in the AWS-S3 directory
      - Files in `CloudFormation/`, `Enviornment/`, or `Utils/` subdirectories
 
-2. **PR Validation Mode**:
+2. **Auto-Update Mode**:
    - Runs the bundling script to regenerate zip files
-   - Checks if the zip files in the PR match the generated ones
-   - **Fails the PR** if zip bundles are out of sync with source files
-   - Provides clear instructions on how to update the bundles locally
-   - PRs cannot be merged until bundles are up-to-date
+   - Automatically commits updated bundles to the PR branch
+   - Includes `[skip ci]` flag to prevent workflow recursion
+   - Developers don't need to manually update bundles - it's handled automatically
+   - Commits are made by GitHub Action bot with clear description
 
 3. **Prevents recursion** by:
    - Excluding zip file changes from triggering the workflow
    - Checking if the commit already contains zip updates
+   - Using `[skip ci]` flag in auto-commit messages
 
 ### Bundling Script
 
@@ -98,9 +99,18 @@ Or trigger the workflow manually:
 
 ## Troubleshooting
 
-### PR validation fails with "bundles are out of sync"
+### Bundles not auto-updated in PR
 
-If your PR fails validation:
+If bundles aren't automatically updated:
+
+1. Check the GitHub Actions tab to see if the workflow ran
+2. Verify your changes are in monitored paths (*.ps1, *.py, *.md, CloudFormation/, Enviornment/, Utils/)
+3. If workflow succeeded but no commit appeared, bundles may already be up-to-date
+4. Manually trigger the workflow from the Actions tab if needed
+
+### Manual bundle update needed
+
+If you prefer to update bundles manually or workflow fails:
 
 1. Run the bundling script locally:
    ```bash
@@ -112,19 +122,13 @@ If your PR fails validation:
    git commit -m "Update AWS-S3 bundles"
    git push
    ```
-3. The PR validation will pass on the next run
 
 ### Workflow doesn't trigger
 
 - Ensure changes are in the monitored paths (see above)
-- For PRs: Check that the PR targets the `master` branch
-- For auto-updates: Check that the changes were pushed to the `master` branch
+- Check that the PR targets the `master` branch
 - Verify the workflow file exists and is valid YAML
-
-### Bundles are outdated
-
-- Manually trigger the workflow from the Actions tab
-- Or run the bundling script locally and commit the results
+- Check that zip files weren't the only changes (they're excluded from triggers)
 
 ### Recursion issues
 
