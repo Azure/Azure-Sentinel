@@ -44,42 +44,54 @@ The automation is implemented via a GitHub Actions workflow (`.github/workflows/
 
 ### Bundling Script
 
-The `.script/bundleAwsS3Scripts.sh` script:
+The `.script/bundleAwsS3Scripts.sh` script uses intelligent, dynamic bundling:
 
-- Extracts existing zip files to preserve unchanged content
-- Only replaces files that have been created or modified in the source directory
-- Creates the nested zip file structure
-- Handles the difference between Commercial (V2 Lambda) and Government (V1 Lambda) versions
-- Ensures nothing is replaced that shouldn't be - only new/modified files are updated
-- Cleans up temporary files after completion
+- **Dynamic File Detection**: Automatically detects changed files using `git diff`
+  - Respects `GITHUB_BASE_REF` in CI/CD environments
+  - Falls back to `HEAD~1` for local execution
+  - Filters out `.zip` files and documentation automatically
+- **Intelligent Updates**: Extracts existing zip files and only replaces modified files
+  - Uses `cmp -s` to compare file contents
+  - Preserves unchanged files to minimize bundle changes
+- **Variant Handling**: Automatically manages differences between Commercial and Government bundles
+  - Commercial: Includes both Lambda V1 and V2
+  - Government: Includes only Lambda V1
+- **Nested Structure**: Creates proper nested zip file structure
+- **Fallback Safety**: If no changes detected, bundles all relevant files to ensure completeness
 
 ## Files Included in Bundles
 
-All bundles include:
+The bundling script uses **dynamic file detection** to automatically determine which files to include:
 
-- `AwsRequiredPolicies.md`
-- `AwsRequiredPoliciesForGov.md`
-- `CloudFormation/cloudformationtemplateforAWSS3.txt`
-- `ConfigAwsConnector.ps1`
-- `ConfigCloudTrailDataConnector.ps1`
-- `ConfigCloudWatchDataConnector.ps1`
-- `ConfigCustomLogDataConnector.ps1`
-- `ConfigGuardDutyDataConnector.ps1`
-- `ConfigVpcFlowDataConnector.ps1`
-- `ConfigVpcFlowLogs.ps1`
-- `Enviornment/EnviornmentConstants.ps1`
-- `README.md`
-- `Utils/AwsPoliciesUpdate.ps1`
-- `Utils/AwsResourceCreator.ps1`
-- `Utils/AwsSentinelTag.ps1`
-- `Utils/CommonAwsPolicies.ps1`
-- `Utils/HelperFunctions.ps1`
+### Dynamic Detection Process
 
-**Commercial bundles additionally include:**
-- `CloudWatchLambdaFunction_V2.py`
+1. **Changed Files Detection**: The script uses `git diff` to detect files that have been modified in the AWS-S3 directory
+2. **Automatic Filtering**: Excludes `.zip` files and `BUNDLE_AUTOMATION.md` from the bundle
+3. **Fallback Mechanism**: If no changes are detected, all relevant files in the AWS-S3 directory are bundled
 
-**All bundles include:**
-- `CloudWatchLambdaFunction.py`
+### File Types Included
+
+The script automatically bundles:
+- **PowerShell scripts** (`*.ps1`) - Configuration and connector scripts
+- **Python files** (`*.py`) - Lambda functions
+- **Markdown documentation** (`*.md`) - Policy and usage documentation  
+- **CloudFormation templates** - Infrastructure-as-code definitions
+- **Utility scripts** - Helper functions and shared code in `Utils/` directory
+- **Environment configuration** - Settings in `Enviornment/` directory
+
+### Bundle Variants
+
+**Commercial Azure Bundles** (`ConfigAwsS3DataConnectorScripts.zip`):
+- Include both `CloudWatchLambdaFunction.py` and `CloudWatchLambdaFunction_V2.py`
+- Contain two nested zips: `ConfigAwsComToAzureCom.zip` and `ConfigAwsGovToAzureCom.zip`
+
+**Government Azure Bundles** (`ConfigAwsS3DataConnectorScriptsGov.zip`):
+- Include only `CloudWatchLambdaFunction.py` (V1)
+- Contain two nested zips: `ConfigAwsComToAzureGov.zip` and `ConfigAwsGovToAzureGov.zip`
+
+### Adding New Files
+
+Simply add or modify files in the `DataConnectors/AWS-S3/` directory. The bundling script will automatically detect and include them - no manual configuration needed!
 
 ## Manual Bundle Generation
 
@@ -93,7 +105,7 @@ If needed, you can manually regenerate the bundles:
 Or trigger the workflow manually:
 
 1. Go to the Actions tab in the GitHub repository
-2. Select "AWS-S3 DataConnector Bundle Update" workflow
+2. Select "AWS-S3 DataConnector Bundle Auto-Update" workflow
 3. Click "Run workflow"
 4. Select the branch and click "Run workflow"
 
@@ -142,21 +154,34 @@ If the workflow triggers itself repeatedly:
 
 ### Adding New Files to Bundles
 
-To add new files to the bundles, edit `.script/bundleAwsS3Scripts.sh`:
+**No configuration needed!** The bundling script uses dynamic file detection:
 
-1. Add the file path to the `FILES_TO_BUNDLE` array
-2. Test locally: `.script/bundleAwsS3Scripts.sh`
-3. Commit the script change
+1. Simply add or modify files in the `DataConnectors/AWS-S3/` directory
+2. The script automatically detects changes via `git diff`
+3. New files are automatically included in the next bundle generation
 
-The workflow will automatically include the new file in future bundles.
+The script intelligently handles:
+- New PowerShell scripts (`*.ps1`)
+- New Python files (`*.py`)
+- New documentation (`*.md`)
+- New files in `CloudFormation/`, `Enviornment/`, or `Utils/` subdirectories
 
 ### Modifying Bundle Structure
 
 To change which files go in which bundle variant (Commercial vs. Government):
 
 1. Edit the `create_nested_zip` function in `.script/bundleAwsS3Scripts.sh`
-2. Adjust the logic for `lambda_version` parameter
-3. Test locally before committing
+2. Adjust the logic for the `lambda_version` parameter
+3. Test locally: `.script/bundleAwsS3Scripts.sh`
+4. Commit your changes
+
+### Understanding Dynamic Detection
+
+The script's `get_changed_files()` function:
+- Compares current branch against base branch (in PRs) or last commit (locally)
+- Automatically filters out `.zip` files and `BUNDLE_AUTOMATION.md`
+- Falls back to including all files if no changes are detected
+- Works seamlessly in both CI/CD and local development environments
 
 ## Benefits
 
