@@ -1,0 +1,73 @@
+name: AWS-S3 DataConnector Bundle Update
+run-name: AWS-S3 DataConnector Bundle Update running on ${{ github.ref_name }}
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      # Trigger when any of these files in AWS-S3 directory change
+      - 'DataConnectors/AWS-S3/*.ps1'
+      - 'DataConnectors/AWS-S3/*.py'
+      - 'DataConnectors/AWS-S3/*.md'
+      - 'DataConnectors/AWS-S3/CloudFormation/**'
+      - 'DataConnectors/AWS-S3/Enviornment/**'
+      - 'DataConnectors/AWS-S3/Utils/**'
+      - 'DataConnectors/AWS-S3/README.md'
+      # Don't trigger on zip file changes (to avoid recursion)
+      - '!DataConnectors/AWS-S3/*.zip'
+  
+  # Allow manual workflow dispatch for testing
+  workflow_dispatch:
+
+jobs:
+  update-bundles:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check if bundle update is needed
+        id: check_changes
+        run: |
+          # Check if the triggering commit already contains zip file updates
+          # This prevents infinite loops
+          if git log -1 --name-only | grep -q "ConfigAwsS3DataConnectorScripts.*\.zip"; then
+            echo "Zip files were already updated in this commit. Skipping bundle update."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Bundle update needed."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run bundle script
+        if: steps.check_changes.outputs.skip != 'true'
+        run: |
+          chmod +x .script/bundleAwsS3Scripts.sh
+          .script/bundleAwsS3Scripts.sh
+      
+      - name: Check for changes in zip files
+        if: steps.check_changes.outputs.skip != 'true'
+        id: check_zip_changes
+        run: |
+          git add DataConnectors/AWS-S3/ConfigAwsS3DataConnectorScripts*.zip
+          if git diff --cached --quiet; then
+            echo "No changes in zip files."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Zip files have been updated."
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit and push updated bundles
+        if: steps.check_changes.outputs.skip != 'true' && steps.check_zip_changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Auto-update AWS-S3 DataConnector script bundles [skip ci]"
+          git push
