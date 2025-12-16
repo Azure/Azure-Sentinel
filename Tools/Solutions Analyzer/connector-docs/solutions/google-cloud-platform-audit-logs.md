@@ -13,13 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **2 data connector(s)**.
 
 ### [GCP Pub/Sub Audit Logs](../connectors/gcpauditlogsdefinition.md)
 
 **Publisher:** Microsoft
 
-The Google Cloud Platform (GCP) audit logs, ingested from Microsoft Sentinel's connector, enables you to capture three types of audit logs: admin activity logs, data access logs, and access transparency logs. Google cloud audit logs record a trail that practitioners can use to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.
+### [GCP Pub/Sub Audit Logs](../connectors/gcppub-subauditlogs.md)
+
+**Publisher:** Microsoft
+
+The Google Cloud Platform (GCP) audit logs, ingested from Sentinel's connector, enable you to capture three types of audit logs: admin activity logs, data access logs, and access transparency logs. Google cloud audit logs record a trail that practitioners can use to monitor access and detect potential threats across Google Cloud Platform (GCP) resources.
 
 **Permissions:**
 
@@ -62,9 +66,9 @@ When you click "Add new collector" in the portal, you'll be prompted to provide:
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `GCPAuditLogs` |
-| **Connector Definition Files** | [data_connector_definition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Audit%20Logs/Data%20Connectors/GCPAuditLogs_ccp/data_connector_definition.json) |
+| **Connector Definition Files** | [GCPAuditLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Audit%20Logs/Data%20Connectors/GCPAuditLogs.json) |
 
-[→ View full connector details](../connectors/gcpauditlogsdefinition.md)
+[→ View full connector details](../connectors/gcppub-subauditlogs.md)
 
 ## Tables Reference
 
@@ -72,6 +76,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `GCPAuditLogs` | [GCP Pub/Sub Audit Logs](../connectors/gcpauditlogsdefinition.md) |
+| `GCPAuditLogs` | [GCP Pub/Sub Audit Logs](../connectors/gcppub-subauditlogs.md), [GCP Pub/Sub Audit Logs](../connectors/gcpauditlogsdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

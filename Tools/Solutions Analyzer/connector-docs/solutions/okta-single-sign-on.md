@@ -13,7 +13,7 @@
 
 ## Data Connectors
 
-This solution provides **3 data connector(s)**.
+This solution provides **4 data connector(s)**.
 
 ### [Okta Single Sign-On](../connectors/oktasso.md)
 
@@ -27,54 +27,93 @@ This solution provides **3 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) data connector provides the capability to ingest audit and event logs from the Okta Sysem Log API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform and uses the Okta System Log API to fetch the events. The connector supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.
+### [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md)
+
+**Publisher:** Okta
+
+The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft Sentinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
 
 **Permissions:**
 
 **Resource Provider Permissions:**
-- **Workspace** (Workspace): Read and Write permissions are required.
+- **Workspace** (Workspace): read and write permissions on the workspace are required.
+- **Keys** (Workspace): read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).
 
 **Custom Permissions:**
-- **Okta API Token**: An Okta API token. Follow the [following instructions](https://developer.okta.com/docs/guides/create-an-api-token/main/) to create an See the [documentation](https://developer.okta.com/docs/reference/api/system-log/) to learn more about Okta System Log API.
+- **Microsoft.Web/sites permissions**: Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/).
+- **Okta API Token**: An Okta API Token is required. See the documentation to learn more about the [Okta System Log API](https://developer.okta.com/docs/reference/api/system-log/).
 
 **Setup Instructions:**
 
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
 
-To enable the Okta Single Sign-On for Microsoft Sentinel, provide the required information below and click on Connect.
->
-**Connector Management Interface**
+>**NOTE:** This connector uses Azure Functions to connect to Okta SSO to pull its logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.
 
-This section is an interactive interface in the Microsoft Sentinel portal that allows you to manage your data collectors.
+>**NOTE:** This connector has been updated, if you have previously deployed an earlier version, and want to update, please delete the existing Okta Azure Function before redeploying this version.
 
-📊 **View Existing Collectors**: A management table displays all currently configured data collectors with the following information:
-- **Endpoint**
+>**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App.
 
-➕ **Add New Collector**: Click the "Add new collector" button to configure a new data collector (see configuration form below).
+**STEP 1 - Configuration steps for the Okta SSO API**
 
-🔧 **Manage Collectors**: Use the actions menu to delete or modify existing collectors.
+ [Follow these instructions](https://developer.okta.com/docs/guides/create-an-api-token/create-the-token/) to create an API Token.
 
-> 💡 **Portal-Only Feature**: This configuration interface is only available when viewing the connector in the Microsoft Sentinel portal. You cannot configure data collectors through this static documentation.
+**Note** - For more information on the rate limit restrictions enforced by Okta, please refer to the **[documentation](https://developer.okta.com/docs/reference/rl-global-mgmt/)**.
 
-**Add domain**
+**STEP 2 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**
 
-*Add domain*
+>**IMPORTANT:** Before deploying the Okta SSO connector, have the Workspace ID and Workspace Primary Key (can be copied from the following), as well as the Okta SSO API Authorization Token, readily available.
+- **Workspace ID**: `WorkspaceId`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+- **Primary Key**: `PrimaryKey`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-When you click the "Add domain" button in the portal, a configuration form will open. You'll need to provide:
+**Option 1 - Azure Resource Manager (ARM) Template**
 
-- **Okta Domain Name** (optional): Okta Domain Name (e.g., myDomain.okta.com)
-- **API Key** (optional): API Key
+  This method provides an automated deployment of the Okta SSO connector using an ARM Tempate.
 
-> 💡 **Portal-Only Feature**: This configuration form is only available in the Microsoft Sentinel portal.
+1. Click the **Deploy to Azure** button below. 
+
+	[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentineloktaazuredeployv2-solution)
+2. Select the preferred **Subscription**, **Resource Group** and **Location**. 
+3. Enter the **Workspace ID**, **Workspace Key**, **API Token** and **URI**. 
+ - Use the following schema for the `uri` value: `https://<OktaDomain>/api/v1/logs?since=` Replace `<OktaDomain>` with your domain. [Click here](https://developer.okta.com/docs/reference/api-overview/#url-namespace) for further details on how to identify your Okta domain namespace. There is no need to add a time value to the URI, the Function App will dynamically append the inital start time of logs to UTC 0:00 for the current UTC date as time value to the URI in the proper format. 
+ - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. 
+4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
+5. Click **Purchase** to deploy.
+
+  **Option 2 - Manual Deployment of Azure Functions**
+
+  Use the following step-by-step instructions to deploy the Okta SSO connector manually with Azure Functions (Deployment via Visual Studio Code).
+**Step 1 - Deploy a Function App**
+
+    1. Download the [Azure Function App](https://aka.ms/sentineloktaazurefunctioncodev2) file. Extract archive to your local development computer.
+2. Follow the [function app manual deployment instructions](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/AzureFunctionsManualDeployment.md#function-app-manual-deployment-instructions) to deploy the Azure Functions app using VSCode.
+3. After successful deployment of the function app, follow next steps for configuring it.
+
+    **Step 2 - Configure the Function App**
+
+    1. Go to Azure Portal for the Function App configuration.
+2. In the Function App, select the Function App Name and select **Configuration**.
+3. In the **Application settings** tab, select **+ New application setting**.
+4. Add each of the following five (5) application settings individually, with their respective string values (case-sensitive): 
+		apiToken
+		workspaceID
+		workspaceKey
+		uri
+		logAnalyticsUri (optional)
+ - Use the following schema for the `uri` value: `https://<OktaDomain>/api/v1/logs?since=` Replace `<OktaDomain>` with your domain. [Click here](https://developer.okta.com/docs/reference/api-overview/#url-namespace) for further details on how to identify your Okta domain namespace. There is no need to add a time value to the URI, the Function App will dynamically append the inital start time of logs to UTC 0:00 for the current UTC date as time value to the URI in the proper format.
+ - Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details.
+ - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: https://<CustomerId>.ods.opinsights.azure.us. 
+5. Once all application settings have been entered, click **Save**.
 
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `OktaV2_CL` |
 | | `Okta_CL` |
 | | `signIns` |
-| **Connector Definition Files** | [OktaSSOv2_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors/OktaNativePollerConnectorV2/OktaSSOv2_DataConnectorDefinition.json) |
+| **Connector Definition Files** | [azuredeploy_Okta_native_poller_connector_v2.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors/OktaNativePollerConnectorV2/azuredeploy_Okta_native_poller_connector_v2.json) |
 
-[→ View full connector details](../connectors/oktassov2.md)
+[→ View full connector details](../connectors/oktasinglesignon(usingazurefunctions).md)
 
 ## Tables Reference
 
@@ -83,8 +122,8 @@ This solution ingests data into **4 table(s)**:
 | Table | Used By Connectors |
 |-------|-------------------|
 | `OktaNativePoller_CL` | [Okta Single Sign-On (Polling CCP)](../connectors/oktasso-polling.md) |
-| `OktaV2_CL` | [Okta Single Sign-On](../connectors/oktassov2.md) |
-| `Okta_CL` | [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On](../connectors/oktasso.md) |
-| `signIns` | [Okta Single Sign-On (Preview)](../connectors/oktassov2.md) |
+| `OktaV2_CL` | [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
+| `Okta_CL` | [Okta Single Sign-On](../connectors/oktasso.md), [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
+| `signIns` | [Okta Single Sign-On (Preview)](../connectors/oktassov2.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
 
 [← Back to Solutions Index](../solutions-index.md)

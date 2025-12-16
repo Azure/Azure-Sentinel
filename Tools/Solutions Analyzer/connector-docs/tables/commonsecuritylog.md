@@ -2,13 +2,13 @@
 
 **Table:** `CommonSecurityLog`
 
-This table is ingested by **58 solution(s)** using **99 connector(s)**.
+This table is ingested by **59 solution(s)** using **100 connector(s)**.
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
 ---
 
-## Solutions (58)
+## Solutions (59)
 
 This table is used by the following solutions:
 
@@ -44,6 +44,7 @@ This table is used by the following solutions:
 - [Infoblox](../solutions/infoblox.md)
 - [Infoblox Cloud Data Connector](../solutions/infoblox-cloud-data-connector.md)
 - [Infoblox SOC Insights](../solutions/infoblox-soc-insights.md)
+- [IronNet IronDefense](../solutions/ironnet-irondefense.md)
 - [Netwrix Auditor](../solutions/netwrix-auditor.md)
 - [NozomiNetworks](../solutions/nozominetworks.md)
 - [OSSEC](../solutions/ossec.md)
@@ -71,7 +72,7 @@ This table is used by the following solutions:
 - [iboss](../solutions/iboss.md)
 - [vArmour Application Controller](../solutions/varmour-application-controller.md)
 
-## Connectors (99)
+## Connectors (100)
 
 This table is ingested by the following connectors:
 
@@ -134,6 +135,7 @@ This table is ingested by the following connectors:
 - [[Deprecated] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md)
 - [[Recommended] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md)
 - [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md)
+- [IronNet IronDefense](../connectors/ironnetirondefense.md)
 - [[Deprecated] Netwrix Auditor via Legacy Agent](../connectors/netwrix.md)
 - [[Deprecated] Netwrix Auditor via AMA](../connectors/netwrixama.md)
 - [[Deprecated] Nozomi Networks N2OS via Legacy Agent](../connectors/nozominetworksn2os.md)

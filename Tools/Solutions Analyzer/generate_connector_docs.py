@@ -704,7 +704,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write(f"| Unique Tables | {len(all_tables)} |\n\n")
         
         # Organization section
-        f.write("## How This Documentation is Organized\\n\\n")
+        f.write("## How This Documentation is Organized\n\n")
         f.write("Each solution has its own page containing:\n\n")
         f.write("- **Solution Overview**: Publisher, support information, and categories\n")
         f.write("- **Connectors**: List of all connectors in the solution\n")

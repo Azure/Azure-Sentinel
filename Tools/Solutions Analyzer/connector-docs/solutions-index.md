@@ -12,18 +12,20 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **477 solutions**, of which **369** include data connectors, providing access to **503 unique connectors** and **811 unique tables**.
+This documentation covers **481 solutions**, of which **382** include data connectors, providing access to **521 unique connectors** and **825 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 477 |
-| Solutions with Connectors | 369 (77%) |
-| Unique Connectors | 503 |
-| Unique Tables | 811 |
+| Total Solutions | 481 |
+| Solutions with Connectors | 382 (79%) |
+| Unique Connectors | 521 |
+| Unique Tables | 825 |
 
-## How This Documentation is Organized\n\nEach solution has its own page containing:
+## How This Documentation is Organized
+
+Each solution has its own page containing:
 
 - **Solution Overview**: Publisher, support information, and categories
 - **Connectors**: List of all connectors in the solution
@@ -94,6 +96,7 @@ Browse solutions alphabetically:
 | [Azure Key Vault](solutions/azure-key-vault.md) | 2022-05-02 | Microsoft Corporation |
 | [Azure Logic Apps](solutions/azure-logic-apps.md) | 2022-06-24 | Microsoft Corporation |
 | [Azure Network Security Groups](solutions/azure-network-security-groups.md) | 2022-05-23 | Microsoft Corporation |
+| [Azure Resource Graph](solutions/azure-resource-graph.md) | 2025-06-20 | Microsoft Corporation |
 | [Azure SQL Database solution for sentinel](solutions/azure-sql-database-solution-for-sentinel.md) | 2022-08-19 | Microsoft Corporation |
 | [Azure Service Bus](solutions/azure-service-bus.md) | 2022-06-29 | Microsoft Corporation |
 | [Azure Storage](solutions/azure-storage.md) | 2022-05-12 | Microsoft Corporation |
@@ -368,6 +371,7 @@ Browse solutions alphabetically:
 | [McAfee Network Security Platform](solutions/mcafee-network-security-platform.md) | 2021-06-29 | Microsoft Corporation |
 | [McAfee ePolicy Orchestrator](solutions/mcafee-epolicy-orchestrator.md) | 2021-03-25 | Microsoft Corporation |
 | [Microsoft 365](solutions/microsoft-365.md) | 2022-05-23 | Microsoft Corporation |
+| [Microsoft 365 Assets](solutions/microsoft-365-assets.md) | 2025-06-20 | Microsoft Corporation |
 | [Microsoft Business Applications](solutions/microsoft-business-applications.md) | 2023-04-19 | Microsoft Corporation |
 | [Microsoft Copilot](solutions/microsoft-copilot.md) | 2025-10-01 | Microsoft |
 | [Microsoft Defender For Identity](solutions/microsoft-defender-for-identity.md) | 2022-04-20 | Microsoft Corporation |
@@ -377,6 +381,7 @@ Browse solutions alphabetically:
 | [Microsoft Defender for Cloud Apps](solutions/microsoft-defender-for-cloud-apps.md) | 2022-05-02 | Microsoft Corporation |
 | [Microsoft Defender for Office 365](solutions/microsoft-defender-for-office-365.md) | 2022-05-17 | Microsoft Corporation |
 | [Microsoft Entra ID](solutions/microsoft-entra-id.md) | 2022-05-16 | Microsoft Corporation |
+| [Microsoft Entra ID Assets](solutions/microsoft-entra-id-assets.md) | 2025-06-20 | Microsoft Corporation |
 | [Microsoft Entra ID Protection](solutions/microsoft-entra-id-protection.md) | 2022-05-18 | Microsoft Corporation |
 | [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md) | 2022-12-21 | Community |
 | [Microsoft Exchange Security - Exchange Online](solutions/microsoft-exchange-security---exchange-online.md) | 2022-12-21 | Community |
@@ -506,6 +511,7 @@ Browse solutions alphabetically:
 | [SIGNL4](solutions/signl4.md) | 2021-12-10 | Derdack |
 | [SINEC Security Guard](solutions/sinec-security-guard.md) | 2024-07-15 | Siemens AG |
 | [SOC Handbook](solutions/soc-handbook.md) | 2022-11-30 | Community |
+| [SOC Prime CCF](solutions/soc-prime-ccf.md) | 2025-09-25 | SOC Prime |
 | [SOC-Process-Framework](solutions/soc-process-framework.md) | 2022-04-08 | Microsoft Corporation |
 | [SailPointIdentityNow](solutions/sailpointidentitynow.md) | 2021-10-26 | SailPoint |
 | [SalemCyber](solutions/salemcyber.md) | 2023-07-21 | Salem Cyber |

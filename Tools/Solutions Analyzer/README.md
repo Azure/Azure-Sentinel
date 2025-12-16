@@ -13,6 +13,13 @@ This directory contains two complementary tools for analyzing Microsoft Sentinel
 
 You can use these files directly without running the scripts. They are kept up-to-date with the Solutions directory.
 
+**Browsable documentation is also available:**
+- [`connector-docs/solutions-index.md`](connector-docs/solutions-index.md) - Browse all solutions with metadata and connector details
+- [`connector-docs/connectors-index.md`](connector-docs/connectors-index.md) - Browse all unique connectors with setup instructions
+- [`connector-docs/tables-index.md`](connector-docs/tables-index.md) - Browse all unique tables with solution references
+
+The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
+
 ---
 
 # 1. Solution Connector Tables Analyzer
@@ -395,6 +402,20 @@ Instructions are formatted with:
 
 ## Version History
 
+### v4.0
+
+- Added support for multiple Data Connectors folder naming conventions:
+  - `Data Connectors` (standard, with space)
+  - `DataConnectors` (no space) - adds solutions such as Alibaba Cloud, CyberArkEPM, IronNet IronDefense, MarkLogicAudit, Open Systems, PDNS Block Data Connector, SlashNext
+  - `Data Connector` (singular) - adds IoTOTThreatMonitoringwithDefenderforIoT
+- Added handling for ARM template variable references in connector `id` field
+  - Connectors with `[variables(...)]` in id now generate ID from title
+  - Adds connectors such as 1Password, CiscoMeraki, Cortex XDR, CustomLogsAma, GCP Audit Logs, Okta SSO
+- Added `connector_id_generated` column to track when connector ID was auto-generated from title
+- Added connectors with `no_table_definitions` to output with empty table field (previously excluded)
+  - Adds connectors such as Azure Resource Graph, Microsoft 365 Assets, Microsoft Entra ID Assets
+- Added `compare_connector_catalogs.py` script to compare GitHub connectors with Sentinel catalog
+
 ### v3.0
 
 - Added `connector_instruction_steps` and `connector_permissions` fields to CSV output
@@ -410,7 +431,7 @@ Instructions are formatted with:
 - Added GitHub URLs for all file references
 - Improved error handling and validation
 
-## v1.0
+### v1.0
 
 - Initial release with basic table detection from connector JSON files
 - CSV output with solution, connector, and table mappings

@@ -13,11 +13,15 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **3 data connector(s)**.
 
 ### [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md)
 
 **Publisher:** Cisco
+
+### [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md)
+
+**Publisher:** Microsoft
 
 ### [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md)
 
@@ -65,7 +69,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md) |
-| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
+| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md) |
+| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

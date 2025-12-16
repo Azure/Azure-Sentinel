@@ -13,11 +13,15 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **3 data connector(s)**.
 
 ### [1Password](../connectors/1password.md)
 
 **Publisher:** 1Password
+
+### [1Password (Serverless)](../connectors/1password(serverless).md)
+
+**Publisher:** Unknown (ARM variable)
 
 ### [1Password (Serverless)](../connectors/1passwordccpdefinition.md)
 
@@ -65,6 +69,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OnePasswordEventLogs_CL` | [1Password](../connectors/1password.md), [1Password (Serverless)](../connectors/1passwordccpdefinition.md) |
+| `OnePasswordEventLogs_CL` | [1Password](../connectors/1password.md), [1Password (Serverless)](../connectors/1passwordccpdefinition.md), [1Password (Serverless)](../connectors/1password(serverless).md) |
 
 [← Back to Solutions Index](../solutions-index.md)
