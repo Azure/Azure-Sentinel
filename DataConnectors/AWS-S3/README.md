@@ -64,3 +64,7 @@ The `ConfigAwsConnector.ps1` script has two parameters:
 - `-LogPath` specifies a custom path to create the script activity log file.
 - `-AwsLogType` specifies the AWS log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty". If this parameter is specified, the user will not be prompted for this information.
 
+## Script Bundle Automation
+
+The configuration scripts are automatically bundled into zip files (`ConfigAwsS3DataConnectorScripts.zip` and `ConfigAwsS3DataConnectorScriptsGov.zip`) whenever changes are made to the source files. This automation ensures that the distributed bundles are always up-to-date with the latest script versions. For more information about the bundling process, see [BUNDLE_AUTOMATION.md](BUNDLE_AUTOMATION.md).
+
