@@ -17,8 +17,22 @@ Individual solution pages are organized in the [`solutions/`](solutions/) direct
 - Solution metadata (title, publisher, description)
 - List of data connectors included in the solution
 - Detailed connector information (ID, title, description)
+- Setup instructions (AI-generated from UI definitions - verify in portal)
+- Required permissions and prerequisites
 - Tables associated with each connector
 - Table uniqueness indicators (whether a table is used by only one connector)
+
+### Connector Pages
+
+Individual connector pages are organized in the [`connectors/`](connectors/) directory. Each connector page includes:
+
+- Connector metadata (ID, publisher, tables ingested)
+- Full connector description
+- Required permissions and prerequisites
+- **Setup Instructions** - Step-by-step configuration guidance rendered from connector UI definitions using AI
+  - ⚠️ **Note**: Instructions are automatically rendered from the user interface definition files using AI and may not be fully accurate. Always verify configuration steps in the Microsoft Sentinel portal.
+- Solutions that include this connector
+- Links to connector definition files on GitHub
 
 ## 📊 Quick Statistics
 
@@ -63,6 +77,17 @@ This documentation is automatically generated from the Solutions Analyzer tool, 
 - Parser files and KQL queries
 
 The analyzer identifies table references in connector configurations and parser logic to create comprehensive mappings.
+
+### AI-Generated Instructions
+
+**Setup Instructions** in connector documentation are automatically extracted from connector UI definition files using AI:
+- Interprets UI-centric instruction types (DataConnectorsGrid, ContextPane, GCPGrid, AADDataTypes, etc.)
+- Converts JSON UI definitions to readable markdown format
+- Generates step-by-step configuration guidance
+- Describes form fields, dropdowns, and management interfaces
+- Marks portal-only features with visual indicators
+
+⚠️ **Important**: AI-generated instructions may not be fully accurate. Always verify all configuration steps in the Microsoft Sentinel portal before implementation.
 
 ## 📝 Data Source
 

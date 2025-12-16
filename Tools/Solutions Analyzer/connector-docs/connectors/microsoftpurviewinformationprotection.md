@@ -12,4 +12,21 @@ Microsoft Purview Information Protection helps you discover, classify, protect, 
 
     Integrate Microsoft Purview Information Protection logs with Microsoft Sentinel to view dashboards, create custom alerts and improve investigation. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223811&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+
+**Custom Permissions:**
+- **License**: Enterprise Mobility + Security E5/A5 or Microsoft 365 E5/A5 or P2
+
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Connect Microsoft Purview Information Protection audit logs to Microsoft Sentinel**
+
 [← Back to Connectors Index](../connectors-index.md)
