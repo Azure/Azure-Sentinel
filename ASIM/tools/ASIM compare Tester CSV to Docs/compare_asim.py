@@ -14,6 +14,10 @@ import csv
 import re
 import os
 import sys
+import hashlib
+import time
+import json
+from pathlib import Path
 from io import StringIO
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
@@ -30,6 +34,15 @@ except ImportError:
 # Default documentation base URLs
 LEARN_BASE_URL = 'https://learn.microsoft.com/en-us/azure/sentinel'
 GITHUB_DOCS_RAW_URL = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/sentinel'
+
+# Cache configuration
+DEFAULT_CACHE_DIR = Path('.cache')
+DEFAULT_CACHE_TTL = 3600  # 1 hour in seconds
+
+# Global cache settings (set from command line)
+_cache_enabled = True
+_cache_dir = DEFAULT_CACHE_DIR
+_cache_ttl = DEFAULT_CACHE_TTL
 
 # Schema mapping from schema name to documentation file
 SCHEMA_MAPPING = {
@@ -92,6 +105,85 @@ class FieldInfo:
     logical_type: str = ""
     list_of_values: str = ""
     aliased: str = ""
+    description: str = ""
+    example: str = ""
+    note: str = ""
+    original_description: str = ""  # Raw description before parsing
+
+
+def parse_description_field(raw_desc: str) -> tuple:
+    """Parse a raw description field and extract description, example, and note.
+    
+    Returns:
+        tuple: (description, example, note)
+    """
+    if not raw_desc:
+        return "", "", ""
+    
+    description = raw_desc.strip()
+    example = ""
+    note = ""
+    
+    # Extract note (typically at the end, after **Note**: or <br><br>**Note**:)
+    note_match = re.search(r'(?:<br>\s*)*\*\*Note\*\*\s*:?\s*(.+?)\s*$', description, re.IGNORECASE | re.DOTALL)
+    if note_match:
+        note = note_match.group(1).strip()
+        description = description[:note_match.start()].strip()
+    
+    # Extract example - multiple patterns (order matters - more specific first):
+    # Look for examples that are typically at the end of the description
+    example_patterns = [
+        # Pattern: "Example: `value`" or "Examples: `value`" at end
+        r'(?:<br>\s*)*(?:Example[s]?\s*[:|-]\s*)(.+?)\s*$',
+        # Pattern: "e.g:" or "e.g.:" followed by value (with optional backticks)
+        r'(?:<br>\s*)*(?:e\.g\.?\s*:\s*)(.+?)\s*$',
+        # Pattern: "e.g." followed by one or more backticked values with <br> or spaces
+        r'(?:<br>\s*)*e\.g\.(?:<br>)?\s*(.+?)\s*$',
+        # Pattern: "For example:" or "for example," at end with backtick value
+        r'(?:<br>\s*)*(?:[Ff]or example\s*[:,]?\s*)(`[^`]+`)\s*$',
+        # Pattern: Preferred format: ... e.g: `value`
+        r'(?:Preferred format\s*:\s*)?(?:<br>\s*)*e\.g\.?\s*:\s*(.+?)\s*$',
+    ]
+    
+    for pattern in example_patterns:
+        example_match = re.search(pattern, description, re.IGNORECASE)
+        if example_match:
+            example = example_match.group(1).strip()
+            description = description[:example_match.start()].strip()
+            break
+    
+    # If no example found in description, check if note contains an example at the end
+    if not example and note:
+        for pattern in example_patterns:
+            example_match = re.search(pattern, note, re.IGNORECASE)
+            if example_match:
+                example = example_match.group(1).strip()
+                note = note[:example_match.start()].strip()
+                break
+    
+    # Clean up example - remove <br> tags, backticks, normalize
+    if example:
+        # Replace <br> with comma or space
+        example = re.sub(r'<br\s*/?>\s*', ', ', example)
+        # Remove HTML tags
+        example = re.sub(r'<[^>]+>', '', example)
+        # Remove surrounding backticks but keep internal ones as separators
+        example = re.sub(r'^`|`$', '', example)
+        # Replace backtick-separated values with commas
+        example = re.sub(r'`\s*(?:or|,)?\s*`', ', ', example)
+        example = re.sub(r'`', '', example)
+        # Normalize whitespace
+        example = re.sub(r'\s+', ' ', example).strip()
+        # Clean up leading/trailing commas and punctuation
+        example = example.strip(',').strip()
+    
+    # Clean up trailing <br> tags from description only
+    description = re.sub(r'(?:<br>\s*)+$', '', description).strip()
+    
+    # Clean up note - only trailing <br> tags
+    note = re.sub(r'(?:<br>\s*)+$', '', note).strip()
+    
+    return description, example, note
 
 
 @dataclass
@@ -121,14 +213,133 @@ class ComparisonResult:
     warnings: List[Dict] = field(default_factory=list)
 
 
-def fetch_content(path: str) -> str:
-    """Fetch content from a local file or URL."""
+def get_cache_path(url: str) -> Path:
+    """Get the cache file path for a URL."""
+    # Create a hash of the URL for the filename
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    # Use the last part of the URL path as a readable prefix
+    url_parts = url.rstrip('/').split('/')
+    readable_name = url_parts[-1] if url_parts else 'unknown'
+    # Sanitize the readable name
+    readable_name = re.sub(r'[^\w\-.]', '_', readable_name)
+    return _cache_dir / f"{readable_name}_{url_hash[:8]}.cache"
+
+
+def get_cache_metadata_path(cache_path: Path) -> Path:
+    """Get the metadata file path for a cache file."""
+    return cache_path.with_suffix('.meta')
+
+
+def is_cache_valid(cache_path: Path) -> bool:
+    """Check if a cache file exists and is still valid (not expired)."""
+    if not _cache_enabled:
+        return False
+    
+    if not cache_path.exists():
+        return False
+    
+    meta_path = get_cache_metadata_path(cache_path)
+    if not meta_path.exists():
+        return False
+    
+    try:
+        with open(meta_path, 'r') as f:
+            meta = json.load(f)
+        cached_time = meta.get('timestamp', 0)
+        if time.time() - cached_time > _cache_ttl:
+            return False
+        return True
+    except (json.JSONDecodeError, KeyError):
+        return False
+
+
+def read_from_cache(cache_path: Path) -> Optional[str]:
+    """Read content from cache if valid."""
+    if not is_cache_valid(cache_path):
+        return None
+    
+    try:
+        with open(cache_path, 'r', encoding='utf-8-sig') as f:  # utf-8-sig handles BOM
+            return f.read()
+    except IOError:
+        return None
+
+
+def write_to_cache(cache_path: Path, content: str, url: str) -> None:
+    """Write content to cache with metadata."""
+    if not _cache_enabled:
+        return
+    
+    try:
+        _cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write content
+        with open(cache_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        # Write metadata
+        meta_path = get_cache_metadata_path(cache_path)
+        with open(meta_path, 'w') as f:
+            json.dump({
+                'url': url,
+                'timestamp': time.time(),
+                'size': len(content)
+            }, f)
+    except IOError:
+        pass  # Silently fail on cache write errors
+
+
+def clear_cache() -> int:
+    """Clear all cached files. Returns the number of files deleted."""
+    if not _cache_dir.exists():
+        return 0
+    
+    count = 0
+    for cache_file in _cache_dir.glob('*.cache'):
+        try:
+            cache_file.unlink()
+            count += 1
+        except IOError:
+            pass
+    
+    for meta_file in _cache_dir.glob('*.meta'):
+        try:
+            meta_file.unlink()
+        except IOError:
+            pass
+    
+    return count
+
+
+def fetch_content(path: str, verbose: bool = False) -> str:
+    """Fetch content from a local file or URL, with caching for URLs."""
     if path.startswith('http://') or path.startswith('https://'):
         if not HAS_REQUESTS:
             raise ImportError("The 'requests' library is required for web URLs. Install it with: pip install requests")
+        
+        # Check cache first
+        cache_path = get_cache_path(path)
+        cached_content = read_from_cache(cache_path)
+        if cached_content is not None:
+            if verbose:
+                print(f"  [cache hit] {path.split('/')[-1]}")
+            return cached_content
+        
+        # Fetch from web
+        if verbose:
+            print(f"  [fetching] {path.split('/')[-1]}")
         response = requests.get(path, timeout=30)
         response.raise_for_status()
-        return response.text
+        content = response.text
+        
+        # Remove BOM if present (UTF-8 BOM is \ufeff)
+        if content.startswith('\ufeff'):
+            content = content[1:]
+        
+        # Write to cache
+        write_to_cache(cache_path, content, path)
+        
+        return content
     else:
         with open(path, 'r', encoding='utf-8-sig') as f:  # utf-8-sig handles BOM
             return f.read()
@@ -357,11 +568,25 @@ def parse_doc_fields(content: str, common_fields: Dict[str, FieldInfo], schema_n
             if field_name in FIELDS_TO_IGNORE or field_name in REGISTRY_NON_FIELDS:
                 continue
             
+            # Extract description from 4th column (5th part after splitting)
+            description = ""
+            example = ""
+            note = ""
+            original_description = ""
+            if not in_standard_log_analytics_section and len(parts) >= 5:
+                raw_desc = parts[4].strip()
+                original_description = raw_desc
+                description, example, note = parse_description_field(raw_desc)
+            
             if field_name and field_class and field_name not in fields:
                 fields[field_name] = FieldInfo(
                     field_class=field_class,
                     field_type=field_type,
-                    source="SchemaDoc"
+                    source="SchemaDoc",
+                    description=description,
+                    example=example,
+                    note=note,
+                    original_description=original_description
                 )
     
     # Pattern: Links to common fields
@@ -373,7 +598,11 @@ def parse_doc_fields(content: str, common_fields: Dict[str, FieldInfo], schema_n
                 fields[field_name] = FieldInfo(
                     field_class=common_fields[field_name].field_class,
                     field_type=common_fields[field_name].field_type,
-                    source="CommonFields"
+                    source="CommonFields",
+                    description=common_fields[field_name].description,
+                    example=common_fields[field_name].example,
+                    note=common_fields[field_name].note,
+                    original_description=common_fields[field_name].original_description
                 )
             else:
                 fields[field_name] = FieldInfo(
@@ -388,7 +617,11 @@ def parse_doc_fields(content: str, common_fields: Dict[str, FieldInfo], schema_n
             fields[common_field_name] = FieldInfo(
                 field_class=common_fields[common_field_name].field_class,
                 field_type=common_fields[common_field_name].field_type,
-                source="CommonFieldsImplicit"
+                source="CommonFieldsImplicit",
+                description=common_fields[common_field_name].description,
+                example=common_fields[common_field_name].example,
+                note=common_fields[common_field_name].note,
+                original_description=common_fields[common_field_name].original_description
             )
     
     return fields
@@ -430,6 +663,10 @@ def parse_common_fields(docs_path: str, is_web: bool = False) -> Dict[str, Field
         match = re.search(r'\*\*([A-Za-z0-9_]+)\*\*', field_col)
         if match:
             field_name = match.group(1)
+            description = ""
+            example = ""
+            note = ""
+            original_description = ""
             
             if in_standard_log_analytics_section:
                 field_type = parts[2].strip()
@@ -442,6 +679,12 @@ def parse_common_fields(docs_path: str, is_web: bool = False) -> Dict[str, Field
                     field_type = 'datetime'
                 if field_type == 'String':
                     field_type = 'string'
+                    
+                # Description is in column 4 for standard log analytics section
+                if len(parts) > 3:
+                    raw_desc = parts[3].strip()
+                    original_description = raw_desc
+                    description, example, note = parse_description_field(raw_desc)
             else:
                 if len(parts) < 4:
                     continue
@@ -451,6 +694,12 @@ def parse_common_fields(docs_path: str, is_web: bool = False) -> Dict[str, Field
                 
                 if field_name == 'Field' or field_class == 'Class':
                     continue
+                    
+                # Description is in column 5 for regular common fields
+                if len(parts) > 4:
+                    raw_desc = parts[4].strip()
+                    original_description = raw_desc
+                    description, example, note = parse_description_field(raw_desc)
             
             # Skip parser parameters
             if re.match(r'^[a-z_]+$', field_name):
@@ -463,7 +712,11 @@ def parse_common_fields(docs_path: str, is_web: bool = False) -> Dict[str, Field
                 fields[field_name] = FieldInfo(
                     field_class=field_class,
                     field_type=field_type,
-                    source="CommonFields"
+                    source="CommonFields",
+                    description=description,
+                    example=example,
+                    note=note,
+                    original_description=original_description
                 )
     
     return fields
@@ -998,7 +1251,7 @@ def generate_all_fields_csv(results: List[ComparisonResult], csv_data: List[Dict
     """Generate CSV content for all fields."""
     output = StringIO()
     fieldnames = ['Schema', 'Field', 'InDoc', 'InCsv', 'DocClass', 'CsvClass', 
-                  'DocType', 'CsvType', 'CsvLogicalType', 'DocSource']
+                  'DocType', 'CsvType', 'CsvLogicalType', 'DocSource', 'Description', 'Example', 'Note', 'OriginalDescription']
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     
@@ -1030,7 +1283,11 @@ def generate_all_fields_csv(results: List[ComparisonResult], csv_data: List[Dict
                         doc_fields[field_name] = FieldInfo(
                             field_class=field_info.field_class,
                             field_type=field_info.field_type,
-                            source="NetworkSessionSchema"
+                            source="NetworkSessionSchema",
+                            description=field_info.description,
+                            example=field_info.example,
+                            note=field_info.note,
+                            original_description=field_info.original_description
                         )
         except Exception:
             doc_fields = {}
@@ -1053,6 +1310,10 @@ def generate_all_fields_csv(results: List[ComparisonResult], csv_data: List[Dict
                 'CsvType': csv_fields[field_name]['Type'] if in_csv else '',
                 'CsvLogicalType': csv_fields[field_name]['LogicalType'] if in_csv else '',
                 'DocSource': doc_fields[field_name].source if in_doc else '',
+                'Description': doc_fields[field_name].description if in_doc else '',
+                'Example': doc_fields[field_name].example if in_doc else '',
+                'Note': doc_fields[field_name].note if in_doc else '',
+                'OriginalDescription': doc_fields[field_name].original_description if in_doc else '',
             })
     
     return output.getvalue()
@@ -1078,6 +1339,15 @@ Examples:
 
   # Compare specific schema only
   python compare_asim.py --schema NetworkSession
+
+  # Refresh cache (clear and re-fetch all content)
+  python compare_asim.py --refresh-cache
+
+  # Skip cache for this run only (use existing cache next time)
+  python compare_asim.py --skip-cache
+
+  # Set cache TTL to 1 day (86400 seconds)
+  python compare_asim.py --cache-ttl 86400
 """
     )
     
@@ -1111,7 +1381,49 @@ Examples:
         help='Suppress verbose output'
     )
     
+    parser.add_argument(
+        '--refresh-cache',
+        action='store_true',
+        help='Clear cache and fetch fresh content (repopulates cache for future runs)'
+    )
+    
+    parser.add_argument(
+        '--skip-cache',
+        action='store_true',
+        help='Skip cache for this run only (does not read or write cache, leaves existing cache intact)'
+    )
+    
+    parser.add_argument(
+        '--cache-ttl',
+        type=int,
+        default=DEFAULT_CACHE_TTL,
+        metavar='SECONDS',
+        help=f'Cache time-to-live in seconds (default: {DEFAULT_CACHE_TTL})'
+    )
+    
+    parser.add_argument(
+        '--cache-dir',
+        default=str(DEFAULT_CACHE_DIR),
+        help=f'Directory for cache files (default: {DEFAULT_CACHE_DIR})'
+    )
+    
     args = parser.parse_args()
+    
+    # Configure cache settings
+    global _cache_enabled, _cache_dir, _cache_ttl
+    _cache_enabled = not args.skip_cache
+    _cache_dir = Path(args.cache_dir)
+    _cache_ttl = args.cache_ttl
+    
+    verbose = not args.quiet
+    
+    # Handle cache refresh
+    if args.refresh_cache:
+        if verbose:
+            print("Refreshing cache...")
+        count = clear_cache()
+        if verbose:
+            print(f"Cleared {count} cached files")
     
     # Determine if using web sources
     csv_is_web = args.csv.startswith('http://') or args.csv.startswith('https://')
@@ -1123,14 +1435,16 @@ Examples:
     else:
         docs_path = args.docs
     
-    verbose = not args.quiet
-    
     if verbose:
         print("ASIM Schema Comparison Tool")
         print("="*40)
         print(f"CSV Source: {args.csv}")
         print(f"Docs Source: {args.docs}")
         print(f"Output: {args.output}")
+        if _cache_enabled:
+            print(f"Cache: enabled (TTL: {_cache_ttl}s, dir: {_cache_dir})")
+        else:
+            print("Cache: disabled")
         print()
     
     # Fetch CSV data

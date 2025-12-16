@@ -59,6 +59,10 @@ python compare_asim.py --csv ./ASimTester.csv --docs ../articles/sentinel
 | `--output` | Output directory for reports | Current directory |
 | `--schema` | Specific schema to compare (e.g., `NetworkSession`) | All schemas |
 | `--quiet`, `-q` | Suppress verbose output | False |
+| `--refresh-cache` | Clear cache and fetch fresh content (repopulates cache) | False |
+| `--skip-cache` | Skip cache for this run only (leaves existing cache intact) | False |
+| `--cache-ttl` | Cache time-to-live in seconds | 3600 (1 hour) |
+| `--cache-dir` | Directory for cache files | `.cache` |
 
 ### Examples
 
@@ -71,6 +75,15 @@ python compare_asim.py --csv ./ASimTester.csv --docs ../articles/sentinel --outp
 
 # Quiet mode
 python compare_asim.py -q
+
+# Refresh cache (clear and re-fetch all content)
+python compare_asim.py --refresh-cache
+
+# Skip cache for this run only
+python compare_asim.py --skip-cache
+
+# Set cache TTL to 1 day (86400 seconds)
+python compare_asim.py --cache-ttl 86400
 ```
 
 ## Output Files
@@ -118,6 +131,44 @@ CSV file with all fields from both sources:
 | CsvType | Type from CSV |
 | CsvLogicalType | Logical type from CSV |
 | DocSource | Source of doc field (SchemaDoc, CommonFields, etc.) |
+| Description | Parsed field description (cleaned, without examples/notes) |
+| Example | Extracted example value(s) from documentation |
+| Note | Extracted note text from documentation |
+| OriginalDescription | Raw description text before parsing (for verification) |
+
+## Caching
+
+The tool caches fetched web content to improve performance on repeated runs.
+
+### Cache Behavior
+
+- **Location**: Cache files are stored in the `.cache` directory by default
+- **TTL**: Cached files expire after 1 hour (3600 seconds) by default
+- **Format**: Each cached URL creates two files:
+  - `filename_hash.cache` - The cached content
+  - `filename_hash.meta` - Metadata (URL, timestamp, size)
+
+### Cache Management
+
+```bash
+# Refresh cache - clear and re-fetch all content (repopulates for future runs)
+python compare_asim.py --refresh-cache
+
+# Skip cache for this run only (leaves existing cache files intact)
+python compare_asim.py --skip-cache
+
+# Set cache TTL to 24 hours
+python compare_asim.py --cache-ttl 86400
+
+# Use a custom cache directory
+python compare_asim.py --cache-dir /tmp/asim-cache
+```
+
+### When to Clear Cache
+
+- After documentation updates on Microsoft Learn
+- When debugging parsing issues
+- When you need the latest content
 
 ## Understanding Results
 
@@ -168,28 +219,36 @@ The tool consists of the following key components:
 
 ### Data Structures
 
-- `FieldInfo`: Information about a field (class, type, source)
+- `FieldInfo`: Information about a field (class, type, source, description, example, note)
 - `IssueInfo`: Information about an issue (type, category, description)
 - `ComparisonResult`: Results from comparing a single schema
 
 ### Key Functions
 
-1. **Data Fetching**
-   - `fetch_content()`: Fetch from local file or URL
+1. **Caching**
+   - `get_cache_path()`: Generate cache file path for a URL
+   - `is_cache_valid()`: Check if cache exists and is not expired
+   - `read_from_cache()`: Read cached content
+   - `write_to_cache()`: Write content to cache with metadata
+   - `clear_cache()`: Remove all cached files
+
+2. **Data Fetching**
+   - `fetch_content()`: Fetch from local file or URL (with caching)
    - `fetch_csv_data()`: Parse CSV data
    - `parse_common_fields()`: Parse common fields documentation
    - `get_network_session_fields()`: Get NetworkSession fields for WebSession
 
-2. **Parsing**
+3. **Parsing**
    - `parse_doc_fields()`: Extract field definitions from markdown tables
+   - `parse_description_field()`: Extract description, example, and note from raw text
 
-3. **Comparison**
+4. **Comparison**
    - `compare_schema()`: Compare a single schema
    - `get_missing_field_issue_type()`: Categorize missing field issues
    - `get_type_mismatch_issue_type()`: Categorize type mismatch issues
    - `get_class_mismatch_issue_type()`: Categorize class mismatch issues
 
-4. **Reporting**
+5. **Reporting**
    - `generate_markdown_report()`: Generate the markdown report
    - `generate_issues_csv()`: Generate issues CSV
    - `generate_all_fields_csv()`: Generate all fields CSV
