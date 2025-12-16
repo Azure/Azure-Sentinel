@@ -1,0 +1,341 @@
+Parser:
+  Title: Alert Event ASIM filtering parser for Bitdefender GravityZone
+  Version: '0.1.0'
+  LastUpdated: Sep 17, 2025
+Product:
+  Name: Bitdefender GravityZone
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1'
+References:
+  - Title: ASIM Alert Schema
+    Link: https://aka.ms/ASimAlertEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing and filtering the Bitdefender GravityZone logs to the ASIM Alert normalized schema.
+ParserName: vimAlertEventBitdefenderGravityZone
+EquivalentBuiltInParser: _Im_AlertEvent_BitdefenderGravityZone
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      hostname_has_any: dynamic=dynamic([]),
+      username_has_any: dynamic=dynamic([]),
+      attacktactics_has_any: dynamic=dynamic([]),
+      attacktechniques_has_any: dynamic=dynamic([]),
+      threatcategory_has_any: dynamic=dynamic([]),
+      alertverdict_has_any: dynamic=dynamic([]),
+      eventseverity_has_any: dynamic=dynamic([]),
+      disabled: bool=false) {
+
+      // Filtering based on the parameters above
+
+      let allEvents = GzSecurityEvents_CL
+        | where not(disabled)
+        | where (isnull(starttime) or start_time >= starttime)
+        | where (isnull(endtime) or end_time <= endtime);
+  
+      let newIncidentEvents = allEvents
+        | where module == "new-incident"
+        | extend d = data
+        // --- Core ASIM fields ---
+        | extend
+          EventVendor = "Bitdefender",
+          EventProduct = "GravityZone",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = 1,
+          EventType = "Alert",
+          EventStartTime = start_time,
+          EventEndTime = end_time,
+          EventUid = tostring(d.incident_id),
+          EventSeverity = case(
+              d.severity == "low", "Low",
+              d.severity == "medium", "Medium",
+              d.severity == "high", "High",
+              "Low"   // fallback value if null or unmatched
+          ),
+          EventCount = 1,
+          DvcHostname = d.computer_name,
+          DvcFQDN = d.computer_fqdn,
+          DvcIpAddr = d.computer_ip,
+          DvcId = d.endpointId,
+          DvcAction = replace_string(tostring(d.main_action), "_", " ")
+        // --- Additional (packed) fields ---
+        | extend AdditionalFields = bag_pack(
+          "SeverityScore", d.severity_score,
+          "DetectionName", d.detection_name,
+          "FileName", d.file_name,
+          "FilePath", d.file_path,
+          "FileHashMd5", d.file_hash_md5,
+          "FileHashSha256", d.file_hash_sha256,
+          "URL", d.url,
+          "Port", d.port,
+          "Protocol", d.protocol,
+          "SourceIp", d.source_ip,
+          "ProcessPid", d.process_pid,
+          "ProcessPath", d.process_path,
+          "ParentProcessPid", d.parent_process_pid,
+          "ParentProcessPath", d.parent_process_path,
+          "AttackTypes", d.attack_types,
+          "AttCkId", d.att_ck_id,
+          "ProcessCommandLine", d.process_command_line,
+          "Username", d.username,
+          "UserSid", d.user_sid,
+          "CompanyId", company_id,
+          "Module", "EDR"
+        )
+        // Final ASIM projection (keep core + AdditionalFields)
+        | project
+          EventVendor,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventStartTime,
+          EventEndTime,
+          EventUid,
+          EventSeverity,
+          EventCount,
+          DvcHostname,
+          DvcFQDN,
+          DvcIpAddr,
+          DvcId,
+          DvcAction,
+          AdditionalFields;
+  
+      let newExtendedIncidentEvents = allEvents
+        | where module == "new-extended-incident"
+        | extend d = data
+        // --- Core ASIM fields ---
+        | extend
+          EventVendor = "Bitdefender",
+          EventProduct = "GravityZone",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = 1,
+          EventType = "Alert",
+          EventStartTime = start_time,
+          EventEndTime = end_time,
+          EventUid = tostring(d.incident_id),
+          EventSeverity = case(
+              d.severity == "low", "Low",
+              d.severity == "medium", "Medium",
+              d.severity == "high", "High",
+              "Low"   // fallback value if null or unmatched
+          ),
+          EventCount = 1,
+          DvcAction = replace_string(tostring(d.main_action), "_", " ")
+        // --- Additional (packed) fields ---
+        | extend AdditionalFields = bag_pack(
+          "SeverityScore", d.severity_score,
+          "IncidentNumber", d.incident_number,
+          "IncidentVersion", d.version,
+          "KillchainPhases", d.killchain_phases,
+          "LastKillchainPhase", d.last_killchain_phase,
+          "AttackTypes", d.attack_types,
+          "CorrelatedIncidentIds", d.correlated_incidents,
+          "Nodes", d.nodes,
+          "CompanyId", company_id,
+          "Module", "XDR"
+        )
+        // Final ASIM projection (keep core + AdditionalFields)
+        | project
+          EventVendor,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventStartTime,
+          EventEndTime,
+          EventUid,
+          EventSeverity,
+          EventCount,
+          DvcAction,
+          AdditionalFields;
+  
+      let ransomwareMitigationEvents = allEvents
+        | where module == "ransomware-mitigation"
+        | extend d = data
+        // --- Core ASIM fields ---
+        | extend
+          EventVendor = "Bitdefender",
+          EventProduct = "GravityZone",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = 1,
+          EventType = "Alert",
+          EventStartTime = start_time,
+          EventEndTime = end_time,
+          EventUid = _ItemId,
+          EventSeverity = "Informational",
+          EventCount = 1,
+          DvcHostname = d.computer_name,
+          DvcFQDN = d.computer_fqdn,
+          DvcIpAddr = d.computer_ip,
+          DvcId = d.endpointId,
+          DvcAction = "Blocked"
+        // --- Additional (packed) fields ---
+        | extend AdditionalFields = bag_pack(
+          "CompanyId", company_id,
+          "CompanyName", d.company_name,
+          "AttackType", d.attack_type, // custom, not MITRE value
+          "AttackTypes", dynamic([]), // mandatory MITRE field
+          "ItemCount", d.item_count,
+          "AttackSource", d.attack_source,
+          "EndpointProduct", d.product_installed,
+          "Module", module
+        )
+        // Final ASIM projection (keep core + AdditionalFields)
+        | project
+          EventVendor,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventStartTime,
+          EventEndTime,
+          EventUid,
+          EventSeverity,
+          EventCount,
+          DvcId,
+          DvcHostname,
+          DvcFQDN,
+          DvcIpAddr,
+          DvcAction,
+          AdditionalFields;
+  
+      let networkSandboxingEvents = allEvents
+        | where module == "network-sandboxing"
+        | extend d = data
+        // --- Compute required fields for downstream mapping ---
+        | extend MaxRemediationAction = iff(array_length(d.remediationActions) > 0, todouble(array_sort_desc(d.remediationActions)[0]), double(3))
+        // --- Core ASIM fields ---
+        | extend
+          EventVendor = "Bitdefender",
+          EventProduct = "GravityZone",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = 1,
+          EventType = "Alert",
+          EventStartTime = start_time,
+          EventEndTime = end_time,
+          EventUid = tostring(d.submissionId),
+          EventSeverity = case(
+              MaxRemediationAction == 3, "Low", // report only
+              MaxRemediationAction == 2, "Medium", // move
+              "High"// fallback - disinfect or delete
+          ),
+          EventCount = 1,
+          DvcHostname = d.computerName,
+          DvcIpAddr = d.computerIp,
+          DvcId = d.endpointId
+        // --- Additional (packed) fields ---
+        | extend AdditionalFields = bag_pack(
+          "CompanyId", company_id,
+          "DeviceExternalId", d.deviceExternalId,
+          "ThreatType", d.threatType,
+          "FilePaths", d.filePaths,
+          "FileSizes", d.fileSizes,
+          "RemediationActions", d.remediationActions,
+          "AttackTypes", dynamic([]), // mandatory MITRE field
+          "Module", module
+        )
+        // Final ASIM projection (keep core + AdditionalFields)
+        | project
+          EventVendor,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventStartTime,
+          EventEndTime,
+          EventUid,
+          EventSeverity,
+          EventCount,
+          DvcId,
+          DvcHostname,
+          DvcIpAddr,
+          AdditionalFields;
+  
+  
+      let exchangeMalwareEvents = allEvents
+        | where module == "exchange-malware"
+        | extend d = data
+        // --- Core ASIM fields ---
+        | extend
+          EventVendor = "Bitdefender",
+          EventProduct = "GravityZone",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = 1,
+          EventType = "Alert",
+          EventStartTime = start_time,
+          EventEndTime = end_time,
+          EventUid = _ItemId,
+          EventSeverity = "Informational",
+          EventCount = 1,
+          DvcHostname = d.computer_name,
+          DvcFQDN = d.computer_fqdn,
+          DvcIpAddr = d.computer_ip,
+          DvcId = d.endpointId,
+          DvcAction = "Blocked"
+        // --- Additional (packed) fields ---
+        | extend AdditionalFields = bag_pack(
+          "CompanyId", company_id,
+          "Malware", d.malware,
+          "Subject", d.subject,
+          "Recipients", d.recipients,
+          "Sender", d.sender,
+          "ServerName", d.serverName,
+          "EndpointProduct", d.product_installed,
+          "AttackTypes", dynamic([]), // mandatory MITRE field
+          "Module", module
+        )
+        // Final ASIM projection (keep core + AdditionalFields)
+        | project
+          EventVendor,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventType,
+          EventStartTime,
+          EventEndTime,
+          EventUid,
+          EventSeverity,
+          EventCount,
+          DvcId,
+          DvcHostname,
+          DvcFQDN,
+          DvcIpAddr,
+          DvcAction,
+          AdditionalFields;
+  
+      union newExtendedIncidentEvents, newIncidentEvents, ransomwareMitigationEvents, networkSandboxingEvents, exchangeMalwareEvents
+        | where (array_length(ipaddr_has_any_prefix) == 0 or array_length(array_intersect(ipaddr_has_any_prefix, pack_array(tostring(DvcIpAddr)))) > 0)
+        | where (array_length(hostname_has_any) == 0 or array_length(array_intersect(hostname_has_any, pack_array(tostring(DvcHostname)))) > 0)
+        | where (array_length(attacktactics_has_any) == 0 or array_length(array_intersect(attacktactics_has_any, pack_array(tostring(AdditionalFields.AttackTypes)))) > 0)
+        | where (array_length(alertverdict_has_any) == 0 or array_length(array_intersect(alertverdict_has_any, pack_array(tostring(DvcAction)))) > 0)
+        | where (array_length(eventseverity_has_any) == 0 or array_length(array_intersect(eventseverity_has_any, pack_array(tostring(EventSeverity)))) > 0);
+  
+  };
+  parser(
+      starttime = starttime,
+      endtime = endtime,
+      ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+      hostname_has_any = hostname_has_any,
+      username_has_any = username_has_any,
+      attacktactics_has_any = attacktactics_has_any,
+      attacktechniques_has_any = attacktechniques_has_any,
+      threatcategory_has_any = threatcategory_has_any,
+      alertverdict_has_any = alertverdict_has_any,
+      eventseverity_has_any = eventseverity_has_any,
+      disabled = disabled
+  )
