@@ -21,18 +21,28 @@ on:
 
 jobs:
   auto-update-bundles:
+    # Security: Block workflow execution on forked repositories
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     
     steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APPLICATION_ID }}
+          private-key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+      
       - name: Checkout PR branch with sparse checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 2  # Just need HEAD and parent for git diff
+          persist-credentials: false  # Security: Don't persist credentials after checkout
           sparse-checkout: |
             DataConnectors/AWS-S3
             .script
@@ -62,9 +72,14 @@ jobs:
       
       - name: Commit updated bundles
         if: steps.check_update.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          
+          # Configure remote with token for push (needed due to persist-credentials: false)
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           
           # Stage zip files
           git add DataConnectors/AWS-S3/ConfigAwsS3DataConnectorScripts*.zip
