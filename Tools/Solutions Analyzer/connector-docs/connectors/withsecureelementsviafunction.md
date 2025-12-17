@@ -30,4 +30,47 @@ With this solution Azure Function is deployed to your tenant, polling periodical
 
 For more information visit our website at: [https://www.withsecure.com](https://www.withsecure.com).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions on the workspace are required.
+
+**Custom Permissions:**
+- **Microsoft.Web/sites permissions**: Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/).
+- **WithSecure Elements API client credentials**: Client credentials are required. [See the documentation to learn more.](https://connect.withsecure.com/getting-started/elements#getting-client-credentials)
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Create WithSecure Elements API credentials**
+
+Follow the [user guide](https://connect.withsecure.com/getting-started/elements#getting-client-credentials) to create Elements API credentials. Save credentials in a safe place.
+
+**2. Create Microsoft Entra application**
+
+Create new Microsoft Entra application and credentials. Follow [the instructions](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#create-microsoft-entra-application) and store values of **Directory (tenant) ID**, **Object ID**, **Application (client) ID** and **Client Secret** (from client credentials field). Remember to store Client Secret in a safe place.
+
+**3. Deploy Function App**
+
+>**NOTE:** This connector uses Azure Functions to pull logs from WithSecure Elements. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.
+
+>**(Optional Step)** Securely store Microsoft Entra client credentials and WithSecure Elements API client credentials in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App.
+
+>**IMPORTANT:** Before deploying the WithSecure Elements connector, have the Workspace Name (can be copied from the following), data from Microsoft Entra (Directory (tenant) ID, Object ID, Application (client) ID and Client Secret), as well as the WithSecure Elements client credentials, readily available.
+- **Workspace Name**: `workspaceName`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+
+**1. Deploy all the resources related to the connector**
+
+1. Click the **Deploy to Azure** button below. 
+
+	[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-WithSecureElementsViaFunction-azuredeploy)
+2. Select the preferred **Subscription**, **Resource Group** and **Location**. 
+3. Enter the **Workspace ID**, **Entra Client ID**, **Entra Client Secret**, **Entra Tenant ID**, **Elements API Client ID**, **Elements API Client Secret**.
+>Note: If using Azure Key Vault secrets for any of the values above, use the`@Microsoft.KeyVault(SecretUri={Security Identifier})`schema in place of the string values. Refer to [Key Vault references documentation](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) for further details. 
+4. You can also fill in optional fields: **Elements API url**, **Engine**, **Engine Group**. Use default value of **Elements API url** unless you have some special case. **Engine** and **Engine Group** map to [security events request parameters](https://connect.withsecure.com/api-reference/elements#post-/security-events/v1/security-events), fill in those parameters if you are interested only in events from specific engine or engine group, in case you want to receive all security events leave the fields with default values.
+5. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
+6. Click **Purchase** to deploy.
+
 [← Back to Connectors Index](../connectors-index.md)
