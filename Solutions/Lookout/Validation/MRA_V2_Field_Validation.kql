@@ -1,0 +1,425 @@
+// =====================================================
+// Lookout MRA V2 - Complete Field Coverage Validation
+// =====================================================
+// Use these queries to verify all fields are populating correctly
+// after deploying the DCR fix
+
+// -----------------------------------------------------
+// 1. QUICK HEALTH CHECK - Run this first
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| summarize 
+    EventCount = count(),
+    UniqueDevices = dcount(device_guid),
+    EventTypes = make_set(event_type),
+    EarliestEvent = min(TimeGenerated),
+    LatestEvent = max(TimeGenerated)
+| extend HealthStatus = iff(EventCount > 0, "✅ Data flowing", "❌ No data")
+
+// -----------------------------------------------------
+// 2. FIELD POPULATION RATE - Check for NULLs
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where TimeGenerated > ago(7d)
+| summarize 
+    TotalEvents = count(),
+    // Core fields
+    TimeGenerated_Populated = countif(isnotnull(TimeGenerated)),
+    id_Populated = countif(isnotempty(id)),
+    enterprise_guid_Populated = countif(isnotempty(enterprise_guid)),
+    event_type_Populated = countif(isnotempty(event_type)),
+    log_type_Populated = countif(isnotempty(log_type)),
+    change_type_Populated = countif(isnotempty(change_type)),
+    // Device fields
+    device_guid_Populated = countif(isnotempty(device_guid)),
+    device_platform_Populated = countif(isnotempty(device_platform)),
+    device_email_Populated = countif(isnotempty(device_email_address)),
+    device_security_status_Populated = countif(isnotempty(device_security_status)),
+    // Threat fields
+    threat_id_Populated = countif(isnotempty(threat_id)),
+    threat_severity_Populated = countif(isnotempty(threat_severity)),
+    threat_type_Populated = countif(isnotempty(threat_type)),
+    // Actor fields (CRITICAL FIX VALIDATION)
+    actor_guid_Populated = countif(isnotempty(actor_guid)),
+    actor_device_guid_Populated = countif(isnotempty(actor_device_guid)),
+    actor_type_Populated = countif(isnotempty(actor_type)),
+    // Smishing fields
+    smishing_alert_id_Populated = countif(isnotempty(smishing_alert_id)),
+    // Audit fields
+    audit_type_Populated = countif(isnotempty(audit_type))
+| extend 
+    // Calculate population percentages
+    TimeGenerated_Pct = round(100.0 * TimeGenerated_Populated / TotalEvents, 2),
+    id_Pct = round(100.0 * id_Populated / TotalEvents, 2),
+    event_type_Pct = round(100.0 * event_type_Populated / TotalEvents, 2),
+    log_type_Pct = round(100.0 * log_type_Populated / TotalEvents, 2),
+    actor_device_guid_Pct = round(100.0 * actor_device_guid_Populated / TotalEvents, 2)
+| project 
+    TotalEvents,
+    TimeGenerated_Pct,
+    id_Pct,
+    event_type_Pct,
+    log_type_Pct,
+    actor_device_guid_Pct,
+    device_guid_Populated,
+    threat_id_Populated,
+    smishing_alert_id_Populated,
+    audit_type_Populated
+
+// -----------------------------------------------------
+// 3. EVENT TYPE DISTRIBUTION
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where TimeGenerated > ago(7d)
+| summarize 
+    EventCount = count(),
+    UniqueDevices = dcount(device_guid),
+    AvgEventsPerDevice = round(count() * 1.0 / dcount(device_guid), 2),
+    Platforms = make_set(device_platform),
+    SampleEventIDs = make_list(id, 5)
+    by event_type
+| order by EventCount desc
+
+// -----------------------------------------------------
+// 4. THREAT EVENTS - Full Field Check
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where event_type == "THREAT"
+| where TimeGenerated > ago(24h)
+| summarize 
+    Total = count(),
+    threat_id_populated = countif(isnotempty(threat_id)),
+    threat_type_populated = countif(isnotempty(threat_type)),
+    threat_action_populated = countif(isnotempty(threat_action)),
+    threat_severity_populated = countif(isnotempty(threat_severity)),
+    threat_classification_populated = countif(isnotempty(threat_classification)),
+    threat_classifications_populated = countif(isnotempty(threat_classifications)),
+    threat_risk_populated = countif(isnotempty(threat_risk)),
+    threat_status_populated = countif(isnotempty(threat_status)),
+    threat_assessments_populated = countif(isnotempty(threat_assessments)),
+    threat_description_populated = countif(isnotempty(threat_description)),
+    threat_application_name_populated = countif(isnotempty(threat_application_name)),
+    threat_package_name_populated = countif(isnotempty(threat_package_name)),
+    threat_package_sha_populated = countif(isnotempty(threat_package_sha)),
+    threat_file_name_populated = countif(isnotempty(threat_file_name)),
+    threat_file_path_populated = countif(isnotempty(threat_file_path))
+| extend Coverage = strcat(
+    "ID: ", round(100.0 * threat_id_populated / Total, 1), "%, ",
+    "Type: ", round(100.0 * threat_type_populated / Total, 1), "%, ",
+    "Severity: ", round(100.0 * threat_severity_populated / Total, 1), "%"
+)
+| project Total, Coverage, *
+
+// -----------------------------------------------------
+// 5. DEVICE EVENTS - Full Field Check
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where event_type == "DEVICE"
+| where TimeGenerated > ago(24h)
+| summarize 
+    Total = count(),
+    device_guid_populated = countif(isnotempty(device_guid)),
+    device_activated_at_populated = countif(isnotnull(device_activated_at)),
+    device_activation_status_populated = countif(isnotempty(device_activation_status)),
+    device_checkin_time_populated = countif(isnotnull(device_checkin_time)),
+    device_customer_id_populated = countif(isnotempty(device_customer_id)),
+    device_platform_populated = countif(isnotempty(device_platform)),
+    device_os_version_populated = countif(isnotempty(device_os_version)),
+    device_manufacturer_populated = countif(isnotempty(device_manufacturer)),
+    device_model_populated = countif(isnotempty(device_model)),
+    device_email_address_populated = countif(isnotempty(device_email_address)),
+    device_security_status_populated = countif(isnotempty(device_security_status)),
+    // Client fields
+    client_lookout_sdk_version_populated = countif(isnotempty(client_lookout_sdk_version)),
+    client_ota_version_populated = countif(isnotempty(client_ota_version)),
+    client_package_name_populated = countif(isnotempty(client_package_name)),
+    // MDM fields
+    mdm_connector_id_populated = countif(isnotnull(mdm_connector_id)),
+    mdm_connector_uuid_populated = countif(isnotempty(mdm_connector_uuid)),
+    mdm_external_id_populated = countif(isnotempty(mdm_external_id))
+| extend CoreCoverage = strcat(
+    "GUID: ", round(100.0 * device_guid_populated / Total, 1), "%, ",
+    "Platform: ", round(100.0 * device_platform_populated / Total, 1), "%, ",
+    "Status: ", round(100.0 * device_security_status_populated / Total, 1), "%"
+)
+| project Total, CoreCoverage, *
+
+// -----------------------------------------------------
+// 6. SMISHING ALERT EVENTS - Full Field Check
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where event_type == "SMISHING_ALERT"
+| where TimeGenerated > ago(24h)
+| summarize 
+    Total = count(),
+    smishing_alert_id_populated = countif(isnotempty(smishing_alert_id)),
+    smishing_alert_type_populated = countif(isnotempty(smishing_alert_type)),
+    smishing_alert_severity_populated = countif(isnotempty(smishing_alert_severity)),
+    smishing_alert_description_populated = countif(isnotempty(smishing_alert_description)),
+    smishing_detections_populated = countif(isnotnull(smishing_detections)),
+    device_guid_populated = countif(isnotempty(device_guid))
+| extend Coverage = strcat(
+    "ID: ", round(100.0 * smishing_alert_id_populated / Total, 1), "%, ",
+    "Severity: ", round(100.0 * smishing_alert_severity_populated / Total, 1), "%, ",
+    "Detections: ", round(100.0 * smishing_detections_populated / Total, 1), "%"
+)
+| project Total, Coverage, *
+
+// If no data, check if event type is available
+LookoutMtdV2_CL
+| where TimeGenerated > ago(7d)
+| summarize SmishingEvents = countif(event_type == "SMISHING_ALERT")
+
+// -----------------------------------------------------
+// 7. AUDIT EVENTS - Full Field Check
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where event_type == "AUDIT"
+| where TimeGenerated > ago(24h)
+| summarize 
+    Total = count(),
+    audit_type_populated = countif(isnotempty(audit_type)),
+    audit_attribute_changes_populated = countif(isnotnull(audit_attribute_changes)),
+    actor_type_populated = countif(isnotempty(actor_type)),
+    actor_guid_populated = countif(isnotempty(actor_guid)),
+    target_type_populated = countif(isnotempty(target_type)),
+    target_guid_populated = countif(isnotempty(target_guid))
+| extend Coverage = strcat(
+    "AuditType: ", round(100.0 * audit_type_populated / Total, 1), "%, ",
+    "Changes: ", round(100.0 * audit_attribute_changes_populated / Total, 1), "%, ",
+    "Actor: ", round(100.0 * actor_guid_populated / Total, 1), "%"
+)
+| project Total, Coverage, *
+
+// -----------------------------------------------------
+// 8. NESTED ARRAYS - Dynamic Field Validation
+// -----------------------------------------------------
+// Check device_permissions array
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| where isnotnull(device_permissions)
+| extend 
+    permissions_count = array_length(device_permissions),
+    sample_permission = device_permissions[0]
+| summarize 
+    EventsWithPermissions = count(),
+    AvgPermissionCount = round(avg(permissions_count), 2),
+    MaxPermissions = max(permissions_count),
+    SamplePermission = any(sample_permission)
+
+// Check device_vulns structure
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| where isnotnull(device_vulns)
+| extend 
+    vuln_data = device_vulns.vulnerabilities,
+    vuln_count = array_length(device_vulns.vulnerabilities)
+| summarize 
+    EventsWithVulns = count(),
+    AvgVulnCount = round(avg(vuln_count), 2),
+    MaxVulns = max(vuln_count)
+
+// Check smishing_detections array
+LookoutMtdV2_CL
+| where event_type == "SMISHING_ALERT"
+| where TimeGenerated > ago(24h)
+| where isnotnull(smishing_detections)
+| extend 
+    detection_count = array_length(smishing_detections),
+    first_detection = smishing_detections[0]
+| summarize 
+    EventsWithDetections = count(),
+    AvgDetectionCount = round(avg(detection_count), 2),
+    SampleDetection = any(first_detection)
+
+// Check audit_attribute_changes array
+LookoutMtdV2_CL
+| where event_type == "AUDIT"
+| where TimeGenerated > ago(24h)
+| where isnotnull(audit_attribute_changes)
+| extend 
+    change_count = array_length(audit_attribute_changes),
+    first_change = audit_attribute_changes[0]
+| summarize 
+    EventsWithChanges = count(),
+    AvgChangeCount = round(avg(change_count), 2),
+    SampleChange = any(first_change)
+
+// -----------------------------------------------------
+// 9. CRITICAL FIX VALIDATION - actor_device_guid
+// -----------------------------------------------------
+// This field was missing from DCR streamDeclarations and should now populate
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| summarize 
+    TotalEvents = count(),
+    actor_device_guid_populated = countif(isnotempty(actor_device_guid)),
+    actor_guid_populated = countif(isnotempty(actor_guid)),
+    actor_type_populated = countif(isnotempty(actor_type))
+| extend 
+    actor_device_guid_Pct = round(100.0 * actor_device_guid_populated / TotalEvents, 2),
+    FixStatus = iff(actor_device_guid_Pct > 50, "✅ DCR Fix Working", "⚠️ Still NULL - DCR not deployed")
+| project TotalEvents, actor_device_guid_Pct, actor_guid_populated, actor_type_populated, FixStatus
+
+// -----------------------------------------------------
+// 10. SAMPLE DATA INSPECTION - View actual records
+// -----------------------------------------------------
+// THREAT sample
+LookoutMtdV2_CL
+| where event_type == "THREAT"
+| where TimeGenerated > ago(24h)
+| take 1
+| project 
+    TimeGenerated, id, event_type, change_type,
+    device_guid, device_platform, device_security_status,
+    threat_id, threat_type, threat_severity, threat_action,
+    threat_classification, threat_risk, threat_status,
+    actor_type, actor_guid, actor_device_guid,
+    threat, device
+
+// DEVICE sample
+LookoutMtdV2_CL
+| where event_type == "DEVICE"
+| where TimeGenerated > ago(24h)
+| take 1
+| project 
+    TimeGenerated, id, event_type,
+    device_guid, device_platform, device_activation_status,
+    device_checkin_time, device_email_address,
+    client_lookout_sdk_version, client_package_name,
+    mdm_connector_id, mdm_external_id,
+    device_permissions, device_settings, device_vulns
+
+// SMISHING_ALERT sample
+LookoutMtdV2_CL
+| where event_type == "SMISHING_ALERT"
+| where TimeGenerated > ago(24h)
+| take 1
+| project 
+    TimeGenerated, id, event_type,
+    smishing_alert_id, smishing_alert_type, smishing_alert_severity,
+    smishing_alert_description, smishing_detections,
+    device_guid, device_email_address
+
+// AUDIT sample
+LookoutMtdV2_CL
+| where event_type == "AUDIT"
+| where TimeGenerated > ago(24h)
+| take 1
+| project 
+    TimeGenerated, id, event_type, change_type,
+    audit_type, audit_attribute_changes,
+    actor_type, actor_guid,
+    target_type, target_guid
+
+// -----------------------------------------------------
+// 11. PARSER VALIDATION - Test LookoutEvents() function
+// -----------------------------------------------------
+LookoutEvents
+| where TimeGenerated > ago(1h)
+| summarize 
+    ParsedEvents = count(),
+    EventTypes = make_set(EventType),
+    UniqueDevices = dcount(DeviceGuid),
+    ThreatEvents = countif(EventType == "ThreatEvent"),
+    DeviceEvents = countif(EventType == "DeviceEvent"),
+    SmishingAlerts = countif(EventType == "SmishingAlert"),
+    AuditEvents = countif(EventType == "AuditEvent")
+| extend ParserStatus = iff(ParsedEvents > 0, "✅ Parser Working", "❌ Parser Issue")
+
+// -----------------------------------------------------
+// 12. COMPREHENSIVE COVERAGE REPORT
+// -----------------------------------------------------
+LookoutMtdV2_CL
+| where TimeGenerated > ago(24h)
+| summarize 
+    // Core Event Fields (7 fields)
+    Core_TimeGenerated = countif(isnotnull(TimeGenerated)),
+    Core_id = countif(isnotempty(id)),
+    Core_enterprise_guid = countif(isnotempty(enterprise_guid)),
+    Core_event_type = countif(isnotempty(event_type)),
+    Core_log_type = countif(isnotempty(log_type)),
+    Core_change_type = countif(isnotempty(change_type)),
+    Core_created_time = countif(isnotnull(created_time)),
+    
+    // Device Fields (13 scalar fields)
+    Device_guid = countif(isnotempty(device_guid)),
+    Device_platform = countif(isnotempty(device_platform)),
+    Device_activation_status = countif(isnotempty(device_activation_status)),
+    Device_security_status = countif(isnotempty(device_security_status)),
+    Device_email = countif(isnotempty(device_email_address)),
+    Device_os_version = countif(isnotempty(device_os_version)),
+    Device_manufacturer = countif(isnotempty(device_manufacturer)),
+    Device_model = countif(isnotempty(device_model)),
+    Device_checkin_time = countif(isnotnull(device_checkin_time)),
+    Device_activated_at = countif(isnotnull(device_activated_at)),
+    
+    // Client Fields (4 fields)
+    Client_sdk_version = countif(isnotempty(client_lookout_sdk_version)),
+    Client_ota_version = countif(isnotempty(client_ota_version)),
+    Client_package_name = countif(isnotempty(client_package_name)),
+    
+    // MDM Fields (3 fields)
+    MDM_connector_id = countif(isnotnull(mdm_connector_id)),
+    MDM_connector_uuid = countif(isnotempty(mdm_connector_uuid)),
+    MDM_external_id = countif(isnotempty(mdm_external_id)),
+    
+    // Threat Fields (16 fields)
+    Threat_id = countif(isnotempty(threat_id)),
+    Threat_type = countif(isnotempty(threat_type)),
+    Threat_severity = countif(isnotempty(threat_severity)),
+    Threat_action = countif(isnotempty(threat_action)),
+    Threat_classification = countif(isnotempty(threat_classification)),
+    Threat_risk = countif(isnotempty(threat_risk)),
+    Threat_status = countif(isnotempty(threat_status)),
+    
+    // Actor Fields (3 fields)
+    Actor_type = countif(isnotempty(actor_type)),
+    Actor_guid = countif(isnotempty(actor_guid)),
+    Actor_device_guid = countif(isnotempty(actor_device_guid)),
+    
+    // Target Fields (7 fields)
+    Target_type = countif(isnotempty(target_type)),
+    Target_guid = countif(isnotempty(target_guid)),
+    Target_email = countif(isnotempty(target_email_address)),
+    
+    // Audit Fields (2 fields)
+    Audit_type = countif(isnotempty(audit_type)),
+    Audit_changes = countif(isnotnull(audit_attribute_changes)),
+    
+    // Smishing Fields (4 fields)
+    Smishing_id = countif(isnotempty(smishing_alert_id)),
+    Smishing_type = countif(isnotempty(smishing_alert_type)),
+    Smishing_severity = countif(isnotempty(smishing_alert_severity)),
+    Smishing_detections = countif(isnotnull(smishing_detections)),
+    
+    // Dynamic Objects (6 fields)
+    Dynamic_device = countif(isnotnull(device)),
+    Dynamic_threat = countif(isnotnull(threat)),
+    Dynamic_audit = countif(isnotnull(audit)),
+    Dynamic_smishing = countif(isnotnull(smishing_alert)),
+    Dynamic_permissions = countif(isnotnull(device_permissions)),
+    Dynamic_vulns = countif(isnotnull(device_vulns)),
+    
+    TotalEvents = count()
+| extend 
+    CoreCoverage_Pct = round(100.0 * (Core_TimeGenerated + Core_id + Core_event_type) / (TotalEvents * 3), 1),
+    DeviceCoverage_Pct = round(100.0 * (Device_guid + Device_platform) / (TotalEvents * 2), 1),
+    ThreatCoverage_Pct = round(100.0 * Threat_id / TotalEvents, 1),
+    ActorCoverage_Pct = round(100.0 * Actor_device_guid / TotalEvents, 1),
+    OverallStatus = case(
+        CoreCoverage_Pct >= 95, "✅ Excellent",
+        CoreCoverage_Pct >= 80, "⚠️ Good",
+        "❌ Poor"
+    )
+| project 
+    TotalEvents,
+    OverallStatus,
+    CoreCoverage_Pct,
+    DeviceCoverage_Pct,
+    ThreatCoverage_Pct,
+    ActorCoverage_Pct,
+    Actor_device_guid,
+    Core_log_type,
+    Core_TimeGenerated
