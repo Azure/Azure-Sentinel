@@ -1,30 +1,28 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains two complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains three complementary tools for analyzing Microsoft Sentinel Solutions:
 
 1. **`solution_connector_tables.py`** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
-2. **`generate_connector_docs.py`** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions
+2. **`collect_table_info.py`** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
+3. **`generate_connector_docs.py`** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
 
 ## Quick Start
 
 **Pre-generated files are already available in this directory:**
 - [`solutions_connectors_tables_mapping.csv`](solutions_connectors_tables_mapping.csv) - Main mapping of connectors to tables with full metadata
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
+- [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor documentation
 
 **Connector Reference documentation in the connector-docs/ directory:**
 
 - **[Solutions Index](connector-docs/solutions-index.md)** - All solutions organized alphabetically (with and without connectors)
 - **[Connectors Index](connector-docs/connectors-index.md)** - All unique connectors with metadata
-- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references
+- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references, transformation support, and ingestion API compatibility
 - **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](connector-docs/solutions/) directory)
 - **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](connector-docs/connectors/) directory)
+- **Individual Table Pages** - Detailed pages for each table with metadata from Azure Monitor documentation (in [`tables/`](connector-docs/tables/) directory)
 
 You can use these files directly without running the scripts. They are kept up-to-date with the Solutions directory.
-
-**Browsable documentation is also available:**
-- [`connector-docs/solutions-index.md`](connector-docs/solutions-index.md) - Browse all solutions with metadata and connector details
-- [`connector-docs/connectors-index.md`](connector-docs/connectors-index.md) - Browse all unique connectors with setup instructions
-- [`connector-docs/tables-index.md`](connector-docs/tables-index.md) - Browse all unique tables with solution references
 
 The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
 
@@ -199,6 +197,93 @@ The analyzer uses intelligent query parsing to distinguish actual table names fr
 - **Multi-line Statement Tracking**: Handles complex multi-line queries with proper context awareness
 - **Comment Stripping**: Removes KQL comments before analysis to avoid false detections
 
+---
+
+# 2. Table Reference Collector
+
+**Script:** `collect_table_info.py`
+
+## Overview
+
+Collects comprehensive table metadata from Microsoft Azure Monitor documentation sources:
+
+- Azure Monitor Logs table reference
+- Microsoft Defender XDR schema reference
+- Table feature support information
+- Ingestion API compatibility
+
+The collected data enriches the connector documentation with detailed table information including transformation support, basic logs eligibility, and documentation links.
+
+## Prerequisites
+
+- Python 3.7 or higher
+- `requests` library for HTTP fetching
+
+```bash
+pip install requests
+```
+
+## Running the Script
+
+From the `Tools/Solutions Analyzer` directory:
+
+```bash
+# Basic run (main pages only)
+python collect_table_info.py
+
+# Full run with individual table details
+python collect_table_info.py --fetch-details
+```
+
+## Command Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--output` | `tables_reference.csv` | Path for the output CSV file |
+| `--report` | `tables_reference_report.md` | Path for the summary report |
+| `--fetch-details` | `False` | Fetch additional details from individual table pages |
+| `--max-details` | None | Maximum number of table detail pages to fetch (for testing) |
+| `--cache-ttl` | `604800` | Cache time-to-live in seconds (default: 1 week) |
+| `--clear-cache` | `False` | Clear all cached files before running |
+
+## Output Files
+
+### tables_reference.csv
+
+Comprehensive CSV with table metadata:
+
+| Column | Description |
+|--------|-------------|
+| `table_name` | Table name |
+| `description` | Table description from documentation |
+| `category` | Table category (e.g., Security, Audit, Azure Resources) |
+| `solutions` | Associated Log Analytics solutions |
+| `resource_types` | Azure resource types that emit to this table |
+| `table_type` | Type classification |
+| `source_azure_monitor` | Whether table is in Azure Monitor reference |
+| `source_defender_xdr` | Whether table is in Defender XDR schema |
+| `source_feature_support` | Whether table has feature support info |
+| `source_ingestion_api` | Whether table supports ingestion API |
+| `azure_monitor_doc_link` | Link to Azure Monitor documentation |
+| `defender_xdr_doc_link` | Link to Defender XDR documentation |
+| `basic_logs_eligible` | Whether table supports Basic Logs plan |
+| `auxiliary_table_eligible` | Whether table can be auxiliary |
+| `supports_transformations` | Whether ingestion-time transformations are supported |
+| `search_job_support` | Whether search jobs are supported |
+| `ingestion_api_supported` | Whether Data Collector API ingestion is supported |
+| `retention_default` | Default retention period |
+| `retention_max` | Maximum retention period |
+| `plan` | Log Analytics plan (Analytics, Basic, etc.) |
+
+### Caching
+
+The script uses file-based caching to minimize network requests:
+
+- Cache files stored in `.cache/` directory
+- Default TTL of 1 week (604800 seconds)
+- MD5 hash of URL used as cache key
+- Use `--clear-cache` to force fresh fetches
+
 ### JSON Parsing Tolerance
 
 The analyzer includes enhanced JSON parsing to handle common issues in ARM templates:
@@ -262,17 +347,18 @@ This will include the `table_detection_methods` column showing exactly how each 
 
 ---
 
-# 2. Connector Documentation Generator
+# 3. Connector Documentation Generator
 
 **Script:** `generate_connector_docs.py`
 
 ## Overview
 
-Generates browsable markdown documentation from the CSV data produced by `solution_connector_tables.py`. The documentation includes:
+Generates browsable markdown documentation from the CSV data produced by `solution_connector_tables.py` and `collect_table_info.py`. The documentation includes:
 
 - Three index pages (solutions, connectors, tables)
 - Individual pages for each solution with connector details
-- Individual pages for each connector with usage information
+- Individual pages for each connector with table transformation and ingestion API support information
+- Individual pages for ALL tables with enriched metadata from Azure Monitor documentation
 - **AI-rendered setup instructions** extracted from connector UI definitions
 
 ## Output
@@ -290,18 +376,33 @@ See the [connector-docs README](connector-docs/README.md) for full documentation
 ## Prerequisites
 
 - Python 3.7 or higher
-- Pre-generated CSV file from `solution_connector_tables.py`
-- No external dependencies required
+- Input CSV files (automatically generated if not present):
+  - `solutions_connectors_tables_mapping.csv` from `solution_connector_tables.py`
+  - `tables_reference.csv` from `collect_table_info.py`
 
 ## Running the Script
 
 From the `Tools/Solutions Analyzer` directory:
 
 ```bash
+# Full run (automatically generates input CSVs first)
 python generate_connector_docs.py
+
+# Skip input generation (use existing CSV files)
+python generate_connector_docs.py --skip-input-generation
 ```
 
-The script reads `solutions_connectors_tables_mapping.csv` and generates all documentation in the `connector-docs/` directory.
+The script automatically calls `compare_connector_catalogs.py` and `collect_table_info.py --fetch-details` before generating documentation, unless `--skip-input-generation` is specified.
+
+## Command Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--input` | `solutions_connectors_tables_mapping.csv` | Path to connector mapping CSV |
+| `--tables-csv` | `tables_reference.csv` | Path to tables reference CSV |
+| `--output-dir` | `connector-docs/` | Output directory for documentation |
+| `--solutions` | All | Generate docs only for specific solutions |
+| `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
 ## Output Structure
 
@@ -312,14 +413,18 @@ connector-docs/
 ├── README.md                    # Documentation guide
 ├── solutions-index.md           # Alphabetical list of all solutions
 ├── connectors-index.md          # Alphabetical list of all connectors
-├── tables-index.md              # Alphabetical list of all tables
-├── solutions/                   # Individual solution pages (477 files)
+├── tables-index.md              # Alphabetical list of all tables with transformation/API support
+├── solutions/                   # Individual solution pages (~480 files)
 │   ├── 1password.md
 │   ├── aws-cloudfront.md
 │   └── ...
-└── connectors/                  # Individual connector pages (503 files)
-    ├── 1passwordeventreporter.md
-    ├── awscloudfront.md
+├── connectors/                  # Individual connector pages (~520 files)
+│   ├── 1passwordeventreporter.md
+│   ├── awscloudfront.md
+│   └── ...
+└── tables/                      # Individual table pages (~825 files)
+    ├── securityevent.md
+    ├── syslog.md
     └── ...
 ```
 
@@ -338,8 +443,19 @@ connector-docs/
 - **AI-rendered setup instructions and permissions** from connector UI definitions with step-by-step guidance
 - Required permissions and prerequisites (rendered from Microsoft Sentinel permissions schema)
 - List of solutions using this connector
-- Tables ingested by the connector
+- Tables ingested with transformation and ingestion API support indicators
 - Links to GitHub connector definition files
+
+**Table Pages** include:
+- Table description from Azure Monitor documentation
+- Category and resource types
+- Basic Logs eligibility
+- Transformation support status
+- Ingestion API compatibility
+- Search job support
+- Retention information
+- Links to Azure Monitor and Defender XDR documentation
+- List of solutions and connectors using the table
 
 **Index Pages** provide:
 - Alphabetical navigation
@@ -425,6 +541,18 @@ Instructions are formatted with:
 - Added connectors with `no_table_definitions` to output with empty table field (previously excluded)
   - Adds connectors such as Azure Resource Graph, Microsoft 365 Assets, Microsoft Entra ID Assets
 - Added `compare_connector_catalogs.py` script to compare GitHub connectors with Sentinel catalog
+- Added `collect_table_info.py` script to collect comprehensive table metadata from Azure Monitor documentation
+  - Fetches from Azure Monitor Logs reference, Defender XDR schema, feature support, and ingestion API pages
+  - Includes transformation support, basic logs eligibility, retention info, and documentation links
+  - Uses file-based caching with configurable TTL (default: 1 week)
+- Enhanced `generate_connector_docs.py` with table reference integration:
+  - Now automatically calls input generation scripts before documentation generation
+  - Added `--tables-csv` argument for tables reference CSV path
+  - Added `--skip-input-generation` flag to use existing CSV files
+  - Tables index now shows transformation and ingestion API support columns
+  - Individual table pages generated for ALL tables (not just multi-solution tables)
+  - Table pages include enriched metadata: description, category, basic logs eligibility, transformation support, ingestion API support, retention info, and documentation links
+  - Connector pages now show transformation and ingestion API support for each table
 
 ### v3.0
 
