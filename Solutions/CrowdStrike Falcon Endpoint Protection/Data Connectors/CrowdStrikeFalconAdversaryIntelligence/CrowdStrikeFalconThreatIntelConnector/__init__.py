@@ -166,7 +166,7 @@ def generate_uuid(identifier: str):
         uuid.UUID: Generated UUID object based on the identifier hash
     """
 
-    hash_value = hashlib.md5(identifier.encode())
+    hash_value = hashlib.md5(identifier.encode())            # CodeQL [SM02167] This is only being used to generate a UUID, not for security purposes.
     return uuid.UUID(hash_value.hexdigest())
 
 
