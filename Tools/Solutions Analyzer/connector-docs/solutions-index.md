@@ -12,14 +12,14 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **479 solutions**, of which **336** include data connectors, providing access to **463 unique connectors** and **740 unique tables**.
+This documentation covers **481 solutions**, of which **336** include data connectors, providing access to **463 unique connectors** and **740 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 479 |
-| Solutions with Connectors | 336 (70%) |
+| Total Solutions | 481 |
+| Solutions with Connectors | 336 (69%) |
 | Unique Connectors | 463 |
 | Unique Tables | 740 |
 
@@ -196,6 +196,7 @@ Browse solutions alphabetically:
 |----------|----------------|----------|
 | [DEV-0537DetectionandHunting](solutions/dev-0537detectionandhunting.md) | 2022-04-07 | Microsoft Corporation |
 | [DNS Essentials](solutions/dns-essentials.md) | 2023-01-14 | Microsoft Corporation |
+| [DORA Compliance](solutions/dora-compliance.md) | 2025-10-08 | Microsoft Corporation |
 | [Darktrace](solutions/darktrace.md) | 2022-05-02 | Darktrace |
 | [Datalake2Sentinel](solutions/datalake2sentinel.md) | 2024-01-15 | Orange Cyberdefense |
 | [Dataminr Pulse](solutions/dataminr-pulse.md) | 2023-04-12 | Dataminr Support |
@@ -509,6 +510,7 @@ Browse solutions alphabetically:
 | [SOC Handbook](solutions/soc-handbook.md) | 2022-11-30 | Community |
 | [SOC Prime CCF](solutions/soc-prime-ccf.md) | 2025-09-25 | SOC Prime |
 | [SOC-Process-Framework](solutions/soc-process-framework.md) | 2022-04-08 | Microsoft Corporation |
+| [SOX IT Compliance](solutions/sox-it-compliance.md) | 2025-12-11 | Microsoft Corporation |
 | [SailPointIdentityNow](solutions/sailpointidentitynow.md) | 2021-10-26 | SailPoint |
 | [SalemCyber](solutions/salemcyber.md) | 2023-07-21 | Salem Cyber |
 | [Salesforce Service Cloud](solutions/salesforce-service-cloud.md) | 2022-05-16 | Microsoft Corporation |

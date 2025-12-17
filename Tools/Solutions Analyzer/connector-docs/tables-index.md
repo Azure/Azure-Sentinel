@@ -170,6 +170,7 @@ This page lists **740 unique tables** ingested by connectors.
 | `Confluence_Audit_CL` | [AtlassianConfluenceAudit](solutions/atlassianconfluenceaudit.md) | [[Deprecated] Atlassian Confluence Audit](connectors/confluenceauditapi.md) |
 | `ContrastADRIncident_CL` | [ContrastADR](solutions/contrastadr.md) | [ContrastADR](connectors/contrastadr.md) |
 | `ContrastADR_CL` | [ContrastADR](solutions/contrastadr.md) | [ContrastADR](connectors/contrastadr.md) |
+| `CopilotActivity` | [Microsoft Copilot](solutions/microsoft-copilot.md) | [Microsoft Copilot](connectors/microsoftcopilot.md) |
 | `Corelight_CL` | [Corelight](solutions/corelight.md) | [Corelight Connector Exporter](connectors/corelightconnectorexporter.md) |
 | `Corelight_v2_bacnet_CL` | [Corelight](solutions/corelight.md) | [Corelight Connector Exporter](connectors/corelightconnectorexporter.md) |
 | `Corelight_v2_capture_loss_CL` | [Corelight](solutions/corelight.md) | [Corelight Connector Exporter](connectors/corelightconnectorexporter.md) |
@@ -555,7 +556,6 @@ This page lists **740 unique tables** ingested by connectors.
 
 | Table | Solutions | Connectors |
 |-------|-----------|------------|
-| `LLMActivity` | [Microsoft Copilot](solutions/microsoft-copilot.md) | [Microsoft Copilot](connectors/microsoftcopilot.md) |
 | `LastPassNativePoller_CL` | [LastPass](solutions/lastpass.md) | [LastPass Enterprise - Reporting (Polling CCP)](connectors/lastpass-polling.md) |
 | `LinuxAudit_CL` | [NXLog LinuxAudit](solutions/nxlog-linuxaudit.md) | [NXLog LinuxAudit](connectors/nxloglinuxaudit.md) |
 | `Lockdown_Data_CL` | [Vectra XDR](solutions/vectra-xdr.md) | [Vectra XDR](connectors/vectraxdr.md) |

@@ -2795,7 +2795,7 @@ The MailRisk by Secure Practice connector allows you to ingest email threat inte
 
 **Solution:** [Microsoft Copilot](solutions/microsoft-copilot.md)
 
-**Tables (1):** `LLMActivity`
+**Tables (1):** `CopilotActivity`
 
 The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless ingestion of Copilot-generated activity logs into Microsoft Sentinel for advanced threat detection, investigation, and response. It collects telemetry from Microsoft Copilot services - such as usage data, prompts and system responses - and ingests into Microsoft Sentinel, allowing security teams to monitor for misuse, detect anomalies, and maintain compliance with organizational policies.
 
