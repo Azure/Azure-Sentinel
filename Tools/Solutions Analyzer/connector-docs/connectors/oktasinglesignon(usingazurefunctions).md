@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `OktaSingleSignOn(usingAzureFunctions)` |
 | **Publisher** | Okta |
-| **Tables Ingested** | [`OktaV2_CL`](../tables-index.md#oktav2_cl), [`Okta_CL`](../tables-index.md#okta_cl), [`signIns`](../tables-index.md#signins) |
 | **Used in Solutions** | [Okta Single Sign-On](../solutions/okta-single-sign-on.md) |
 | **Connector Definition Files** | [azuredeploy_Okta_native_poller_connector_v2.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors/OktaNativePollerConnectorV2/azuredeploy_Okta_native_poller_connector_v2.json) |
 
 The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft Sentinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`OktaV2_CL`](../tables/oktav2-cl.md) | — | — |
+| [`Okta_CL`](../tables/okta-cl.md) | — | — |
+| [`signIns`](../tables/signins.md) | — | — |
 
 ## Permissions
 

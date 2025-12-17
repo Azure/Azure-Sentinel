@@ -4,11 +4,25 @@
 |----------|-------|
 | **Connector ID** | `OpenSystems` |
 | **Publisher** | Open Systems |
-| **Tables Ingested** | [`OpenSystemsAuthenticationLogs_CL`](../tables-index.md#opensystemsauthenticationlogs_cl), [`OpenSystemsFirewallLogs_CL`](../tables-index.md#opensystemsfirewalllogs_cl), [`OpenSystemsImAuthentication`](../tables-index.md#opensystemsimauthentication), [`OpenSystemsImNetworkSessionFirewall`](../tables-index.md#opensystemsimnetworksessionfirewall), [`OpenSystemsImNetworkSessionProxy`](../tables-index.md#opensystemsimnetworksessionproxy), [`OpenSystemsImZTNA`](../tables-index.md#opensystemsimztna), [`OpenSystemsProxyLogs_CL`](../tables-index.md#opensystemsproxylogs_cl), [`OpenSystemsZtnaLogs_CL`](../tables-index.md#opensystemsztnalogs_cl) |
 | **Used in Solutions** | [Open Systems](../solutions/open-systems.md) |
 | **Connector Definition Files** | [OpenSystems.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Open%20Systems/Data%20Connectors/OpenSystems.json) |
 
 The Open Systems Logs API Microsoft Sentinel Connector provides the capability to ingest Open Systems logs into Microsoft Sentinel using Open Systems Logs API.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`OpenSystemsAuthenticationLogs_CL`](../tables/opensystemsauthenticationlogs-cl.md) | — | — |
+| [`OpenSystemsFirewallLogs_CL`](../tables/opensystemsfirewalllogs-cl.md) | — | — |
+| [`OpenSystemsImAuthentication`](../tables/opensystemsimauthentication.md) | — | — |
+| [`OpenSystemsImNetworkSessionFirewall`](../tables/opensystemsimnetworksessionfirewall.md) | — | — |
+| [`OpenSystemsImNetworkSessionProxy`](../tables/opensystemsimnetworksessionproxy.md) | — | — |
+| [`OpenSystemsImZTNA`](../tables/opensystemsimztna.md) | — | — |
+| [`OpenSystemsProxyLogs_CL`](../tables/opensystemsproxylogs-cl.md) | — | — |
+| [`OpenSystemsZtnaLogs_CL`](../tables/opensystemsztnalogs-cl.md) | — | — |
 
 ## Permissions
 

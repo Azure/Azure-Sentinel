@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `NetskopeWebTransactionsDataConnector` |
 | **Publisher** | Netskope |
-| **Tables Ingested** | [`NetskopeWebtxData_CL`](../tables-index.md#netskopewebtxdata_cl), [`NetskopeWebtxErrors_CL`](../tables-index.md#netskopewebtxerrors_cl) |
 | **Used in Solutions** | [Netskopev2](../solutions/netskopev2.md) |
 | **Connector Definition Files** | [Netskope_WebTransactions.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Data%20Connectors/NetskopeWebTransactionsDataConnector/Netskope_WebTransactions.json) |
 
@@ -21,6 +20,15 @@ The [Netskope Web Transactions](https://docs.netskope.com/en/netskope-help/data-
 > https://docs.netskope.com/en/netskope-help/data-security/transaction-events/netskope-transaction-events/ 
 
 
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`NetskopeWebtxData_CL`](../tables/netskopewebtxdata-cl.md) | — | — |
+| [`NetskopeWebtxErrors_CL`](../tables/netskopewebtxerrors-cl.md) | — | — |
 
 ## Permissions
 

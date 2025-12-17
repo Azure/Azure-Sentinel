@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CiscoMeraki(usingRESTAPI)` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`CiscoMerakiNativePoller_CL`](../tables-index.md#ciscomerakinativepoller_cl), [`meraki_CL`](../tables-index.md#meraki_cl) |
 | **Used in Solutions** | [CiscoMeraki](../solutions/ciscomeraki.md) |
 | **Connector Definition Files** | [azuredeploy_Cisco_Meraki_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json) |
 
@@ -15,6 +14,15 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
  **Supported ASIM schema:** 
 
  1. Network Session
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CiscoMerakiNativePoller_CL`](../tables/ciscomerakinativepoller-cl.md) | — | — |
+| [`meraki_CL`](../tables/meraki-cl.md) | — | — |
 
 ## Permissions
 

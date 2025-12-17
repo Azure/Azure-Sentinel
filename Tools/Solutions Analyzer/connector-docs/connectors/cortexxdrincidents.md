@@ -4,11 +4,18 @@
 |----------|-------|
 | **Connector ID** | `CortexXDRIncidents` |
 | **Publisher** | DEFEND Ltd. |
-| **Tables Ingested** | [`PaloAltoCortexXDR_Incidents_CL`](../tables-index.md#paloaltocortexxdr_incidents_cl) |
 | **Used in Solutions** | [Cortex XDR](../solutions/cortex-xdr.md) |
 | **Connector Definition Files** | [CortexXDR_DataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cortex%20XDR/Data%20Connectors/CortexXDR_DataConnector.json) |
 
 Custom Data connector from DEFEND to utilise the Cortex API to ingest incidents from Cortex XDR platform into Microsoft Sentinel.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`PaloAltoCortexXDR_Incidents_CL`](../tables/paloaltocortexxdr-incidents-cl.md) | — | — |
 
 ## Permissions
 

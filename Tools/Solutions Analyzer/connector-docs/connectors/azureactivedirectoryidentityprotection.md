@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `AzureActiveDirectoryIdentityProtection` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`SecurityAlert`](../tables-index.md#securityalert) |
 | **Used in Solutions** | [Microsoft Entra ID Protection](../solutions/microsoft-entra-id-protection.md) |
 | **Connector Definition Files** | [template_AzureActiveDirectoryIdentityProtection.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Protection/Data%20Connectors/template_AzureActiveDirectoryIdentityProtection.JSON) |
 
@@ -13,6 +12,14 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 
 [Get Microsoft Entra ID Premium P1/P2 ](https://aka.ms/asi-ipcconnectorgetlink)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
 
 ## Permissions
 

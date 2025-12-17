@@ -1,8 +1,10 @@
 # OnePasswordEventLogs_CL
 
-**Table:** `OnePasswordEventLogs_CL`
-
-This table is ingested by **1 solution(s)** using **3 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `OnePasswordEventLogs_CL` |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 3 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

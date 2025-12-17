@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `MimecastATAPI` |
 | **Publisher** | Mimecast |
-| **Tables Ingested** | [`Awareness_Performance_Details_CL`](../tables-index.md#awareness_performance_details_cl), [`Awareness_SafeScore_Details_CL`](../tables-index.md#awareness_safescore_details_cl), [`Awareness_User_Data_CL`](../tables-index.md#awareness_user_data_cl), [`Awareness_Watchlist_Details_CL`](../tables-index.md#awareness_watchlist_details_cl) |
 | **Used in Solutions** | [Mimecast](../solutions/mimecast.md) |
 | **Connector Definition Files** | [Mimecast_AT_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastAT/Mimecast_AT_FunctionApp.json) |
 
@@ -21,6 +20,17 @@ The Mimecast products included within the connector are:
 - Watchlist Details
 
 
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Awareness_Performance_Details_CL`](../tables/awareness-performance-details-cl.md) | — | — |
+| [`Awareness_SafeScore_Details_CL`](../tables/awareness-safescore-details-cl.md) | — | — |
+| [`Awareness_User_Data_CL`](../tables/awareness-user-data-cl.md) | — | — |
+| [`Awareness_Watchlist_Details_CL`](../tables/awareness-watchlist-details-cl.md) | — | — |
 
 ## Permissions
 

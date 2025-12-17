@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `MicrosoftCloudAppSecurity` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`McasShadowItReporting`](../tables-index.md#mcasshadowitreporting), [`SecurityAlert`](../tables-index.md#securityalert), [`discoveryLogs`](../tables-index.md#discoverylogs) |
 | **Used in Solutions** | [Microsoft Defender for Cloud Apps](../solutions/microsoft-defender-for-cloud-apps.md) |
 | **Connector Definition Files** | [MicrosoftCloudAppSecurity.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud%20Apps/Data%20Connectors/MicrosoftCloudAppSecurity.JSON) |
 
@@ -25,6 +24,16 @@ By connecting with [Microsoft Defender for Cloud Apps](https://aka.ms/asi-mcas-c
 
 
 [Deploy now >](https://aka.ms/asi-mcas-connector-deploynow)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`McasShadowItReporting`](../tables/mcasshadowitreporting.md) | ✓ | ✗ |
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
+| [`discoveryLogs`](../tables/discoverylogs.md) | — | — |
 
 ## Permissions
 

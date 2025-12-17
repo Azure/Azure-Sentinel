@@ -1,8 +1,15 @@
 # AzureDiagnostics
 
-**Table:** `AzureDiagnostics`
+Reference for AzureDiagnostics table in Azure Monitor Logs.
 
-This table is ingested by **15 solution(s)** using **15 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `AzureDiagnostics` |
+| **Category** | Azure Resources |
+| **Solutions Using Table** | 15 |
+| **Connectors Ingesting** | 15 |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/azurediagnostics) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

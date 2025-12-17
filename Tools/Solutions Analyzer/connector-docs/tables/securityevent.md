@@ -1,8 +1,17 @@
 # SecurityEvent
 
-**Table:** `SecurityEvent`
+Reference for SecurityEvent table in Azure Monitor Logs.
 
-This table is ingested by **4 solution(s)** using **6 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `SecurityEvent` |
+| **Category** | Security |
+| **Solutions Using Table** | 4 |
+| **Connectors Ingesting** | 6 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/securityevent) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -27,6 +36,17 @@ This table is ingested by the following connectors:
 - [Security Events via Legacy Agent](../connectors/securityevents.md)
 - [Semperis Directory Services Protector](../connectors/semperisdsp.md)
 - [Windows Security Events via AMA](../connectors/windowssecurityevents.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/securityinsights`
+- `<br>microsoft.compute/virtualmachines`
+- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
+- `<br>microsoft.azurestackhci/virtualmachines`
+- `<br>microsoft.scvmm/virtualmachines`
+- `<br>microsoft.compute/virtualmachinescalesets`
 
 ---
 

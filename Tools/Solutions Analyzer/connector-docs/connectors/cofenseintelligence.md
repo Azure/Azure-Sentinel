@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CofenseIntelligence` |
 | **Publisher** | Cofense |
-| **Tables Ingested** | [`Malware_Data_CL`](../tables-index.md#malware_data_cl), [`ThreatIntelligenceIndicator`](../tables-index.md#threatintelligenceindicator) |
 | **Used in Solutions** | [CofenseIntelligence](../solutions/cofenseintelligence.md) |
 | **Connector Definition Files** | [CofenseIntelligence_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence/Data%20Connectors/CofenseIntelligenceDataConnector/CofenseIntelligence_API_FunctionApp.json) |
 
@@ -47,6 +46,15 @@ The [Cofense-Intelligence](https://cofense.com/product-services/phishing-intelli
  3. Microsoft Defender for Endpoints Indicator documentation: 
 
 > https://learn.microsoft.com/microsoft-365/security/defender-endpoint/ti-indicator?view=o365-worldwide
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Malware_Data_CL`](../tables/malware-data-cl.md) | — | — |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
 
 ## Permissions
 

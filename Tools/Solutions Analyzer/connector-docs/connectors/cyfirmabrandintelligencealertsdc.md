@@ -4,9 +4,20 @@
 |----------|-------|
 | **Connector ID** | `CyfirmaBrandIntelligenceAlertsDC` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`CyfirmaBIDomainITAssetAlerts_CL`](../tables-index.md#cyfirmabidomainitassetalerts_cl), [`CyfirmaBIExecutivePeopleAlerts_CL`](../tables-index.md#cyfirmabiexecutivepeoplealerts_cl), [`CyfirmaBIMaliciousMobileAppsAlerts_CL`](../tables-index.md#cyfirmabimaliciousmobileappsalerts_cl), [`CyfirmaBIProductSolutionAlerts_CL`](../tables-index.md#cyfirmabiproductsolutionalerts_cl), [`CyfirmaBISocialHandlersAlerts_CL`](../tables-index.md#cyfirmabisocialhandlersalerts_cl) |
 | **Used in Solutions** | [Cyfirma Brand Intelligence](../solutions/cyfirma-brand-intelligence.md) |
 | **Connector Definition Files** | [CyfirmaBIAlerts_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Brand%20Intelligence/Data%20Connectors/CyfirmaBIAlerts_ccp/CyfirmaBIAlerts_DataConnectorDefinition.json) |
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CyfirmaBIDomainITAssetAlerts_CL`](../tables/cyfirmabidomainitassetalerts-cl.md) | — | — |
+| [`CyfirmaBIExecutivePeopleAlerts_CL`](../tables/cyfirmabiexecutivepeoplealerts-cl.md) | — | — |
+| [`CyfirmaBIMaliciousMobileAppsAlerts_CL`](../tables/cyfirmabimaliciousmobileappsalerts-cl.md) | — | — |
+| [`CyfirmaBIProductSolutionAlerts_CL`](../tables/cyfirmabiproductsolutionalerts-cl.md) | — | — |
+| [`CyfirmaBISocialHandlersAlerts_CL`](../tables/cyfirmabisocialhandlersalerts-cl.md) | — | — |
 
 ## Permissions
 

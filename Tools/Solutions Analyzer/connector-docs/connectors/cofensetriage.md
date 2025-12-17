@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CofenseTriage` |
 | **Publisher** | Cofense |
-| **Tables Ingested** | [`Cofense_Triage_failed_indicators_CL`](../tables-index.md#cofense_triage_failed_indicators_cl), [`Report_links_data_CL`](../tables-index.md#report_links_data_cl), [`ThreatIntelligenceIndicator`](../tables-index.md#threatintelligenceindicator) |
 | **Used in Solutions** | [CofenseTriage](../solutions/cofensetriage.md) |
 | **Connector Definition Files** | [CofenseTriage_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage/Data%20Connectors/CofenseTriageDataConnector/CofenseTriage_API_FunctionApp.json) |
 
@@ -45,6 +44,16 @@ The [Cofense-Triage](https://cofense.com/product-services/cofense-triage/) data 
  3. Microsoft Defender for Endpoints Indicator documentation: 
 
 > https://learn.microsoft.com/microsoft-365/security/defender-endpoint/ti-indicator?view=o365-worldwide
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Cofense_Triage_failed_indicators_CL`](../tables/cofense-triage-failed-indicators-cl.md) | — | — |
+| [`Report_links_data_CL`](../tables/report-links-data-cl.md) | — | — |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
 
 ## Permissions
 

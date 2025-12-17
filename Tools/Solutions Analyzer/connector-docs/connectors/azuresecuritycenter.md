@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `AzureSecurityCenter` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`SecurityAlert`](../tables-index.md#securityalert) |
 | **Used in Solutions** | [Microsoft Defender for Cloud](../solutions/microsoft-defender-for-cloud.md) |
 | **Connector Definition Files** | [AzureSecurityCenter.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud/Data%20Connectors/AzureSecurityCenter.JSON) |
 
@@ -13,6 +12,14 @@ Microsoft Defender for Cloud is a security management tool that allows you to de
 
 
 [For more information>](https://aka.ms/ASC-Connector)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
 
 ## Permissions
 

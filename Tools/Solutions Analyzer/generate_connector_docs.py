@@ -8,11 +8,13 @@ of https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference
 import csv
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 import argparse
 from urllib.parse import quote
 import json
 import re
+import subprocess
+import sys
 
 
 def sanitize_anchor(text: str) -> str:
@@ -898,7 +900,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
     print(f"Generated connectors index: {index_path}")
 
 
-def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> None:
+def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, any]]:
     """Generate tables index page organized alphabetically."""
     
     index_path = output_dir / "tables-index.md"
@@ -957,25 +959,19 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
         f.write("\n\n")
         
-        # Generate sections by letter
+        # Generate sections by letter - now with additional columns for transformation and ingestion API support
         for letter in letters:
             f.write(f"## {letter}\n\n")
-            f.write("| Table | Solutions | Connectors |\n")
-            f.write("|-------|-----------|------------|\n")
+            f.write("| Table | Solutions | Connectors | Transforms | Ingestion API |\n")
+            f.write("|-------|-----------|------------|:----------:|:-------------:|\n")
             
             for table in sorted(by_letter[letter]):
                 info = tables_map[table]
                 num_solutions = len(info['solutions'])
                 num_connectors = len(info['connectors'])
                 
-                # Determine if we should create individual table page
-                has_table_page = num_solutions > 1 or num_connectors > 1
-                
-                # Table name cell with optional link
-                if has_table_page:
-                    table_cell = f"[`{table}`](tables/{sanitize_anchor(table)}.md)"
-                else:
-                    table_cell = f"`{table}`"
+                # All tables get individual pages now
+                table_cell = f"[`{table}`](tables/{sanitize_anchor(table)}.md)"
                 
                 # Solutions cell - limit to 3 items, link to table page for more
                 if num_solutions == 1:
@@ -1009,7 +1005,16 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                     more_link = f"[+{num_connectors - 5} more](tables/{sanitize_anchor(table)}.md)"
                     connectors_cell = ", ".join(connector_links) + " " + more_link
                 
-                f.write(f"| {table_cell} | {solutions_cell} | {connectors_cell} |\n")
+                # Get transformation and ingestion API support from tables_reference
+                table_ref = tables_reference.get(table, {})
+                supports_transforms = table_ref.get('supports_transformations', '')
+                ingestion_api = table_ref.get('ingestion_api_supported', '')
+                
+                # Format as checkmarks/dashes
+                transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "—" if supports_transforms else ""
+                ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "—" if ingestion_api else ""
+                
+                f.write(f"| {table_cell} | {solutions_cell} | {connectors_cell} | {transforms_cell} | {ingestion_cell} |\n")
             
             f.write("\n")
     
@@ -1019,8 +1024,8 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     return tables_map
 
 
-def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path) -> None:
-    """Generate individual table documentation pages for tables with multiple solutions or connectors."""
+def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]]) -> None:
+    """Generate individual table documentation pages for ALL tables."""
     
     table_dir = output_dir / "tables"
     table_dir.mkdir(parents=True, exist_ok=True)
@@ -1031,18 +1036,70 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         num_solutions = len(info['solutions'])
         num_connectors = len(info['connectors'])
         
-        # Only create pages for tables with multiple solutions or connectors
-        if num_solutions <= 1 and num_connectors <= 1:
-            continue
+        # Generate page for ALL tables now (removed condition that required multiple solutions/connectors)
         
         table_path = table_dir / f"{sanitize_anchor(table)}.md"
+        
+        # Get reference data from tables_reference CSV
+        table_ref = tables_reference.get(table, {})
         
         with table_path.open("w", encoding="utf-8") as f:
             f.write(f"# {table}\n\n")
             
-            # Overview
-            f.write(f"**Table:** `{table}`\n\n")
-            f.write(f"This table is ingested by **{num_solutions} solution(s)** using **{num_connectors} connector(s)**.\n\n")
+            # Description from reference CSV
+            description = table_ref.get('description', '')
+            if description:
+                f.write(f"{description}\n\n")
+            
+            # Metadata table
+            f.write("| | |\n")
+            f.write("|----------|-------|\n")
+            f.write(f"| **Table Name** | `{table}` |\n")
+            
+            category = table_ref.get('category', '')
+            if category:
+                f.write(f"| **Category** | {category} |\n")
+            
+            # Connector solutions and usage
+            f.write(f"| **Solutions Using Table** | {num_solutions} |\n")
+            f.write(f"| **Connectors Ingesting** | {num_connectors} |\n")
+            
+            # Table characteristics from reference CSV
+            basic_logs = table_ref.get('basic_logs_eligible', '')
+            if basic_logs:
+                basic_logs_display = "✓ Yes" if basic_logs.lower() == 'yes' else "✗ No" if basic_logs.lower() == 'no' else basic_logs
+                f.write(f"| **Basic Logs Eligible** | {basic_logs_display} |\n")
+            
+            supports_transforms = table_ref.get('supports_transformations', '')
+            if supports_transforms:
+                transforms_display = "✓ Yes" if supports_transforms.lower() == 'yes' else "✗ No" if supports_transforms.lower() == 'no' else supports_transforms
+                f.write(f"| **Supports Transformations** | {transforms_display} |\n")
+            
+            ingestion_api = table_ref.get('ingestion_api_supported', '')
+            if ingestion_api:
+                ingestion_display = "✓ Yes" if ingestion_api.lower() == 'yes' else "✗ No" if ingestion_api.lower() == 'no' else ingestion_api
+                f.write(f"| **Ingestion API Supported** | {ingestion_display} |\n")
+            
+            search_job = table_ref.get('search_job_support', '')
+            if search_job:
+                search_display = "✓ Yes" if search_job.lower() == 'yes' else "✗ No" if search_job.lower() == 'no' else search_job
+                f.write(f"| **Search Job Support** | {search_display} |\n")
+            
+            plan = table_ref.get('plan', '')
+            if plan:
+                f.write(f"| **Plan** | {plan} |\n")
+            
+            # Documentation links
+            azure_monitor_link = table_ref.get('azure_monitor_doc_link', '')
+            defender_xdr_link = table_ref.get('defender_xdr_doc_link', '')
+            
+            if azure_monitor_link:
+                f.write(f"| **Azure Monitor Docs** | [View Documentation]({azure_monitor_link}) |\n")
+            
+            if defender_xdr_link:
+                f.write(f"| **Defender XDR Docs** | [View Documentation]({defender_xdr_link}) |\n")
+            
+            f.write("\n")
             
             if info.get('is_unique', False):
                 f.write("⚠️ **Note:** This table name is unique to specific connectors.\n\n")
@@ -1050,18 +1107,42 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             f.write("---\n\n")
             
             # Solutions section
-            f.write(f"## Solutions ({num_solutions})\n\n")
-            f.write("This table is used by the following solutions:\n\n")
-            for solution_name in sorted(info['solutions']):
-                f.write(f"- [{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)\n")
-            f.write("\n")
+            if num_solutions > 0:
+                f.write(f"## Solutions ({num_solutions})\n\n")
+                f.write("This table is used by the following solutions:\n\n")
+                for solution_name in sorted(info['solutions']):
+                    f.write(f"- [{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)\n")
+                f.write("\n")
             
             # Connectors section
-            f.write(f"## Connectors ({num_connectors})\n\n")
-            f.write("This table is ingested by the following connectors:\n\n")
-            for connector_id, connector_title in sorted(info['connectors']):
-                f.write(f"- [{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)\n")
-            f.write("\n")
+            if num_connectors > 0:
+                f.write(f"## Connectors ({num_connectors})\n\n")
+                f.write("This table is ingested by the following connectors:\n\n")
+                for connector_id, connector_title in sorted(info['connectors']):
+                    f.write(f"- [{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)\n")
+                f.write("\n")
+            
+            # Additional reference information
+            resource_types = table_ref.get('resource_types', '')
+            if resource_types and resource_types != '-':
+                f.write("## Resource Types\n\n")
+                f.write("This table collects data from the following Azure resource types:\n\n")
+                for rt in resource_types.split(','):
+                    rt = rt.strip()
+                    if rt:
+                        f.write(f"- `{rt}`\n")
+                f.write("\n")
+            
+            # Retention information
+            retention_default = table_ref.get('retention_default', '')
+            retention_max = table_ref.get('retention_max', '')
+            if retention_default or retention_max:
+                f.write("## Retention\n\n")
+                if retention_default:
+                    f.write(f"- **Default Retention:** {retention_default}\n")
+                if retention_max:
+                    f.write(f"- **Maximum Retention:** {retention_max}\n")
+                f.write("\n")
             
             # Navigation
             f.write("---\n\n")
@@ -1075,7 +1156,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
     print(f"Generated {pages_created} individual table pages")
 
 
-def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> None:
+def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]]) -> None:
     """Generate individual connector documentation pages."""
     
     connector_dir = output_dir / "connectors"
@@ -1118,10 +1199,6 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             if publisher:
                 f.write(f"| **Publisher** | {publisher} |\n")
             
-            # Tables
-            tables_list = ", ".join([f"[`{table}`](../tables-index.md#{table.lower()})" for table in sorted(data['tables']) if table])
-            f.write(f"| **Tables Ingested** | {tables_list} |\n")
-            
             # Solutions
             solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
             f.write(f"| **Used in Solutions** | {solutions_list} |\n")
@@ -1136,11 +1213,41 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             
             f.write("\n")
             
-            # Description at the bottom
+            # Description
             description = first_entry.get('connector_description', '')
             if description:
                 description = description.replace('<br>', '\n\n')
                 f.write(f"{description}\n\n")
+            
+            # Tables Ingested Section - Enhanced with transformation and ingestion API info
+            tables = sorted([t for t in data['tables'] if t])
+            if tables:
+                f.write("## Tables Ingested\n\n")
+                f.write("This connector ingests data into the following tables:\n\n")
+                f.write("| Table | Supports Transformations | Ingestion API Supported |\n")
+                f.write("|-------|:------------------------:|:-----------------------:|\n")
+                
+                for table in tables:
+                    table_ref = tables_reference.get(table, {})
+                    supports_transforms = table_ref.get('supports_transformations', '')
+                    ingestion_api = table_ref.get('ingestion_api_supported', '')
+                    
+                    # Format as checkmarks/dashes
+                    transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
+                    ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
+                    
+                    table_link = f"[`{table}`](../tables/{sanitize_anchor(table)}.md)"
+                    f.write(f"| {table_link} | {transforms_cell} | {ingestion_cell} |\n")
+                
+                f.write("\n")
+                
+                # Add note about ingestion API support
+                has_ingestion_api_tables = any(
+                    tables_reference.get(t, {}).get('ingestion_api_supported', '').lower() == 'yes' 
+                    for t in tables
+                )
+                if has_ingestion_api_tables:
+                    f.write("> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.\n\n")
             
             # Permissions section
             permissions = first_entry.get('connector_permissions', '')
@@ -1346,6 +1453,12 @@ def main() -> None:
         help="Path to input CSV file (default: solutions_connectors_tables_mapping.csv)",
     )
     parser.add_argument(
+        "--tables-csv",
+        type=Path,
+        default=Path(__file__).parent / "tables_reference.csv",
+        help="Path to tables reference CSV file (default: tables_reference.csv)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path(__file__).parent / "connector-docs",
@@ -1356,11 +1469,65 @@ def main() -> None:
         nargs="*",
         help="Generate docs only for specific solutions (default: all solutions)",
     )
+    parser.add_argument(
+        "--skip-input-generation",
+        action="store_true",
+        help="Skip running input CSV generation scripts",
+    )
     
     args = parser.parse_args()
     
+    # Run input CSV generation scripts if not skipped
+    script_dir = Path(__file__).parent
+    if not args.skip_input_generation:
+        print("Running input CSV generation scripts...")
+        
+        # Run compare_connector_catalogs.py
+        compare_script = script_dir / "compare_connector_catalogs.py"
+        if compare_script.exists():
+            print(f"  Running {compare_script.name}...")
+            result = subprocess.run(
+                [sys.executable, str(compare_script)],
+                cwd=str(script_dir),
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                print(f"    Warning: {compare_script.name} failed: {result.stderr}")
+            else:
+                print(f"    Done.")
+        
+        # Run collect_table_info.py --fetch-details (without cache update)
+        collect_script = script_dir / "collect_table_info.py"
+        if collect_script.exists():
+            print(f"  Running {collect_script.name} --fetch-details...")
+            result = subprocess.run(
+                [sys.executable, str(collect_script), "--fetch-details"],
+                cwd=str(script_dir),
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                print(f"    Warning: {collect_script.name} failed: {result.stderr}")
+            else:
+                print(f"    Done.")
+    
     if not args.input.exists():
         raise SystemExit(f"Input file not found: {args.input}")
+    
+    # Load tables reference CSV into a dictionary keyed by table name
+    tables_reference: Dict[str, Dict[str, str]] = {}
+    if args.tables_csv.exists():
+        print(f"Reading {args.tables_csv}...")
+        with args.tables_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                table_name = row.get('table_name', '')
+                if table_name:
+                    tables_reference[table_name] = row
+        print(f"Loaded {len(tables_reference)} tables from reference CSV")
+    else:
+        print(f"Warning: Tables reference CSV not found: {args.tables_csv}")
     
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -1393,13 +1560,13 @@ def main() -> None:
     # Generate index pages
     generate_index_page(by_solution, args.output_dir)
     generate_connectors_index(by_solution, args.output_dir)
-    tables_map = generate_tables_index(by_solution, args.output_dir)
+    tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference)
     
     # Generate individual table pages
-    generate_table_pages(tables_map, args.output_dir)
+    generate_table_pages(tables_map, args.output_dir, tables_reference)
     
     # Generate individual connector pages
-    generate_connector_pages(by_solution, args.output_dir)
+    generate_connector_pages(by_solution, args.output_dir, tables_reference)
     
     # Generate individual solution pages
     for solution_name, connectors in sorted(by_solution.items()):
@@ -1413,8 +1580,8 @@ def main() -> None:
             if connector_id:
                 all_connector_ids.add(connector_id)
     
-    # Count table pages created
-    table_pages_count = sum(1 for t in tables_map.values() if len(t['solutions']) > 1 or len(t['connectors']) > 1)
+    # Count table pages created - now counts all tables with pages
+    table_pages_count = len(tables_map)
     
     print(f"\nDocumentation generated successfully in: {args.output_dir}")
     print(f"  - Solutions index: {args.output_dir / 'solutions-index.md'}")

@@ -1,8 +1,17 @@
 # Syslog
 
-**Table:** `Syslog`
+Reference for Syslog table in Azure Monitor Logs.
 
-This table is ingested by **34 solution(s)** using **35 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `Syslog` |
+| **Category** | Security |
+| **Solutions Using Table** | 34 |
+| **Connectors Ingesting** | 35 |
+| **Basic Logs Eligible** | ✗ No |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/syslog) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -86,6 +95,20 @@ This table is ingested by the following connectors:
 - [Syslog via AMA](../connectors/syslogama.md)
 - [[Deprecated] VMware ESXi](../connectors/vmwareesxi.md)
 - [[Deprecated] WatchGuard Firebox](../connectors/watchguardfirebox.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.operationalinsights/workspaces`
+- `<br>microsoft.containerservice/managedclusters`
+- `<br>microsoft.kubernetes/connectedclusters`
+- `<br>microsoft.compute/virtualmachines`
+- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
+- `<br>microsoft.azurestackhci/virtualmachines`
+- `<br>microsoft.scvmm/virtualmachines`
+- `<br>microsoft.compute/virtualmachinescalesets`
+- `<br>microsoft.hybridcontainerservice/provisionedclusters`
 
 ---
 

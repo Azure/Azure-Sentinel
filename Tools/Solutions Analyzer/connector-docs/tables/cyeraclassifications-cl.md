@@ -1,8 +1,10 @@
 # CyeraClassifications_CL
 
-**Table:** `CyeraClassifications_CL`
-
-This table is ingested by **1 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `CyeraClassifications_CL` |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

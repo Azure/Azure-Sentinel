@@ -4,11 +4,18 @@
 |----------|-------|
 | **Connector ID** | `HYASProtect` |
 | **Publisher** | HYAS |
-| **Tables Ingested** | [`HYASProtectDnsSecurityLogs_CL`](../tables-index.md#hyasprotectdnssecuritylogs_cl) |
 | **Used in Solutions** | [HYAS Protect](../solutions/hyas-protect.md) |
 | **Connector Definition Files** | [HYASProtect_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HYAS%20Protect/Data%20Connectors/HYASProtect_FunctionApp.json) |
 
 HYAS Protect provide logs based on reputation values - Blocked, Malicious, Permitted, Suspicious.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`HYASProtectDnsSecurityLogs_CL`](../tables/hyasprotectdnssecuritylogs-cl.md) | — | — |
 
 ## Permissions
 

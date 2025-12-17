@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CiscoSecureEndpoint` |
 | **Publisher** | Cisco |
-| **Tables Ingested** | [`CiscoSecureEndpoint_CL`](../tables-index.md#ciscosecureendpoint_cl) |
 | **Used in Solutions** | [Cisco Secure Endpoint](../solutions/cisco-secure-endpoint.md) |
 | **Connector Definition Files** | [CiscoSecureEndpoint_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Secure%20Endpoint/Data%20Connectors/CiscoSecureEndpoint_API_FunctionApp.json) |
 
@@ -13,6 +12,14 @@ The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides t
 
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CiscoSecureEndpoint_CL`](../tables/ciscosecureendpoint-cl.md) | — | — |
 
 ## Permissions
 

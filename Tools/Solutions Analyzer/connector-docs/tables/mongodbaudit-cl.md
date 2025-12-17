@@ -1,8 +1,10 @@
 # MongoDBAudit_CL
 
-**Table:** `MongoDBAudit_CL`
-
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `MongoDBAudit_CL` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

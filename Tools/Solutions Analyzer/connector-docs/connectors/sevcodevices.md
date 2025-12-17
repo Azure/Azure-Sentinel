@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `SevcoDevices` |
 | **Publisher** | Sevco Security |
-| **Tables Ingested** | [`Sevco_Devices_CL`](../tables-index.md#sevco_devices_cl) |
 | **Used in Solutions** | [SevcoSecurity](../solutions/sevcosecurity.md) |
 | **Connector Definition Files** | [Connector_SevcoSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SevcoSecurity/Data%20Connectors/Connector_SevcoSecurity.json) |
 
@@ -13,6 +12,14 @@ The Sevco Platform - Devices connector allows you to easily connect your Sevco D
 
 
 [For more information >​](https://docs.sev.co/docs/microsoft-sentinel-inventory)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Sevco_Devices_CL`](../tables/sevco-devices-cl.md) | — | — |
 
 ## Permissions
 

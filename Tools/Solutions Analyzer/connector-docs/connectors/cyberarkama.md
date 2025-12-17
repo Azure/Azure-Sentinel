@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `CyberArkAma` |
 | **Publisher** | Cyber-Ark |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [CyberArk Enterprise Password Vault (EPV) Events](../solutions/cyberark-enterprise-password-vault-(epv)-events.md) |
 | **Connector Definition Files** | [template_CyberArkAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArk%20Enterprise%20Password%20Vault%20%28EPV%29%20Events/Data%20Connectors/template_CyberArkAMA.json) |
 
 CyberArk Privilege Access Manager generates an xml Syslog message for every action taken against the Vault.  The PAM will send the xml messages through the Microsoft Sentinel.xsl translator to be converted into CEF standard format and sent to a syslog staging server of your choice (syslog-ng, rsyslog). The Log Analytics agent installed on your syslog staging server will import the messages into Microsoft Log Analytics. Refer to the [CyberArk documentation](https://docs.cyberark.com/privilege-cloud-standard/Latest/en/Content/Privilege%20Cloud/privCloud-connect-siem.htm) for more guidance on SIEM integrations.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

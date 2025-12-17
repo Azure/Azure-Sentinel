@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `SymantecEndpointProtection` |
 | **Publisher** | Broadcom |
-| **Tables Ingested** | [`Syslog`](../tables-index.md#syslog) |
 | **Used in Solutions** | [Symantec Endpoint Protection](../solutions/symantec-endpoint-protection.md) |
 | **Connector Definition Files** | [Connector_Syslog_SymantecEndpointProtection.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20Endpoint%20Protection/Data%20Connectors/Connector_Syslog_SymantecEndpointProtection.json) |
 
 The [Broadcom Symantec Endpoint Protection (SEP)](https://www.broadcom.com/products/cyber-security/endpoint/end-user/enterprise) connector allows you to easily connect your SEP logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

@@ -1,8 +1,17 @@
 # ASimAuditEventLogs
 
-**Table:** `ASimAuditEventLogs`
+Reference for ASimAuditEventLogs table in Azure Monitor Logs.
 
-This table is ingested by **3 solution(s)** using **3 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `ASimAuditEventLogs` |
+| **Category** | Security |
+| **Solutions Using Table** | 3 |
+| **Connectors Ingesting** | 3 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimauditeventlogs) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -23,6 +32,12 @@ This table is ingested by the following connectors:
 - [Cisco Meraki (using REST API)](../connectors/ciscomerakimultirule.md)
 - [CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3)](../connectors/crowdstrikereplicatorv2.md)
 - [Workday User Activity](../connectors/workdayccpdefinition.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/auditeventnormalized`
 
 ---
 

@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `GitHubWebhook` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`githubscanaudit_CL`](../tables-index.md#githubscanaudit_cl) |
 | **Used in Solutions** | [GitHub](../solutions/github.md) |
 | **Connector Definition Files** | [GithubWebhook_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GithubWebhook/GithubWebhook_API_FunctionApp.json) |
 
@@ -13,6 +12,14 @@ The [GitHub](https://www.github.com) webhook data connector provides the capabil
 
 
  **Note:** If you are intended to ingest Github Audit logs, Please refer to GitHub Enterprise Audit Log Connector from "**Data Connectors**" gallery.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`githubscanaudit_CL`](../tables/githubscanaudit-cl.md) | — | — |
 
 ## Permissions
 

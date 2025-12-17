@@ -4,11 +4,19 @@
 |----------|-------|
 | **Connector ID** | `SlashNextFunctionApp` |
 | **Publisher** | SlashNext |
-| **Tables Ingested** | [`AzureDiagnostics`](../tables-index.md#azurediagnostics), [`AzureMetrics`](../tables-index.md#azuremetrics) |
 | **Used in Solutions** | [SlashNext](../solutions/slashnext.md) |
 | **Connector Definition Files** | [SlashNext_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/Data%20Connectors/SlashNext_FunctionApp.json) |
 
 The SlashNext function app utilizes python to perform the analysis of the raw logs and returns URLs present in the logs.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`AzureDiagnostics`](../tables/azurediagnostics.md) | — | ✗ |
+| [`AzureMetrics`](../tables/azuremetrics.md) | ✗ | ✗ |
 
 ## Permissions
 

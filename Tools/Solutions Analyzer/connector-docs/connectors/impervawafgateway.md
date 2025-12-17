@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `ImpervaWAFGateway` |
 | **Publisher** | Imperva |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [Imperva WAF Gateway](../solutions/imperva-waf-gateway.md) |
 | **Connector Definition Files** | [Connector_Imperva_WAF_Gateway.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Imperva%20WAF%20Gateway/Data%20Connectors/Connector_Imperva_WAF_Gateway.json) |
 
 The [Imperva](https://www.imperva.com) connector will allow you to quickly connect your Imperva WAF Gateway alerts to Azure Sentinel. This provides you additional insight into your organization's WAF traffic and improves your security operation capabilities.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

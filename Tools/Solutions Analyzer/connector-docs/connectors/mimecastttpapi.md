@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `MimecastTTPAPI` |
 | **Publisher** | Mimecast |
-| **Tables Ingested** | [`MimecastTTPAttachment_CL`](../tables-index.md#mimecastttpattachment_cl), [`MimecastTTPImpersonation_CL`](../tables-index.md#mimecastttpimpersonation_cl), [`MimecastTTPUrl_CL`](../tables-index.md#mimecastttpurl_cl), [`Ttp_Attachment_CL`](../tables-index.md#ttp_attachment_cl), [`Ttp_Impersonation_CL`](../tables-index.md#ttp_impersonation_cl), [`Ttp_Url_CL`](../tables-index.md#ttp_url_cl) |
 | **Used in Solutions** | [Mimecast](../solutions/mimecast.md), [MimecastTTP](../solutions/mimecastttp.md) |
 | **Connector Definition Files** | [Mimecast_TTP_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastTTP/Mimecast_TTP_FunctionApp.json) |
 
@@ -19,6 +18,19 @@ The Mimecast products included within the connector are:
 - Attachment Protect
 
 
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`MimecastTTPAttachment_CL`](../tables/mimecastttpattachment-cl.md) | — | — |
+| [`MimecastTTPImpersonation_CL`](../tables/mimecastttpimpersonation-cl.md) | — | — |
+| [`MimecastTTPUrl_CL`](../tables/mimecastttpurl-cl.md) | — | — |
+| [`Ttp_Attachment_CL`](../tables/ttp-attachment-cl.md) | — | — |
+| [`Ttp_Impersonation_CL`](../tables/ttp-impersonation-cl.md) | — | — |
+| [`Ttp_Url_CL`](../tables/ttp-url-cl.md) | — | — |
 
 ## Permissions
 

@@ -69,7 +69,7 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md) |
-| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
+| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md) |
+| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

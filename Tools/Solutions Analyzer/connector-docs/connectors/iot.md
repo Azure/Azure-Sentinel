@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `IoT` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`SecurityAlert`](../tables-index.md#securityalert) |
 | **Used in Solutions** | [IoTOTThreatMonitoringwithDefenderforIoT](../solutions/iototthreatmonitoringwithdefenderforiot.md) |
 | **Connector Definition Files** | [template_IoT.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IoTOTThreatMonitoringwithDefenderforIoT/Data%20Connectors/template_IoT.JSON) |
 
@@ -13,6 +12,14 @@ Gain insights into your IoT security by connecting Microsoft Defender for IoT al
 You can get out-of-the-box alert metrics and data, including alert trends, top alerts, and alert breakdown by severity.
 
 You can also get information about the recommendations provided for your IoT hubs including top recommendations and recommendations by severity. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2224002&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
 
 ## Permissions
 

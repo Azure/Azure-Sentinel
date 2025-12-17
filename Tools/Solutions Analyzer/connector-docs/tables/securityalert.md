@@ -1,8 +1,17 @@
 # SecurityAlert
 
-**Table:** `SecurityAlert`
+Reference for SecurityAlert table in Azure Monitor Logs.
 
-This table is ingested by **9 solution(s)** using **10 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `SecurityAlert` |
+| **Category** | Security |
+| **Solutions Using Table** | 9 |
+| **Connectors Ingesting** | 10 |
+| **Basic Logs Eligible** | ✗ No |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/securityalert) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -36,6 +45,12 @@ This table is ingested by the following connectors:
 - [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md)
 - [Microsoft Defender for Office 365 (Preview)](../connectors/officeatp.md)
 - [Microsoft 365 Insider Risk Management](../connectors/officeirm.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/securityinsights`
 
 ---
 

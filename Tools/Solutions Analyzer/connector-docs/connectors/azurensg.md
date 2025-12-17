@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `AzureNSG` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`AzureDiagnostics`](../tables-index.md#azurediagnostics) |
 | **Used in Solutions** | [Azure Network Security Groups](../solutions/azure-network-security-groups.md) |
 | **Connector Definition Files** | [AzureNSG.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups/Data%20Connectors/AzureNSG.JSON) |
 
@@ -25,6 +24,14 @@ When you enable logging for an NSG, you can gather the following types of resour
 
 
 This connector lets you stream your NSG diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223718&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`AzureDiagnostics`](../tables/azurediagnostics.md) | — | ✗ |
 
 ## Permissions
 

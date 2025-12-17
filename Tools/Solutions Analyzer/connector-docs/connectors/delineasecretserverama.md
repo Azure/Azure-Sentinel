@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `DelineaSecretServerAma` |
 | **Publisher** | Delinea, Inc |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [Delinea Secret Server](../solutions/delinea-secret-server.md) |
 | **Connector Definition Files** | [template_DelineaSecretServerAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Delinea%20Secret%20Server/Data%20Connectors/template_DelineaSecretServerAMA.json) |
 
 Common Event Format (CEF) from Delinea Secret Server 
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

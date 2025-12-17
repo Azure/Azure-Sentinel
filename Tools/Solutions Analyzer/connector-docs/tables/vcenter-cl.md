@@ -1,8 +1,10 @@
 # vcenter_CL
 
-**Table:** `vcenter_CL`
-
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `vcenter_CL` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

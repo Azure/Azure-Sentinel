@@ -1,8 +1,10 @@
 # PostgreSQL_CL
 
-**Table:** `PostgreSQL_CL`
-
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `PostgreSQL_CL` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

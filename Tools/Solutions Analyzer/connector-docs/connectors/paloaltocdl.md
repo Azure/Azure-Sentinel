@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `PaloAltoCDL` |
 | **Publisher** | Palo Alto Networks |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [PaloAltoCDL](../solutions/paloaltocdl.md) |
 | **Connector Definition Files** | [Connector_PaloAlto_CDL_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoCDL/Data%20Connectors/Connector_PaloAlto_CDL_CEF.json) |
 
 The [Palo Alto Networks CDL](https://www.paloaltonetworks.com/cortex/cortex-data-lake) data connector provides the capability to ingest [CDL logs](https://docs.paloaltonetworks.com/strata-logging-service/log-reference/log-forwarding-schema-overview) into Microsoft Sentinel.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

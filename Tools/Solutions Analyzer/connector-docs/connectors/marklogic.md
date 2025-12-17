@@ -4,11 +4,18 @@
 |----------|-------|
 | **Connector ID** | `MarkLogic` |
 | **Publisher** | MarkLogic |
-| **Tables Ingested** | [`MarkLogicAudit_CL`](../tables-index.md#marklogicaudit_cl) |
 | **Used in Solutions** | [MarkLogicAudit](../solutions/marklogicaudit.md) |
 | **Connector Definition Files** | [Connector_MarkLogicAudit.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MarkLogicAudit/Data%20Connectors/Connector_MarkLogicAudit.json) |
 
 MarkLogic data connector provides the capability to ingest [MarkLogicAudit](https://www.marklogic.com/) logs into Microsoft Sentinel. Refer to [MarkLogic documentation](https://docs.marklogic.com/guide/getting-started) for more information.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`MarkLogicAudit_CL`](../tables/marklogicaudit-cl.md) | — | — |
 
 ## Permissions
 

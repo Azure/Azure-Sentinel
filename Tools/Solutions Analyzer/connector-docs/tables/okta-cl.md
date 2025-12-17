@@ -1,8 +1,10 @@
 # Okta_CL
 
-**Table:** `Okta_CL`
-
-This table is ingested by **1 solution(s)** using **3 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `Okta_CL` |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 3 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

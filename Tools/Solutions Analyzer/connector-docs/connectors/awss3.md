@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `AwsS3` |
 | **Publisher** | Amazon |
-| **Tables Ingested** | [`AWSCloudTrail`](../tables-index.md#awscloudtrail), [`AWSCloudWatch`](../tables-index.md#awscloudwatch), [`AWSGuardDuty`](../tables-index.md#awsguardduty), [`AWSVPCFlow`](../tables-index.md#awsvpcflow) |
 | **Used in Solutions** | [Amazon Web Services](../solutions/amazon-web-services.md) |
 | **Connector Definition Files** | [template_AwsS3.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/template_AwsS3.json) |
 
@@ -21,6 +20,19 @@ This connector allows you to ingest AWS service logs, collected in AWS S3 bucket
 
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2218883&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`AWSCloudTrail`](../tables/awscloudtrail.md) | ✓ | ✓ |
+| [`AWSCloudWatch`](../tables/awscloudwatch.md) | ✓ | ✓ |
+| [`AWSGuardDuty`](../tables/awsguardduty.md) | ✓ | ✓ |
+| [`AWSVPCFlow`](../tables/awsvpcflow.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

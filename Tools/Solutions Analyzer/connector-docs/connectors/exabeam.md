@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `Exabeam` |
 | **Publisher** | Exabeam |
-| **Tables Ingested** | [`Syslog`](../tables-index.md#syslog) |
 | **Used in Solutions** | [Exabeam Advanced Analytics](../solutions/exabeam-advanced-analytics.md) |
 | **Connector Definition Files** | [Connector_Exabeam_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Exabeam%20Advanced%20Analytics/Data%20Connectors/Connector_Exabeam_Syslog.json) |
 
 The [Exabeam Advanced Analytics](https://www.exabeam.com/ueba/advanced-analytics-and-mitre-detect-and-stop-threats/) data connector provides the capability to ingest Exabeam Advanced Analytics events into Microsoft Sentinel. Refer to [Exabeam Advanced Analytics documentation](https://docs.exabeam.com/) for more information.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

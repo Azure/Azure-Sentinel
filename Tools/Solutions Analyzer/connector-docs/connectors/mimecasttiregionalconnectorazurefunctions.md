@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `MimecastTIRegionalConnectorAzureFunctions` |
 | **Publisher** | Mimecast |
-| **Tables Ingested** | [`Event`](../tables-index.md#event), [`ThreatIntelligenceIndicator`](../tables-index.md#threatintelligenceindicator) |
 | **Used in Solutions** | [MimecastTIRegional](../solutions/mimecasttiregional.md) |
 | **Connector Definition Files** | [MimecastTIRegional_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTIRegional/Data%20Connectors/MimecastTIRegional_API_AzureFunctionApp.json) |
 
@@ -17,6 +16,15 @@ Mimecast products and features required:
 - Mimecast Threat Intelligence
 
 
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Event`](../tables/event.md) | ✓ | ✗ |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
 
 ## Permissions
 

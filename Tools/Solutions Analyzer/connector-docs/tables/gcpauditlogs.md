@@ -1,8 +1,17 @@
 # GCPAuditLogs
 
-**Table:** `GCPAuditLogs`
+Reference for GCPAuditLogs table in Azure Monitor Logs.
 
-This table is ingested by **1 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `GCPAuditLogs` |
+| **Category** | Security |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 2 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/gcpauditlogs) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

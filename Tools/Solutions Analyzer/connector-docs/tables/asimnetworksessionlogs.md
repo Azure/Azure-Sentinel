@@ -1,8 +1,17 @@
 # ASimNetworkSessionLogs
 
-**Table:** `ASimNetworkSessionLogs`
+Reference for ASimNetworkSessionLogs table in Azure Monitor Logs.
 
-This table is ingested by **4 solution(s)** using **4 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `ASimNetworkSessionLogs` |
+| **Category** | Security |
+| **Solutions Using Table** | 4 |
+| **Connectors Ingesting** | 4 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimnetworksessionlogs) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -25,6 +34,12 @@ This table is ingested by the following connectors:
 - [CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3)](../connectors/crowdstrikereplicatorv2.md)
 - [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md)
 - [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/networksessionnormalized`
 
 ---
 

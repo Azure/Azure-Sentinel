@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `IronNetIronDefense` |
 | **Publisher** | IronNet |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [IronNet IronDefense](../solutions/ironnet-irondefense.md) |
 | **Connector Definition Files** | [IronNetIronDefense.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IronNet%20IronDefense/Data%20Connectors/IronNetIronDefense.json) |
 
 The IronNet IronDefense connector enables ingest of IronDefense alerts, events, and IronDome notifications into Sentinel, enabling Sentinel to utilize IronDefense's behavioral analytics and the IronDome community to quickly identify threats in your enterprise network.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

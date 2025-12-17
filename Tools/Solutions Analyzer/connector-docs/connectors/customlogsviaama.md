@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CustomlogsviaAMA` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`ApacheHTTPServer_CL`](../tables-index.md#apachehttpserver_cl), [`JBossEvent_CL`](../tables-index.md#jbossevent_cl), [`JuniperIDP_CL`](../tables-index.md#juniperidp_cl), [`MarkLogicAudit_CL`](../tables-index.md#marklogicaudit_cl), [`MongoDBAudit_CL`](../tables-index.md#mongodbaudit_cl), [`NGINX_CL`](../tables-index.md#nginx_cl), [`OracleWebLogicServer_CL`](../tables-index.md#oracleweblogicserver_cl), [`PostgreSQL_CL`](../tables-index.md#postgresql_cl), [`SecurityBridgeLogs_CL`](../tables-index.md#securitybridgelogs_cl), [`SquidProxy_CL`](../tables-index.md#squidproxy_cl), [`Tomcat_CL`](../tables-index.md#tomcat_cl), [`Ubiquiti_CL`](../tables-index.md#ubiquiti_cl), [`VectraStream_CL`](../tables-index.md#vectrastream_cl), [`ZPA_CL`](../tables-index.md#zpa_cl), [`meraki_CL`](../tables-index.md#meraki_cl), [`vcenter_CL`](../tables-index.md#vcenter_cl) |
 | **Used in Solutions** | [CustomLogsAma](../solutions/customlogsama.md) |
 | **Connector Definition Files** | [CustomLogsViaAmaTemplate.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CustomLogsAma/Data%20Connectors/CustomLogsViaAmaTemplate.json) |
 
@@ -13,6 +12,29 @@ Many applications log information to text or JSON files instead of standard logg
 
 
 **NOTE: Use this connector for the following devices:** Cisco Meraki, Zscaler Private Access (ZPA), VMware vCenter, Apache HTTP server, Apache Tomcat, Jboss Enterprise application platform, Juniper IDP, MarkLogic Audit, MongoDB Audit, Nginx HTTP server, Oracle Weblogic server, PostgreSQL Events, Squid Proxy, Ubiquiti UniFi, SecurityBridge Threat detection SAP and AI vectra stream.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`ApacheHTTPServer_CL`](../tables/apachehttpserver-cl.md) | — | — |
+| [`JBossEvent_CL`](../tables/jbossevent-cl.md) | — | — |
+| [`JuniperIDP_CL`](../tables/juniperidp-cl.md) | — | — |
+| [`MarkLogicAudit_CL`](../tables/marklogicaudit-cl.md) | — | — |
+| [`MongoDBAudit_CL`](../tables/mongodbaudit-cl.md) | — | — |
+| [`NGINX_CL`](../tables/nginx-cl.md) | — | — |
+| [`OracleWebLogicServer_CL`](../tables/oracleweblogicserver-cl.md) | — | — |
+| [`PostgreSQL_CL`](../tables/postgresql-cl.md) | — | — |
+| [`SecurityBridgeLogs_CL`](../tables/securitybridgelogs-cl.md) | — | — |
+| [`SquidProxy_CL`](../tables/squidproxy-cl.md) | — | — |
+| [`Tomcat_CL`](../tables/tomcat-cl.md) | — | — |
+| [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) | — | — |
+| [`VectraStream_CL`](../tables/vectrastream-cl.md) | — | — |
+| [`ZPA_CL`](../tables/zpa-cl.md) | — | — |
+| [`meraki_CL`](../tables/meraki-cl.md) | — | — |
+| [`vcenter_CL`](../tables/vcenter-cl.md) | — | — |
 
 ## Permissions
 

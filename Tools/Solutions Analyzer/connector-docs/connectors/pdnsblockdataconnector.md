@@ -4,11 +4,18 @@
 |----------|-------|
 | **Connector ID** | `PDNSBlockDataConnector` |
 | **Publisher** | Nominet |
-| **Tables Ingested** | [`PDNSBlockData_CL`](../tables-index.md#pdnsblockdata_cl) |
 | **Used in Solutions** | [PDNS Block Data Connector](../solutions/pdns-block-data-connector.md) |
 | **Connector Definition Files** | [PDNSBlockDataConnector_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PDNS%20Block%20Data%20Connector/Data%20Connectors/PDNSBlockDataConnector_API_FunctionApp.json) |
 
 This application enables you to ingest your PDNS block data into your SIEM tool
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`PDNSBlockData_CL`](../tables/pdnsblockdata-cl.md) | — | — |
 
 ## Permissions
 

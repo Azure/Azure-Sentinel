@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CyborgSecurity_HUNTER` |
 | **Publisher** | Cyborg Security |
-| **Tables Ingested** | [`SecurityEvent`](../tables-index.md#securityevent) |
 | **Used in Solutions** | [Cyborg Security HUNTER](../solutions/cyborg-security-hunter.md) |
 | **Connector Definition Files** | [CyborgSecurity_HUNTER.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER/Data%20Connectors/CyborgSecurity_HUNTER.json) |
 
@@ -13,6 +12,16 @@ Cyborg Security is a leading provider of advanced threat hunting solutions, with
 
 
 Follow the steps to gain access to Cyborg Security's Community and setup the 'Open in Tool' capabilities in the HUNTER Platform.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SecurityEvent`](../tables/securityevent.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

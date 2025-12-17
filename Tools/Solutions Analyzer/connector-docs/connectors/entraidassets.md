@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `EntraIDAssets` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** |  |
 | **Used in Solutions** | [Microsoft Entra ID Assets](../solutions/microsoft-entra-id-assets.md) |
 | **Connector Definition Files** | [EntraIDAssets_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID%20Assets/Data%20Connectors/EntraIDAssets_DataConnectorDefinition.json) |
 

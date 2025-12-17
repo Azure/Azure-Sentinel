@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `OfficeATP` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`SecurityAlert`](../tables-index.md#securityalert) |
 | **Used in Solutions** | [Microsoft Defender for Office 365](../solutions/microsoft-defender-for-office-365.md) |
 | **Connector Definition Files** | [template_OfficeATP.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Data%20Connectors/template_OfficeATP.json) |
 
@@ -35,6 +34,14 @@ These alerts can be seen by Office customers in the ** Office Security and Compl
 
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219942&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
 
 ## Permissions
 

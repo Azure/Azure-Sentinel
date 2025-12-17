@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `SalesforceServiceCloud` |
 | **Publisher** | Salesforce |
-| **Tables Ingested** | [`SalesforceServiceCloudV2_CL`](../tables-index.md#salesforceservicecloudv2_cl), [`SalesforceServiceCloud_CL`](../tables-index.md#salesforceservicecloud_cl) |
 | **Used in Solutions** | [Salesforce Service Cloud](../solutions/salesforce-service-cloud.md) |
 | **Connector Definition Files** | [SalesforceServiceCloud_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesforceServiceCloud_API_FunctionApp.json) |
 
@@ -13,6 +12,15 @@ The Salesforce Service Cloud data connector provides the capability to ingest in
 
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SalesforceServiceCloudV2_CL`](../tables/salesforceservicecloudv2-cl.md) | — | — |
+| [`SalesforceServiceCloud_CL`](../tables/salesforceservicecloud-cl.md) | — | — |
 
 ## Permissions
 

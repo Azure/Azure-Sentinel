@@ -4,11 +4,18 @@
 |----------|-------|
 | **Connector ID** | `1Password(Serverless)` |
 | **Publisher** | Unknown (ARM variable) |
-| **Tables Ingested** | [`OnePasswordEventLogs_CL`](../tables-index.md#onepasswordeventlogs_cl) |
 | **Used in Solutions** | [1Password](../solutions/1password.md) |
 | **Connector Definition Files** | [azuredeploy_1Password_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password/Data%20Connectors/1Password_ccpv2/azuredeploy_1Password_poller_connector.json) |
 
 The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & ItemUsage events into Microsoft Sentinel.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`OnePasswordEventLogs_CL`](../tables/onepasswordeventlogs-cl.md) | — | — |
 
 ## Permissions
 

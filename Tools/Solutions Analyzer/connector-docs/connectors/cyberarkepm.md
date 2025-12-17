@@ -4,11 +4,18 @@
 |----------|-------|
 | **Connector ID** | `CyberArkEPM` |
 | **Publisher** | CyberArk |
-| **Tables Ingested** | [`CyberArkEPM_CL`](../tables-index.md#cyberarkepm_cl) |
 | **Used in Solutions** | [CyberArkEPM](../solutions/cyberarkepm.md) |
 | **Connector Definition Files** | [CyberArkEPM_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkEPM/Data%20Connectors/CyberArkEPM_API_FunctionApp.json) |
 
 The [CyberArk Endpoint Privilege Manager](https://www.cyberark.com/products/endpoint-privilege-manager/) data connector provides the capability to retrieve security event logs of the CyberArk EPM services and more events into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CyberArkEPM_CL`](../tables/cyberarkepm-cl.md) | — | — |
 
 ## Permissions
 

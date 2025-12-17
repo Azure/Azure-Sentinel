@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `GitHubEcAuditLogPolling` |
 | **Publisher** | GitHub |
-| **Tables Ingested** | [`GitHubAuditLogPolling_CL`](../tables-index.md#githubauditlogpolling_cl) |
 | **Used in Solutions** | [GitHub](../solutions/github.md) |
 | **Connector Definition Files** | [azuredeploy_GitHub_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/azuredeploy_GitHub_native_poller_connector.json) |
 
@@ -17,6 +16,14 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 
 <p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md) | — | — |
 
 ## Permissions
 

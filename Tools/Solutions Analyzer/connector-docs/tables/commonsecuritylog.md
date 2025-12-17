@@ -1,8 +1,17 @@
 # CommonSecurityLog
 
-**Table:** `CommonSecurityLog`
+Reference for CommonSecurityLog table in Azure Monitor Logs.
 
-This table is ingested by **59 solution(s)** using **100 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `CommonSecurityLog` |
+| **Category** | Security |
+| **Solutions Using Table** | 59 |
+| **Connectors Ingesting** | 100 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/commonsecuritylog) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -176,6 +185,17 @@ This table is ingested by the following connectors:
 - [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md)
 - [[Deprecated] vArmour Application Controller via Legacy Agent](../connectors/varmourac.md)
 - [[Deprecated] vArmour Application Controller via AMA](../connectors/varmouracama.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/cef`
+- `<br>microsoft.compute/virtualmachines`
+- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
+- `<br>microsoft.azurestackhci/virtualmachines`
+- `<br>microsoft.scvmm/virtualmachines`
+- `<br>microsoft.compute/virtualmachinescalesets`
 
 ---
 

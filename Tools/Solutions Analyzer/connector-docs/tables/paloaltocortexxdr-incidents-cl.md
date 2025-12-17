@@ -1,8 +1,10 @@
 # PaloAltoCortexXDR_Incidents_CL
 
-**Table:** `PaloAltoCortexXDR_Incidents_CL`
-
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `PaloAltoCortexXDR_Incidents_CL` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
