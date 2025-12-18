@@ -39,16 +39,16 @@ This playbook is deployed automatically as part of the TacitRed Defender Threat 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Logic App     │────▶│  Function App   │────▶│ Microsoft       │
-│   (Scheduler)   │     │  (Processing)   │     │ Sentinel TI     │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │                       │
-        ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐
-│   TacitRed      │     │  Application    │
-│   API           │     │  Insights       │
-└─────────────────┘     └─────────────────┘
+-----------------     -----------------     -----------------
+|   Logic App     | --> |  Function App   | --> | Microsoft       |
+|   (Scheduler)   |     |  (Processing)   |     | Sentinel TI     |
+-----------------     -----------------     -----------------
+        |                       |
+        v                       v
+-----------------     -----------------
+|   TacitRed      |     |  Application    |
+|   API           |     |  Insights       |
+-----------------     -----------------
 ```
 
 ## Configuration
