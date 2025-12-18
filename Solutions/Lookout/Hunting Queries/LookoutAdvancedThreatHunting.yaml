@@ -1,0 +1,51 @@
+id: lookout-advanced-threat-hunting
+name: Lookout Advanced Threat Hunting - Multi-Vector Attacks
+description: Identifies devices experiencing multiple threat types within a short timeframe, indicating coordinated attacks
+requiredDataConnectors:
+  - connectorId: LookoutAPI
+    dataTypes:
+      - LookoutEvents
+tactics:
+  - Discovery
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1057
+  - T1418
+  - T1566
+query: |
+  let timeWindow = 24h;
+  let threatEvents = LookoutEvents
+  | where TimeGenerated > ago(timeWindow)
+  | where EventType == "THREAT"
+  | where ThreatSeverity in ("CRITICAL", "HIGH")
+  | summarize 
+      ThreatTypes = make_set(ThreatType),
+      ThreatCount = count(),
+      FirstThreat = min(TimeGenerated),
+      LastThreat = max(TimeGenerated),
+      ThreatClassifications = make_set(ThreatClassifications)
+      by DeviceGuid, DeviceEmailAddress;
+  let smishingEvents = LookoutEvents
+  | where TimeGenerated > ago(timeWindow)
+  | where EventType == "SMISHING_ALERT"
+  | where SmishingAlertSeverity in ("CRITICAL", "HIGH")
+  | summarize 
+      SmishingTypes = make_set(SmishingAlertType),
+      SmishingCount = count(),
+      FirstSmishing = min(TimeGenerated)
+      by DeviceGuid;
+  threatEvents
+  | join kind=inner (smishingEvents) on DeviceGuid
+  | where ThreatCount >= 2 or SmishingCount >= 1
+  | extend AttackDuration = LastThreat - FirstThreat
+  | extend MultiVectorRisk = case(
+      ThreatCount >= 3 and SmishingCount >= 1, "Critical",
+      ThreatCount >= 2 and SmishingCount >= 1, "High", 
+      ThreatCount >= 3, "High",
+      "Medium"
+  )
+  | project DeviceGuid, DeviceEmailAddress, ThreatTypes, SmishingTypes, 
+            ThreatCount, SmishingCount, AttackDuration, MultiVectorRisk,
+            FirstThreat, LastThreat, ThreatClassifications
+  | order by MultiVectorRisk desc, ThreatCount desc
