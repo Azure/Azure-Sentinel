@@ -530,10 +530,11 @@ function New-BtpConnectionRequestBody {
                 request = @{
                     apiEndpoint = $apiEndpoint
                     httpMethod = "Get"
-                    queryWindowInMin = 5
+                    queryWindowInMin = 1
                     queryTimeFormat = "yyyy-MM-ddTHH:mm:ss.fff"
                     retryCount = 3
-                    timeoutInSeconds = 120
+                    timeoutInSeconds = 60
+                    queryWindowDelayInMin = 20
                     startTimeAttributeName = "time_from"
                     endTimeAttributeName = "time_to"
                     headers = @{
