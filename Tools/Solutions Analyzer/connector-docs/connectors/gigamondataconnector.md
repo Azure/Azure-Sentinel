@@ -10,4 +10,24 @@
 
 Use this data connector to integrate with Gigamon Application Metadata Exporter (AMX) and get data sent directly to Microsoft Sentinel. 
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions are required.
+- **Keys** (Workspace): read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Gigamon Data Connector**
+
+1. Application Metadata Exporter (AMX) application converts the output from the Application Metadata Intelligence (AMI) in CEF format into JSON format and sends it to the cloud tools and Kafka.
+ 2. The AMX application can be deployed only on a V Series Node and can be connected to Application Metadata Intelligence running on a physical node or a virtual machine.
+ 3. The AMX application and the AMI are managed by GigaVUE-FM. This application is supported on VMware ESXi, VMware NSX-T, AWS and Azure.
+- **Workspace ID**: `WorkspaceId`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+- **Primary Key**: `PrimaryKey`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+
 [← Back to Connectors Index](../connectors-index.md)

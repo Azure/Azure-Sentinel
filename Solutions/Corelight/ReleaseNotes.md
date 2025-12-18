@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.2       | 01-12-2025                     | Added Corelight Aggregation Parsers.
 | 3.2.1       | 30-10-2025                     | Added corelight_first_seen and corelight_anomaly Parsers.
 | 3.2.0       | 05-03-2025                     | Added new Parsers, Workbooks and Watchlists.
 | 3.1.0       | 27-09-2024                     | Updated Parsers and added new tabs in Workbook.

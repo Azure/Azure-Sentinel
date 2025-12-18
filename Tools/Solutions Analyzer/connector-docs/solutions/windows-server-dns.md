@@ -43,6 +43,34 @@ The DNS log connector allows you to easily connect your DNS analytic and audit l
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220127&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+- **Solutions** (ResourceGroup): [read and write permissions](https://docs.microsoft.com/azure/role-based-access-control/built-in-roles#log-analytics-contributor).
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Download and install the agent**
+
+>  DNS logs are collected only from **Windows** agents.
+**Choose where to install the agent:**
+
+**Install agent on Azure Windows Virtual Machine**
+
+  Download the agent on the relevant machine and follow the instructions.
+  - **Install/configure: InstallAgentOnVirtualMachine**
+
+  **Install agent on non-Azure Windows Machine**
+
+  Select the machine to install the agent and then click **Connect**.
+  - **Install/configure: InstallAgentOnNonAzure**
+
+**2. Install DNS solution**
+- Install solution: DnsAnalytics
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `DnsEvents` |

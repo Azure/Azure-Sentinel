@@ -10,4 +10,41 @@
 
 Gain insights into Microsoft Entra ID by connecting Audit and Sign-in logs to Microsoft Sentinel to gather insights around Microsoft Entra ID scenarios. You can learn about app usage, conditional access policies, legacy auth relate details using our Sign-in logs. You can get information on your Self Service Password Reset (SSPR) usage, Microsoft Entra ID Management activities like user, group, role, app management using our Audit logs table. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2219715&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+- **Diagnostic Settings** (/providers/microsoft.aadiam): read and write permissions to AAD diagnostic settings.
+
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Connect Microsoft Entra ID logs to Microsoft Sentinel**
+
+Select Microsoft Entra ID log types:
+**Select Microsoft Entra ID Data Types**
+
+In the Microsoft Sentinel portal, select which data types to enable:
+
+- ☐ **Sign-In Logs**
+- ☐ **Audit Logs**
+- ☐ **Non-Interactive User Sign-In Log**
+- ☐ **Service Principal Sign-In Logs**
+- ☐ **Managed Identity Sign-In Logs**
+- ☐ **Provisioning Logs**
+- ☐ **ADFS Sign-In Logs**
+- ☐ **User Risk Events**
+- ☐ **Risky Users**
+- ☐ **Network Access Traffic Logs**
+- ☐ **Risky Service Principals**
+- ☐ **Service Principal Risk Events**
+
+Each data type may have specific licensing requirements. Review the information provided for each type in the portal before enabling.
+
+> 💡 **Portal-Only Feature**: Data type selection is only available in the Microsoft Sentinel portal.
+
 [← Back to Connectors Index](../connectors-index.md)
