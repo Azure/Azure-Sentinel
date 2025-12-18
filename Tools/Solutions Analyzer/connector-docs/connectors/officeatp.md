@@ -36,4 +36,24 @@ These alerts can be seen by Office customers in the ** Office Security and Compl
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219942&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+
+**Licenses:**
+- Office Advanced Threat Protection
+
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Connect Microsoft Defender for Office 365 alerts to Microsoft Sentinel**
+
+Connecting Microsoft Defender for Office 365 will cause your data that is collected by Microsoft Defender for Office 365 service to be stored and processed in the location that you have configured your Microsoft Sentinel workspace.
+- Connect Microsoft Defender for Office 365
+
 [← Back to Connectors Index](../connectors-index.md)

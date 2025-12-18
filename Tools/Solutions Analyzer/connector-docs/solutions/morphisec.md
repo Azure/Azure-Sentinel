@@ -25,6 +25,25 @@ This solution provides more than just data ingestion; it equips your security te
 
 With this solution, you can empower your SOC to leverage Morphisec's powerful threat prevention within a unified investigation and response workflow in Microsoft Sentinel.
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): Read and Write permissions are required.
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Configure Morphisec Connector**
+
+1. Create an API key client in Morphisec Console with read permissions to fetch alerts. 
+2. Provide the Client ID and Client Secret in the connector configuration.
+- **Morphisec Base URL**: https://<your-morphisec-region>.morphisec.cloud
+- **Client ID**: Enter the Client ID
+- **Client Secret**: (password field)
+- **Tenant ID**: Enter your Morphisec Tenant ID
+- Click 'Connect to Morphisec' to establish connection
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `MorphisecAlerts_CL` |

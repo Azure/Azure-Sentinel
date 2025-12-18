@@ -1,0 +1,92 @@
+id: fd94c2ab-0b7b-4f89-9c74-5a6f1e2d9c31
+Function:
+  Title: Parser to extract Compromised Files alerts from Cyble Vision Alerts
+  Version: '1.0.0'
+  LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_compromised_files
+FunctionAlias: Alerts_compromised_files
+FunctionQuery: |
+  CybleVisionAlerts_CL
+  | where Service == "compromised_files"
+  // Parse inner object
+  | extend Data = parse_json(Data)
+  // Extract top level compromised file fields
+  | extend
+      CF_CompromisedOn   = tostring(Data.compromised_on),
+      CF_Content         = tostring(Data.content),
+      CF_CreatedOn       = tostring(Data.created_on),
+      CF_DocId           = tostring(Data.doc_id),
+      CF_FileObjPath     = tostring(Data.file_obj_path),
+      CF_LogName         = tostring(Data.log_name),
+      CF_LogObjPath      = tostring(Data.log_obj_path),
+      CF_RelativePath    = tostring(Data.relative_path),
+      // meta_data sub object
+      CF_Meta_FileName   = tostring(Data.meta_data.file_name),
+      CF_Meta_FilePath   = tostring(Data.meta_data.file_path),
+      CF_Meta_FileSize   = tostring(Data.meta_data.file_size),
+      CF_Meta_Created    = tostring(Data.meta_data.c_date),
+      CF_Meta_Modified   = tostring(Data.meta_data.m_date)
+  // Extract URLs
+  | extend CF_Parsed_URLs = extract_all(@"(URL:\s*([^\s]+))", CF_Content)
+  // Extract USERNAME fields
+  | extend CF_Parsed_Usernames = extract_all(@"(USERNAME:\s*([^\s]+))", CF_Content)
+  // Extract PASSWORD fields
+  | extend CF_Parsed_Passwords = extract_all(@"(PASSWORD:\s*([^\s]+))", CF_Content)
+  // Extract first usable values for entity mapping
+  | extend
+      CF_FirstURL       = tostring(CF_Parsed_URLs[0]),
+      CF_FirstUsername  = tostring(CF_Parsed_Usernames[0]),
+      CF_FirstPassword  = tostring(CF_Parsed_Passwords[0])
+  // Also extract emails from content
+  | extend CF_Emails = extract_all(@"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", CF_Content)
+  | extend CF_PrimaryEmail = tostring(CF_Emails[0])
+  // Risk Score Pack (your standard)
+  | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+  // Final projection same structure as your other parsers
+  | project
+      TimeGenerated,
+      AlertID = tostring(ID),
+      EntityID,
+      KeywordName,
+      CompanyID,
+      Status,
+      Severity,
+      UserSeverity,
+      BucketID,
+      Domain,
+      BucketName,
+      TruePositive,
+      LLMProcessed,
+      LLMExplanation,
+      IP,
+      Service,
+      Risk_Score,
+      // compromised_files specific fields
+      Filename,
+      Extension,
+      Compromised_Date,
+      CF_CompromisedOn,
+      CF_CreatedOn,
+      CF_DocId,
+      CF_FileObjPath,
+      CF_LogName,
+      CF_LogObjPath,
+      CF_RelativePath,
+      CF_Meta_FileName,
+      CF_Meta_FilePath,
+      CF_Meta_FileSize,
+      CF_Meta_Created,
+      CF_Meta_Modified,
+      CF_Content,
+      // Parsed credentials
+      CF_Parsed_URLs,
+      CF_Parsed_Usernames,
+      CF_Parsed_Passwords,
+      CF_FirstURL,
+      CF_FirstUsername,
+      CF_FirstPassword,
+      CF_Emails,
+      CF_PrimaryEmail,
+      // raw parsed object
+      Data

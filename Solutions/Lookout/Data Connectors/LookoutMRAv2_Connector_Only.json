@@ -1,0 +1,145 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Sentinel workspace name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for resources"
+      }
+    },
+    "lookoutApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Lookout API key"
+      }
+    },
+    "connectorName": {
+      "type": "string",
+      "defaultValue": "[concat('LookoutMRAv2-', uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "Connector name"
+      }
+    },
+    "dataCollectionRuleName": {
+      "type": "string",
+      "defaultValue": "LookoutdemoSentinel-lookout-dcr",
+      "metadata": {
+        "description": "Existing DCR name"
+      }
+    },
+    "dataCollectionEndpointName": {
+      "type": "string",
+      "defaultValue": "LookoutdemoSentinel-lookout-dce",
+      "metadata": {
+        "description": "Existing DCE name"
+      }
+    }
+  },
+  "variables": {
+    "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+    "dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]",
+    "tableName": "LookoutMtdV2_CL",
+    "streamName": "Custom-LookoutMtdV2_CL"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "apiVersion": "2023-02-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', parameters('connectorName'))]",
+      "location": "[parameters('location')]",
+      "kind": "RestApiPoller",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Lookout Mobile Risk API v2",
+          "publisher": "Lookout",
+          "descriptionMarkdown": "Lookout Mobile Risk API v2 connector with field extraction",
+          "graphQueriesTableName": "LookoutMtdV2_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Lookout Events",
+              "baseQuery": "LookoutMtdV2_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "LookoutMtdV2_CL",
+              "lastDataReceivedQuery": "LookoutMtdV2_CL | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ]
+          }
+        },
+        "dataType": "[variables('tableName')]",
+        "dcrConfig": {
+          "dataCollectionEndpoint": "[reference(variables('dataCollectionEndpointId'), '2022-06-01').logsIngestion.endpoint]",
+          "dataCollectionRuleImmutableId": "[reference(variables('dataCollectionRuleId'), '2022-06-01').immutableId]",
+          "streamName": "[variables('streamName')]"
+        },
+        "auth": {
+          "type": "APIKey",
+          "APIKey": "[parameters('lookoutApiKey')]"
+        },
+        "request": {
+          "apiEndpoint": "https://api.lookout.com/mra/stream/v2/events",
+          "httpMethod": "GET",
+          "queryWindowInMin": 5,
+          "queryTimeFormat": "yyyy-MM-dd'T'HH:mm:ss'Z'",
+          "rateLimitQPS": 10,
+          "retryCount": 3,
+          "timeoutInSeconds": 120,
+          "startTimeAttributeName": "start_time",
+          "queryParameters": {
+            "types": "THREAT,DEVICE,SMISHING_ALERT,AUDIT"
+          },
+          "headers": {
+            "Accept": "text/event-stream",
+            "User-Agent": "Microsoft-Sentinel-Lookout-v2"
+          }
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$"
+          ],
+          "format": "json"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "connectorName": {
+      "type": "string",
+      "value": "[parameters('connectorName')]"
+    }
+  }
+}
