@@ -10,4 +10,65 @@
 
 The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/security/email-security/index.html) data connector provides the capability to ingest [Cisco SEG Consolidated Event Logs](https://www.cisco.com/c/en/us/td/docs/security/esa/esa14-0/user_guide/b_ESA_Admin_Guide_14-0/b_ESA_Admin_Guide_12_1_chapter_0100111.html#con_1061902) into Microsoft Sentinel.
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions are required.
+- **Keys** (Workspace): read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+>**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**CiscoSEGEvent**](https://aka.ms/sentinel-CiscoSEG-parser) which is deployed with the Microsoft Sentinel Solution.
+
+>**NOTE:** This data connector has been developed using AsyncOS 14.0 for Cisco Secure Email Gateway
+
+**1. Linux Syslog agent configuration**
+
+Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.
+
+> Notice that the data from all regions will be stored in the selected workspace
+**1.1 Select or create a Linux machine**
+
+  Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds.
+
+  **1.2 Install the CEF collector on the Linux machine**
+
+  Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.
+
+> 1. Make sure that you have Python on your machine using the following command: python -version.
+
+> 2. You must have elevated permissions (sudo) on your machine.
+  - **Run the following command to install and apply the CEF collector:**: `sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}`
+**2. Forward Common Event Format (CEF) logs to Syslog agent**
+
+Follow these steps to configure Cisco Secure Email Gateway to forward logs via syslog:
+
+2.1. Configure [Log Subscription](https://www.cisco.com/c/en/us/td/docs/security/esa/esa14-0/user_guide/b_ESA_Admin_Guide_14-0/b_ESA_Admin_Guide_12_1_chapter_0100111.html#con_1134718)
+
+>**NOTE:** Select **Consolidated Event Logs** in Log Type field.
+
+**3. Validate connection**
+
+Follow the instructions to validate your connectivity:
+
+Open Log Analytics to check if the logs are received using the CommonSecurityLog schema.
+
+>It may take about 20 minutes until the connection streams data to your workspace.
+
+If the logs are not received, run the following connectivity validation script:
+
+> 1. Make sure that you have Python on your machine using the following command: python -version
+
+>2. You must have elevated permissions (sudo) on your machine
+- **Run the following command to validate your connectivity:**: `sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}`
+
+**4. Secure your machine**
+
+Make sure to configure the machine's security according to your organization's security policy
+
+
+[Learn more >](https://aka.ms/SecureCEF)
+
 [← Back to Connectors Index](../connectors-index.md)

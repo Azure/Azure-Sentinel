@@ -1,0 +1,40 @@
+id: 1f6a9b2c-3d4e-5f6a-7b8c-9d0e1f2a3b4c
+name: AI Agents - Published Agents with Author Authentication
+description: |
+  This query identifies Copilot Studio AI agents that are published and use the maker`s personal credentials in their authentication or integration flows. 
+  This configuration introduces security risks because any interaction with the agent could leverage the maker`s privileges, potentially granting access to sensitive resources. 
+  If the agent is compromised, attackers could perform actions with the maker`s permissions, leading to privilege escalation or data exposure.
+  Recommended Action: Replace maker credentials with secure alternatives such as managed identities or service principals. 
+  Ensure published agents follow least-privilege principles and avoid personal credential usage in production environments.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let base = AIAgentsInfo
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | where AgentStatus == "Published";
+  let directActions = base
+  | mv-expand detail = AgentToolsDetails
+  | where detail.action.connectionProperties.mode == "Maker"
+  | extend ActionType = "FromTools", Action = detail.action
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns;
+  let topicActions = base
+  | mv-expand topic = AgentTopicsDetails
+  | extend topicActionsArray = topic.beginDialog.actions
+  | mv-expand Action = topicActionsArray
+  | where Action.connectionProperties.mode == "Maker"
+  | extend ActionType = "FromTopic"
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, Action;
+  directActions
+  | union topicActions
+  | sort by AIAgentId, Timestamp desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0

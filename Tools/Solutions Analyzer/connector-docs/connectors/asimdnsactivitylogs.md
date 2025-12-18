@@ -36,4 +36,17 @@ Windows DNS events are supported by Advanced SIEM Information Model (ASIM) and s
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2225993&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace data sources** (Workspace): read and write permissions.
+
+**Custom Permissions:**
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+> 📋 **Additional Configuration Step**: This connector includes a configuration step of type `ASimDnsActivityLogs`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
+
 [← Back to Connectors Index](../connectors-index.md)

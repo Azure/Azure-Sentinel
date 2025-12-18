@@ -10,4 +10,20 @@
 
 The [Cyera DSPM](https://api.cyera.io/) data connector allows you to connect to your Cyera's DSPM tenant and ingesting Classifications, Assets, Issues, and Identity Resources/Definitions into Microsoft Sentinel. The data connector is built on Microsoft Sentinel's Codeless Connector Framework and uses the Cyera's API to fetch Cyera's [DSPM Telemetry](https://www.cyera.com/) once recieced can be correlated with security events creating custom columns so that queries don't need to parse it again, thus resulting in better performance.
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): Read and Write permissions are required.
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Cyera DSPM Authentication**
+
+Connect to your Cyera DSPM tenenant via Personal Access Tokens
+- **Cyera Personal Access Token Client ID**: client_id
+- **Cyera Personal Access Token Secret Key**: (password field)
+- Click 'Connect' to establish connection
+
 [← Back to Connectors Index](../connectors-index.md)

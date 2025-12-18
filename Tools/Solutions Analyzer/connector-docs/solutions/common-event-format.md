@@ -25,6 +25,26 @@ This solution provides **2 data connector(s)**.
 
 Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by many security vendors to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223547&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace data sources** (Workspace): read and write permissions.
+
+**Custom Permissions:**
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Enable data collection rule​**
+
+>  CEF Events logs are collected only from **Linux** agents.
+- Configure CefAma data connector
+
+- **Create data collection rule**
+
+**2. Run the following command to install and apply the CEF collector:**
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `CommonSecurityLog` |

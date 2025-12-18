@@ -41,6 +41,28 @@ This solution produces alerts that can be seen by Office customers in the Inside
 
 These alerts can be imported into Microsoft Sentinel with this connector, allowing you to see, investigate, and respond to them in a broader organizational threat context. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223721&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+
+**Custom Permissions:**
+
+**Licenses:**
+- Office Information Rights Management
+
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Connect Microsoft 365 Insider Risk Management alerts to Microsoft Sentinel**
+
+Connecting Microsoft 365 Insider Risk Management will cause your data that is collected by Microsoft 365 Insider Risk Management service to be stored and processed in the location that you have configured your Microsoft Sentinel workspace.
+- Connect Microsoft 365 Insider Risk Management
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `SecurityAlert` |

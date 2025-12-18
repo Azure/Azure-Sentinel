@@ -21,6 +21,39 @@ This solution provides **1 data connector(s)**.
 
 The [Corelight](https://corelight.com/) data connector enables incident responders and threat hunters who use Microsoft Sentinel to work faster and more effectively. The data connector enables ingestion of events from [Zeek](https://zeek.org/) and [Suricata](https://suricata-ids.org/) via Corelight Sensors into Microsoft Sentinel.
 
+**Permissions:**
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions are required.
+- **Keys** (Workspace): read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).
+
+**Setup Instructions:**
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+>**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**Corelight**](https://aka.ms/sentinel-Corelight-parser) which is deployed with the Microsoft Sentinel Solution.
+
+**1. Get the files**
+
+Contact your TAM, SE, or info@corelight.com to get the files needed for the Microsoft Sentinel integration.
+
+**2. Replay sample data.**
+
+Replay sample data to create the needed tables in your Log Analytics workspace.
+- **Send sample data (only needed once per Log Analytics workspace)**: `./send_samples.py --workspace-id {0} --workspace-key {1}`
+
+**3. Install custom exporter.**
+
+Install the custom exporter or the logstash container.
+
+**4. Configure the Corelight Sensor to send logs to the Azure Log Analytics Agent.**
+
+Using the following values, configure your Corelight Sensor to use the Microsoft Sentinel exporter. Alternatively, you can configure the logstash container with these values and configure your sensor to send JSON over TCP to that container on the appropriate port.
+- **Workspace ID**: `WorkspaceId`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+- **Primary Workspace Key**: `PrimaryKey`
+  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+
 | | |
 |--------------------------|---|
 | **Tables Ingested** | `Corelight_CL` |

@@ -28,4 +28,27 @@ Microsoft Defender XDR suite includes:
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220004&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
 
+## Permissions
+
+**Resource Provider Permissions:**
+- **Workspace** (Workspace): read and write permissions.
+
+**Custom Permissions:**
+- **License**: M365 E5, M365 A5 or any other Microsoft Defender XDR eligible license.
+
+**Tenant Permissions:**
+Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
+
+## Setup Instructions
+
+> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
+
+**1. Connect incidents & alerts**
+
+Connect Microsoft Defender XDR incidents to your Microsoft Sentinel. Incidents will appear in the incidents queue.
+> 📋 **Additional Configuration Step**: This connector includes a configuration step of type `MicrosoftThreatProtection`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
+
+**2. Connect events**
+> 📋 **Additional Configuration Step**: This connector includes a configuration step of type `MicrosoftDefenderATPEvents`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
+
 [← Back to Connectors Index](../connectors-index.md)
