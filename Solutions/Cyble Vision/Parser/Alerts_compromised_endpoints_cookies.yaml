@@ -1,0 +1,100 @@
+id: B6A1B312-DF16-4C82-872E-9DBB520F5900
+Function:
+  Title: Parser to extract Compromised Endpoints Cookies alerts from Cyble Vision Alerts
+  Version: '1.0.0'
+  LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_compromised_endpoints_cookies
+FunctionAlias: Alerts_compromised_endpoints_cookies
+FunctionQuery: |
+  CybleVisionAlerts_CL
+    | where Service == "compromised_endpoints_cookies"
+    // Parse toplevel data object
+    | extend Data = parse_json(Data)
+    // Extract nested content object
+    | extend Content = Data.content
+    // Cookie Data convert singlequoted Python dict to valid JSON
+    | extend RawCookieData = tostring(Content.["Cookie Data"])
+    | extend CookieJsonString = replace("'", '"', RawCookieData)
+    | extend CEC_Cookie = parse_json(CookieJsonString)
+    // Extract cookie fields
+    | extend
+        CEC_Email           = tostring(CEC_Cookie.email),
+        CEC_EmailDomain     = tostring(CEC_Cookie.emailDomain),
+        CEC_SessionID       = tostring(CEC_Cookie.sessionId),
+        CEC_Issuer          = tostring(CEC_Cookie.iss),
+        CEC_Audience        = tostring(CEC_Cookie.aud),
+        CEC_Subject         = tostring(CEC_Cookie.sub),
+        CEC_JTI             = tostring(CEC_Cookie.jti),
+        CEC_Exp             = tostring(CEC_Cookie.exp),
+        CEC_IAT             = tostring(CEC_Cookie.iat),
+        CEC_NBF             = tostring(CEC_Cookie.nbf),
+        CEC_Verified        = tostring(CEC_Cookie.verified),
+        CEC_RefreshTimeout  = tostring(CEC_Cookie.refreshTimeout)
+    // Additional extracted fields
+    | extend
+        CEC_URL             = tostring(Content.URL),
+        CEC_Expiry          = tostring(Content.Expiry),
+        CEC_Filename        = tostring(Data.filename),
+        CEC_CreatedOn       = tostring(Data.created_on),
+        CEC_UpdatedOn       = tostring(Data.updated_on),
+        CEC_SourceID        = tostring(Data.source_id),
+        CEC_S3Key           = tostring(Data.s3_key),
+        CEC_TA              = tostring(Data.ta),
+        CEC_ParentFolderID  = tostring(Data.parent_folder_path_id),
+        CEC_Meta_FileName   = tostring(Data.['meta-data'].file_name),
+        CEC_Meta_FilePath   = tostring(Data.['meta-data'].file_path),
+        CEC_Meta_FileSize   = tostring(Data.['meta-data'].file_size),
+        CEC_Meta_Created    = tostring(Data.['meta-data'].c_date),
+        CEC_Meta_Modified   = tostring(Data.['meta-data'].m_date)
+    // Risk Score Pack (your standard)
+    | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+    // FINAL projection (same structure as all your parsers)
+    | project
+        TimeGenerated,
+        AlertID = tostring(ID),
+        EntityID,
+        KeywordName,
+        CompanyID,
+        Status,
+        Severity,
+        UserSeverity,
+        BucketID,
+        Domain,
+        BucketName,
+        TruePositive,
+        LLMProcessed,
+        LLMExplanation,
+        IP,
+        Service,
+        Risk_Score,
+        // Compromised Cookies fields
+        CEC_URL,
+        CEC_Expiry,
+        CEC_Email,
+        CEC_EmailDomain,
+        CEC_SessionID,
+        CEC_Issuer,
+        CEC_Audience,
+        CEC_Subject,
+        CEC_JTI,
+        CEC_Exp,
+        CEC_IAT,
+        CEC_NBF,
+        CEC_Verified,
+        CEC_RefreshTimeout,
+        CEC_Filename,
+        CEC_CreatedOn,
+        CEC_UpdatedOn,
+        CEC_SourceID,
+        CEC_S3Key,
+        CEC_TA,
+        CEC_ParentFolderID,
+        CEC_Meta_FileName,
+        CEC_Meta_FilePath,
+        CEC_Meta_FileSize,
+        CEC_Meta_Created,
+        CEC_Meta_Modified,
+        // raw parsed content
+        Data,
+        CEC_Cookie
