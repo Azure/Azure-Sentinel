@@ -922,7 +922,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             }
             # log the title to the console            
             $title = $ccpItem.title ?? $solutionName
-            $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $title data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            $connectorDescriptionText = "This Solution installs the data connector for $title. You can get $title data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
 
             $baseDataConnectorTextElement = [PSCustomObject] @{
                 name    = "dataconnectors$global:connectorCounter-text";
@@ -1132,8 +1132,35 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # AccessKeyId 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessKeyId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken')
+    {
+        # Check for userName.value format OR UserToken format
+        $hasUserName = $armResource.properties.auth.userName -and $armResource.properties.auth.userName.value
+        $hasPassword = $armResource.properties.auth.password -and $armResource.properties.auth.password.value
+        $hasUserToken = $armResource.properties.auth.UserToken
+
+        if ($hasUserName -and $hasPassword) {
+            Write-Host "Processing userName+password format for JwtToken auth."
+            # Process userName.value format
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.userName -propertyName 'value' -isInnerObject $true -innerObjectName 'userName' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth.password -propertyName 'value' -isInnerObject $true -innerObjectName 'password' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+
+        }
+        elseif ($hasUserToken) {
+            Write-Host "Processing UserToken format for JwtToken auth."
+            # Process UserToken format
+            ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'UserToken' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+        }
+        else {
+            Write-Host "Error: For kind $kindType with JwtToken auth, either 'userName.value' + 'password.value' or 'UserToken' is required." -BackgroundColor Red
+            exit 1;
+        }
+
+        # TokenEndpoint is required for both formats
+        ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'TokenEndpoint' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $false -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
+    }
     else {
-        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1' or 'APIKey'." -BackgroundColor Red
+        Write-Host "Error: For kind $kindType, Data Connector Poller file should have 'auth' object with 'type' attribute having value either 'Basic', 'OAuth2', 'AliCloudSlsV1', 'APIKey' or 'JwtToken'." -BackgroundColor Red
         exit 1;
     }
 
@@ -1169,11 +1196,29 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         else {
             Write-Host "Warning: 'stepInfo' object is missing 'nextSteps' array."
         }
+    }
 
-        if ($stepIds.Count -gt 0) {
-            $stepIdsString = $stepIds -join ', '
-            Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
+    # Also collect stepIds from nested stepCollectorConfigs
+    $hasStepCollectorConfigs = [bool]($armResource.properties.PSobject.Properties.name -match "stepCollectorConfigs")
+    if ($hasStepCollectorConfigs) {
+        foreach ($stepConfig in $armResource.properties.stepCollectorConfigs.PSObject.Properties) {
+            $stepConfigName = $stepConfig.Name
+            $stepConfigValue = $stepConfig.Value
+
+            # Check if this step has nested nextSteps
+            if ($stepConfigValue.stepInfo -and $stepConfigValue.stepInfo.nextSteps) {
+                foreach ($nestedStep in $stepConfigValue.stepInfo.nextSteps) {
+                    if ($stepIds -notcontains $nestedStep.stepId) {
+                        $stepIds += $nestedStep.stepId
+                    }
+                }
+            }
         }
+    }
+
+    if ($stepIds.Count -gt 0) {
+        $stepIdsString = $stepIds -join ', '
+        Write-Host "List of identified 'stepId' in 'stepInfo' are: $stepIdsString"
     }
 
     # stepCollectorConfigs placeholder
