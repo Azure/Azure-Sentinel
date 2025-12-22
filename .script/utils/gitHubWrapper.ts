@@ -1,7 +1,5 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
-import { execSync } from "child_process";
-import fs from "fs";
 import * as logger from "./logger.js";
 import "./stringExtenssions.js";
 
@@ -19,10 +17,7 @@ if (!_owner || !_repo || !_pr_number) {
 let pullRequestDetails: any | undefined;
 let octokit: Octokit;
 
-if (process.env.GITHUB_TOKEN) {
-  console.log("Creating authenticated Octokit client using GITHUB_TOKEN.");
-  octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-} else if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
+if (process.env.SYSTEM_PULLREQUEST_ISFORK === "true") {
   console.log("Running in a forked repository. Creating unauthenticated Octokit client.");
   octokit = new Octokit(); // Unauthenticated client
 } else if (process.env.GITHUBAPPID && process.env.GITHUBAPPPRIVATEKEY && process.env.GITHUBAPPINSTALLATIONID) {
@@ -39,170 +34,46 @@ if (process.env.GITHUB_TOKEN) {
   console.error("GitHub App authentication is not configured.");
 }
 
-type GitDiffEntry = {
-  kind: string;
-  filename: string;
-};
-
-function safeExec(cmd: string): string | undefined {
-  try {
-    return execSync(cmd, { stdio: ["ignore", "pipe", "ignore"] }).toString("utf8");
-  } catch {
-    return;
-  }
-}
-
-function tryVerifyRef(ref: string): boolean {
-  return typeof safeExec(`git rev-parse --verify ${ref}^{commit}`) !== "undefined";
-}
-
-function getTargetBranchName(): string | undefined {
-  const raw = process.env.SYSTEM_PULLREQUEST_TARGETBRANCH || process.env.GITHUB_BASE_REF;
-  if (!raw) return;
-  const parts = raw.split("/");
-  return parts[parts.length - 1];
-}
-
-function getEventBaseHeadShas(): { baseSha?: string; headSha?: string } {
-  const eventPath = process.env.GITHUB_EVENT_PATH;
-  if (!eventPath) return {};
-  try {
-    const raw = fs.readFileSync(eventPath, "utf8");
-    const evt = JSON.parse(raw) as any;
-    const pr = evt?.pull_request;
-    return {
-      baseSha: pr?.base?.sha,
-      headSha: pr?.head?.sha,
-    };
-  } catch {
-    return {};
-  }
-}
-
-function getMergeCommitParents(): { parent1?: string; parent2?: string } {
-  const parentsLine = safeExec("git rev-list --parents -n 1 HEAD")?.trim();
-  if (!parentsLine) return {};
-  const parts = parentsLine.split(/\s+/);
-  if (parts.length >= 3) {
-    return { parent1: parts[1], parent2: parts[2] };
-  }
-  return {};
-}
-
-function getGitDiffEntries(fileKinds: string[]): GitDiffEntry[] | undefined {
-  const kindsLower = fileKinds.map(k => k.toLowerCase());
-
-  const { baseSha, headSha } = getEventBaseHeadShas();
-  if (baseSha && headSha && tryVerifyRef(baseSha) && tryVerifyRef(headSha)) {
-    const out = safeExec(`git diff --name-status ${baseSha} ${headSha}`);
-    if (out) return parseNameStatus(out, kindsLower);
-  }
-
-  const { parent1, parent2 } = getMergeCommitParents();
-  if (parent1 && parent2 && tryVerifyRef(parent1) && tryVerifyRef(parent2)) {
-    const out = safeExec(`git diff --name-status ${parent1} ${parent2}`);
-    if (out) return parseNameStatus(out, kindsLower);
-  }
-
-  const targetBranch = getTargetBranchName();
-  const candidateRefs = targetBranch
-    ? [`origin/${targetBranch}`, `upstream/${targetBranch}`, targetBranch]
-    : ["origin/master", "upstream/master", "master"];
-
-  const baseRef = candidateRefs.find(r => tryVerifyRef(r));
-  if (baseRef) {
-    const out = safeExec(`git diff --name-status ${baseRef}...HEAD`);
-    if (out) return parseNameStatus(out, kindsLower);
-  }
-
-  const out = safeExec("git diff --name-status HEAD~1...HEAD");
-  if (out) return parseNameStatus(out, kindsLower);
-
-  return;
-}
-
-function parseNameStatus(output: string, kindsLower: string[]): GitDiffEntry[] {
-  const entries: GitDiffEntry[] = [];
-  const lines = output.split(/\r?\n/).filter(l => l.trim().length > 0);
-  for (const line of lines) {
-    const parts = line.split("\t");
-    if (parts.length < 2) continue;
-    const status = parts[0];
-    const code = status[0];
-    let kind: string;
-    let filename: string;
-
-    if (code === "R" || code === "C") {
-      kind = code === "R" ? "renamed" : "copied";
-      filename = parts[2] || parts[1];
-    } else {
-      kind = code === "A" ? "added" : code === "D" ? "deleted" : "modified";
-      filename = parts[1];
-    }
-
-    if (!kindsLower.includes(kind)) continue;
-    if (filename.indexOf(".script/tests") !== -1) continue;
-
-    entries.push({ kind, filename });
-  }
-  return entries;
-}
-
 export async function GetPRDetails(owner :string  = String(_owner), repo = String(_repo), pull_number: number = Number(_pr_number)) {
   if (typeof pullRequestDetails == "undefined") {
     if (!octokit) {
       console.error("Octokit is not initialized. Cannot get PR details.");
       return;
     }
-    try {
-      console.log("Getting PR details");
-      const { data } = await octokit.pulls.get({
-        owner,
-        repo,
-        pull_number,
-      });
-      pullRequestDetails = data;
-    } catch (e: any) {
-      console.log(`Failed to get PR details via GitHub API. Falling back to local git diff. ${e?.message || e}`);
-      return;
-    }
+    console.log("Getting PR details");
+    const { data } = await octokit.pulls.get({
+      owner,
+      repo,
+      pull_number,
+    });
+    pullRequestDetails = data;
   }
   return pullRequestDetails;
 }
 
 export async function GetDiffFiles(fileKinds: string[], fileTypeSuffixes?: string[], filePathFolderPreffixes?: string[], owner :string  = String(_owner), repo = String(_repo), pull_number: number = Number(_pr_number)) {
-  let changedFilePaths: string[] | undefined;
+  const pr = await GetPRDetails(owner, repo, pull_number);
 
-  if (octokit) {
-    try {
-      const pr = await GetPRDetails(owner, repo, pull_number);
-      if (typeof pr !== "undefined") {
-        const { data: changedFiles } = await octokit.pulls.listFiles({
-          owner,
-          repo,
-          pull_number,
-        });
-        console.log(`${changedFiles.length} files changed in current PR`);
-        changedFilePaths = changedFiles
-          .filter((change: any) => fileKinds.map(kind => kind.toLowerCase()).includes(String(change.status).toLowerCase()))
-          .map((change: any) => String(change.filename));
-      }
-    } catch (e: any) {
-      console.log(`Failed to list PR files via GitHub API. Falling back to local git diff. ${e?.message || e}`);
-    }
+  if (typeof pr === "undefined") {
+    console.log("GitHub Pull Request wasn't found. If issue persists - please open an issue");
+    return;
   }
 
-  if (typeof changedFilePaths === "undefined") {
-    const gitEntries = getGitDiffEntries(fileKinds);
-    if (typeof gitEntries === "undefined") {
-      console.log("Unable to determine changed files via GitHub API or local git diff.");
-      return;
-    }
-    console.log(`${gitEntries.length} files changed in current PR (git diff fallback)`);
-    changedFilePaths = gitEntries.map(e => e.filename);
+  if (!octokit) {
+    console.log("Octokit is not initialized. Cannot get diff files.");
+    return;
   }
 
-  const filterChangedFiles = changedFilePaths
+  const { data: changedFiles } = await octokit.pulls.listFiles({
+    owner,
+    repo,
+    pull_number,
+  });
+  console.log(`${changedFiles.length} files changed in current PR`);
+
+  const filterChangedFiles = changedFiles
+    .filter(change => fileKinds.map(kind => kind.toLowerCase()).includes(change.status.toLowerCase()))
+    .map(change => change.filename)
     .filter(filePath => typeof fileTypeSuffixes === "undefined" || filePath.endsWithAny(fileTypeSuffixes))
     .filter(filePath => typeof filePathFolderPreffixes === "undefined" || filePath.startsWithAny(filePathFolderPreffixes))
     .filter(filePath => filePath.indexOf(".script/tests") === -1);
