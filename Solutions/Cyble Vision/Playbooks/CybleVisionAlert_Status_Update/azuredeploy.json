@@ -1,0 +1,498 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "CybleVisionAlert_Status_Update",
+        "description": "This Logic App updates Cyble alert status and severity based on Sentinel incident changes. It supports automatic updates via automation rules and interprets user-applied tags to determine the correct status mapping.",
+        "prerequisites": [
+            "1. A valid Cyble API key is required to authenticate requests to the Cyble platform. Which can be obtained from your Cyble account.",
+            "2. Sentinel Automation Rules must be configured to trigger this Logic App.",
+            "3. [Automation Rules](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyble%20Vision/Playbooks/CybleVisionAlert_Status_Update/Azure_Sentinel_automation_rules.json)"
+            ],
+        "postDeployment": [
+            "* When updating an incident, remove any auto-applied tags such as",
+            "   severity auto set",
+            "    status auto set",
+            "These tags can prevent the Logic App from triggering correctly."
+        ],
+        "prerequisitesDeployTemplateFile": "None",
+        "lastUpdateTime": "2025-12-12T10:02:00.000Z",
+        "entities": [
+        ],
+        "tags": [
+            "Alerts",
+            "Cyble Vision"
+        ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Cyble Inc."
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Cyble-Vision-Alert-Status",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CybleVisionAlert_Status_Update",
+            "type": "String"
+        },
+        "CybleAPIkey": {
+            "defaultValue": "",
+            "type": "SecureString"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "parameters": {
+                    "CybleAPIkey": {
+                        "type": "SecureString",
+                        "value": "[parameters('CybleAPIkey')]"
+                    },
+                    "$connections": {
+                        "type": "Object",
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "alternativeParameterValues": {
+                                    "authenticationType": "ManagedServiceIdentity"
+                                }
+                            }
+                        }
+                    }
+                },
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "CybleAPIkey": {
+                            "type": "SecureString"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_Severity_Low": {
+                            "actions": {
+                                "Set_variable_17": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_MappedSeverity",
+                                        "value": "LOW"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('var_MappedSeverity')",
+                                            "Low"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Check_Severity_Medium": {
+                            "actions": {
+                                "Set_variable_18": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_MappedSeverity",
+                                        "value": "MEDIUM"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Check_Severity_Low": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['severity']",
+                                            "Medium"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Check_Severity_High": {
+                            "actions": {
+                                "Set_variable_19": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_MappedSeverity",
+                                        "value": "HIGH"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Check_Severity_Medium": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['severity']",
+                                            "High"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Status_New_UNREVIEWED": {
+                            "actions": {
+                                "UNREVIEWED": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_cybleStatus",
+                                        "value": "UNREVIEWED"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@triggerBody()?['object']?['properties']?['status']",
+                                            "New"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                         "Status_Active_UNDERREVIEW": {
+                            "actions": {
+                                "UNDER_REVIEW": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_cybleStatus",
+                                        "value": "UNDER_REVIEW"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Status_New_UNREVIEWED": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@triggerBody()?['object']?['properties']?['status']",
+                                            "Active"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Status_Closed_RESOLVED": {
+                            "actions": {
+                                "RESOLVED": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_cybleStatus",
+                                        "value": "RESOLVED"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Status_Active_UNDERREVIEW": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['status']",
+                                            "Closed"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each_": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "Parse_additional_data": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "Domain": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "Keyword": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "Score": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "LiveStatus": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "RegistrationDate": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "LastLiveCheck": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "Screenshot": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "AlertID": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "Current_Status": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Set_AlertID": {
+                                    "runAfter": {
+                                        "Parse_additional_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_alertId",
+                                        "value": "@body('Parse_additional_data')?['AlertID'][0]"
+                                    }
+                                },
+                                "set_service": {
+                                    "runAfter": {
+                                        "Set_AlertID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "var_service",
+                                        "value": "@body('Parse_additional_data')?['Service'][0]"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variables": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "var_alertId",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "var_service",
+                                        "type": "string",
+                                        "value": "@{triggerBody()?['object']?['properties']?['customDetails']?['Service']}"
+                                    },
+                                    {
+                                        "name": "var_cybleStatus",
+                                        "type": "string",
+                                        "value": "@{triggerBody()?['object']?['properties']?['status']}"
+                                    },
+                                    {
+                                        "name": "var_MappedSeverity",
+                                        "type": "string",
+                                        "value": "@{triggerBody()?['object']?['properties']?['severity']}"
+                                    },
+                                    {
+                                        "name": "var_comm",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                            },
+                        "post_comment-copy": {
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://bifrost.cyble.ai/ar-apollo-v2/api/v2/y/alerts/@{variables('var_alertId')}/comments",
+                                "method": "POST",
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Authorization": "@{concat('Bearer', parameters('CybleAPIkey'))}"
+                                },
+                                "body": {
+                                    "content": "@{variables('var_comm')}",
+                                    "service": "@{variables('var_service')}"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "update_alert_details": {
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://bifrost.cyble.ai/ar-apollo-v2/api/v2/y/alerts",
+                                "method": "PUT",
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Authorization": "@{concat('Bearer', parameters('CybleAPIkey'))}"
+                                },
+                                "body": "\"alerts\": [\n                    {\n                      \"id\": \"@{variables('var_alertId')}\",\n                      \"status\": \"@{variables('var_cybleStatus')}\",\n                      \"service\": \"@{variables('var_service')}\"\n                      \"severity\": \"@{variables('var_MappedSeverity')}\" \n                    }\n                  ]"
+                            }
+                        },
+                        "Set_variable": {
+                            "runAfter": {
+                                "Status_Closed_RESOLVED": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "var_comm",
+                                "value": "@concat(\n  'This alert was updated by ',\n  coalesce(triggerBody()?['object']?['properties']?['owner']?['assignedTo'], 'Unknown'),\n  '. Status updated to ',\n  variables('var_cybleStatus'),\n  '. Comment: ',\n  coalesce(\n    triggerBody()?['incidentUpdates']?['comments']?[0]?['properties']?['message'],\n    ''\n  )\n)"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                }
+            }
+        }
+    ]
+}
