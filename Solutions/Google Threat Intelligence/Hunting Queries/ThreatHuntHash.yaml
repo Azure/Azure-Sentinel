@@ -1,0 +1,35 @@
+id: "0051a0d9-684f-4317-abbd-c1e5c24b39cb"
+name: Google Threat Intelligence - Threat Hunting Hash
+description: |
+  'Google Threat Intelligence hash correlation.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+tags:
+  - GoogleThreatIntelligence
+query: |
+  _Im_FileEvent
+  | where isnotempty(Hash)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey contains 'file:hashes'
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "Google Threat Intelligence"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  ) on $left.Hash == $right.ObservableValue
+  | project Hash, HashType
+  | extend FileHash_0_Value = Hash
+  | extend FileHash_0_Algorithm = HashType
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashType
+version: 1.0.0
