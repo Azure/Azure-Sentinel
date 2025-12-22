@@ -23,7 +23,7 @@ class KeyVaultSecretManager:
         Returns:
             SecretClient: returns client object for accessing AzureKeyVault.
         """
-        credential = DefaultAzureCredential()
+        credential = DefaultAzureCredential()        # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
         client = SecretClient(vault_url=self.keyvault_uri, credential=credential)
         return client
 
