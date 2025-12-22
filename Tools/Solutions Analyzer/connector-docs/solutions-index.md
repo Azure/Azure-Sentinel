@@ -12,16 +12,16 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **477 solutions**, of which **369** include data connectors, providing access to **503 unique connectors** and **811 unique tables**.
+This documentation covers **482 solutions**, of which **338** include data connectors, providing access to **468 unique connectors** and **744 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 477 |
-| Solutions with Connectors | 369 (77%) |
-| Unique Connectors | 503 |
-| Unique Tables | 811 |
+| Total Solutions | 482 |
+| Solutions with Connectors | 338 (70%) |
+| Unique Connectors | 468 |
+| Unique Tables | 744 |
 
 ## How This Documentation is Organized\n\nEach solution has its own page containing:
 
@@ -196,6 +196,7 @@ Browse solutions alphabetically:
 |----------|----------------|----------|
 | [DEV-0537DetectionandHunting](solutions/dev-0537detectionandhunting.md) | 2022-04-07 | Microsoft Corporation |
 | [DNS Essentials](solutions/dns-essentials.md) | 2023-01-14 | Microsoft Corporation |
+| [DORA Compliance](solutions/dora-compliance.md) | 2025-10-08 | Microsoft Corporation |
 | [Darktrace](solutions/darktrace.md) | 2022-05-02 | Darktrace |
 | [Datalake2Sentinel](solutions/datalake2sentinel.md) | 2024-01-15 | Orange Cyberdefense |
 | [Dataminr Pulse](solutions/dataminr-pulse.md) | 2023-04-12 | Dataminr Support |
@@ -271,7 +272,7 @@ Browse solutions alphabetically:
 | [Google Cloud Platform Cloud Monitoring](solutions/google-cloud-platform-cloud-monitoring.md) | 2022-07-01 | Microsoft Corporation |
 | [Google Cloud Platform Cloud Run](solutions/google-cloud-platform-cloud-run.md) | 2021-07-30 | Microsoft Corporation |
 | [Google Cloud Platform Compute Engine](solutions/google-cloud-platform-compute-engine.md) | 2022-07-07 | Microsoft Corporation |
-| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) | 2024-11-03 | Microsoft Corporation |
+| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) |  |  |
 | [Google Cloud Platform Load Balancer Logs](solutions/google-cloud-platform-load-balancer-logs.md) | 2025-02-12 | Microsoft Corporation |
 | [Google Cloud Platform Security Command Center](solutions/google-cloud-platform-security-command-center.md) | 2023-09-11 | Microsoft Corporation |
 | [Google Cloud Platform VPC Flow Logs](solutions/google-cloud-platform-vpc-flow-logs.md) | 2025-02-12 | Microsoft Corporation |
@@ -394,6 +395,7 @@ Browse solutions alphabetically:
 | [MimecastTIRegional](solutions/mimecasttiregional.md) | 2023-08-23 | Mimecast |
 | [MimecastTTP](solutions/mimecastttp.md) | 2022-02-24 | Mimecast |
 | [Minemeld](solutions/minemeld.md) | 2022-10-11 | Microsoft Corporation |
+| [Miro](solutions/miro.md) |  | Miro |
 | [MongoDBAtlas](solutions/mongodbatlas.md) | 2025-08-22 | MongoDB |
 | [MongoDBAudit](solutions/mongodbaudit.md) | 2022-06-01 | Microsoft Corporation |
 | [Morphisec](solutions/morphisec.md) | 2022-05-05 | Morphisec |
@@ -506,7 +508,9 @@ Browse solutions alphabetically:
 | [SIGNL4](solutions/signl4.md) | 2021-12-10 | Derdack |
 | [SINEC Security Guard](solutions/sinec-security-guard.md) | 2024-07-15 | Siemens AG |
 | [SOC Handbook](solutions/soc-handbook.md) | 2022-11-30 | Community |
+| [SOC Prime CCF](solutions/soc-prime-ccf.md) | 2025-09-25 | SOC Prime |
 | [SOC-Process-Framework](solutions/soc-process-framework.md) | 2022-04-08 | Microsoft Corporation |
+| [SOX IT Compliance](solutions/sox-it-compliance.md) | 2025-12-11 | Microsoft Corporation |
 | [SailPointIdentityNow](solutions/sailpointidentitynow.md) | 2021-10-26 | SailPoint |
 | [SalemCyber](solutions/salemcyber.md) | 2023-07-21 | Salem Cyber |
 | [Salesforce Service Cloud](solutions/salesforce-service-cloud.md) | 2022-05-16 | Microsoft Corporation |
@@ -575,6 +579,7 @@ Browse solutions alphabetically:
 | [Trend Micro Deep Security](solutions/trend-micro-deep-security.md) | 2022-05-10 | Trend Micro |
 | [Trend Micro TippingPoint](solutions/trend-micro-tippingpoint.md) | 2022-05-02 | Trend Micro |
 | [Trend Micro Vision One](solutions/trend-micro-vision-one.md) | 2022-05-11 | Trend Micro |
+| [Tropico](solutions/tropico.md) | 2025-12-02 | TROPICO Security |
 
 ### U
 

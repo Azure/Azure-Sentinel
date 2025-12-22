@@ -1,0 +1,224 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Lookout Mobile Risk API v2 - Enhanced Security Dashboard\n\n**NOTE**: This workbook leverages the enhanced Lookout Mobile Risk API v2 data with comprehensive field extraction and advanced threat intelligence. It depends on the [**LookoutEvents**](https://aka.ms/sentinel-lookoutapi-parser) parser deployed with the Azure Sentinel Solution.\n\n## Key Features\n- **Multi-Vector Threat Analysis**: Correlates threats, smishing alerts, and device compliance\n- **Enhanced Device Intelligence**: Leverages v2 device fields including MDM integration\n- **Advanced Risk Scoring**: Comprehensive risk assessment across all event types\n- **Campaign Detection**: Identifies coordinated attacks and threat patterns\n- **Compliance Monitoring**: Real-time device compliance and security posture tracking"
+      },
+      "name": "text - header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timerange-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2592000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {"durationMs": 3600000},
+                {"durationMs": 14400000},
+                {"durationMs": 43200000},
+                {"durationMs": 86400000},
+                {"durationMs": 172800000},
+                {"durationMs": 604800000},
+                {"durationMs": 1209600000},
+                {"durationMs": 2592000000},
+                {"durationMs": 7776000000}
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "enterprise-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "EnterpriseGuid",
+            "type": 2,
+            "isRequired": false,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| distinct EnterpriseGuid\n| order by EnterpriseGuid asc",
+            "typeSettings": {
+              "additionalResourceOptions": ["value::all"],
+              "selectAllValue": "*"
+            },
+            "defaultValue": "value::all"
+          },
+          {
+            "id": "platform-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "DevicePlatform",
+            "type": 2,
+            "isRequired": false,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| distinct DevicePlatform\n| order by DevicePlatform asc",
+            "typeSettings": {
+              "additionalResourceOptions": ["value::all"],
+              "selectAllValue": "*"
+            },
+            "defaultValue": "value::all"
+          }
+        ]
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| summarize \n    TotalEvents = count(),\n    ThreatEvents = countif(EventType == \"THREAT\"),\n    SmishingAlerts = countif(EventType == \"SMISHING_ALERT\"),\n    DeviceEvents = countif(EventType == \"DEVICE\"),\n    AuditEvents = countif(EventType == \"AUDIT\"),\n    CriticalThreats = countif(EventType == \"THREAT\" and ThreatSeverity == \"CRITICAL\"),\n    HighThreats = countif(EventType == \"THREAT\" and ThreatSeverity == \"HIGH\"),\n    CriticalSmishing = countif(EventType == \"SMISHING_ALERT\" and SmishingAlertSeverity == \"CRITICAL\"),\n    NonCompliantDevices = countif(EventType == \"DEVICE\" and DeviceComplianceStatus == \"Non-Compliant\"),\n    HighRiskDevices = countif(EventType == \"DEVICE\" and DeviceSecurityStatus == \"THREATS_HIGH\")\n| extend \n    ThreatRate = round(todouble(ThreatEvents) / todouble(TotalEvents) * 100, 2),\n    CriticalThreatRate = round(todouble(CriticalThreats) / todouble(ThreatEvents) * 100, 2),\n    ComplianceRate = round((1.0 - todouble(NonCompliantDevices) / todouble(DeviceEvents)) * 100, 2)",
+        "size": 4,
+        "title": "Security Overview - Key Metrics",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "TotalEvents",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "TotalEvents",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "ThreatRate",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "overview-metrics"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| where EventType == \"THREAT\"\n| where ThreatSeverity in (\"CRITICAL\", \"HIGH\")\n| extend RiskScore = case(\n    ThreatSeverity == \"CRITICAL\", 10,\n    ThreatSeverity == \"HIGH\", 8,\n    ThreatSeverity == \"MEDIUM\", 5,\n    ThreatSeverity == \"LOW\", 2,\n    1\n)\n| summarize \n    ThreatCount = count(),\n    AvgRiskScore = avg(RiskScore),\n    MaxRiskScore = max(RiskScore),\n    AffectedDevices = dcount(DeviceGuid),\n    ThreatTypes = make_set(ThreatType),\n    Classifications = make_set(ThreatClassifications)\n    by bin(TimeGenerated, 1h), ThreatSeverity\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "High Severity Threat Timeline",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "threat-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| where EventType == \"SMISHING_ALERT\"\n| extend ImpersonationType = case(\n    SmishingAlertDescription has \"CEO\" or SmishingAlertDescription has \"executive\", \"Executive Impersonation\",\n    SmishingAlertDescription has \"IT\" or SmishingAlertDescription has \"support\", \"IT Support Impersonation\",\n    SmishingAlertDescription has \"bank\" or SmishingAlertDescription has \"financial\", \"Financial Impersonation\",\n    SmishingAlertDescription has \"delivery\" or SmishingAlertDescription has \"package\", \"Delivery Impersonation\",\n    \"Generic Phishing\"\n)\n| summarize \n    AlertCount = count(),\n    AffectedDevices = dcount(DeviceGuid),\n    CriticalAlerts = countif(SmishingAlertSeverity == \"CRITICAL\"),\n    HighAlerts = countif(SmishingAlertSeverity == \"HIGH\")\n    by ImpersonationType, SmishingAlertType\n| extend TotalHighRisk = CriticalAlerts + HighAlerts\n| order by TotalHighRisk desc",
+        "size": 0,
+        "title": "Smishing Attack Analysis - Impersonation Patterns",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "smishing-analysis"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| where EventType == \"DEVICE\"\n| extend DeviceRiskScore = case(\n    DeviceSecurityStatus == \"THREATS_HIGH\", 9,\n    DeviceSecurityStatus == \"THREATS_MEDIUM\", 6,\n    DeviceSecurityStatus == \"THREATS_LOW\", 3,\n    DeviceComplianceStatus == \"Non-Compliant\", 7,\n    DeviceComplianceStatus == \"Partial\", 4,\n    1\n)\n| extend MDMStatus = case(\n    isnotempty(MDMConnectorId) and isnotempty(MDMExternalId), \"Fully Integrated\",\n    isnotempty(MDMConnectorId), \"Partial Integration\",\n    \"Not Integrated\"\n)\n| summarize \n    DeviceCount = dcount(DeviceGuid),\n    AvgRiskScore = avg(DeviceRiskScore),\n    NonCompliantDevices = dcountif(DeviceGuid, DeviceComplianceStatus == \"Non-Compliant\"),\n    HighRiskDevices = dcountif(DeviceGuid, DeviceSecurityStatus == \"THREATS_HIGH\"),\n    OutdatedSDK = dcountif(DeviceGuid, ClientLookoutSDKVersion < \"2.0\")\n    by DevicePlatform, MDMStatus\n| extend ComplianceRate = round((1.0 - todouble(NonCompliantDevices) / todouble(DeviceCount)) * 100, 2)\n| order by AvgRiskScore desc",
+        "size": 0,
+        "title": "Device Security Posture by Platform and MDM Integration",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "device-posture"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let campaignWindow = 48h;\nlet minDevices = 3;\nLookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| where EventType in (\"THREAT\", \"SMISHING_ALERT\")\n| extend ThreatIndicator = case(\n    EventType == \"THREAT\", ThreatType,\n    EventType == \"SMISHING_ALERT\", SmishingAlertType,\n    \"Unknown\"\n)\n| extend ThreatSev = case(\n    EventType == \"THREAT\", ThreatSeverity,\n    EventType == \"SMISHING_ALERT\", SmishingAlertSeverity,\n    \"Unknown\"\n)\n| where ThreatSev in (\"CRITICAL\", \"HIGH\")\n| summarize \n    AffectedDevices = dcount(DeviceGuid),\n    DeviceList = make_set(DeviceGuid),\n    EmailList = make_set(DeviceEmailAddress),\n    PlatformDistribution = make_set(DevicePlatform),\n    FirstIncident = min(TimeGenerated),\n    LastIncident = max(TimeGenerated),\n    EventTypes = make_set(EventType)\n    by EnterpriseGuid, ThreatIndicator\n| where AffectedDevices >= minDevices\n| extend CampaignDuration = LastIncident - FirstIncident\n| extend CampaignRisk = case(\n    AffectedDevices >= 10, \"Critical\",\n    AffectedDevices >= 5, \"High\",\n    \"Medium\"\n)\n| project ThreatIndicator, AffectedDevices, CampaignRisk, CampaignDuration, FirstIncident, LastIncident, PlatformDistribution, EventTypes\n| order by AffectedDevices desc",
+        "size": 0,
+        "title": "Potential Threat Campaigns - Multi-Device Attacks",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "campaign-detection"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| where EventType == \"AUDIT\"\n| where AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\", \"USER_MANAGEMENT\")\n| extend SecurityImplication = case(\n    AuditAttributeChanges has \"threat_response_level\" and AuditAttributeChanges has \"LOW\", \"Threat Response Weakened\",\n    AuditAttributeChanges has \"auto_quarantine_enabled\" and AuditAttributeChanges has \"false\", \"Auto-Quarantine Disabled\",\n    AuditAttributeChanges has \"compliance_enforcement\" and AuditAttributeChanges has \"false\", \"Compliance Enforcement Disabled\",\n    AuditAttributeChanges has \"admin\" or AuditAttributeChanges has \"privilege\", \"Privilege Changes\",\n    \"Configuration Update\"\n)\n| extend RiskLevel = case(\n    ActorType == \"SYSTEM\", \"Automated\",\n    ActorType == \"ADMIN_USER\", \"Administrative\",\n    ActorType == \"USER\", \"User-Initiated\",\n    \"Unknown\"\n)\n| summarize \n    ChangeCount = count(),\n    UniqueActors = dcount(ActorGuid),\n    HighRiskChanges = countif(SecurityImplication in (\"Threat Response Weakened\", \"Auto-Quarantine Disabled\", \"Compliance Enforcement Disabled\")),\n    PrivilegeChanges = countif(SecurityImplication == \"Privilege Changes\")\n    by bin(TimeGenerated, 1d), AuditType, RiskLevel\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Security Configuration Changes - Audit Trail",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "audit-trail"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| where EventType in (\"THREAT\", \"SMISHING_ALERT\", \"DEVICE\")\n| extend RiskScore = case(\n    EventType == \"THREAT\" and ThreatSeverity == \"CRITICAL\", 10,\n    EventType == \"THREAT\" and ThreatSeverity == \"HIGH\", 8,\n    EventType == \"SMISHING_ALERT\" and SmishingAlertSeverity == \"CRITICAL\", 9,\n    EventType == \"SMISHING_ALERT\" and SmishingAlertSeverity == \"HIGH\", 7,\n    EventType == \"DEVICE\" and DeviceSecurityStatus == \"THREATS_HIGH\", 6,\n    EventType == \"DEVICE\" and DeviceComplianceStatus == \"Non-Compliant\", 5,\n    2\n)\n| where RiskScore >= 6\n| summarize \n    TotalRiskScore = sum(RiskScore),\n    EventCount = count(),\n    ThreatEvents = countif(EventType == \"THREAT\"),\n    SmishingEvents = countif(EventType == \"SMISHING_ALERT\"),\n    DeviceEvents = countif(EventType == \"DEVICE\"),\n    LastActivity = max(TimeGenerated),\n    DeviceInfo = take_any(strcat(DeviceManufacturer, \" \", DeviceModel, \" (\", DevicePlatform, \" \", DeviceOSVersion, \")\"))\n    by DeviceGuid, DeviceEmailAddress\n| extend OverallRisk = case(\n    TotalRiskScore >= 25, \"Critical\",\n    TotalRiskScore >= 15, \"High\",\n    TotalRiskScore >= 8, \"Medium\",\n    \"Low\"\n)\n| where OverallRisk in (\"Critical\", \"High\")\n| project DeviceGuid, DeviceEmailAddress, DeviceInfo, OverallRisk, TotalRiskScore, EventCount, ThreatEvents, SmishingEvents, DeviceEvents, LastActivity\n| order by TotalRiskScore desc\n| take 20",
+        "size": 0,
+        "title": "Top 20 High-Risk Devices - Comprehensive Risk Assessment",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "high-risk-devices"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LookoutEvents\n| where TimeGenerated {TimeRange}\n| where EnterpriseGuid in ({EnterpriseGuid}) or '*' in ({EnterpriseGuid})\n| where DevicePlatform in ({DevicePlatform}) or '*' in ({DevicePlatform})\n| summarize EventCount = count() by EventType, bin(TimeGenerated, 1h)\n| render timechart",
+        "size": 0,
+        "title": "Event Volume Trends by Type",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "event-trends"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Advanced Analytics and Recommendations\n\n### Key Insights from v2 Data:\n- **Enhanced Threat Intelligence**: Leverages comprehensive threat classification and assessment data\n- **Smishing Detection**: New v2 capability providing advanced SMS phishing protection\n- **Device Compliance Monitoring**: Real-time compliance status with MDM integration details\n- **Audit Trail**: Complete administrative action tracking for compliance and security governance\n\n### Recommended Actions:\n1. **High-Risk Devices**: Review devices with critical risk scores and implement remediation\n2. **Campaign Detection**: Investigate potential coordinated attacks affecting multiple devices\n3. **Compliance Gaps**: Address non-compliant devices and MDM integration issues\n4. **Configuration Changes**: Review high-risk audit events and unauthorized modifications\n\n### Next Steps:\n- Configure automated response playbooks for critical threats\n- Implement device quarantine policies for high-risk devices\n- Set up alerting for potential threat campaigns\n- Review and update security policies based on audit findings"
+      },
+      "name": "recommendations"
+    }
+  ],
+  "fallbackResourceIds": [
+    "Azure Monitor"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

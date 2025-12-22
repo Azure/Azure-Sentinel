@@ -1,9 +1,12 @@
 id: 9e4f8a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
-name: AI Agents - Email AI-Controlled Inputs
+name: AI Agents - Sending email to AI controlled input values
 description: |
-  'Identifies AI agents configured to send emails with AI-controlled inputs that may contain sensitive or inappropriate content.
-  This configuration poses security risks as AI-generated content may include unintended information disclosure, hallucinations,
-  or other content that should be reviewed before external transmission.'
+  This query identifies Copilot Studio AI agents using generative orchestration to send emails 
+  via the Outlook connector where all action input values are populated dynamically by the orchestrator. 
+  This configuration is risky because if an attacker successfully performs a prompt injection (XPIA) attack, 
+  the agent could be manipulated to exfiltrate sensitive data to arbitrary recipients.
+  Recommended Action: Confirm with the agent owner whether this behavior is required and understand the business justification. 
+  If feasible, hard-code the recipient address in the email action or apply strict validation to limit misuse.
 requiredDataConnectors: []
 tactics:
   - Exfiltration
@@ -12,20 +15,15 @@ relevantTechniques:
   - T1041
   - T1565
 query: |
- //Find agents with email sending tool via microsoft 365 connector, where the input parameters of the inputs are populated by generative orchestrator 
- AIAgentsInfo 
+  AIAgentsInfo 
   | summarize arg_max(Timestamp, *) by AIAgentId 
   | where AgentStatus != "Deleted" 
-  | extend Config = tostring(todynamic(RawAgentInfo).Bot.Attributes.configuration)
-  | parse Config with * "\"GenerativeActionsEnabled\":" GenerativeActionsEnabled:boolean * 
-  | where GenerativeActionsEnabled 
+  | where IsGenerativeOrchestrationEnabled
   | mvexpand Action = AgentToolsDetails 
   | extend  OperationId = tostring(Action.action.operationId), ActionName = tostring(Action.modelDisplayName), Action 
   | where OperationId == "SendEmailV2"  
-  | where isempty(Action.inputs) //All inputs are populated by Orchestrator 
+  | where isempty(Action.inputs)
   | project-reorder AgentCreationTime ,AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, ActionName 
-  | extend AccountCustomEntity = CreatorAccountUpn
-  | extend HostCustomEntity = AIAgentName
 entityMappings:
   - entityType: Account
     fieldMappings:

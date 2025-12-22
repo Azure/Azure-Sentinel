@@ -1,0 +1,40 @@
+id: 5e8f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b
+name: AI Agents - Published Dormant (30d)
+description: |
+  This query identifies Copilot Studio AI agents that are published but have not been used by any user in the organization for the last 30 days. 
+  Dormant agents can create unnecessary exposure and may still hold active connections or credentials, which could become a security risk if left unmanaged. 
+  They also increase clutter and make it harder to maintain a clean, efficient environment.
+  Recommended Action: Review these agents to confirm whether they are still needed. If not, consider unpublishing or removing them. 
+  If they are required, validate their configuration and ensure they follow security best practices before reactivation.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let ActiveAgents =
+      CloudAppEvents
+      | where Timestamp > ago(30d)
+      | where ActionType == "CopilotInteraction"
+      | where RawEventData.AppIdentity startswith "Copilot.studio"
+      | extend AppIdentity = iff(isnotempty(RawEventData.CopilotEventData.AppIdentity), RawEventData.CopilotEventData.AppIdentity, RawEventData.AppIdentity)
+      | extend AgentName = extract(@"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}-(.*)$", 1, tostring(AppIdentity))
+      | where isnotempty(AgentName)
+      | distinct AgentName;
+  AIAgentsInfo
+  | where AgentCreationTime > ago(30d)
+  | summarize arg_max(Timestamp, *) by AIAgentId
+  | where AgentStatus != "Deleted"
+  | where AgentStatus == "Published"
+  | extend AgentName2 = tostring(todynamic(RawAgentInfo)['Bot']['Attributes']['schemaname'])
+  | where isnotempty(AgentName2)
+  | where AgentName2 !in (ActiveAgents)
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0
