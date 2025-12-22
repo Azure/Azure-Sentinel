@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `AzureAdvancedThreatProtection` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`SecurityAlert`](../tables-index.md#securityalert) |
 | **Used in Solutions** | [Microsoft Defender For Identity](../solutions/microsoft-defender-for-identity.md) |
 | **Connector Definition Files** | [MicrosoftDefenderforIdentity.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20For%20Identity/Data%20Connectors/MicrosoftDefenderforIdentity.JSON) |
 
@@ -31,6 +30,14 @@ Connect Microsoft Defender for Identity to gain visibility into the events and u
 
 
 For more information, see the [Microsoft Sentinel documentation >](https://go.microsoft.com/fwlink/p/?linkid=2220069&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
 
 ## Permissions
 

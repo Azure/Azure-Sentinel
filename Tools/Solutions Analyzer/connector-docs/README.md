@@ -8,7 +8,7 @@ This directory contains comprehensive reference for Microsoft Sentinel data conn
 
 - **[Solutions Index](solutions-index.md)** - Browse all solutions alphabetically, with overview statistics and quick access to solution details
 - **[Connectors Index](connectors-index.md)** - Browse all unique connectors alphabetically, with publisher information, descriptions, and associated tables
-- **[Tables Index](tables-index.md)** - Browse all unique tables alphabetically, with solution references and connector counts
+- **[Tables Index](tables-index.md)** - Browse all unique tables alphabetically, with solution references, connector counts, transformation support, and ingestion API compatibility
 
 ### Solution Pages
 
@@ -26,13 +26,29 @@ Individual solution pages are organized in the [`solutions/`](solutions/) direct
 
 Individual connector pages are organized in the [`connectors/`](connectors/) directory. Each connector page includes:
 
-- Connector metadata (ID, publisher, tables ingested)
+- Connector metadata (ID, publisher)
 - Full connector description
 - Required permissions and prerequisites
+- **Tables Ingested** with transformation and ingestion API support indicators
 - **Setup Instructions** - Step-by-step configuration guidance rendered from connector UI definitions using AI
   - ⚠️ **Note**: Instructions are automatically rendered from the user interface definition files using AI and may not be fully accurate. Always verify configuration steps in the Microsoft Sentinel portal.
 - Solutions that include this connector
 - Links to connector definition files on GitHub
+
+### Table Pages
+
+Individual table pages are organized in the [`tables/`](tables/) directory. Each table page includes:
+
+- Table description from Azure Monitor documentation
+- Category and resource types
+- Basic Logs eligibility status
+- Transformation support status
+- Ingestion API compatibility
+- Search job support
+- Retention information (default and maximum)
+- Links to Azure Monitor and Defender XDR documentation
+- List of solutions using the table
+- List of connectors ingesting data to the table
 
 ## 📊 Quick Statistics
 
@@ -54,7 +70,10 @@ Use the [Connectors Index](connectors-index.md) to find specific connectors. Eac
 Browse the [Tables Index](tables-index.md) to discover which solutions and connectors use a specific table. The index shows:
 - All solutions that include connectors writing to the table
 - Number of connectors using the table
-- Whether the table is unique to a single connector
+- Whether the table supports transformations
+- Whether the table supports the Ingestion API
+
+Click on any table name to view its detailed page with Azure Monitor documentation, retention info, and full lists of solutions and connectors.
 
 ## 🔄 Navigation
 
@@ -89,19 +108,30 @@ The analyzer identifies table references in connector configurations and parser 
 
 ⚠️ **Important**: AI-generated instructions may not be fully accurate. Always verify all configuration steps in the Microsoft Sentinel portal before implementation.
 
-## 📝 Data Source
+## 📝 Data Sources
 
-The documentation is based on analysis of the `solutions_connectors_tables_mapping.csv` file, which contains:
-- Solution metadata
-- Connector configurations
-- Table mappings
-- Detection methods
-- Parser references
+The documentation is based on analysis of:
+
+1. **`solutions_connectors_tables_mapping.csv`** - Contains:
+   - Solution metadata
+   - Connector configurations
+   - Table mappings
+   - Detection methods
+   - Parser references
+
+2. **`tables_reference.csv`** - Contains:
+   - Table metadata from Azure Monitor documentation
+   - Basic Logs eligibility
+   - Transformation support
+   - Ingestion API compatibility
+   - Retention information
+   - Documentation links
 
 ## 🔗 Related Resources
 
-- [Solutions Analyzer Tool](../) - The Python tool that generates this documentation
-- [CSV Mapping Data](../solutions_connectors_tables_mapping.csv) - Raw data used to generate documentation
+- [Solutions Analyzer Tool](../) - The Python tools that generate this documentation
+- [Connector Mapping CSV](../solutions_connectors_tables_mapping.csv) - Connector to table mapping data
+- [Tables Reference CSV](../tables_reference.csv) - Table metadata from Azure Monitor documentation
 - [Issues Report](../solutions_connectors_tables_issues_and_exceptions_report.csv) - Known issues and exceptions in the analysis
 
 ---

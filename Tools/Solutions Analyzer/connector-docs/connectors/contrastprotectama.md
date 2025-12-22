@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `ContrastProtectAma` |
 | **Publisher** | Contrast Security |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [Contrast Protect](../solutions/contrast-protect.md) |
 | **Connector Definition Files** | [template_ContrastProtectAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Data%20Connectors/template_ContrastProtectAMA.json) |
 
 Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

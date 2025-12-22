@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `AIVectraDetect` |
 | **Publisher** | Vectra AI |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [Vectra AI Detect](../solutions/vectra-ai-detect.md) |
 | **Connector Definition Files** | [AIVectraDetect.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Vectra%20AI%20Detect/Data%20Connectors/AIVectraDetect.json) |
 
 The AI Vectra Detect connector allows users to connect Vectra Detect logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives users more insight into their organization's network and improves their security operation capabilities.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

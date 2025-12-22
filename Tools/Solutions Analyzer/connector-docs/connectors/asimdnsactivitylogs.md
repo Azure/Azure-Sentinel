@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `ASimDnsActivityLogs` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`ASimDnsActivityLogs`](../tables-index.md#asimdnsactivitylogs) |
 | **Used in Solutions** | [Windows Server DNS](../solutions/windows-server-dns.md) |
 | **Connector Definition Files** | [template_ASimDnsActivityLogs.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_ASimDnsActivityLogs.JSON) |
 
@@ -35,6 +34,16 @@ Windows DNS events are supported by Advanced SIEM Information Model (ASIM) and s
 
 
 For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2225993&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`ASimDnsActivityLogs`](../tables/asimdnsactivitylogs.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

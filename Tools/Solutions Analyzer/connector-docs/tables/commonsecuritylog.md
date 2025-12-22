@@ -1,14 +1,23 @@
 # CommonSecurityLog
 
-**Table:** `CommonSecurityLog`
+Reference for CommonSecurityLog table in Azure Monitor Logs.
 
-This table is ingested by **58 solution(s)** using **99 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `CommonSecurityLog` |
+| **Category** | Security |
+| **Solutions Using Table** | 59 |
+| **Connectors Ingesting** | 100 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/commonsecuritylog) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
 ---
 
-## Solutions (58)
+## Solutions (59)
 
 This table is used by the following solutions:
 
@@ -44,6 +53,7 @@ This table is used by the following solutions:
 - [Infoblox](../solutions/infoblox.md)
 - [Infoblox Cloud Data Connector](../solutions/infoblox-cloud-data-connector.md)
 - [Infoblox SOC Insights](../solutions/infoblox-soc-insights.md)
+- [IronNet IronDefense](../solutions/ironnet-irondefense.md)
 - [Netwrix Auditor](../solutions/netwrix-auditor.md)
 - [NozomiNetworks](../solutions/nozominetworks.md)
 - [OSSEC](../solutions/ossec.md)
@@ -71,7 +81,7 @@ This table is used by the following solutions:
 - [iboss](../solutions/iboss.md)
 - [vArmour Application Controller](../solutions/varmour-application-controller.md)
 
-## Connectors (99)
+## Connectors (100)
 
 This table is ingested by the following connectors:
 
@@ -134,6 +144,7 @@ This table is ingested by the following connectors:
 - [[Deprecated] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md)
 - [[Recommended] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md)
 - [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md)
+- [IronNet IronDefense](../connectors/ironnetirondefense.md)
 - [[Deprecated] Netwrix Auditor via Legacy Agent](../connectors/netwrix.md)
 - [[Deprecated] Netwrix Auditor via AMA](../connectors/netwrixama.md)
 - [[Deprecated] Nozomi Networks N2OS via Legacy Agent](../connectors/nozominetworksn2os.md)
@@ -174,6 +185,17 @@ This table is ingested by the following connectors:
 - [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md)
 - [[Deprecated] vArmour Application Controller via Legacy Agent](../connectors/varmourac.md)
 - [[Deprecated] vArmour Application Controller via AMA](../connectors/varmouracama.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/cef`
+- `<br>microsoft.compute/virtualmachines`
+- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
+- `<br>microsoft.azurestackhci/virtualmachines`
+- `<br>microsoft.scvmm/virtualmachines`
+- `<br>microsoft.compute/virtualmachinescalesets`
 
 ---
 

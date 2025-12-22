@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `InfobloxNIOS` |
 | **Publisher** | Infoblox |
-| **Tables Ingested** | [`Syslog`](../tables-index.md#syslog) |
 | **Used in Solutions** | [Infoblox NIOS](../solutions/infoblox-nios.md) |
 | **Connector Definition Files** | [Connector_Syslog_Infoblox.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Data%20Connectors/Connector_Syslog_Infoblox.json) |
 
 The [Infoblox Network Identity Operating System (NIOS)](https://www.infoblox.com/glossary/network-identity-operating-system-nios/) connector allows you to easily connect your Infoblox NIOS logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

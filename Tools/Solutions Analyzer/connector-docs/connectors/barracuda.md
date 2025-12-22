@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `Barracuda` |
 | **Publisher** | Barracuda |
-| **Tables Ingested** | [`Barracuda_CL`](../tables-index.md#barracuda_cl), [`CommonSecurityLog`](../tables-index.md#commonsecuritylog), [`barracuda_CL`](../tables-index.md#barracuda_cl) |
 | **Used in Solutions** | [Barracuda WAF](../solutions/barracuda-waf.md) |
 | **Connector Definition Files** | [template_Barracuda.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20WAF/Data%20Connectors/template_Barracuda.json) |
 
@@ -13,6 +12,18 @@ The Barracuda Web Application Firewall (WAF) connector allows you to easily conn
 
 
 [For more information >​](https://aka.ms/CEF-Barracuda)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Barracuda_CL`](../tables/barracuda-cl.md) | — | — |
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+| [`barracuda_CL`](../tables/barracuda-cl.md) | — | — |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

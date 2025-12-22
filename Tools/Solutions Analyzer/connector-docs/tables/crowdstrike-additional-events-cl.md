@@ -1,8 +1,10 @@
 # CrowdStrike_Additional_Events_CL
 
-**Table:** `CrowdStrike_Additional_Events_CL`
-
-This table is ingested by **1 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `CrowdStrike_Additional_Events_CL` |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

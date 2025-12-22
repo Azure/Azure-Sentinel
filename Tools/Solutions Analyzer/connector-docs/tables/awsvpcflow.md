@@ -1,8 +1,17 @@
 # AWSVPCFlow
 
-**Table:** `AWSVPCFlow`
+Reference for AWSVPCFlow table in Azure Monitor Logs.
 
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `AWSVPCFlow` |
+| **Category** | Security |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/awsvpcflow) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

@@ -4,11 +4,23 @@
 |----------|-------|
 | **Connector ID** | `Wiz` |
 | **Publisher** | Wiz |
-| **Tables Ingested** | [`WizAuditLogsV2_CL`](../tables-index.md#wizauditlogsv2_cl), [`WizAuditLogs_CL`](../tables-index.md#wizauditlogs_cl), [`WizIssuesV2_CL`](../tables-index.md#wizissuesv2_cl), [`WizIssues_CL`](../tables-index.md#wizissues_cl), [`WizVulnerabilitiesV2_CL`](../tables-index.md#wizvulnerabilitiesv2_cl), [`WizVulnerabilities_CL`](../tables-index.md#wizvulnerabilities_cl) |
 | **Used in Solutions** | [Wiz](../solutions/wiz.md) |
 | **Connector Definition Files** | [template_WIZ.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Wiz/Data%20Connectors/template_WIZ.json) |
 
 The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, and Audit logs to Microsoft Sentinel.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`WizAuditLogsV2_CL`](../tables/wizauditlogsv2-cl.md) | — | — |
+| [`WizAuditLogs_CL`](../tables/wizauditlogs-cl.md) | — | — |
+| [`WizIssuesV2_CL`](../tables/wizissuesv2-cl.md) | — | — |
+| [`WizIssues_CL`](../tables/wizissues-cl.md) | — | — |
+| [`WizVulnerabilitiesV2_CL`](../tables/wizvulnerabilitiesv2-cl.md) | — | — |
+| [`WizVulnerabilities_CL`](../tables/wizvulnerabilities-cl.md) | — | — |
 
 ## Permissions
 

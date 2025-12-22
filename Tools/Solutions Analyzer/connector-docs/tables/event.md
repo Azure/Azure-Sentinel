@@ -1,8 +1,17 @@
 # Event
 
-**Table:** `Event`
+Reference for Event table in Azure Monitor Logs.
 
-This table is ingested by **3 solution(s)** using **5 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `Event` |
+| **Category** | Security |
+| **Solutions Using Table** | 3 |
+| **Connectors Ingesting** | 5 |
+| **Basic Logs Eligible** | ✗ No |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/event) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -25,6 +34,18 @@ This table is ingested by the following connectors:
 - [Microsoft Exchange Admin Audit Logs by Event Logs](../connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md)
 - [Microsoft Exchange Logs and Events](../connectors/esi-opt2exchangeserverseventlogs.md)
 - [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.operationalinsights/workspaces`
+- `<br>microsoft.compute/virtualmachines`
+- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
+- `<br>microsoft.azurestackhci/virtualmachines`
+- `<br>microsoft.scvmm/virtualmachines`
+- `<br>microsoft.compute/virtualmachinescalesets`
+- `<br>microsoft.azurestackhci/clusters`
 
 ---
 

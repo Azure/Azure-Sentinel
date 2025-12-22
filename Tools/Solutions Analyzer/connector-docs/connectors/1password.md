@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `1Password` |
 | **Publisher** | 1Password |
-| **Tables Ingested** | [`OnePasswordEventLogs_CL`](../tables-index.md#onepasswordeventlogs_cl) |
 | **Used in Solutions** | [1Password](../solutions/1password.md) |
 | **Connector Definition Files** | [1Password_data_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password/Data%20Connectors/deployment/1Password_data_connector.json) |
 
@@ -21,6 +20,14 @@ This solution takes a dependency on the following technologies, and some of thes
 
 
 -  [Azure Functions](https://azure.microsoft.com/services/functions/#overview)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`OnePasswordEventLogs_CL`](../tables/onepasswordeventlogs-cl.md) | — | — |
 
 ## Permissions
 

@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `DigitalGuardianDLP` |
 | **Publisher** | Digital Guardian |
-| **Tables Ingested** | [`Syslog`](../tables-index.md#syslog) |
 | **Used in Solutions** | [Digital Guardian Data Loss Prevention](../solutions/digital-guardian-data-loss-prevention.md) |
 | **Connector Definition Files** | [Connector_DigitalGuardian_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Guardian%20Data%20Loss%20Prevention/Data%20Connectors/Connector_DigitalGuardian_Syslog.json) |
 
 [Digital Guardian Data Loss Prevention (DLP)](https://digitalguardian.com/platform-overview) data connector provides the capability to ingest Digital Guardian DLP logs into Microsoft Sentinel.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

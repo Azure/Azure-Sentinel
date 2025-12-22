@@ -1,8 +1,17 @@
 # W3CIISLog
 
-**Table:** `W3CIISLog`
+Reference for W3CIISLog table in Azure Monitor Logs.
 
-This table is ingested by **1 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `W3CIISLog` |
+| **Category** | IT & Management Tools |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 2 |
+| **Basic Logs Eligible** | ✗ No |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/w3ciislog) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -20,6 +29,16 @@ This table is ingested by the following connectors:
 
 - [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md)
 - [IIS Logs of Microsoft Exchange Servers](../connectors/esi-opt5exchangeiislogs.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.compute/virtualmachines`
+- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
+- `<br>microsoft.azurestackhci/virtualmachines`
+- `<br>microsoft.scvmm/virtualmachines`
+- `<br>microsoft.compute/virtualmachinescalesets`
 
 ---
 

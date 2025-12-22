@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CitrixWAFAma` |
 | **Publisher** | Citrix Systems Inc. |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [Citrix Web App Firewall](../solutions/citrix-web-app-firewall.md) |
 | **Connector Definition Files** | [template_Citrix_WAFAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall/Data%20Connectors/template_Citrix_WAFAMA.json) |
 
@@ -13,6 +12,16 @@
 
 
 Citrix WAF supports Common Event Format (CEF) which is an industry standard format on top of Syslog messages . By connecting Citrix WAF CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

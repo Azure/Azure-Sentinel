@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `DarktraceAma` |
 | **Publisher** | Darktrace |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [AI Analyst Darktrace](../solutions/ai-analyst-darktrace.md) |
 | **Connector Definition Files** | [template_AIA-DarktraceAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AI%20Analyst%20Darktrace/Data%20Connectors/template_AIA-DarktraceAMA.json) |
 
 The Darktrace connector lets users connect Darktrace Model Breaches in real-time with Microsoft Sentinel, allowing creation of custom Dashboards, Workbooks, Notebooks and Custom Alerts to improve investigation.  Microsoft Sentinel's enhanced visibility into Darktrace logs enables monitoring and mitigation of security threats.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

@@ -1,8 +1,10 @@
 # CloudflareV2_CL
 
-**Table:** `CloudflareV2_CL`
-
-This table is ingested by **2 solution(s)** using **1 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `CloudflareV2_CL` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 1 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

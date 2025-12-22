@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `Pathlock_TDnR` |
 | **Publisher** | Pathlock Inc. |
-| **Tables Ingested** | [`ABAPAuditLog`](../tables-index.md#abapauditlog), [`Pathlock_TDnR_CL`](../tables-index.md#pathlock_tdnr_cl) |
 | **Used in Solutions** | [Pathlock_TDnR](../solutions/pathlock-tdnr.md) |
 | **Connector Definition Files** | [Pathlock_TDnR_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR/Data%20Connectors/Pathlock_TDnR_PUSH_CCP/Pathlock_TDnR_connectorDefinition.json) |
 
@@ -21,6 +20,15 @@ This precision-driven approach helps security teams drastically reduce false pos
 
 
 By combining business-context intelligence with advanced analytics, Pathlock enables enterprises to strengthen detection accuracy, streamline response actions, and maintain continuous control across their SAP environments—without adding complexity or redundant monitoring layers.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`ABAPAuditLog`](../tables/abapauditlog.md) | ✓ | ✗ |
+| [`Pathlock_TDnR_CL`](../tables/pathlock-tdnr-cl.md) | — | — |
 
 ## Permissions
 

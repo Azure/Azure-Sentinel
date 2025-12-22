@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `CiscoMerakiMultiRule` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`ASimAuditEventLogs`](../tables-index.md#asimauditeventlogs), [`ASimNetworkSessionLogs`](../tables-index.md#asimnetworksessionlogs), [`ASimWebSessionLogs`](../tables-index.md#asimwebsessionlogs) |
 | **Used in Solutions** | [Cisco Meraki Events via REST API](../solutions/cisco-meraki-events-via-rest-api.md) |
 | **Connector Definition Files** | [dataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/Data%20Connectors/CiscoMerakiMultiRule_ccp/dataConnectorDefinition.json) |
 
@@ -19,6 +18,18 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
  2. Web Session  
 
  3. Audit Event
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`ASimAuditEventLogs`](../tables/asimauditeventlogs.md) | ✓ | ✓ |
+| [`ASimNetworkSessionLogs`](../tables/asimnetworksessionlogs.md) | ✓ | ✓ |
+| [`ASimWebSessionLogs`](../tables/asimwebsessionlogs.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

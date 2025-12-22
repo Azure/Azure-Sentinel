@@ -1,8 +1,17 @@
 # ABAPAuditLog
 
-**Table:** `ABAPAuditLog`
+Reference for ABAPAuditLog table in Azure Monitor Logs.
 
-This table is ingested by **3 solution(s)** using **3 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `ABAPAuditLog` |
+| **Category** | Security |
+| **Solutions Using Table** | 3 |
+| **Connectors Ingesting** | 3 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/abapauditlog) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

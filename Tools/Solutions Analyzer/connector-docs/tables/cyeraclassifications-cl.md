@@ -1,8 +1,10 @@
 # CyeraClassifications_CL
 
-**Table:** `CyeraClassifications_CL`
-
-This table is ingested by **1 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `CyeraClassifications_CL` |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 2 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -18,8 +20,8 @@ This table is used by the following solutions:
 
 This table is ingested by the following connectors:
 
-- [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md)
-- [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
+- [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md)
+- [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
 
 ---
 

@@ -1,8 +1,11 @@
 # SecurityIncident
 
-**Table:** `SecurityIncident`
-
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `SecurityIncident` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
+| **Ingestion API Supported** | ✗ No |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

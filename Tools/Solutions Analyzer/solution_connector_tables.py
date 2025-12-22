@@ -550,14 +550,25 @@ def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
                 id_value = current.get("id")
                 publisher_value = current.get("publisher")
                 title_value = current.get("title")
+                # Allow connectors where title is a valid string (most important for display)
+                # id and publisher may contain ARM variable references which we can resolve later
                 if (
                     isinstance(id_value, str)
                     and isinstance(publisher_value, str)
                     and isinstance(title_value, str)
-                    and not any("[variables(" in value.lower() for value in (id_value, publisher_value, title_value))
+                    and "[variables(" not in title_value.lower()  # title must be literal
                 ):
                     # Extract description, instructionSteps, and permissions if available
                     connector_copy = current.copy()
+                    connector_copy["id_generated"] = False
+                    # Resolve id if it's a variable reference - use a fallback based on title
+                    if "[variables(" in id_value.lower():
+                        # Try to create a reasonable id from the title
+                        connector_copy["id"] = title_value.replace(" ", "").replace("-", "")
+                        connector_copy["id_generated"] = True
+                    # Resolve publisher if it's a variable reference - mark as unknown
+                    if "[variables(" in publisher_value.lower():
+                        connector_copy["publisher"] = "Unknown (ARM variable)"
                     if "descriptionMarkdown" in current:
                         connector_copy["description"] = current["descriptionMarkdown"]
                     if "instructionSteps" in current:
@@ -887,10 +898,19 @@ def main() -> None:
         has_metadata = (solution_dir / "SolutionMetadata.json").exists()
         parser_names, parser_table_map = collect_parser_metadata(solution_dir.resolve())
         parser_names_lower = {name.lower() for name in parser_names if name}
-        data_connectors_dir = solution_dir / "Data Connectors"
+        # Support "Data Connectors" (preferred), "DataConnectors", and "Data Connector" (singular) folder naming
+        data_connectors_dirs = [
+            solution_dir / "Data Connectors",
+            solution_dir / "DataConnectors",
+            solution_dir / "Data Connector",
+        ]
         has_valid_connector = False
+        has_data_connectors_dir = False
 
-        if data_connectors_dir.exists():
+        for data_connectors_dir in data_connectors_dirs:
+            if not data_connectors_dir.exists():
+                continue
+            has_data_connectors_dir = True
             for json_path in sorted(data_connectors_dir.rglob("*.json")):
                 data = read_json(json_path)
                 if data is None:
@@ -936,6 +956,7 @@ def main() -> None:
                     connector_id = entry.get("id", "")
                     connector_publisher = entry.get("publisher", "")
                     connector_title = entry.get("title", "")
+                    connector_id_generated = entry.get("id_generated", False)
                     # Replace newlines with <br> for GitHub CSV rendering
                     connector_description = entry.get("description", "").replace("\n", "<br>").replace("\r", "")
                     connector_instruction_steps = entry.get("instructionSteps", "")
@@ -1046,6 +1067,7 @@ def main() -> None:
                             connector_description,
                             connector_instruction_steps,
                             connector_permissions,
+                            connector_id_generated,
                             table_name,
                         )
                         combo_key = (solution_info["solution_name"], connector_id, table_name)
@@ -1088,6 +1110,33 @@ def main() -> None:
                         if not had_table_definitions:
                             reason = "no_table_definitions"
                             details = "Connector definition did not expose any table tokens."
+                            # Still include connector in output with empty table
+                            row_key = (
+                                solution_info["solution_name"],
+                                solution_info["solution_folder"],
+                                solution_info["solution_publisher_id"],
+                                solution_info["solution_offer_id"],
+                                solution_info["solution_first_publish_date"],
+                                solution_info["solution_last_publish_date"],
+                                solution_info["solution_version"],
+                                solution_info["solution_support_name"],
+                                solution_info["solution_support_tier"],
+                                solution_info["solution_support_link"],
+                                solution_info["solution_author_name"],
+                                solution_info["solution_categories"],
+                                connector_id,
+                                connector_publisher,
+                                connector_title,
+                                connector_description,
+                                connector_instruction_steps,
+                                connector_permissions,
+                                connector_id_generated,
+                                "",  # Empty table name
+                            )
+                            existing_flag = grouped_rows[row_key].get(relative_path)
+                            if existing_flag is None or (existing_flag and not is_azuredeploy):
+                                grouped_rows[row_key][relative_path] = is_azuredeploy
+                            produced_rows += 1
                         elif parser_filtered_tables and len(parser_filtered_tables) == total_table_entries:
                             reason = "parser_tables_only"
                             tables_list = ", ".join(sorted(parser_filtered_tables))
@@ -1101,19 +1150,21 @@ def main() -> None:
                             details = "Table tokens were detected but none could be emitted."
                         if used_loganalytics_fallback and reason == "no_table_definitions":
                             details = "No table tokens detected; emitted tables solely from logAnalyticsTableId values but still filtered."
-                        add_issue(
-                            issues,
-                            solution_name=solution_info["solution_name"],
-                            solution_folder=solution_info["solution_folder"],
-                            connector_id=connector_id,
-                            connector_title=connector_title,
-                            connector_publisher=connector_publisher,
-                            connector_file=relative_path,
-                            reason=reason,
-                            details=details,
-                        )
+                        # Only log issue for cases other than no_table_definitions (which is now included in output)
+                        if reason != "no_table_definitions":
+                            add_issue(
+                                issues,
+                                solution_name=solution_info["solution_name"],
+                                solution_folder=solution_info["solution_folder"],
+                                connector_id=connector_id,
+                                connector_title=connector_title,
+                                connector_publisher=connector_publisher,
+                                connector_file=relative_path,
+                                reason=reason,
+                                details=details,
+                            )
 
-        if data_connectors_dir.exists() and not has_valid_connector:
+        if has_data_connectors_dir and not has_valid_connector:
             missing_connector_json.append(solution_dir.name)
             add_issue(
                 issues,
@@ -1159,6 +1210,7 @@ def main() -> None:
             "",  # connector_description
             "",  # connector_instruction_steps
             "",  # connector_permissions
+            False,  # connector_id_generated
             "",  # table_name
         )
         grouped_rows[row_key] = {}  # Empty file map for solutions without connectors
@@ -1166,7 +1218,7 @@ def main() -> None:
     rows: List[Dict[str, str]] = []
     for row_key in sorted(grouped_rows.keys()):
         path_map = grouped_rows[row_key]
-        combo_key = (row_key[0], row_key[12], row_key[18])
+        combo_key = (row_key[0], row_key[12], row_key[19])  # solution_name, connector_id, table_name
         non_azure_files = sorted([path for path, is_azure in path_map.items() if not is_azure])
         if non_azure_files:
             file_list = non_azure_files
@@ -1187,7 +1239,7 @@ def main() -> None:
         support_info = row_key_metadata.get(row_key, {"table_detection_methods": set()})
         
         row_data = {
-            "Table": row_key[18],
+            "Table": row_key[19],
             "solution_name": row_key[0],
             "solution_folder": f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}",
             "solution_publisher_id": row_key[2],
@@ -1206,6 +1258,7 @@ def main() -> None:
             "connector_description": row_key[15],
             "connector_instruction_steps": row_key[16],
             "connector_permissions": row_key[17],
+            "connector_id_generated": "true" if row_key[18] else "false",
             "connector_files": ";".join(github_urls),
             "is_unique": "true" if len(file_list) == 1 else "false",
         }
@@ -1237,6 +1290,7 @@ def main() -> None:
         "connector_description",
         "connector_instruction_steps",
         "connector_permissions",
+        "connector_id_generated",
         "connector_files",
         "is_unique",
     ]

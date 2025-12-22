@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `MimecastSEGAPI` |
 | **Publisher** | Mimecast |
-| **Tables Ingested** | [`Seg_Cg_CL`](../tables-index.md#seg_cg_cl), [`Seg_Dlp_CL`](../tables-index.md#seg_dlp_cl) |
 | **Used in Solutions** | [Mimecast](../solutions/mimecast.md) |
 | **Connector Definition Files** | [Mimecast_SEG_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastSEG/Mimecast_SEG_FunctionApp.json) |
 
@@ -15,6 +14,15 @@ The data connector for [Mimecast Secure Email Gateway](https://integrations.mime
 - Mimecast Data Leak Prevention
 
  
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Seg_Cg_CL`](../tables/seg-cg-cl.md) | — | — |
+| [`Seg_Dlp_CL`](../tables/seg-dlp-cl.md) | — | — |
 
 ## Permissions
 

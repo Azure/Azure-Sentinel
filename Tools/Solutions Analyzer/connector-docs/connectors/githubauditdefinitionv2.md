@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `GitHubAuditDefinitionV2` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`GitHubAuditLogsV2_CL`](../tables-index.md#githubauditlogsv2_cl) |
 | **Used in Solutions** | [GitHub](../solutions/github.md) |
 | **Connector Definition Files** | [GitHubAuditLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GitHubAuditLogs_CCF/GitHubAuditLogs_ConnectorDefinition.json) |
 
@@ -13,6 +12,14 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 
  **Note:** If you intended to ingest GitHub subscribed events into Microsoft Sentinel, please refer to GitHub (using Webhooks) Connector from "**Data Connectors**" gallery.
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) | — | — |
 
 ## Permissions
 

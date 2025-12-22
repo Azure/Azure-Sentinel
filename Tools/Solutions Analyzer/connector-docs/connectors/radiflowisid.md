@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `RadiflowIsid` |
 | **Publisher** | Radiflow |
-| **Tables Ingested** | [`CommonSecurityLog`](../tables-index.md#commonsecuritylog) |
 | **Used in Solutions** | [Radiflow](../solutions/radiflow.md) |
 | **Connector Definition Files** | [RadiflowIsid.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Radiflow/Data%20Connectors/RadiflowIsid.json) |
 
 iSID enables non-disruptive monitoring of distributed ICS networks for changes in topology and behavior, using multiple security packages, each offering a unique capability pertaining to a specific type of network activity
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

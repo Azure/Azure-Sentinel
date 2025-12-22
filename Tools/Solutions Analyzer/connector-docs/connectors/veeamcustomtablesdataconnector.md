@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `VeeamCustomTablesDataConnector` |
 | **Publisher** | Veeam |
-| **Tables Ingested** | [`VeeamAuthorizationEvents_CL`](../tables-index.md#veeamauthorizationevents_cl), [`VeeamCovewareFindings_CL`](../tables-index.md#veeamcovewarefindings_cl), [`VeeamMalwareEvents_CL`](../tables-index.md#veeammalwareevents_cl), [`VeeamOneTriggeredAlarms_CL`](../tables-index.md#veeamonetriggeredalarms_cl), [`VeeamSecurityComplianceAnalyzer_CL`](../tables-index.md#veeamsecuritycomplianceanalyzer_cl), [`VeeamSessions_CL`](../tables-index.md#veeamsessions_cl) |
 | **Used in Solutions** | [Veeam](../solutions/veeam.md) |
 | **Connector Definition Files** | [Veeam_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam/Data%20Connectors/Veeam_API_FunctionApp.json) |
 
@@ -29,6 +28,19 @@ The connector supports integration with Veeam Backup & Replication, Veeam ONE an
 - **VeeamCovewareFindings_CL**: Security findings from Coveware solution
 
 - **VeeamSessions_CL**: Veeam sessions
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`VeeamAuthorizationEvents_CL`](../tables/veeamauthorizationevents-cl.md) | — | — |
+| [`VeeamCovewareFindings_CL`](../tables/veeamcovewarefindings-cl.md) | — | — |
+| [`VeeamMalwareEvents_CL`](../tables/veeammalwareevents-cl.md) | — | — |
+| [`VeeamOneTriggeredAlarms_CL`](../tables/veeamonetriggeredalarms-cl.md) | — | — |
+| [`VeeamSecurityComplianceAnalyzer_CL`](../tables/veeamsecuritycomplianceanalyzer-cl.md) | — | — |
+| [`VeeamSessions_CL`](../tables/veeamsessions-cl.md) | — | — |
 
 ## Permissions
 

@@ -1,8 +1,17 @@
 # ASimDnsActivityLogs
 
-**Table:** `ASimDnsActivityLogs`
+Reference for ASimDnsActivityLogs table in Azure Monitor Logs.
 
-This table is ingested by **2 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `ASimDnsActivityLogs` |
+| **Category** | Security |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 2 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✓ Yes |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimdnsactivitylogs) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -21,6 +30,12 @@ This table is ingested by the following connectors:
 
 - [Windows DNS Events via AMA](../connectors/asimdnsactivitylogs.md)
 - [CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3)](../connectors/crowdstrikereplicatorv2.md)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.securityinsights/dnsnormalized`
 
 ---
 

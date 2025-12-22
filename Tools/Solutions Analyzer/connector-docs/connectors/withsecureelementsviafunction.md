@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `WithSecureElementsViaFunction` |
 | **Publisher** | WithSecure |
-| **Tables Ingested** | [`WsSecurityEvents_CL`](../tables-index.md#wssecurityevents_cl) |
 | **Used in Solutions** | [WithSecureElementsViaFunction](../solutions/withsecureelementsviafunction.md) |
 | **Connector Definition Files** | [WithSecureElementsViaFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction/Data%20Connectors/WithSecureElementsViaFunction.json) |
 
@@ -29,6 +28,14 @@ With this solution Azure Function is deployed to your tenant, polling periodical
 
 
 For more information visit our website at: [https://www.withsecure.com](https://www.withsecure.com).
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`WsSecurityEvents_CL`](../tables/wssecurityevents-cl.md) | — | — |
 
 ## Permissions
 

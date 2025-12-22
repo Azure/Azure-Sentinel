@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `WindowsFirewallAma` |
 | **Publisher** | Microsoft |
-| **Tables Ingested** | [`ASimNetworkSessionLogs`](../tables-index.md#asimnetworksessionlogs) |
 | **Used in Solutions** | [Windows Firewall](../solutions/windows-firewall.md) |
 | **Connector Definition Files** | [template_WindowsFirewallAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/template_WindowsFirewallAma.JSON) |
 
@@ -21,6 +20,16 @@ For more information, see the following articles:
 - [Data collection endpoints in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview?tabs=portal)
 
 - [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`ASimNetworkSessionLogs`](../tables/asimnetworksessionlogs.md) | ✓ | ✓ |
+
+> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 
 ## Permissions
 

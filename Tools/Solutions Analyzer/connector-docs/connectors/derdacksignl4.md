@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `DerdackSIGNL4` |
 | **Publisher** | Derdack |
-| **Tables Ingested** | [`SIGNL4_CL`](../tables-index.md#signl4_cl), [`SecurityIncident`](../tables-index.md#securityincident) |
 | **Used in Solutions** | [SIGNL4](../solutions/signl4.md) |
 | **Connector Definition Files** | [DerdackSIGNL4.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SIGNL4/Data%20Connectors/DerdackSIGNL4.json) |
 
@@ -13,6 +12,15 @@ When critical systems fail or security incidents happen, SIGNL4 bridges the ‘l
 
 
 [Learn more >](https://www.signl4.com)
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`SIGNL4_CL`](../tables/signl4-cl.md) | — | — |
+| [`SecurityIncident`](../tables/securityincident.md) | — | ✗ |
 
 ## Permissions
 

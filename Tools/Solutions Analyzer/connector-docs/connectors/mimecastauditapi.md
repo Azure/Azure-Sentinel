@@ -4,7 +4,6 @@
 |----------|-------|
 | **Connector ID** | `MimecastAuditAPI` |
 | **Publisher** | Mimecast |
-| **Tables Ingested** | [`Audit_CL`](../tables-index.md#audit_cl), [`MimecastAudit_CL`](../tables-index.md#mimecastaudit_cl) |
 | **Used in Solutions** | [Mimecast](../solutions/mimecast.md), [MimecastAudit](../solutions/mimecastaudit.md) |
 | **Connector Definition Files** | [Mimecast_Audit_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Mimecast/Data%20Connectors/MimecastAudit/Mimecast_Audit_FunctionApp.json) |
 
@@ -15,6 +14,15 @@ The Mimecast products included within the connector are:
 Audit
 
  
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`Audit_CL`](../tables/audit-cl.md) | — | — |
+| [`MimecastAudit_CL`](../tables/mimecastaudit-cl.md) | — | — |
 
 ## Permissions
 

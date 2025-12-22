@@ -1,8 +1,10 @@
 # OnePasswordEventLogs_CL
 
-**Table:** `OnePasswordEventLogs_CL`
-
-This table is ingested by **1 solution(s)** using **2 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `OnePasswordEventLogs_CL` |
+| **Solutions Using Table** | 1 |
+| **Connectors Ingesting** | 3 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
@@ -14,11 +16,12 @@ This table is used by the following solutions:
 
 - [1Password](../solutions/1password.md)
 
-## Connectors (2)
+## Connectors (3)
 
 This table is ingested by the following connectors:
 
 - [1Password](../connectors/1password.md)
+- [1Password (Serverless)](../connectors/1password(serverless).md)
 - [1Password (Serverless)](../connectors/1passwordccpdefinition.md)
 
 ---

@@ -4,11 +4,20 @@
 |----------|-------|
 | **Connector ID** | `FortinetFortiNdrCloudDataConnector` |
 | **Publisher** | Fortinet |
-| **Tables Ingested** | [`FncEventsDetections_CL`](../tables-index.md#fnceventsdetections_cl), [`FncEventsObservation_CL`](../tables-index.md#fnceventsobservation_cl), [`FncEventsSuricata_CL`](../tables-index.md#fnceventssuricata_cl) |
 | **Used in Solutions** | [Fortinet FortiNDR Cloud](../solutions/fortinet-fortindr-cloud.md) |
 | **Connector Definition Files** | [FortinetFortiNdrCloud_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiNDR%20Cloud/Data%20Connectors/FortinetFortiNdrCloud_API_AzureFunctionApp.json) |
 
 The Fortinet FortiNDR Cloud data connector provides the capability to ingest [Fortinet FortiNDR Cloud](https://docs.fortinet.com/product/fortindr-cloud) data into Microsoft Sentinel using the FortiNDR Cloud API
+
+## Tables Ingested
+
+This connector ingests data into the following tables:
+
+| Table | Supports Transformations | Ingestion API Supported |
+|-------|:------------------------:|:-----------------------:|
+| [`FncEventsDetections_CL`](../tables/fnceventsdetections-cl.md) | — | — |
+| [`FncEventsObservation_CL`](../tables/fnceventsobservation-cl.md) | — | — |
+| [`FncEventsSuricata_CL`](../tables/fnceventssuricata-cl.md) | — | — |
 
 ## Permissions
 

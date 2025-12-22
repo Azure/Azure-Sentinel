@@ -1,14 +1,21 @@
 # AzureDiagnostics
 
-**Table:** `AzureDiagnostics`
+Reference for AzureDiagnostics table in Azure Monitor Logs.
 
-This table is ingested by **14 solution(s)** using **14 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `AzureDiagnostics` |
+| **Category** | Azure Resources |
+| **Solutions Using Table** | 15 |
+| **Connectors Ingesting** | 15 |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/azurediagnostics) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
 ---
 
-## Solutions (14)
+## Solutions (15)
 
 This table is used by the following solutions:
 
@@ -26,8 +33,9 @@ This table is used by the following solutions:
 - [Azure Stream Analytics](../solutions/azure-stream-analytics.md)
 - [Azure Web Application Firewall (WAF)](../solutions/azure-web-application-firewall-(waf).md)
 - [Azure kubernetes Service](../solutions/azure-kubernetes-service.md)
+- [SlashNext](../solutions/slashnext.md)
 
-## Connectors (14)
+## Connectors (15)
 
 This table is ingested by the following connectors:
 
@@ -44,6 +52,7 @@ This table is ingested by the following connectors:
 - [Azure SQL Databases](../connectors/azuresql.md)
 - [Azure Stream Analytics](../connectors/azurestreamanalytics-ccp.md)
 - [Azure DDoS Protection](../connectors/ddos.md)
+- [SlashNext Function App](../connectors/slashnextfunctionapp.md)
 - [Azure Web Application Firewall (WAF)](../connectors/waf.md)
 
 ---

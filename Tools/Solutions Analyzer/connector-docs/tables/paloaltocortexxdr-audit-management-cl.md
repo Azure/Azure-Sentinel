@@ -1,8 +1,10 @@
 # PaloAltoCortexXDR_Audit_Management_CL
 
-**Table:** `PaloAltoCortexXDR_Audit_Management_CL`
-
-This table is ingested by **2 solution(s)** using **1 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `PaloAltoCortexXDR_Audit_Management_CL` |
+| **Solutions Using Table** | 2 |
+| **Connectors Ingesting** | 1 |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 

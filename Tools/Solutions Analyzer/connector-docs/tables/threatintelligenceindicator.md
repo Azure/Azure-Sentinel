@@ -1,8 +1,17 @@
 # ThreatIntelligenceIndicator
 
-**Table:** `ThreatIntelligenceIndicator`
+Reference for ThreatIntelligenceIndicator table in Azure Monitor Logs.
 
-This table is ingested by **10 solution(s)** using **14 connector(s)**.
+| | |
+|----------|-------|
+| **Table Name** | `ThreatIntelligenceIndicator` |
+| **Category** | Security |
+| **Solutions Using Table** | 10 |
+| **Connectors Ingesting** | 14 |
+| **Basic Logs Eligible** | ✗ No |
+| **Supports Transformations** | ✓ Yes |
+| **Ingestion API Supported** | ✗ No |
+| **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/threatintelligenceindicator) |
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
