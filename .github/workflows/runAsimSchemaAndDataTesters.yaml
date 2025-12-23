@@ -2,7 +2,7 @@
 # The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
 name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, reopened, synchronize, labeled]
     branches:
       - master
@@ -66,22 +66,23 @@ jobs:
             if echo "$labels" | grep -q "SafeToRun"; then
               log_success "'SafeToRun' label found - checking if re-approval needed"
               
-              # Check if this workflow was triggered by new commits (synchronize event)
+              # SECURITY: Only allow 'labeled' event to pass when SafeToRun exists
+              # Block ALL other events (synchronize, edited, reopened) to prevent bypass
               trigger_event="${{ github.event.action }}"
               log_info "Workflow triggered by: $trigger_event"
               
-              if [ "$trigger_event" = "synchronize" ]; then
-                log_info "New commits detected on fork PR with existing 'SafeToRun' label"
+              if [ "$trigger_event" = "labeled" ]; then
+                log_success "Label approval granted - triggered by adding SafeToRun label"
+                echo "approved=true" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
+              else
+                log_info "Event '$trigger_event' detected on fork PR with existing 'SafeToRun' label"
                 log_info "Maintainer must remove and re-add the 'SafeToRun' label for security"
                 echo "approved=false" >> $GITHUB_OUTPUT
                 echo "needs_approval=false" >> $GITHUB_OUTPUT
                 echo "comment_needed=true" >> $GITHUB_OUTPUT
                 exit 1
-              else
-                log_success "Label approval granted (no new commits)"
-                echo "approved=true" >> $GITHUB_OUTPUT
-                echo "needs_approval=false" >> $GITHUB_OUTPUT
-                echo "comment_needed=false" >> $GITHUB_OUTPUT
               fi
             else
               log_info "'SafeToRun' label not found - approval required"
@@ -227,17 +228,13 @@ jobs:
               pip install tabulate
       - name: Run ASim parsers template validations python script
         run: |
-              filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py" 
-              # Check if file exists and delete if it does
-              if [ -f "$filePath" ]; then
-                rm -f "$filePath"
-              fi
-              # Download the file
-              echo "Downloading script from the master: $url"
-              curl -o "$filePath" "$url"
-              # Execute the script
-              python "$filePath" 
+              # SECURITY: Execute in isolated environment to prevent import shadowing
+              echo "Creating isolated execution environment..."
+              TMPDIR=$(mktemp -d) && trap "rm -rf $TMPDIR" EXIT
+              echo "Downloading script from master to isolated directory..."
+              curl -sSf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/VerifyASimParserTemplate.py -o "$TMPDIR/script.py"
+              echo "Executing script with Python isolation flags..."
+              python -I -s "$TMPDIR/script.py" 
   Run-ASim-Sample-Data-Ingest:
     needs: Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
@@ -287,18 +284,13 @@ jobs:
       - name: Asim Sample Log Ingestion
         id: Ingestlogs
         run: |
-              filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
-              url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py" 
-              # Check if file exists and delete if it does
-              if [ -f "$filePath" ]; then
-                rm -f "$filePath"
-              fi
-              # Download the file
-              echo "Downloading script from the master: $url"
-              curl -o "$filePath" "$url"
-              chmod +x "$filePath"
-              # Execute the script
-              python "$filePath" "${{ github.event.pull_request.number }}"
+              # SECURITY: Execute in isolated environment to prevent import shadowing
+              echo "Creating isolated execution environment..."
+              TMPDIR=$(mktemp -d) && trap "rm -rf $TMPDIR" EXIT
+              echo "Downloading script from master to isolated directory..."
+              curl -sSf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ingestASimSampleData.py -o "$TMPDIR/script.py"
+              echo "Executing script with Python isolation flags..."
+              python -I -s "$TMPDIR/script.py" "${{ github.event.pull_request.number }}"
   Run-ASim-Schema-Data-tests:
     needs: Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
@@ -341,27 +333,17 @@ jobs:
         uses: azure/powershell@v2
         with:
           inlineScript: |
-            $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
-            $url = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/runAsimTesters.ps1"
-            # Check if file exists and delete if it does
-            if (Test-Path $filePath) {
-              Remove-Item $filePath -Force
-            }
-            # Download the runAsimTesters file
-            Write-Host "Downloading script from the master: $url"
-            Invoke-WebRequest -Uri $url -OutFile $filePath
-            # download the convertYamlToObject.ps1 script form master
-            $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
-            $url_convert_yaml = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/convertYamlToObject.ps1"
-            # Check if file exists and delete if it does
-            if (Test-Path $filePath_convert_yaml) {
-              Remove-Item $filePath_convert_yaml -Force
-            }
-            # Download the convertYamlToObject file
-            Write-Host "Downloading script from the master: $url_convert_yaml"
-            Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml 
-            # Execute the script
-            & $filePath
+            # SECURITY: Execute in isolated environment to prevent code injection
+            Write-Host "Creating isolated execution environment..."
+            $tmpDir = New-TemporaryFile | % { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+            try {
+              Write-Host "Downloading scripts from master to isolated directory..."
+              Invoke-WebRequest https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/runAsimTesters.ps1 -OutFile "$tmpDir/script.ps1"
+              Invoke-WebRequest https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/convertYamlToObject.ps1 -OutFile "$tmpDir/helper.ps1"
+              Write-Host "Executing script from isolated environment..."
+              Push-Location $env:GITHUB_WORKSPACE
+              & "$tmpDir/script.ps1"
+            } finally { Pop-Location; Remove-Item $tmpDir -Recurse -Force -EA SilentlyContinue }
           azPSVersion: "latest"
   Run-ASim-Parser-Filtering-Tests:
     needs: Run-ASim-Sample-Data-Ingest
@@ -409,14 +391,10 @@ jobs:
           allow-no-subscriptions: true
       - name: Run ASim parsers filtering tests python script
         run: |
-          filePath=".script/tests/asimParsersTest/ASimFilteringTest.py"
-          url="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ASimFilteringTest.py"
-          # Check if file exists and delete if it does
-          if [ -f "$filePath" ]; then
-            rm -f "$filePath"
-          fi
-          # Download the file
-          echo "Downloading script from the master: $url"
-          curl -o "$filePath" "$url"
-          # Execute the script
-          python "$filePath"
+          # SECURITY: Execute in isolated environment to prevent import shadowing
+          echo "Creating isolated execution environment..."
+          TMPDIR=$(mktemp -d) && trap "rm -rf $TMPDIR" EXIT
+          echo "Downloading script from master to isolated directory..."
+          curl -sSf https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/ASimFilteringTest.py -o "$TMPDIR/script.py"
+          echo "Executing script with Python isolation flags..."
+          python -I -s "$TMPDIR/script.py"
