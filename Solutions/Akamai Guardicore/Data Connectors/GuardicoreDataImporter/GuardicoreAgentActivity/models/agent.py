@@ -34,7 +34,7 @@ class AgentHealth(BaseModel):
     aggregator: Optional[Aggregator] = None
     aggregator_component_id: Optional[str] = None
     capabilities: Optional[List[Capability]] = []
-    status: str
+    status: Optional[str] = None
     default_operating_mode: Optional[Any] = None
     dump_present: Optional[bool] = False
 
