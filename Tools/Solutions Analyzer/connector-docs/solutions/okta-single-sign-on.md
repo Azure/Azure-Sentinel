@@ -84,7 +84,7 @@ This solution ingests data into **4 table(s)**:
 |-------|-------------------|
 | `OktaNativePoller_CL` | [Okta Single Sign-On (Polling CCP)](../connectors/oktasso-polling.md) |
 | `OktaV2_CL` | [Okta Single Sign-On](../connectors/oktassov2.md) |
-| `Okta_CL` | [Okta Single Sign-On](../connectors/oktasso.md), [Okta Single Sign-On](../connectors/oktassov2.md) |
+| `Okta_CL` | [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On](../connectors/oktasso.md) |
 | `signIns` | [Okta Single Sign-On (Preview)](../connectors/oktassov2.md) |
 
 [← Back to Solutions Index](../solutions-index.md)
