@@ -19,40 +19,25 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Palo Alto
 
+The Palo Alto Prisma Cloud CSPM data connector provides the capability to ingest [Prisma Cloud CSPM alerts](https://prisma.pan.dev/api/cloud/cspm/alerts#operation/get-alerts) and [audit logs](https://prisma.pan.dev/api/cloud/cspm/audit-logs#operation/rl-audit-logs) into Microsoft sentinel using the Prisma Cloud CSPM API. Refer to [Prisma Cloud CSPM API documentation](https://prisma.pan.dev/api/cloud/cspm) for more information.
+
+
+
+<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `PaloAltoPrismaCloudAlert_CL` |
+| | `PaloAltoPrismaCloudAudit_CL` |
+| **Connector Definition Files** | [PrismaCloud_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Data%20Connectors/PrismaCloud_API_FunctionApp.json) |
+
+[→ View full connector details](../connectors/paloaltoprismacloud.md)
+
 ### [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md)
 
 **Publisher:** Microsoft
 
 The Palo Alto Prisma Cloud CSPM data connector allows you to connect to your Palo Alto Prisma Cloud CSPM instance and ingesting Alerts (https://pan.dev/prisma-cloud/api/cspm/alerts/) & Audit Logs(https://pan.dev/prisma-cloud/api/cspm/audit-logs/) into Microsoft Sentinel.
-
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace** (Workspace): Read and Write permissions are required.
-- **Keys** (Workspace): Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. Connect Palo Alto Prisma Cloud CSPM Events to Microsoft Sentinel**
-
-To get more information on how to obtain the Prisma Cloud Access Key, Secret Key, and Base URL, please refer to the[connector tutorial](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Data%20Connectors/Readme.md), provide the required information below and click on Connect.
->
-- **Prisma Cloud Access Key**: Enter Access Key
-- **Prisma Cloud Secret Key**: (password field)
-- **Prisma Cloud Base URL**: https://api2.eu.prismacloud.io
-- Click 'Connect' to establish connection
-**Connector Management Interface**
-
-This section is an interactive interface in the Microsoft Sentinel portal that allows you to manage your data collectors.
-
-📊 **View Existing Collectors**: A management table displays all currently configured data collectors with the following information:
-- **PaloAltoPrismaCloudCSPM Api Endpoints**
-
-➕ **Add New Collector**: Click the "Add new collector" button to configure a new data collector (see configuration form below).
-
-> 💡 **Portal-Only Feature**: This configuration interface is only available when viewing the connector in the Microsoft Sentinel portal. You cannot configure data collectors through this static documentation.
 
 | Attribute | Value |
 |:-------------------------|:---|

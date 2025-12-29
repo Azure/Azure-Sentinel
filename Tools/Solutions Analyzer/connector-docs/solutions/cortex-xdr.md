@@ -19,29 +19,24 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
+The [Palo Alto Cortex XDR](https://cortex-panw.stoplight.io/docs/cortex-xdr/branches/main/09agw06t5dpvw-cortex-xdr-rest-api) data connector allows ingesting logs from the Palo Alto Cortex XDR API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the Palo Alto Cortex XDR API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `PaloAltoCortexXDR_Alerts_CL` |
+| | `PaloAltoCortexXDR_Audit_Agent_CL` |
+| | `PaloAltoCortexXDR_Audit_Management_CL` |
+| | `PaloAltoCortexXDR_Endpoints_CL` |
+| | `PaloAltoCortexXDR_Incidents_CL` |
+| **Connector Definition Files** | [DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cortex%20XDR/Data%20Connectors/CortexXDR_ccp/DataConnectorDefinition.json) |
+
+[→ View full connector details](../connectors/cortexxdrdataconnector.md)
+
 ### [Cortex XDR - Incidents](../connectors/cortexxdrincidents.md)
 
 **Publisher:** DEFEND Ltd.
 
 Custom Data connector from DEFEND to utilise the Cortex API to ingest incidents from Cortex XDR platform into Microsoft Sentinel.
-
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace** (Workspace): read and write permissions are required.
-- **Keys** (Workspace): read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)
-
-**Custom Permissions:**
-- **Cortex API credentials**: **Cortex API Token** is required for REST API. [See the documentation to learn more about API](https://docs.paloaltonetworks.com/cortex/cortex-xdr/cortex-xdr-api.html). Check all requirements and follow the instructions for obtaining credentials.
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. Enable Cortex XDR API**
-
-Connect Cortex XDR to Microsoft Sentinel via Cortex API to process Cortex Incidents.
-> 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
 | Attribute | Value |
 |:-------------------------|:---|

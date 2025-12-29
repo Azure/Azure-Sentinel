@@ -1368,58 +1368,43 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 if publisher:
                     f.write(f"**Publisher:** {publisher}\n\n")
                 
-            description = first_conn.get('connector_description', '')
-            if description:
-                # Replace <br> with newlines but preserve markdown formatting
-                description = description.replace('<br>', '\n\n')
-                f.write(f"{description}\n\n")
-            
-            # Permissions section
-            permissions = first_conn.get('connector_permissions', '')
-            if permissions:
-                f.write("**Permissions:**\n\n")
-                formatted_permissions = format_permissions(permissions)
-                f.write(f"{formatted_permissions}\n\n")
-            
-            # Setup Instructions section
-            instruction_steps = first_conn.get('connector_instruction_steps', '')
-            if instruction_steps:
-                f.write("**Setup Instructions:**\n\n")
-                f.write("> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.\n\n")
-                formatted_instructions = format_instruction_steps(instruction_steps)
-                f.write(f"{formatted_instructions}\n\n")
-            
-            # Combined table for Tables Ingested and Connector Definition Files
-            tables = sorted(set(conn['Table'] for conn in conn_entries))
-            connector_files = first_conn.get('connector_files', '')
-            files = [f.strip() for f in connector_files.split(';') if f.strip()] if connector_files else []
-            
-            f.write("| Attribute | Value |\n")
-            f.write("|:-------------------------|:---|\n")
-            
-            # Tables Ingested
-            if len(tables) == 1:
-                f.write(f"| **Tables Ingested** | `{tables[0]}` |\n")
-            else:
-                for i, table in enumerate(tables):
-                    if i == 0:
-                        f.write(f"| **Tables Ingested** | `{table}` |\n")
-                    else:
-                        f.write(f"| | `{table}` |\n")
-            
-            # Connector Definition Files
-            if files:
-                for i, file_url in enumerate(files):
-                    file_name = file_url.split('/')[-1]
-                    if i == 0:
-                        f.write(f"| **Connector Definition Files** | [{file_name}]({file_url}) |\n")
-                    else:
-                        f.write(f"| | [{file_name}]({file_url}) |\n")
-            
-            f.write("\n")
-            
-            # Link to connector page
-            f.write(f"[→ View full connector details](../connectors/{sanitize_anchor(connector_id)}.md)\n\n")
+                description = first_conn.get('connector_description', '')
+                if description:
+                    # Replace <br> with newlines but preserve markdown formatting
+                    description = description.replace('<br>', '\n\n')
+                    f.write(f"{description}\n\n")
+                
+                # Combined table for Tables Ingested and Connector Definition Files
+                tables = sorted(set(conn['Table'] for conn in conn_entries))
+                connector_files = first_conn.get('connector_files', '')
+                files = [f.strip() for f in connector_files.split(';') if f.strip()] if connector_files else []
+                
+                f.write("| Attribute | Value |\n")
+                f.write("|:-------------------------|:---|\n")
+                
+                # Tables Ingested
+                if len(tables) == 1:
+                    f.write(f"| **Tables Ingested** | `{tables[0]}` |\n")
+                else:
+                    for i, table in enumerate(tables):
+                        if i == 0:
+                            f.write(f"| **Tables Ingested** | `{table}` |\n")
+                        else:
+                            f.write(f"| | `{table}` |\n")
+                
+                # Connector Definition Files
+                if files:
+                    for i, file_url in enumerate(files):
+                        file_name = file_url.split('/')[-1]
+                        if i == 0:
+                            f.write(f"| **Connector Definition Files** | [{file_name}]({file_url}) |\n")
+                        else:
+                            f.write(f"| | [{file_name}]({file_url}) |\n")
+                
+                f.write("\n")
+                
+                # Link to connector page
+                f.write(f"[→ View full connector details](../connectors/{sanitize_anchor(connector_id)}.md)\n\n")
         
             # Tables summary section (only for solutions with connectors)
             all_tables = sorted(set(conn['Table'] for conn in connectors if conn.get('Table', '').strip()))

@@ -21,26 +21,24 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Lookout
 
+The [Lookout](https://lookout.com) data connector provides the capability to ingest [Lookout](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide#commoneventfields) events into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. The [Lookout](https://lookout.com) data connector provides ability to get events which helps to examine potential security risks and more.
+
+
+
+<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `Lookout_CL` |
+| **Connector Definition Files** | [Lookout_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout/Data%20Connectors/Lookout_API_FunctionApp.json) |
+
+[→ View full connector details](../connectors/lookoutapi.md)
+
 ### [Lookout Mobile Threat Detection Connector (via Codeless Connector Framework) (Preview)](../connectors/lookoutstreaming-definition.md)
 
 **Publisher:** Microsoft
 
 The [Lookout Mobile Threat Detection](https://lookout.com) data connector provides the capability to ingest events related to mobile security risks into Microsoft Sentinel through the Mobile Risk API. Refer to [API documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) for more information. This connector helps you examine potential security risks detected in mobile devices.
-
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace** (Workspace): Read and Write permissions on the workspace are required.
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. Connect Lookout Mobile Threat Defence connector to Microsoft Sentinel**
-Before connecting to Lookout, ensure the following prerequisites are completed.
-#### 1.  **ApiKey** is required for Mobile Threat Detection API. See the [documentation](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide) to learn more about API. Check all requirements and follow  the [instructions](https://enterprise.support.lookout.com/hc/en-us/articles/115002741773-Mobile-Risk-API-Guide#authenticatingwiththemobileriskapi) for obtaining credentials.
-- **API key**: (password field)
-- Click 'Connect' to establish connection
 
 | Attribute | Value |
 |:-------------------------|:---|

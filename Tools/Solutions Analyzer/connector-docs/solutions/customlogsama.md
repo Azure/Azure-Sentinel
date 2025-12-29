@@ -25,24 +25,6 @@ Many applications log information to text or JSON files instead of standard logg
 
 **NOTE: Use this connector for the following devices:** Cisco Meraki, Zscaler Private Access (ZPA), VMware vCenter, Apache HTTP server, Apache Tomcat, Jboss Enterprise application platform, Juniper IDP, MarkLogic Audit, MongoDB Audit, Nginx HTTP server, Oracle Weblogic server, PostgreSQL Events, Squid Proxy, Ubiquiti UniFi, SecurityBridge Threat detection SAP and AI vectra stream.
 
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace data sources** (Workspace): read and write permissions.
-
-**Custom Permissions:**
-- **Permissions**: To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. Enable data collection rule**
-
-> Custom logs are collected from both Windows and Linux agents.
-> 📋 **Additional Configuration Step**: This connector includes a configuration step of type `CustomLogsAMA`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
-- **Create data collection rule**
-
 | Attribute | Value |
 |:-------------------------|:---|
 | **Tables Ingested** | `ApacheHTTPServer_CL` |

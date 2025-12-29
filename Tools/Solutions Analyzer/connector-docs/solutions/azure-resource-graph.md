@@ -21,18 +21,6 @@ This solution provides **1 data connector(s)**.
 
 Azure Resource Graph connector gives richer insights into Azure events by supplementing details about Azure subscriptions and Azure resources.
 
-**Permissions:**
-
-**Custom Permissions:**
-- **Policy**: Owner role permission on Azure subscriptions
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-Connect Azure Resource Graph to Microsoft Sentinel
-**Entities**
-
 | Attribute | Value |
 |:-------------------------|:---|
 | **Tables Ingested** | `` |

@@ -29,21 +29,6 @@ Data from this connector is used to build data risk graphs in Purview. If you've
 
 This connector is in limited private preview.
 
-**Permissions:**
-
-**Custom Permissions:**
-- **OfficeActivity table availability**: Enable the OfficeActivity table in Log Analytics.
-
-**Tenant Permissions:**
-Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-1.Connect Microsoft 365 assets (formerly, Office 365) to Microsoft Sentinel.
-  - SharePoint and OneDrive
-
 | Attribute | Value |
 |:-------------------------|:---|
 | **Tables Ingested** | `` |

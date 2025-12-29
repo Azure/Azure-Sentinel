@@ -19,42 +19,45 @@ This solution provides **3 data connector(s)**.
 
 **Publisher:** 1Password
 
+The [1Password](https://www.1password.com) solution for Microsoft Sentinel enables you to ingest 1Password logs and events into Microsoft Sentinel. The connector provides visibility into 1Password Events and Alerts in Microsoft Sentinel to improve monitoring and investigation capabilities.
+
+
+
+**Underlying Microsoft Technologies used:**
+
+
+
+This solution takes a dependency on the following technologies, and some of these dependencies either may be in [Preview](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) state or might result in additional ingestion or operational costs:
+
+
+
+-  [Azure Functions](https://azure.microsoft.com/services/functions/#overview)
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `OnePasswordEventLogs_CL` |
+| **Connector Definition Files** | [1Password_data_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password/Data%20Connectors/deployment/1Password_data_connector.json) |
+
+[→ View full connector details](../connectors/1password.md)
+
 ### [1Password (Serverless)](../connectors/1password(serverless).md)
 
 **Publisher:** Unknown (ARM variable)
+
+The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & ItemUsage events into Microsoft Sentinel.
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `OnePasswordEventLogs_CL` |
+| **Connector Definition Files** | [azuredeploy_1Password_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password/Data%20Connectors/1Password_ccpv2/azuredeploy_1Password_poller_connector.json) |
+
+[→ View full connector details](../connectors/1password(serverless).md)
 
 ### [1Password (Serverless)](../connectors/1passwordccpdefinition.md)
 
 **Publisher:** 1Password
 
 The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & ItemUsage events into Microsoft Sentinel.
-
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace** (Workspace): Read and Write permissions are required.
-
-**Custom Permissions:**
-- **1Password API token**: A 1Password API Token is required. See the [1Password documentation](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens) on how to create an API token.
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. STEP 1 - Create a 1Password API token:**
-
-Follow the [1Password documentation](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens) for guidance on this step.
-
-**2. STEP 2 - Choose the correct base URL:**
-
-There are multiple 1Password servers which might host your events. The correct server depends on your license and region. Follow the [1Password documentation](https://developer.1password.com/docs/events-api/reference/#servers) to choose the correct server. Input the base URL as displayed by the documentation (including 'https://' and without a trailing '/').
-
-**3. STEP 3 - Enter your 1Password Details:**
-
-Enter the 1Password base URL & API Token below:
-- **Base Url**: Enter your Base Url
-- **API Token**: (password field)
-- Click 'connect' to establish connection
 
 | Attribute | Value |
 |:-------------------------|:---|
@@ -69,6 +72,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OnePasswordEventLogs_CL` | [1Password](../connectors/1password.md), [1Password (Serverless)](../connectors/1passwordccpdefinition.md), [1Password (Serverless)](../connectors/1password(serverless).md) |
+| `OnePasswordEventLogs_CL` | [1Password](../connectors/1password.md), [1Password (Serverless)](../connectors/1password(serverless).md), [1Password (Serverless)](../connectors/1passwordccpdefinition.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

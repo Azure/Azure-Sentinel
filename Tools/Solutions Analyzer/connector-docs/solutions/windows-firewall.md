@@ -19,6 +19,15 @@ This solution provides **2 data connector(s)**.
 
 **Publisher:** Microsoft
 
+Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `WindowsFirewall` |
+| **Connector Definition Files** | [Windows%20Firewall.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/Windows%20Firewall.JSON) |
+
+[→ View full connector details](../connectors/windowsfirewall.md)
+
 ### [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md)
 
 **Publisher:** Microsoft
@@ -36,24 +45,6 @@ For more information, see the following articles:
 - [Data collection endpoints in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview?tabs=portal)
 
 - [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
-
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace data sources** (Workspace): read and write permissions.
-
-**Custom Permissions:**
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. Enable data collection rule**
-
-> Windows Firewall events are collected only from Windows agents.
-- Configure WindowsFirewallAma data connector
-
-- **Create data collection rule**
 
 | Attribute | Value |
 |:-------------------------|:---|

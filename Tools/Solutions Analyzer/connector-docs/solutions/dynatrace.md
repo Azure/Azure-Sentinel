@@ -20,38 +20,46 @@ This solution provides **4 data connector(s)**.
 
 **Publisher:** Dynatrace
 
+This connector uses the Dynatrace Attacks REST API to ingest detected attacks into Microsoft Sentinel Log Analytics
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `DynatraceAttacks_CL` |
+| **Connector Definition Files** | [Connector_Dynatrace_Attacks.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_Attacks.json) |
+
+[→ View full connector details](../connectors/dynatraceattacks.md)
+
 ### [Dynatrace Audit Logs](../connectors/dynatraceauditlogs.md)
 
 **Publisher:** Dynatrace
 
+This connector uses the [Dynatrace Audit Logs REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/audit-logs) to ingest tenant audit logs into Microsoft Sentinel Log Analytics
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `DynatraceAuditLogs_CL` |
+| **Connector Definition Files** | [Connector_Dynatrace_AuditLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_AuditLogs.json) |
+
+[→ View full connector details](../connectors/dynatraceauditlogs.md)
+
 ### [Dynatrace Problems](../connectors/dynatraceproblems.md)
 
 **Publisher:** Dynatrace
+
+This connector uses the [Dynatrace Problem REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/problems-v2) to ingest problem events into Microsoft Sentinel Log Analytics
+
+| Attribute | Value |
+|:-------------------------|:---|
+| **Tables Ingested** | `DynatraceProblems_CL` |
+| **Connector Definition Files** | [Connector_Dynatrace_Problems.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_Problems.json) |
+
+[→ View full connector details](../connectors/dynatraceproblems.md)
 
 ### [Dynatrace Runtime Vulnerabilities](../connectors/dynatraceruntimevulnerabilities.md)
 
 **Publisher:** Dynatrace
 
 This connector uses the [Dynatrace Security Problem REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/application-security/vulnerabilities/get-vulnerabilities) to ingest detected runtime vulnerabilities into Microsoft Sentinel Log Analytics.
-
-**Permissions:**
-
-**Resource Provider Permissions:**
-- **Workspace** (Workspace): read and write permissions are required.
-
-**Custom Permissions:**
-- **Dynatrace tenant (ex. xyz.dynatrace.com)**: You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled, learn more about the [Dynatrace platform](https://www.dynatrace.com/).
-- **Dynatrace Access Token**: You need a Dynatrace Access Token, the token should have ***Read security problems*** (securityProblems.read) scope.
-
-**Setup Instructions:**
-
-> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
-
-**1. Dynatrace Vulnerabilities Events to Microsoft Sentinel**
-
-Configure and Enable Dynatrace [Application Security](https://www.dynatrace.com/platform/application-security/). 
- Follow [these instructions](https://docs.dynatrace.com/docs/shortlink/token#create-api-token) to generate an access token.
-> 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
 | Attribute | Value |
 |:-------------------------|:---|
