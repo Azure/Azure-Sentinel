@@ -1,10 +1,11 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains three complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
 
 1. **`map_solutions_connectors_tables.py`** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
 2. **`collect_table_info.py`** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
 3. **`generate_connector_docs.py`** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
+4. **`solution_analyzer_upload_to_kusto.py`** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
 
 ## Quick Start
 
@@ -699,7 +700,104 @@ The documentation content is included in an "Additional Documentation" section w
 
 ---
 
+# 4. Kusto Upload Script
+
+**Script:** `solution_analyzer_upload_to_kusto.py`
+
+## Overview
+
+Uploads the generated CSV files to an Azure Data Explorer (Kusto) cluster for querying and analysis. Uses managed streaming ingestion for fast uploads (the same method used by the ADX "Get Data" UI).
+
+## Prerequisites
+
+- Python 3.7 or higher
+- Azure CLI installed and authenticated (`az login`)
+- Required Python packages:
+
+```bash
+pip install azure-kusto-data azure-kusto-ingest azure-identity
+```
+
+## Running the Script
+
+```bash
+python solution_analyzer_upload_to_kusto.py --cluster <cluster_url> --database <database_name>
+```
+
+### Example
+
+```bash
+python solution_analyzer_upload_to_kusto.py \
+    --cluster "https://mycluster.eastus.kusto.windows.net" \
+    --database "MyDatabase"
+```
+
+## Command Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--cluster`, `-c` | (required) | Kusto cluster URL (e.g., `https://mycluster.region.kusto.windows.net`) |
+| `--database`, `-d` | (required) | Kusto database name |
+| `--csv-dir` | `.` (current directory) | Directory containing the CSV files |
+| `--dry-run` | `False` | Show what would be done without making changes |
+
+## Tables Created
+
+The script creates the following tables in the Kusto database:
+
+| CSV File | Kusto Table Name |
+|----------|------------------|
+| `tables_reference.csv` | `solution_analyzer_table_reference_lookup` |
+| `connectors.csv` | `solution_analyzer_connectors_lookup` |
+| `tables.csv` | `solution_analyzer_tables_lookup` |
+| `solutions.csv` | `solution_analyzer_solutions_lookup` |
+| `solutions_connectors_tables_mapping_simplified.csv` | `solution_analyzer_mapping` |
+| `solutions_connectors_tables_mapping.csv` | `solutions_connectors_tables_mapping` |
+
+## Authentication
+
+The script uses `DefaultAzureCredential` from the Azure Identity library, which supports:
+
+- Azure CLI authentication (`az login`)
+- Managed Identity (when running in Azure)
+- Environment variables
+- Visual Studio Code authentication
+
+### Authenticating with Azure CLI
+
+```bash
+# Login to Azure
+az login
+
+# If using a specific tenant
+az login --tenant <tenant-id>
+
+# Verify authentication
+az account show
+```
+
+## Dry Run Mode
+
+To preview what tables would be created without making changes:
+
+```bash
+python solution_analyzer_upload_to_kusto.py \
+    --cluster "https://mycluster.eastus.kusto.windows.net" \
+    --database "MyDatabase" \
+    --dry-run
+```
+
+---
+
 ## Version History
+
+### v4.2
+
+- Added `solution_analyzer_upload_to_kusto.py` script to upload CSV files to Azure Data Explorer (Kusto)
+  - Uses managed streaming ingestion for fast uploads (same method as ADX "Get Data" UI)
+  - Creates 6 lookup tables: table reference, connectors, tables, solutions, mapping, and full mapping
+  - Supports Azure CLI authentication via DefaultAzureCredential
+  - Includes dry-run mode for previewing changes
 
 ### v4.1
 
