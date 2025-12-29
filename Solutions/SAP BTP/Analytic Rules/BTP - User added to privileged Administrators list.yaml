@@ -1,0 +1,63 @@
+id: 7d4e9f2a-8b1c-4a5d-9e3f-6c2b1a0d8e7f
+kind: Scheduled
+name: BTP - User added to Cloud Identity Service privileged Administrators list
+description: Identifies when a user is granted privileged administrator permissions
+  in SAP Cloud Identity Service. These permissions include managing Identity Providers,
+  Service Providers, Users, Groups, and Access controls.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  let monitored_permissions = dynamic(["ManageIdP", "ManageSP", "ManageUsers", "ReadUsers", "ManageAccess", "ManageGroups"]);
+  SAPBTPAuditLog_CL
+  | extend data_s = tostring(Message.data)
+  | extend action = extract(@"action=""([^""]+)""", 1, data_s)
+  | extend state = extract(@"state=""([^""]+)""", 1, data_s)
+  | extend changedAttribute = extract(@"changedAttribute=""([^""]+)""", 1, data_s)
+  | extend newValue = extract(@"newValue=""([^""]+)""", 1, data_s)
+  | extend targetUser = extract(@"userIdentifier=""([^""]+)""", 1, data_s)
+  | extend callerMail = extract(@"callerMail=""([^""]+)""", 1, data_s)
+  | extend ipAddress = extract(@"ipAddress=""([^""]+)""", 1, data_s)
+  | where action == "grantPermissions"
+  | where state == "successful"
+  | where changedAttribute == "authorizations"
+  | where isnotempty(newValue)
+  | mv-expand permission = monitored_permissions
+  | where newValue contains tostring(permission)
+  | summarize 
+      GrantedPermissions = make_set(newValue, 10),
+      MatchedPermissions = make_set(tostring(permission), 10)
+      by UpdatedOn, UserName, callerMail, targetUser, Tenant, ipAddress
+  | project UpdatedOn, UserName, callerMail, targetUser, GrantedPermissions, MatchedPermissions, Tenant, ipAddress, CloudApp = "SAP Cloud Identity Service"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+version: 1.0.0
