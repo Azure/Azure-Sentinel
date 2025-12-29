@@ -12,9 +12,15 @@ Browse all tables ingested by Microsoft Sentinel data connectors.
 
 ## Overview
 
-This page lists **740 unique tables** ingested by connectors.
+This page lists **744 unique tables** ingested by connectors.
 
-**Jump to:** [A](#a) | [B](#b) | [C](#c) | [D](#d) | [E](#e) | [F](#f) | [G](#g) | [H](#h) | [I](#i) | [J](#j) | [K](#k) | [L](#l) | [M](#m) | [N](#n) | [O](#o) | [P](#p) | [Q](#q) | [R](#r) | [S](#s) | [T](#t) | [U](#u) | [V](#v) | [W](#w) | [Z](#z)
+**Jump to:** [#](##) | [A](#a) | [B](#b) | [C](#c) | [D](#d) | [E](#e) | [F](#f) | [G](#g) | [H](#h) | [I](#i) | [J](#j) | [K](#k) | [L](#l) | [M](#m) | [N](#n) | [O](#o) | [P](#p) | [Q](#q) | [R](#r) | [S](#s) | [T](#t) | [U](#u) | [V](#v) | [W](#w) | [Z](#z)
+
+## #
+
+| Table | Solutions | Connectors |
+|-------|-----------|------------|
+| [`{{graphQueriesTableName}}`](tables/{{graphqueriestablename}}.md) | [Tropico](solutions/tropico.md) | [Tropico Security - Alerts](connectors/tropicoalertsdefinition.md), [Tropico Security - Events](connectors/tropicoeventsdefinition.md), [Tropico Security - Incidents](connectors/tropicoincidentsdefinition.md) |
 
 ## A
 
@@ -303,6 +309,7 @@ This page lists **740 unique tables** ingested by connectors.
 | `CyberArk_AuditEvents_CL` | [CyberArkAudit](solutions/cyberarkaudit.md) | [CyberArkAudit](connectors/cyberarkaudit.md) |
 | `CyberSixgill_Alerts_CL` | [Cybersixgill-Actionable-Alerts](solutions/cybersixgill-actionable-alerts.md) | [Cybersixgill Actionable Alerts](connectors/cybersixgillactionablealerts.md) |
 | `CyberpionActionItems_CL` | [IONIX](solutions/ionix.md) | [IONIX Security Logs](connectors/cyberpionsecuritylogs.md) |
+| `CybleVisionAlerts_CL` | [Cyble Vision](solutions/cyble-vision.md) | [Cyble Vision Alerts](connectors/cyblevisionalerts.md) |
 | [`CyeraAssets_CL`](tables/cyeraassets-cl.md) | [CyeraDSPM](solutions/cyeradspm.md) | [Cyera DSPM Microsoft Sentinel Data Connector](connectors/cyeradspmccf.md), [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](connectors/cyerafunctionsconnector.md) |
 | [`CyeraAssets_MS_CL`](tables/cyeraassets-ms-cl.md) | [CyeraDSPM](solutions/cyeradspm.md) | [Cyera DSPM Microsoft Sentinel Data Connector](connectors/cyeradspmccf.md), [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](connectors/cyerafunctionsconnector.md) |
 | [`CyeraClassifications_CL`](tables/cyeraclassifications-cl.md) | [CyeraDSPM](solutions/cyeradspm.md) | [Cyera DSPM Microsoft Sentinel Data Connector](connectors/cyeradspmccf.md), [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](connectors/cyerafunctionsconnector.md) |
@@ -579,6 +586,8 @@ This page lists **740 unique tables** ingested by connectors.
 | `MimecastTTPAttachment_CL` | [MimecastTTP](solutions/mimecastttp.md) | [Mimecast Targeted Threat Protection](connectors/mimecastttpapi.md) |
 | `MimecastTTPImpersonation_CL` | [MimecastTTP](solutions/mimecastttp.md) | [Mimecast Targeted Threat Protection](connectors/mimecastttpapi.md) |
 | `MimecastTTPUrl_CL` | [MimecastTTP](solutions/mimecastttp.md) | [Mimecast Targeted Threat Protection](connectors/mimecastttpapi.md) |
+| `MiroAuditLogs_CL` | [Miro](solutions/miro.md) | [Miro Audit Logs (Enterprise Plan)](connectors/miroauditlogsdataconnector.md) |
+| `MiroContentLogs_CL` | [Miro](solutions/miro.md) | [Miro Content Logs (Enterprise Plan + Enterprise Guard)](connectors/mirocontentlogsdataconnector.md) |
 | `MongoDBAudit_CL` | [MongoDBAudit](solutions/mongodbaudit.md) | [[Deprecated] MongoDB Audit](connectors/mongodb.md) |
 | `MorphisecAlerts_CL` | [Morphisec](solutions/morphisec.md) | [Morphisec API Data Connector (via Codeless Connector Framework)](connectors/morphisecccf.md) |
 | `MuleSoft_Cloudhub_CL` | [Mulesoft](solutions/mulesoft.md) | [MuleSoft Cloudhub](connectors/mulesoft.md) |
