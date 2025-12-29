@@ -38,4 +38,10 @@ This solution ingests data into **2 table(s)**:
 | `ObsidianActivity_CL` | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) |
 | `ObsidianThreat_CL` | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 25-09-2025                     | Initial Solution Release.                   |
+
 [← Back to Solutions Index](../solutions-index.md)

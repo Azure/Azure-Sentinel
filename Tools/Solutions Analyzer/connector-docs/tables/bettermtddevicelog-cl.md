@@ -14,7 +14,7 @@
 
 This table is used by the following solutions:
 
-- [BETTER Mobile Threat Defense (MTD)](../solutions/better-mobile-threat-defense-(mtd).md)
+- [BETTER Mobile Threat Defense (MTD)](../solutions/better-mobile-threat-defense-%28mtd%29.md)
 
 ## Connectors (1)
 

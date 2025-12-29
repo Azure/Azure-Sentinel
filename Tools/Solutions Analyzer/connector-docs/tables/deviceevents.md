@@ -5,11 +5,9 @@ Multiple event types, including events triggered by security controls such as Mi
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `DeviceEvents` |
-| **Category** | Security |
+| **Category** | XDR |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/deviceevents) |
 | **Defender XDR Docs** | [View Documentation](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-deviceevents-table) |

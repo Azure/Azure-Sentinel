@@ -1,15 +1,12 @@
 # Syslog
 
-Reference for Syslog table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `Syslog` |
-| **Category** | Security, Virtual Machines |
+| **Category** | Security |
 | **Solutions Using Table** | 34 |
 | **Connectors Ingesting** | 35 |
-| **Basic Logs Eligible** | ✗ No |
-| **Supports Transformations** | ✓ Yes |
+| **Basic Logs Eligible** | Partial support - data arriving from Log Analytics agent (MMA) or Azure Monitor Agent (AMA) is fully supported. Data arriving via Diagnostics Extension agent is collected though storage while this path isn't supported. |
 | **Ingestion API Supported** | ✓ Yes |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/syslog) |
 
@@ -34,7 +31,7 @@ This table is used by the following solutions:
 - [Digital Guardian Data Loss Prevention](../solutions/digital-guardian-data-loss-prevention.md)
 - [ESETPROTECT](../solutions/esetprotect.md)
 - [Exabeam Advanced Analytics](../solutions/exabeam-advanced-analytics.md)
-- [Forescout (Legacy)](../solutions/forescout-(legacy).md)
+- [Forescout (Legacy)](../solutions/forescout-%28legacy%29.md)
 - [GitLab](../solutions/gitlab.md)
 - [ISC Bind](../solutions/isc-bind.md)
 - [Infoblox NIOS](../solutions/infoblox-nios.md)
@@ -95,20 +92,6 @@ This table is ingested by the following connectors:
 - [Syslog via AMA](../connectors/syslogama.md)
 - [[Deprecated] VMware ESXi](../connectors/vmwareesxi.md)
 - [[Deprecated] WatchGuard Firebox](../connectors/watchguardfirebox.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.operationalinsights/workspaces`
-- `microsoft.containerservice/managedclusters`
-- `microsoft.kubernetes/connectedclusters`
-- `microsoft.compute/virtualmachines`
-- `microsoft.conenctedvmwarevsphere/virtualmachines`
-- `microsoft.azurestackhci/virtualmachines`
-- `microsoft.scvmm/virtualmachines`
-- `microsoft.compute/virtualmachinescalesets`
-- `microsoft.hybridcontainerservice/provisionedclusters`
 
 ---
 

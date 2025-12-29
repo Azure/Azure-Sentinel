@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CloudflareV2_CL` | [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](../connectors/cloudflaredefinition.md) |
 
+## Release Notes
+
+**Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+|------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.0      | 02-10-2025                    | Includes all CCF connector definitions and configurations.                                |
+
 [← Back to Solutions Index](../solutions-index.md)

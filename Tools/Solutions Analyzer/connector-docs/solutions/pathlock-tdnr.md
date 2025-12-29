@@ -50,4 +50,10 @@ This solution ingests data into **2 table(s)**:
 | `ABAPAuditLog` | [Pathlock Inc.: Threat Detection and Response for SAP](../connectors/pathlock-tdnr.md) |
 | `Pathlock_TDnR_CL` | [Pathlock Threat Detection and Response Integration](../connectors/pathlock-tdnr.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       |  05-11-2025                    | Initial Solution Release					 |
+
 [← Back to Solutions Index](../solutions-index.md)

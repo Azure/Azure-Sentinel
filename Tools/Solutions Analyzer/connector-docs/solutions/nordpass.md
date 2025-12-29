@@ -37,4 +37,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `NordPassEventLogs_CL` | [NordPass](../connectors/nordpass.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**        |
+|-------------|--------------------------------|---------------------------|
+| 3.0.1       | 25-08-2025                     | Added new Activity Logs   |
+| 3.0.0       | 22-04-2025                     | Initial Solution Release. |
+
 [← Back to Solutions Index](../solutions-index.md)

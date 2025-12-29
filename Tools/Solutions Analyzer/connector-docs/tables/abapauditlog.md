@@ -1,15 +1,11 @@
 # ABAPAuditLog
 
-Reference for ABAPAuditLog table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `ABAPAuditLog` |
 | **Category** | Security |
 | **Solutions Using Table** | 3 |
 | **Connectors Ingesting** | 3 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/abapauditlog) |
 

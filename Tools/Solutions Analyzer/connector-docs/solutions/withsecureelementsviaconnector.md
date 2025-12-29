@@ -43,4 +43,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] WithSecure Elements via Connector](../connectors/withsecureelementsviaconnector.md) |
 
+## Release Notes
+
+| **Version**   | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                          |
+|---------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+|  3.0.1        |  01-07-2024                    | Deprecating data connectors |
+|  3.0.0        |  31-10-2023                    | Updated legacy F-Secure links related to the connector installation and event forwarding configuration with WithSecure links|
+
 [← Back to Solutions Index](../solutions-index.md)

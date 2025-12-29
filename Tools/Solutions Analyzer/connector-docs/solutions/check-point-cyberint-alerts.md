@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `argsentdc_CL` | [Check Point Cyberint Alerts Connector (via Codeless Connector Platform)](../connectors/checkpointcyberintalerts.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**        |
+| ----------- | ------------------------------ | ------------------------- |
+| 3.0.1       | 05-11-2025                     | Update **Data Connector** |
+| 3.0.0       | 17-06-2025                     | Initial Solution release. |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -40,4 +40,10 @@ This solution ingests data into **2 table(s)**:
 | `Syslog` | [[Deprecated] Microsoft Sysmon For Linux](../connectors/microsoftsysmonforlinux.md) |
 | `vimProcessCreateLinuxSysmon` | [[Deprecated] Microsoft Sysmon For Linux](../connectors/microsoftsysmonforlinux.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 26-07-2024                     | Deprecated Data Connector. |
+
 [← Back to Solutions Index](../solutions-index.md)

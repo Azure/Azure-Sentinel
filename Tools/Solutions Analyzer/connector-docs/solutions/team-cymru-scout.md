@@ -63,4 +63,12 @@ This solution ingests data into **14 table(s)**:
 | `Cymru_Scout_IP_Data_Summary_PDNS_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
 | `Cymru_Scout_IP_Data_x509_CL` | [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.1.1       | 25-09-2025                     | Fixed bug in TeamCymruScoutEnrichIncident playbook. |
+| 3.1.0       | 16-05-2025                     | Updated Workbook, Parser, Data Connector and created new playbook. |
+| 3.0.0       | 07-08-2024                     | Added Solution for Team Cymru Scout. |
+
 [← Back to Solutions Index](../solutions-index.md)

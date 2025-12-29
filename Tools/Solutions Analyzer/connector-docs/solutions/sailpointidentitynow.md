@@ -37,4 +37,10 @@ This solution ingests data into **2 table(s)**:
 | `SailPointIDN_Events_CL` | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) |
 | `SailPointIDN_Triggers_CL` | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 28-08-2024                     | **Data Connector** instruction updated      |
+
 [← Back to Solutions Index](../solutions-index.md)

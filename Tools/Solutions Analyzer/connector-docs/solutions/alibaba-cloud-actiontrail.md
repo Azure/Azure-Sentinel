@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AliCloudActionTrailLogs_CL` | [Alibaba Cloud ActionTrail (via Codeless Connector Framework)](../connectors/alicloudactiontrailccpdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 								|
+|-------------|--------------------------------|----------------------------------------------------------------------------------------------------| 
+| 3.0.1       | 22-08-2025                     | Moving Alibaba Cloud ActionTrail **CCF Data Connector** to GA.   	|
+| 3.0.0       | 07-07-2025                     | Added Alibaba Cloud Actiontrail CCF connector.<br/>Added Preview tag to CCF Connector title.   	|
+
 [← Back to Solutions Index](../solutions-index.md)

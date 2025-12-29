@@ -79,4 +79,12 @@ This solution ingests data into **2 table(s)**:
 | `CommonSecurityLog` | [[Deprecated] Infoblox SOC Insight Data Connector via AMA](../connectors/infobloxsocinsightsdataconnector-ama.md), [[Deprecated] Infoblox SOC Insight Data Connector via Legacy Agent](../connectors/infobloxsocinsightsdataconnector-legacy.md) |
 | `InfobloxInsight_CL` | [Infoblox SOC Insight Data Connector via REST API](../connectors/infobloxsocinsightsdataconnector-api.md) |
 
+## Release Notes
+
+| **Version**   | **Date Modified**              | **Change History**                      |
+|---------------|--------------------------------|-----------------------------------------|
+| 3.0.2         | 28-06-2024                     | Deprecating data connectors  |
+| 3.0.1         | 03-05-2024                     | Repackaged for parser issue fix on reinstall |
+| 3.0.0         | 04-03-2024                     | Initial Solution Release                |
+
 [← Back to Solutions Index](../solutions-index.md)

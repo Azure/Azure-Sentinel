@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | [Forescout](../connectors/forescout.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.0       | 20-06-2024                     | Update in description changes                                      |
+
 [← Back to Solutions Index](../solutions-index.md)

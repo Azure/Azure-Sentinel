@@ -17,4 +17,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 03-04-2024					   | Added RleaseNotes file for Minemeld solution		   |
+
 [← Back to Solutions Index](../solutions-index.md)

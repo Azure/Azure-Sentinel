@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `ThreatIntelligence` |
 | **Publisher** | Microsoft |
-| **Used in Solutions** | [Threat Intelligence](../solutions/threat-intelligence.md), [Threat Intelligence (NEW)](../solutions/threat-intelligence-(new).md) |
+| **Used in Solutions** | [Threat Intelligence](../solutions/threat-intelligence.md), [Threat Intelligence (NEW)](../solutions/threat-intelligence-%28new%29.md) |
 | **Collection Method** | Native |
 | **Connector Definition Files** | [template_ThreatIntelligence.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence/Data%20Connectors/template_ThreatIntelligence.json) |
 
@@ -16,10 +16,10 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
-| [`ThreatIntelIndicators`](../tables/threatintelindicators.md) | ✓ | ✗ |
-| [`ThreatIntelObjects`](../tables/threatintelobjects.md) | ✓ | ✗ |
-| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | — | ✓ |
+| [`ThreatIntelIndicators`](../tables/threatintelindicators.md) | — | ✗ |
+| [`ThreatIntelObjects`](../tables/threatintelobjects.md) | — | ✗ |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | — | ✗ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

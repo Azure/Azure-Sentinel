@@ -37,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `LastPassNativePoller_CL` | [LastPass Enterprise - Reporting (Polling CCP)](../connectors/lastpass-polling.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                         |
+|-------------|--------------------------------|----------------------------------------------------------------------------|
+| 3.0.0       | 07-11-2023                     | Modified text as there is rebranding from Azure Active Directory to Microsoft Entra ID.   |
+
 [← Back to Solutions Index](../solutions-index.md)

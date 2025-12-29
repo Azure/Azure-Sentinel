@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `MarkLogicAudit_CL` | [[Deprecated] MarkLogic Audit](../connectors/marklogic.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
+|-------------|--------------------------------|-------------------------------------------------------------|
+| 3.0.1       | 02-01-2025                     | Removed Deprecated **Data connector**                       |
+| 3.0.0       | 12-08-2024                     | Deprecating data connector                                  |
+
 [← Back to Solutions Index](../solutions-index.md)

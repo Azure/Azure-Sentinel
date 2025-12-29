@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `ProofpointPOD` |
 | **Publisher** | Proofpoint |
-| **Used in Solutions** | [Proofpoint On demand(POD) Email Security](../solutions/proofpoint-on-demand(pod)-email-security.md) |
+| **Used in Solutions** | [Proofpoint On demand(POD) Email Security](../solutions/proofpoint-on-demand%28pod%29-email-security.md) |
 | **Collection Method** | Azure Function |
 | **Connector Definition Files** | [ProofpointPOD_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Data%20Connectors/ProofpointPOD_API_FunctionApp.json) |
 

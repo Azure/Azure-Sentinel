@@ -5,7 +5,7 @@
 | **Connector ID** | `MicrosoftSysmonForLinux` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Microsoft Sysmon For Linux](../solutions/microsoft-sysmon-for-linux.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [SysmonForLinux.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Sysmon%20For%20Linux/Data%20Connectors/SysmonForLinux.json) |
 
 [Sysmon for Linux](https://github.com/Sysinternals/SysmonForLinux) provides detailed information about process creations, network connections and other system events.
@@ -18,7 +18,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
+| [`Syslog`](../tables/syslog.md) | — | ✓ |
 | [`vimProcessCreateLinuxSysmon`](../tables/vimprocesscreatelinuxsysmon.md) | — | — |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.

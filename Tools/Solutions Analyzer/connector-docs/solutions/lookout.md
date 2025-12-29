@@ -56,4 +56,11 @@ This solution ingests data into **2 table(s)**:
 | `LookoutMtdV2_CL` | [Lookout Mobile Threat Detection Connector (via Codeless Connector Framework) (Preview)](../connectors/lookoutstreaming-definition.md) |
 | `Lookout_CL` | [[DEPRECATED] Lookout](../connectors/lookoutapi.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.1       | 12-11-2025                     | **Parser** updates have been implemented, along with the development of comprehensive and executive dashboards. Additionally, **Analytic Rules** have been updated to include MITRE mappings. |
+| 3.0.0       | 07-11-2025                     | New **CCF Connector** added to Solution - *Lookout Mobile Threat Detection Connector*.    |
+
 [← Back to Solutions Index](../solutions-index.md)

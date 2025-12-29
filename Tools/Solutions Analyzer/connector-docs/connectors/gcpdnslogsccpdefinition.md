@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPDNS`](../tables/gcpdns.md) | ✓ | ✗ |
+| [`GCPDNS`](../tables/gcpdns.md) | — | ✗ |
 
 ## Permissions
 

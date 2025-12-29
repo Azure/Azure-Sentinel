@@ -57,4 +57,12 @@ This solution ingests data into **3 table(s)**:
 | `CiscoSecureEndpointEventsV2_CL` | [Cisco Secure Endpoint (via Codeless Connector Framework)](../connectors/ciscosecureendpointlogsccpdefinition.md) |
 | `CiscoSecureEndpoint_CL` | [[DEPRECATED] Cisco Secure Endpoint (AMP)](../connectors/ciscosecureendpoint.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                             |
+|-------------|-------------------------------|-----------------------------------------------|
+| 3.0.2       | 14-08-2025                    | Cisco Secure Endpoint **CCF Connector** moving to GA. |
+| 3.0.1       | 23-06-2025                    | Adding a new **CCF Data Connector** - *Cisco Secure Endpoint*  and updated the **Parser** to handle the newly introduced table.  	   |
+| 3.0.0       | 28-08-2024                    | Updated the python runtime version to 3.11.    |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -5,11 +5,9 @@ Safe Links clicks from email messages, Teams, and Office 365 apps
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `UrlClickEvents` |
-| **Category** | Security |
+| **Category** | XDR |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/urlclickevents) |
 | **Defender XDR Docs** | [View Documentation](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-urlclickevents-table) |

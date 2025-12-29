@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [Claroty xDome](../connectors/clarotyxdome.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
+|-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.0.0       | 16-04-2024                     | Initial Solution Release                                                       |
+
 [← Back to Solutions Index](../solutions-index.md)

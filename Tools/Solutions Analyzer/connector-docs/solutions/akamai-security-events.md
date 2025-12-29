@@ -49,4 +49,12 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] Akamai Security Events via AMA](../connectors/akamaisecurityeventsama.md), [[Deprecated] Akamai Security Events via Legacy Agent](../connectors/akamaisecurityevents.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.2       | 12-11-2024                     |    Removed Deprecated **Data Connector**                           |
+| 3.0.1       | 08-07-2024                     |    Deprecated **Data Connector**                                   |
+| 3.0.0       | 20-09-2023                     |    Addition of new Akamai Security Events AMA **Data Connector**   |
+
 [← Back to Solutions Index](../solutions-index.md)

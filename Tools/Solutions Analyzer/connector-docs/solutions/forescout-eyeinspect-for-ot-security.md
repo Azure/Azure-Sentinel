@@ -38,4 +38,10 @@ This solution ingests data into **2 table(s)**:
 | `ForescoutOtAlert_CL` | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) |
 | `ForescoutOtAsset_CL` | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------| 
+| 3.0.0       | 14-07-2025                     |	Initial Solution Release                                        |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -93,6 +93,7 @@ class TableInfo:
     source_defender_xdr: bool = False
     source_feature_support: bool = False
     source_ingestion_api: bool = False
+    xdr_only: bool = False  # True if table only exists in Defender XDR (not in Azure Monitor)
     
     # Links
     azure_monitor_doc_link: str = ""
@@ -641,16 +642,20 @@ def merge_table_info(tables: Dict[str, TableInfo],
     # Merge Defender XDR tables
     for table_name, info in defender_tables.items():
         if table_name in merged:
-            # Update existing entry
-            if info.description and not merged[table_name].description:
-                merged[table_name].description = info.description
-            elif info.description:
-                # Defender description might be more concise, use it
+            # Update existing entry with XDR info
+            # Always use XDR description if available (more concise and relevant)
+            if info.description:
                 merged[table_name].description = info.description
             merged[table_name].source_defender_xdr = True
             merged[table_name].defender_xdr_doc_link = info.defender_xdr_doc_link
+            # Overwrite category to XDR for all XDR tables
+            merged[table_name].category = "XDR"
+            # XDR tables that also exist in Azure Monitor are not XDR-only
+            merged[table_name].xdr_only = False
         else:
-            # Add new entry
+            # Add new entry - this is an XDR-only table
+            info.xdr_only = True
+            info.category = "XDR"  # Set category for XDR-only tables
             merged[table_name] = info
     
     # Merge feature support info
@@ -698,6 +703,7 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
         'table_type',
         'source_azure_monitor',
         'source_defender_xdr',
+        'xdr_only',
         'source_feature_support',
         'source_ingestion_api',
         'azure_monitor_doc_link',
@@ -727,6 +733,7 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
                 'table_type': info.table_type,
                 'source_azure_monitor': 'Yes' if info.source_azure_monitor else 'No',
                 'source_defender_xdr': 'Yes' if info.source_defender_xdr else 'No',
+                'xdr_only': 'Yes' if info.xdr_only else 'No',
                 'source_feature_support': 'Yes' if info.source_feature_support else 'No',
                 'source_ingestion_api': 'Yes' if info.source_ingestion_api else 'No',
                 'azure_monitor_doc_link': info.azure_monitor_doc_link,
@@ -751,6 +758,7 @@ def generate_report_md(tables: Dict[str, TableInfo], output_path: Path) -> None:
     total_tables = len(tables)
     azure_monitor_count = sum(1 for t in tables.values() if t.source_azure_monitor)
     defender_xdr_count = sum(1 for t in tables.values() if t.source_defender_xdr)
+    xdr_only_count = sum(1 for t in tables.values() if t.xdr_only)
     feature_support_count = sum(1 for t in tables.values() if t.source_feature_support)
     ingestion_api_count = sum(1 for t in tables.values() if t.ingestion_api_supported)
     
@@ -776,6 +784,7 @@ def generate_report_md(tables: Dict[str, TableInfo], output_path: Path) -> None:
         f.write(f"| Total Tables | {total_tables} |\n")
         f.write(f"| In Azure Monitor Reference | {azure_monitor_count} |\n")
         f.write(f"| In Defender XDR Schema | {defender_xdr_count} |\n")
+        f.write(f"| XDR Only (not in Azure Monitor) | {xdr_only_count} |\n")
         f.write(f"| With Feature Support Info | {feature_support_count} |\n")
         f.write(f"| Supported by Ingestion API | {ingestion_api_count} |\n")
         f.write("\n")

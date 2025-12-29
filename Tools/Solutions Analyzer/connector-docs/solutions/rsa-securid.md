@@ -36,4 +36,12 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | [[Deprecated] RSA® SecurID (Authentication Manager)](../connectors/rsasecuridam.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
+|-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.0.1       | 26-12-2024                     | Removed Deprecated **Data connector**                                          |
+| 3.0.0       | 01-08-2024                     |Update **Parser** as part of Syslog migration                                   |
+|             |                                |Deprecating data connectors                                                     |
+
 [← Back to Solutions Index](../solutions-index.md)

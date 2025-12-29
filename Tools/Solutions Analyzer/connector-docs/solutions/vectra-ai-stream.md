@@ -85,4 +85,11 @@ This solution ingests data into **19 table(s)**:
 | `vectra_ssl_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
 | `vectra_x509_CL` | [[Recommended] Vectra AI Stream via AMA](../connectors/vectrastreamama.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
+|-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.0.1       | 19-11-2024                     |Added new **Parser** vectra_match to the Solution </br>Update the solution to support a new metadata type: match (suricata)| 
+| 3.0.0       | 10-07-2024                     | Added new **AMA Data Connector**</br> Removed deprecated content **Hunting Queries** And **Workbooks**</br> Added new **Parsers** to the Solution   |
+
 [← Back to Solutions Index](../solutions-index.md)

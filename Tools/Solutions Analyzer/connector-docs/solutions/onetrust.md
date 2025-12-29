@@ -37,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `OneTrustMetadataV3_CL` | [OneTrust](../connectors/onetrustpush.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+|3.0.0        | 24-10-2025                     | Initial release of the OneTrust **CCF connector**.  |
+
 [← Back to Solutions Index](../solutions-index.md)

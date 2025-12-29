@@ -38,4 +38,12 @@ This solution ingests data into **2 table(s)**:
 | `net_assets_CL` | [Holm Security Asset Data](../connectors/holmsecurityassets.md) |
 | `web_assets_CL` | [Holm Security Asset Data](../connectors/holmsecurityassets.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.1       | 05-10-2023                     | Minor fixes |
+| 3.0.0       | 28-09-2023                     | Repackaged with V3 |
+| 2.0.0       | 17-02-2022                     | Initial Solution Release |
+
 [← Back to Solutions Index](../solutions-index.md)

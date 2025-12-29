@@ -37,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `ThreatIntelligenceIndicator` | [MISP2Sentinel](../connectors/misp2sentinelconnector.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 29-07-2023                     | **Data Connector** Initial version of MISP2Sentinel with support for Upload Indicators API
+
 [← Back to Solutions Index](../solutions-index.md)

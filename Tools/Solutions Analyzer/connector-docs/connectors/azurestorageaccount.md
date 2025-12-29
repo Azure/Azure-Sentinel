@@ -5,7 +5,7 @@
 | **Connector ID** | `AzureStorageAccount` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Azure Storage](../solutions/azure-storage.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | Azure Diagnostics |
 | **Connector Definition Files** | [AzureStorageAccount_CCP.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Storage/Data%20Connectors/AzureStorageAccount_CCP.JSON) |
 
 Azure Storage account is a cloud solution for modern data storage scenarios. It contains all your data objects: blobs, files, queues, tables, and disks. This connector lets you stream Azure Storage accounts diagnostics logs into your Microsoft Sentinel workspace, allowing you to continuously monitor activity in all your instances, and detect malicious activity in your organization. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220068&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
@@ -16,11 +16,11 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AzureMetrics`](../tables/azuremetrics.md) | ✗ | ✗ |
-| [`StorageBlobLogs`](../tables/storagebloblogs.md) | ✓ | ✗ |
-| [`StorageFileLogs`](../tables/storagefilelogs.md) | ✓ | ✗ |
-| [`StorageQueueLogs`](../tables/storagequeuelogs.md) | ✓ | ✗ |
-| [`StorageTableLogs`](../tables/storagetablelogs.md) | ✓ | ✗ |
+| [`AzureMetrics`](../tables/azuremetrics.md) | — | ✗ |
+| [`StorageBlobLogs`](../tables/storagebloblogs.md) | — | ✗ |
+| [`StorageFileLogs`](../tables/storagefilelogs.md) | — | ✗ |
+| [`StorageQueueLogs`](../tables/storagequeuelogs.md) | — | ✗ |
+| [`StorageTableLogs`](../tables/storagetablelogs.md) | — | ✗ |
 
 ## Permissions
 

@@ -14,16 +14,33 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **483 solutions**, of which **382** include data connectors, providing access to **521 unique connectors** and **825 unique tables**.
+This documentation covers **485 solutions**, of which **385** include data connectors, providing access to **527 unique connectors** and **829 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 483 |
-| Solutions with Connectors | 382 (79%) |
-| Unique Connectors | 521 |
-| Unique Tables | 825 |
+| Total Solutions | 485 |
+| Solutions with Connectors | 385 (79%) |
+| Unique Connectors | 527 |
+| Unique Tables | 829 |
+
+### Collection Methods
+
+| Collection Method | Total Connectors | Active Connectors* | Total Solutions | Active Solutions* |
+|:-----------------|:----------------:|:-----------------:|:---------------:|:----------------:|
+| Azure Function | 129 | 111 | 102 | 102 |
+| CCF | 126 | 125 | 110 | 110 |
+| AMA | 105 | 34 | 99 | 30 |
+| Unknown (Custom Log) | 56 | 47 | 54 | 45 |
+| MMA | 52 | 8 | 53 | 15 |
+| Native | 25 | 25 | 20 | 20 |
+| Azure Diagnostics | 17 | 17 | 17 | 17 |
+| REST API | 14 | 14 | 15 | 15 |
+| Unknown | 3 | 3 | 4 | 4 |
+| **Total** | **527** | **384** | **385** | **301** |
+
+*\*Active excludes connectors and solutions marked as deprecated.*
 
 ## How This Documentation is Organized
 
@@ -103,7 +120,7 @@ Browse solutions alphabetically:
 | [Azure Service Bus](solutions/azure-service-bus.md) | 2022-06-29 | Microsoft Corporation |
 | [Azure Storage](solutions/azure-storage.md) | 2022-05-12 | Microsoft Corporation |
 | [Azure Stream Analytics](solutions/azure-stream-analytics.md) | 2022-06-24 | Microsoft Corporation |
-| [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-(waf).md) | 2022-05-18 | Microsoft Corporation |
+| [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-%28waf%29.md) | 2022-05-18 | Microsoft Corporation |
 | [Azure kubernetes Service](solutions/azure-kubernetes-service.md) | 2022-06-01 | Microsoft Corporation |
 | [AzureDevOpsAuditing](solutions/azuredevopsauditing.md) | 2022-09-20 | Microsoft Corporation |
 | [AzureSecurityBenchmark](solutions/azuresecuritybenchmark.md) | 2022-06-17 | Microsoft Corporation |
@@ -113,7 +130,7 @@ Browse solutions alphabetically:
 
 | Solution | First Published | Publisher |
 |----------|----------------|----------|
-| [BETTER Mobile Threat Defense (MTD)](solutions/better-mobile-threat-defense-(mtd).md) | 2022-05-02 | Better Mobile Security Inc. |
+| [BETTER Mobile Threat Defense (MTD)](solutions/better-mobile-threat-defense-%28mtd%29.md) | 2022-05-02 | Better Mobile Security Inc. |
 | [Barracuda CloudGen Firewall](solutions/barracuda-cloudgen-firewall.md) | 2021-05-02 | Community |
 | [Barracuda WAF](solutions/barracuda-waf.md) | 2022-05-13 | Barracuda |
 | [Beyond Security beSECURE](solutions/beyond-security-besecure.md) | 2022-05-02 | Beyond Security |
@@ -178,10 +195,10 @@ Browse solutions alphabetically:
 | [Cribl](solutions/cribl.md) | 2024-08-01 | Cribl |
 | [CrowdStrike Falcon Endpoint Protection](solutions/crowdstrike-falcon-endpoint-protection.md) | 2022-06-01 | Microsoft Corporation |
 | [CustomLogsAma](solutions/customlogsama.md) | 2024-07-21 | Microsoft Corporation |
-| [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-(epv)-events.md) | 2022-05-02 | Cyberark |
+| [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-%28epv%29-events.md) | 2022-05-02 | Cyberark |
 | [CyberArkAudit](solutions/cyberarkaudit.md) | 2024-03-01 | CyberArk Support |
 | [CyberArkEPM](solutions/cyberarkepm.md) | 2022-04-10 | CyberArk Support |
-| [CybersecurityMaturityModelCertification(CMMC)2.0](solutions/cybersecuritymaturitymodelcertification(cmmc)2.0.md) | 2022-01-06 | Microsoft Corporation |
+| [CybersecurityMaturityModelCertification(CMMC)2.0](solutions/cybersecuritymaturitymodelcertification%28cmmc%292.0.md) | 2022-01-06 | Microsoft Corporation |
 | [Cybersixgill-Actionable-Alerts](solutions/cybersixgill-actionable-alerts.md) | 2023-02-27 | Cybersixgill |
 | [Cyble Vision](solutions/cyble-vision.md) | 2025-05-05 | Cyble Support |
 | [Cyborg Security HUNTER](solutions/cyborg-security-hunter.md) | 2023-07-03 | Cyborg Security |
@@ -236,7 +253,7 @@ Browse solutions alphabetically:
 | [Eset Security Management Center](solutions/eset-security-management-center.md) | 2022-05-11 | Eset |
 | [Exabeam Advanced Analytics](solutions/exabeam-advanced-analytics.md) | 2022-05-20 | Microsoft Corporation |
 | [ExtraHop](solutions/extrahop.md) | 2025-02-11 | ExtraHop Support |
-| [ExtraHop Reveal(x)](solutions/extrahop-reveal(x).md) | 2022-05-19 | ExtraHop |
+| [ExtraHop Reveal(x)](solutions/extrahop-reveal%28x%29.md) | 2022-05-19 | ExtraHop |
 
 ### F
 
@@ -253,7 +270,7 @@ Browse solutions alphabetically:
 | [Forcepoint CSG](solutions/forcepoint-csg.md) | 2022-05-10 | Community |
 | [Forcepoint DLP](solutions/forcepoint-dlp.md) | 2022-05-09 | Community |
 | [Forcepoint NGFW](solutions/forcepoint-ngfw.md) | 2022-05-25 | Community |
-| [Forescout (Legacy)](solutions/forescout-(legacy).md) | 2022-06-01 | Microsoft Corporation |
+| [Forescout (Legacy)](solutions/forescout-%28legacy%29.md) | 2022-06-01 | Microsoft Corporation |
 | [Forescout eyeInspect for OT Security](solutions/forescout-eyeinspect-for-ot-security.md) | 2025-07-10 | Forescout Technologies |
 | [ForescoutHostPropertyMonitor](solutions/forescouthostpropertymonitor.md) | 2022-06-28 | Forescout Technologies |
 | [ForgeRock Common Audit for CEF](solutions/forgerock-common-audit-for-cef.md) | 2022-05-04 | Forgerock |
@@ -402,6 +419,7 @@ Browse solutions alphabetically:
 | [MimecastTIRegional](solutions/mimecasttiregional.md) | 2023-08-23 | Mimecast |
 | [MimecastTTP](solutions/mimecastttp.md) | 2022-02-24 | Mimecast |
 | [Minemeld](solutions/minemeld.md) | 2022-10-11 | Microsoft Corporation |
+| [Miro](solutions/miro.md) |  | Miro |
 | [MongoDBAtlas](solutions/mongodbatlas.md) | 2025-08-22 | MongoDB |
 | [MongoDBAudit](solutions/mongodbaudit.md) | 2022-06-01 | Microsoft Corporation |
 | [Morphisec](solutions/morphisec.md) | 2022-05-05 | Morphisec |
@@ -458,7 +476,7 @@ Browse solutions alphabetically:
 |----------|----------------|----------|
 | [PCI DSS Compliance](solutions/pci-dss-compliance.md) | 2022-06-29 | Microsoft Corporation |
 | [PDNS Block Data Connector](solutions/pdns-block-data-connector.md) | 2023-03-31 | Nominet PDNS Support |
-| [Palo Alto - XDR (Cortex)](solutions/palo-alto---xdr-(cortex).md) |  |  |
+| [Palo Alto - XDR (Cortex)](solutions/palo-alto---xdr-%28cortex%29.md) |  |  |
 | [Palo Alto Cortex XDR CCP](solutions/palo-alto-cortex-xdr-ccp.md) | 2024-12-07 | Microsoft Corporation |
 | [Palo Alto Cortex Xpanse CCF](solutions/palo-alto-cortex-xpanse-ccf.md) | 2024-12-07 | Microsoft Corporation |
 | [Palo Alto Prisma Cloud CWPP](solutions/palo-alto-prisma-cloud-cwpp.md) | 2022-06-24 | Microsoft Corporation |
@@ -474,7 +492,7 @@ Browse solutions alphabetically:
 | [Power Platform](solutions/power-platform.md) |  |  |
 | [Prancer PenSuiteAI Integration](solutions/prancer-pensuiteai-integration.md) | 2023-08-02 | Prancer PenSuiteAI Integration |
 | [ProofPointTap](solutions/proofpointtap.md) | 2022-05-23 | Proofpoint, Inc. |
-| [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand(pod)-email-security.md) | 2021-03-31 | Proofpoint, Inc. |
+| [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand%28pod%29-email-security.md) | 2021-03-31 | Proofpoint, Inc. |
 | [Pulse Connect Secure](solutions/pulse-connect-secure.md) | 2022-05-02 | Microsoft Corporation |
 | [Pure Storage](solutions/pure-storage.md) | 2024-02-05 | purestoragemarketplaceadmin |
 
@@ -571,7 +589,7 @@ Browse solutions alphabetically:
 | [TheHive](solutions/thehive.md) | 2021-10-23 | Microsoft Corporation |
 | [Theom](solutions/theom.md) | 2022-11-04 | Theom |
 | [Threat Intelligence](solutions/threat-intelligence.md) | 2022-05-18 | Microsoft Corporation |
-| [Threat Intelligence (NEW)](solutions/threat-intelligence-(new).md) | 2025-04-02 | Microsoft Corporation |
+| [Threat Intelligence (NEW)](solutions/threat-intelligence-%28new%29.md) | 2025-04-02 | Microsoft Corporation |
 | [Threat Intelligence Solution for Azure Government](solutions/threat-intelligence-solution-for-azure-government.md) | 2023-03-06 | Microsoft Corporation |
 | [ThreatAnalysis&Response](solutions/threatanalysis&response.md) | 2021-10-20 | Microsoft Corporation |
 | [ThreatConnect](solutions/threatconnect.md) | 2023-09-11 | ThreatConnect, Inc. |
@@ -585,6 +603,7 @@ Browse solutions alphabetically:
 | [Trend Micro Deep Security](solutions/trend-micro-deep-security.md) | 2022-05-10 | Trend Micro |
 | [Trend Micro TippingPoint](solutions/trend-micro-tippingpoint.md) | 2022-05-02 | Trend Micro |
 | [Trend Micro Vision One](solutions/trend-micro-vision-one.md) | 2022-05-11 | Trend Micro |
+| [Tropico](solutions/tropico.md) | 2025-12-02 | TROPICO Security |
 
 ### U
 
@@ -641,10 +660,10 @@ Browse solutions alphabetically:
 |----------|----------------|----------|
 | [ZeroFox](solutions/zerofox.md) | 2023-07-28 | ZeroFox |
 | [ZeroNetworks](solutions/zeronetworks.md) | 2022-06-06 | Zero Networks |
-| [ZeroTrust(TIC3.0)](solutions/zerotrust(tic3.0).md) | 2021-10-20 | Microsoft Corporation |
+| [ZeroTrust(TIC3.0)](solutions/zerotrust%28tic3.0%29.md) | 2021-10-20 | Microsoft Corporation |
 | [Zimperium Mobile Threat Defense](solutions/zimperium-mobile-threat-defense.md) | 2022-05-02 | Zimperium |
 | [Zinc Open Source](solutions/zinc-open-source.md) | 2022-10-03 | Microsoft Corporation |
 | [ZoomReports](solutions/zoomreports.md) | 2022-05-23 | Microsoft Corporation |
 | [Zscaler Internet Access](solutions/zscaler-internet-access.md) | 2022-05-25 | Zscaler |
-| [Zscaler Private Access (ZPA)](solutions/zscaler-private-access-(zpa).md) | 2022-01-31 | Microsoft Corporation |
+| [Zscaler Private Access (ZPA)](solutions/zscaler-private-access-%28zpa%29.md) | 2022-01-31 | Microsoft Corporation |
 

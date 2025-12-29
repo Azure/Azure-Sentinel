@@ -1,15 +1,11 @@
 # ASimFileEventLogs
 
-Reference for ASimFileEventLogs table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `ASimFileEventLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✓ Yes |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimfileeventlogs) |
 
@@ -30,12 +26,6 @@ This table is ingested by the following connectors:
 
 - [CrowdStrike Falcon Data Replicator (CrowdStrike Managed AWS-S3)](../connectors/crowdstrikereplicatorv2.md)
 - [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.securityinsights/asimtables`
 
 ---
 

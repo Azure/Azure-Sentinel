@@ -56,7 +56,7 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) d
 
 [→ View full connector details](../connectors/oktassov2.md)
 
-### [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md)
+### [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon%28usingazurefunctions%29.md)
 
 **Publisher:** Okta
 
@@ -69,7 +69,7 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 | | `signIns` |
 | **Connector Definition Files** | [azuredeploy_Okta_native_poller_connector_v2.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Okta%20Single%20Sign-On/Data%20Connectors/OktaNativePollerConnectorV2/azuredeploy_Okta_native_poller_connector_v2.json) |
 
-[→ View full connector details](../connectors/oktasinglesignon(usingazurefunctions).md)
+[→ View full connector details](../connectors/oktasinglesignon%28usingazurefunctions%29.md)
 
 ## Tables Reference
 
@@ -79,7 +79,26 @@ This solution ingests data into **4 table(s)**:
 |-------|-------------------|
 | `OktaNativePoller_CL` | [Okta Single Sign-On (Polling CCP)](../connectors/oktasso-polling.md) |
 | `OktaV2_CL` | [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
-| `Okta_CL` | [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On](../connectors/oktasso.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
+| `Okta_CL` | [Okta Single Sign-On](../connectors/oktasso.md), [Okta Single Sign-On](../connectors/oktassov2.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
 | `signIns` | [Okta Single Sign-On (Preview)](../connectors/oktassov2.md), [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md) |
+
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
+|-------------|--------------------------------|---------------------------------------------------------------|
+| 3.1.2       | 06-01-2025                     | Removing Custom Entity mappings from **Analytic Rule**                         |
+| 3.1.1       | 08-11-2024                     | Fixed CCP **Data Connector** connection bug                          |
+| 3.1.0       | 27-11-2024                     | Fixed Solution version in Maintemplate and resolved ARM template error                           |
+| 3.0.10      | 08-11-2024                     | Updated **Parser** to fix the schema                          |
+| 3.0.9       | 17-10-2024                     | Updated package to fix connectivity of CCP connector |
+| 3.0.8       | 14-08-2024                     | Data Connector Globally Available         |
+| 3.0.7       | 25-04-2024                     | Repackaged for parser issue with old names       |
+| 3.0.6       | 17-04-2024                     | Repackaged solution for parser fix   |
+| 3.0.5       | 08-04-2024                     | Added Azure Deploy button for government portal deployments   |
+| 3.0.4       | 18-03-2024                     | Updated description in data file, data connector and added logo for ccp data connector                    |
+| 3.0.3       | 08-03-2024                     | Updated ccp with domainname in dcr, tables, name change in definition and poller                     |
+| 3.0.2       | 20-02-2024                     | Updated _solutionVersion to resource specific version and repackage                    |
+| 3.0.1       | 24-01-2024                     | New **Analytic Rule** added (UserSessionImpersonation.yaml)  |
+| 3.0.0       | 10-10-2023                     | Manual deployment instructions updated for **Data Connector** |
 
 [← Back to Solutions Index](../solutions-index.md)

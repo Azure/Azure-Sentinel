@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `QscoutAppEvents_CL` | [QscoutAppEventsConnector](../connectors/qscoutappeventsccfdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                     |
+|-------------|--------------------------------|--------------------------------------------------------------------------------------------------------|
+| 3.0.0       | 07-11-2025                     | Initial Solution Release for Quokka **CCF Data Connector** with an Analytic Rule and a Workbook        |
+
 [← Back to Solutions Index](../solutions-index.md)

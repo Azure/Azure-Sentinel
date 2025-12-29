@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Garrison_ULTRARemoteLogs_CL` | [Garrison ULTRA Remote Logs](../connectors/garrisonultraremotelogs.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.0       | 22-11-2024                     | Initial Solution Release   |
+
 [← Back to Solutions Index](../solutions-index.md)

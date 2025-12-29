@@ -37,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `MailRiskEventEmails_CL` | [MailRisk by Secure Practice](../connectors/securepracticemailriskconnector.md) |
 
+## Release Notes
+
+| **Version**  | **Date Modified (DD-MM-YYYY)**  | **Change History**                          	|
+|--------------|---------------------------------|----------------------------------------------|
+| 3.0.0        | 29-10-2025                      | Migrate connector to CCF                   	|
+
 [← Back to Solutions Index](../solutions-index.md)

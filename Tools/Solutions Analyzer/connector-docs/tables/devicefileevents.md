@@ -5,11 +5,9 @@ File creation, modification, and other file system events
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `DeviceFileEvents` |
-| **Category** | Security |
+| **Category** | XDR |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/devicefileevents) |
 | **Defender XDR Docs** | [View Documentation](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicefileevents-table) |

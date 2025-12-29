@@ -21,7 +21,7 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [1Password](../connectors/1password.md)
-- [1Password (Serverless)](../connectors/1password(serverless).md)
+- [1Password (Serverless)](../connectors/1password%28serverless%29.md)
 - [1Password (Serverless)](../connectors/1passwordccpdefinition.md)
 
 ---

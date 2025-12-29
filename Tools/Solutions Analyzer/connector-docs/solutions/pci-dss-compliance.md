@@ -17,4 +17,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.0       | 16-10-2024                     |   Updated solution to fix content issue and data type for **Workbook** issue                                        |
+
 [← Back to Solutions Index](../solutions-index.md)

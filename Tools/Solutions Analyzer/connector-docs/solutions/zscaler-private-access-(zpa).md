@@ -36,4 +36,13 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `ZPA_CL` | [[Deprecated] Zscaler Private Access](../connectors/zscalerprivateaccess.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.3       | 28-08-2025                     | The parser query now includes additional fields such as SessionID, IPProtocol, ClientCountryCode, and others, improving event parsing and enrichment.                                              |
+| 3.0.2       | 08-07-2025                     | Enhanced **Parser** logic to improve result filtering. |
+| 3.0.1       | 05-12-2024                     | Removed Deperacted **Data connectors**                             |
+| 3.0.0       | 22-08-2024                     | Deprecating data connectors    								    |
+
 [← Back to Solutions Index](../solutions-index.md)

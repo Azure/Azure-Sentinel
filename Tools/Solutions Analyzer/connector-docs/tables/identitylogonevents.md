@@ -5,11 +5,9 @@ Authentication events on Active Directory and Microsoft online services
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `IdentityLogonEvents` |
-| **Category** | Security |
+| **Category** | XDR |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/identitylogonevents) |
 | **Defender XDR Docs** | [View Documentation](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-identitylogonevents-table) |

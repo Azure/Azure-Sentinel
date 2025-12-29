@@ -5,11 +5,9 @@ Security events that occur post-delivery, after Microsoft 365 delivers the email
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `EmailPostDeliveryEvents` |
-| **Category** | Security |
+| **Category** | XDR |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/emailpostdeliveryevents) |
 | **Defender XDR Docs** | [View Documentation](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-emailpostdeliveryevents-table) |

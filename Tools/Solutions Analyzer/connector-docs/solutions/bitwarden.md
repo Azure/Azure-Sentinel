@@ -41,4 +41,10 @@ This solution ingests data into **3 table(s)**:
 | `BitwardenGroups_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
 | `BitwardenMembers_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                 |
+|-------------|--------------------------------|----------------------------------------------------|
+| 3.0.0       | 07-06-2024                     | Initial Solution Release                           |
+
 [← Back to Solutions Index](../solutions-index.md)

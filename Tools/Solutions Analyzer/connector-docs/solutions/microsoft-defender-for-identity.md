@@ -58,4 +58,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `SecurityAlert` | [Microsoft Defender for Identity](../connectors/azureadvancedthreatprotection.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                     |
+|-------------|--------------------------------|----------------------------------------|
+| 3.0.0       | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
+
 [← Back to Solutions Index](../solutions-index.md)

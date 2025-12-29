@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `GCPIDS` | [Google Cloud Platform Cloud IDS (via Codeless Connector Framework)](../connectors/gcpcloudidslogsccpdefinition.md) |
 
+## Release Notes
+
+**Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+|------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.1      | 13-08-2025                    | Google Cloud Platform IDS **CCF Data Connector** moving to GA                             |
+| 3.0.0      | 11-03-2025                    | Initial Solution Release                                               					 |
+
 [← Back to Solutions Index](../solutions-index.md)

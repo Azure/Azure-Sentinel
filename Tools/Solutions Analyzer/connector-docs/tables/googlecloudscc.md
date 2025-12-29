@@ -1,15 +1,11 @@
 # GoogleCloudSCC
 
-Reference for GoogleCloudSCC table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `GoogleCloudSCC` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✓ Yes |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/googlecloudscc) |
 

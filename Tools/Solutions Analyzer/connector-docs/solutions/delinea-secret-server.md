@@ -49,4 +49,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] Delinea Secret Server via AMA](../connectors/delineasecretserverama.md), [[Deprecated] Delinea Secret Server via Legacy Agent](../connectors/delineasecretserver-cef.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
+| 3.0.0       | 20-09-2023                     |	Addition of new Delinea Secret Server AMA **Data Connector**    |
+
 [← Back to Solutions Index](../solutions-index.md)

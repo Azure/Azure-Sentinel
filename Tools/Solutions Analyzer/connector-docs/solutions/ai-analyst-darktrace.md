@@ -49,4 +49,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] AI Analyst Darktrace via AMA](../connectors/darktraceama.md), [[Deprecated] AI Analyst Darktrace via Legacy Agent](../connectors/darktrace.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
+| 3.0.0       | 18-09-2023                     |	Addition of new AI Analyst Darktrace AMA **Data Connector**     |
+
 [← Back to Solutions Index](../solutions-index.md)

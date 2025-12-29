@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `BigIDDSPMCatalog_CL` | [BigID DSPM connector](../connectors/bigiddspmlogsconnectordefinition.md) |
 
+## Release Notes
+
+**Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+|------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.0      | 15-10-2025    | First version of a BigID DSPM CCF Connector. <br/> BigID DSPM CCF Connector now using JWT user token authentication |
+
 [← Back to Solutions Index](../solutions-index.md)

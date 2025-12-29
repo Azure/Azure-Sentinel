@@ -36,4 +36,10 @@ This connector is in limited private preview.
 
 [→ View full connector details](../connectors/m365assets.md)
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                |
+|-------------|--------------------------------|---------------------------------------------------------------------------------------------------|
+| 3.0.0       | 20-06-2025                     | Releasing a new Microsoft 365 Asset connector solution in Content Hub and Data Connector gallery. |
+
 [← Back to Solutions Index](../solutions-index.md)

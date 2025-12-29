@@ -37,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `varonisresources_CL` | [Varonis Purview Push Connector](../connectors/varonispurviewpush.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 27-10-2025                     | Initial Solution Release |
+
 [← Back to Solutions Index](../solutions-index.md)

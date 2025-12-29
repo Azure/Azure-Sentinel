@@ -70,4 +70,10 @@ This solution ingests data into **16 table(s)**:
 | `meraki_CL` | [Custom logs via AMA](../connectors/customlogsviaama.md) |
 | `vcenter_CL` | [Custom logs via AMA](../connectors/customlogsviaama.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                         |
+|-------------|--------------------------------|------------------------------------------------------------|
+| 3.0.0 	    | 08-08-2024 				        	   | Initial Solution Release                										|
+
 [← Back to Solutions Index](../solutions-index.md)

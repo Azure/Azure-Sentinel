@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | [[Deprecated] McAfee Network Security Platform](../connectors/mcafeensp.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                               |
+|-------------|--------------------------------|--------------------------------------------------|
+| 3.0.1       | 27-12-2024                     | Removed Deprecated **Data connector**            |
+| 3.0.0       | 23-07-2024                     | Deprecated Data connectors  |
+
 [← Back to Solutions Index](../solutions-index.md)

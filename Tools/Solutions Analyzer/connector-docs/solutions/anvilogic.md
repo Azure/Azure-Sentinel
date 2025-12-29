@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Anvilogic_Alerts_CL` | [Anvilogic](../connectors/anvilogicccfdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
+|-------------|--------------------------------|--------------------------------------------------------------|
+| 3.0.0       | 20-06-2025                     | Initial Solution Release.                                    |
+
 [← Back to Solutions Index](../solutions-index.md)

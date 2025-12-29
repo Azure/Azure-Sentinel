@@ -22,7 +22,7 @@ This table is ingested by the following connectors:
 
 - [Okta Single Sign-On](../connectors/oktasso.md)
 - [Okta Single Sign-On](../connectors/oktassov2.md)
-- [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon(usingazurefunctions).md)
+- [Okta Single Sign-On (using Azure Functions)](../connectors/oktasinglesignon%28usingazurefunctions%29.md)
 
 ---
 

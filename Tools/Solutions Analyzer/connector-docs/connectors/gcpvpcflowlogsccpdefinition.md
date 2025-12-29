@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPVPCFlow`](../tables/gcpvpcflow.md) | ✓ | ✗ |
+| [`GCPVPCFlow`](../tables/gcpvpcflow.md) | — | ✗ |
 
 ## Permissions
 

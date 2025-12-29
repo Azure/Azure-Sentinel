@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`ProjectActivity`](../tables/projectactivity.md) | ✓ | ✗ |
+| [`ProjectActivity`](../tables/projectactivity.md) | — | ✗ |
 
 ## Permissions
 

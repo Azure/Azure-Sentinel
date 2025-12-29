@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AWSRoute53Resolver` | [Amazon Web Services S3 DNS Route53 (via Codeless Connector Framework)](../connectors/awsroute53resolverccpdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                               |
+|-------------|--------------------------------|------------------------------------------------------------------|
+|  3.0.1 	  |  30-06-2025 				   | Amazon Web Services Route 53 **CCF Data Connector** moving to GA |
+|  3.0.0      |  27-05-2025                    | Initial Solution Release.           							  |
+
 [← Back to Solutions Index](../solutions-index.md)

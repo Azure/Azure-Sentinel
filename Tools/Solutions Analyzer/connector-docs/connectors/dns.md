@@ -5,7 +5,7 @@
 | **Connector ID** | `DNS` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Windows Server DNS](../solutions/windows-server-dns.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_DNS.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Data%20Connectors/template_DNS.JSON) |
 
 The DNS log connector allows you to easily connect your DNS analytic and audit logs with Microsoft Sentinel, and other related data, to improve investigation.
@@ -34,8 +34,8 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`DnsEvents`](../tables/dnsevents.md) | ✓ | ✗ |
-| [`DnsInventory`](../tables/dnsinventory.md) | ✓ | ✗ |
+| [`DnsEvents`](../tables/dnsevents.md) | — | ✗ |
+| [`DnsInventory`](../tables/dnsinventory.md) | — | ✗ |
 
 ## Permissions
 

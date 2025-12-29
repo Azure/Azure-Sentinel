@@ -13,7 +13,11 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **2 data connector(s)**.
+
+### [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md)
+
+**Publisher:** Microsoft
 
 Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your security alerts from Microsoft Defender for Cloud into Microsoft Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
 
@@ -47,6 +51,15 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SecurityAlert` | [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md) |
+| `SecurityAlert` | [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md), [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md) |
+
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYY)** | **Change History**                              |
+|-------------|-------------------------------|-------------------------------------------------|
+| 3.0.3       |	06-12-2025	                  |Moved MicrosoftDefenderForCloudTenantBased's **Data Connector** from public preview to Global Availability | 
+| 3.0.2       |	15-04-2024	                  |Updated **Data Connector** MicrosoftDefenderForCloudTenantBased's kind as GenericUI | 
+| 3.0.1       | 03-04-2024                    |Corrected the standard tier in **Data Connector** and Updated MicrosoftDefenderForCloudTenantBased.json to support FFX  |
+| 3.0.0       | 08-11-2023                    |New **Data Connector** included		        |
 
 [← Back to Solutions Index](../solutions-index.md)

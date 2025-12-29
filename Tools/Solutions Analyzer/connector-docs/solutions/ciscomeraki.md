@@ -28,7 +28,7 @@ The [Cisco Meraki](https://meraki.cisco.com/) connector allows you to easily con
 
 [→ View full connector details](../connectors/ciscomeraki.md)
 
-### [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md)
+### [Cisco Meraki (using REST API)](../connectors/ciscomeraki%28usingrestapi%29.md)
 
 **Publisher:** Microsoft
 
@@ -46,7 +46,7 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
 | | `meraki_CL` |
 | **Connector Definition Files** | [azuredeploy_Cisco_Meraki_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoMeraki/Data%20Connectors/CiscoMerakiNativePollerConnector/azuredeploy_Cisco_Meraki_native_poller_connector.json) |
 
-[→ View full connector details](../connectors/ciscomeraki(usingrestapi).md)
+[→ View full connector details](../connectors/ciscomeraki%28usingrestapi%29.md)
 
 ### [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md)
 
@@ -74,7 +74,17 @@ This solution ingests data into **2 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md) |
-| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
+| `CiscoMerakiNativePoller_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md) |
+| `meraki_CL` | [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md), [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md), [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md) |
+
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
+|-------------|--------------------------------|-------------------------------------------------------------|
+| 3.0.5       | 11-06-2025                     | Correct name shown on **Data Types** to match query used..  |
+| 3.0.4       | 23-07-2025                     | **Workbook** updated with new ThreatIntelIndicators table.  |
+| 3.0.3       | 02012-2024                     | Removed Deprecated **Data Connectors**                      |
+| 3.0.2       | 12-08-2024                     | Deprecating data connector                                  |
+| 3.0.1       | 26-07-2023                     | Updated **Workbook** template to remove unused variables.   |
 
 [← Back to Solutions Index](../solutions-index.md)

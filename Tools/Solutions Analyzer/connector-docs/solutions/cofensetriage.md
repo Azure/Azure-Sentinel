@@ -77,4 +77,10 @@ This solution ingests data into **3 table(s)**:
 | `Report_links_data_CL` | [Cofense Triage Threat Indicators Ingestion](../connectors/cofensetriage.md) |
 | `ThreatIntelligenceIndicator` | [Cofense Triage Threat Indicators Ingestion](../connectors/cofensetriage.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 20-06-2024                     | Updated Data Connector to retry failed indicators.                    |
+
 [← Back to Solutions Index](../solutions-index.md)

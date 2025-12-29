@@ -57,4 +57,10 @@ This solution ingests data into **5 table(s)**:
 | `PaloAltoCortexXDR_Endpoints_CL` | [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
 | `PaloAltoCortexXDR_Incidents_CL` | [Cortex XDR - Incidents](../connectors/cortexxdrincidents.md), [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
+|-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.0.0       | 28-07-2023                     | Initial Solution Release                                                 |
+
 [← Back to Solutions Index](../solutions-index.md)

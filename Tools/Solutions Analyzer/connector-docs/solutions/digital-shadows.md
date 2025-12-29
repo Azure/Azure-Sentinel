@@ -35,4 +35,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `DigitalShadows_CL` | [Digital Shadows Searchlight](../connectors/digitalshadowssearchlightazurefunctions.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.0       | 30-11-2023                     |  Added new Entity Mapping to **Analytic Rules**                    |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPFirewallLogs`](../tables/gcpfirewalllogs.md) | ✓ | ✗ |
+| [`GCPFirewallLogs`](../tables/gcpfirewalllogs.md) | — | ✗ |
 
 ## Permissions
 

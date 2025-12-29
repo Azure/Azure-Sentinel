@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPIAM`](../tables/gcpiam.md) | ✓ | ✗ |
+| [`GCPIAM`](../tables/gcpiam.md) | — | ✗ |
 
 ## Permissions
 

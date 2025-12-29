@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `ProofpointCCPDefinition` |
 | **Publisher** | Proofpoint |
-| **Used in Solutions** | [Proofpoint On demand(POD) Email Security](../solutions/proofpoint-on-demand(pod)-email-security.md) |
+| **Used in Solutions** | [Proofpoint On demand(POD) Email Security](../solutions/proofpoint-on-demand%28pod%29-email-security.md) |
 | **Collection Method** | CCF |
 | **Connector Definition Files** | [ProofpointPOD_Definaton.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Data%20Connectors/ProofPointEmailSecurity_CCP/ProofpointPOD_Definaton.json) |
 

@@ -49,4 +49,13 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `PrismaCloudCompute_CL` | [Palo Alto Prisma Cloud CWPP (using REST API)](../connectors/prismacloudcomputenativepoller.md), [Palo Alto Prisma Cloud CWPP (using REST API)](../connectors/paloaltoprismacloudcwpp.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.3       | 03-01-2024                     |	Repackaged for _solutionVersion issue in resource            |
+| 3.0.2       | 03-01-2024                     |	Updated package version and password as a securestring            |
+| 3.0.1       | 30-11-2023                     |	Updated the data connector and its associated package             |
+| 3.0.0       | 10-10-2023                     |	Added new files to support CCP CLV2 and its package               |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -17,8 +17,8 @@ This connector ingests data into the following tables:
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
 | [`AzureDiagnostics`](../tables/azurediagnostics.md) | — | ✗ |
-| [`ContainerInventory`](../tables/containerinventory.md) | ✓ | ✗ |
-| [`KubeEvents`](../tables/kubeevents.md) | ✓ | ✗ |
+| [`ContainerInventory`](../tables/containerinventory.md) | — | ✗ |
+| [`KubeEvents`](../tables/kubeevents.md) | — | ✗ |
 
 ## Permissions
 

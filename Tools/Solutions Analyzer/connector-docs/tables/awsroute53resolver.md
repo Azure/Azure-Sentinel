@@ -1,15 +1,11 @@
 # AWSRoute53Resolver
 
-Reference for AWSRoute53Resolver table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `AWSRoute53Resolver` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/awsroute53resolver) |
 

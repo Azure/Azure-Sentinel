@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AWSSecurityHubFindings`](../tables/awssecurityhubfindings.md) | ✓ | ✗ |
+| [`AWSSecurityHubFindings`](../tables/awssecurityhubfindings.md) | — | ✗ |
 
 ## Permissions
 

@@ -18,7 +18,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`MicrosoftPurviewInformationProtection`](../tables/microsoftpurviewinformationprotection.md) | ✓ | ✗ |
+| [`MicrosoftPurviewInformationProtection`](../tables/microsoftpurviewinformationprotection.md) | — | ✗ |
 
 ## Permissions
 

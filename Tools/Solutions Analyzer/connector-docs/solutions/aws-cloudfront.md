@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AWSCloudFront_AccessLog_CL` | [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](../connectors/awscloudfrontccpdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                           |
+|------------|-------------------------------|----------------------------------------------------------------------------------------------|
+| 3.0.0      | 24-06-2025                    | Initial Solution Release. <br/>Added new CCF **Data Connector** 'AWSCloudFrontLog_CCF'       |
+
 [← Back to Solutions Index](../solutions-index.md)

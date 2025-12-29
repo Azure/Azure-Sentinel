@@ -17,4 +17,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
+|-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.1       | 28-11-2023                     | Modified text as there is rebranding from Azure Active Directory to Microsoft Entra ID & MS 365 Defender to MS Defender XDR |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -16,4 +16,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
+|-------------|--------------------------------|---------------------------------------------------------------------------|
+| 3.0.1       | 29-01-2024                     | App insights to LA change in data connector and repackage                 |
+
 [← Back to Solutions Index](../solutions-index.md)

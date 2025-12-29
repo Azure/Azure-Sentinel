@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `ZscalerPrivateAccess` |
 | **Publisher** | Zscaler |
-| **Used in Solutions** | [Zscaler Private Access (ZPA)](../solutions/zscaler-private-access-(zpa).md) |
+| **Used in Solutions** | [Zscaler Private Access (ZPA)](../solutions/zscaler-private-access-%28zpa%29.md) |
 | **Collection Method** | MMA |
 | **Connector Definition Files** | [Connector_LogAnalytics_agent_Zscaler_ZPA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Zscaler%20Private%20Access%20%28ZPA%29/Data%20Connectors/Connector_LogAnalytics_agent_Zscaler_ZPA.json) |
 
@@ -83,5 +83,15 @@ Zscaler Private Access logs are delivered via Log Streaming Service (LSS). Refer
 		sudo /opt/microsoft/omsagent/bin/service_control restart
 - **Workspace ID**: `WorkspaceId`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+
+## Additional Documentation
+
+> 📄 *Source: [Zscaler Private Access (ZPA)\Data Connectors\README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Zscaler Private Access (ZPA)\Data Connectors\README.md)*
+
+# Zscaler Private Access (ZPA)
+The [Zscaler Private Access (ZPA)](https://help.zscaler.com/zpa/what-zscaler-private-access) data connector provides the capability to ingest [Zscaler Private Access events](https://help.zscaler.com/zpa/log-streaming-service) into Microsoft Sentinel. Refer to [Zscaler Private Access documentation](https://help.zscaler.com/zpa) for more information.
+# Requirements
+1. ZPA device log forwarding configuration uses the port "**22033**" by default. Ensure this port is not being used by any other source on your server.
+2. If you would like to change the default port for ZPA configuartion(**zpa.conf**) make sure that it should not get conflict with default AMA agent ports i.e. (For example CEF uses "**25226**" or "**25224**")
 
 [← Back to Connectors Index](../connectors-index.md)

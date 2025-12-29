@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `BetterMTD` |
 | **Publisher** | BETTER Mobile |
-| **Used in Solutions** | [BETTER Mobile Threat Defense (MTD)](../solutions/better-mobile-threat-defense-(mtd).md) |
+| **Used in Solutions** | [BETTER Mobile Threat Defense (MTD)](../solutions/better-mobile-threat-defense-%28mtd%29.md) |
 | **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [BETTERMTD.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BETTER%20Mobile%20Threat%20Defense%20%28MTD%29/Data%20Connectors/BETTERMTD.json) |
 

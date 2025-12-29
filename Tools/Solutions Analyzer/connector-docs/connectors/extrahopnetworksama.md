@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `ExtraHopNetworksAma` |
 | **Publisher** | ExtraHop Networks |
-| **Used in Solutions** | [ExtraHop Reveal(x)](../solutions/extrahop-reveal(x).md) |
+| **Used in Solutions** | [ExtraHop Reveal(x)](../solutions/extrahop-reveal%28x%29.md) |
 | **Collection Method** | AMA |
 | **Connector Definition Files** | [template_ExtraHopReveal%28x%29AMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ExtraHop%20Reveal%28x%29/Data%20Connectors/template_ExtraHopReveal%28x%29AMA.json) |
 
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | — | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `BitglassLogs_CL` | [Bitglass](../connectors/bitglass.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
+|-------------|--------------------------------|--------------------------------------------------------------------------|
+| 3.0.0       | 21-10-2024                     | Updated the python runtime version to **3.11** and updated functional URL|
+
 [← Back to Solutions Index](../solutions-index.md)

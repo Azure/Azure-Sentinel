@@ -22,7 +22,7 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [[Deprecated] Cisco Meraki](../connectors/ciscomeraki.md)
-- [Cisco Meraki (using REST API)](../connectors/ciscomeraki(usingrestapi).md)
+- [Cisco Meraki (using REST API)](../connectors/ciscomeraki%28usingrestapi%29.md)
 - [Cisco Meraki (using REST API)](../connectors/ciscomerakinativepoller.md)
 - [Custom logs via AMA](../connectors/customlogsviaama.md)
 

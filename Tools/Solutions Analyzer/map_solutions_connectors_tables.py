@@ -813,9 +813,10 @@ def determine_collection_method(
     connector_description: str,
     json_content: Optional[str] = None,
     filename: Optional[str] = None,
-) -> Tuple[str, str]:
+    table_metadata: Optional[List[Dict[str, str]]] = None,
+) -> Tuple[str, str, List[Tuple[str, str]]]:
     """
-    Determine the data collection method based on connector metadata and JSON content.
+    Determine the data collection method based on connector metadata, JSON content, and table metadata.
     
     Collection Methods:
     - CCF (Codeless Connector Framework): Uses pollingConfig, RestApiPoller, CCP/CCF patterns
@@ -826,8 +827,26 @@ def determine_collection_method(
     - REST API: Direct REST API integration
     - Native: Built-in Microsoft integrations
     
+    Detection Priority:
+    1. Explicit AMA/MMA in title (strongest indicator)
+    2. Azure Diagnostics patterns
+    3. Native Microsoft integrations
+    4. CCF patterns (content-based)
+    5. Azure Function patterns
+    6. REST API patterns
+    7. Table metadata fallback
+    
+    Args:
+        connector_id: The connector identifier
+        connector_title: The connector title
+        connector_description: The connector description
+        json_content: Optional JSON content from the connector definition file
+        filename: Optional filename of the connector definition
+        table_metadata: Optional list of table metadata dicts with 'category' and 'resource_types'
+    
     Returns:
-        Tuple of (collection_method, detection_reason)
+        Tuple of (collection_method, detection_reason, all_matches)
+        where all_matches is a list of (method, reason) for all detected methods
     """
     # Normalize inputs for case-insensitive matching
     conn_id_lower = (connector_id or "").lower()
@@ -836,89 +855,181 @@ def determine_collection_method(
     content = json_content or ""
     file_lower = (filename or "").lower()
     
-    # 1. CCF Detection - check patterns and JSON content
-    if 'ccp' in conn_id_lower or 'ccf' in conn_id_lower or 'codeless' in conn_title_lower:
-        return "CCF", "ID/title contains CCP/CCF/Codeless"
-    if 'polling' in conn_id_lower and 'function' not in conn_id_lower:
-        return "CCF", "ID contains Polling pattern (CCF)"
-    if 'pollingConfig' in content:
-        return "CCF", "Has pollingConfig"
-    if 'dcrConfig' in content and '"type"' in content and 'RestApiPoller' in content:
-        return "CCF", "Has dcrConfig with RestApiPoller"
-    if 'GCPAuthConfig' in content:
-        return "CCF", "Has GCPAuthConfig"
-    if 'dataConnectorDefinitions' in content:
-        return "CCF", "Uses dataConnectorDefinitions"
+    # Track all matching methods for reporting
+    all_matches: List[Tuple[str, str]] = []
     
-    # 2. Azure Function Detection - check both filename and content patterns
+    # === PRIORITY 1: Explicit AMA/MMA in title only (strongest indicator) ===
+    # Only title-based detection - must be explicit in connector name
+    title_indicates_ama = ('AMA' in connector_title or 'via AMA' in connector_title or
+                           'ama' in conn_id_lower.split('-') or conn_id_lower.endswith('ama'))
+    title_indicates_mma = ('Legacy Agent' in connector_title or 'via Legacy Agent' in connector_title)
+    
+    # Special case: WindowsFirewall (without Ama suffix) is MMA
+    if connector_id == 'WindowsFirewall':
+        title_indicates_mma = True
+    
+    if title_indicates_ama:
+        all_matches.append(("AMA", "Title/ID indicates AMA"))
+    if title_indicates_mma:
+        all_matches.append(("MMA", "Title mentions Legacy Agent"))
+    
+    # === PRIORITY 2: Azure Function Detection - FILENAME ONLY ===
+    # Only filename-based detection at this priority - content patterns are lower
+    is_azure_function_filename = False
     if 'functionapp' in file_lower or 'function_app' in file_lower or '_api_function' in file_lower:
-        return "Azure Function", "Filename indicates Azure Function"
-    if 'azure functions' in conn_desc_lower:
-        return "Azure Function", "Description mentions Azure Functions"
-    if 'azurefunction' in conn_id_lower:
-        return "Azure Function", "ID contains AzureFunction"
-    if 'Deploy to Azure' in content and 'Function App' in content:
-        return "Azure Function", "Deploy Azure Function pattern"
-    if 'Azure Function App' in content:
-        return "Azure Function", "Content mentions Azure Function App"
-    if 'azure-functions' in content.lower() and 'pricing/details/functions' in content.lower():
-        return "Azure Function", "References Azure Functions pricing"
+        all_matches.append(("Azure Function", "Filename indicates Azure Function"))
+        is_azure_function_filename = True
+    if 'azurefunction' in conn_id_lower or 'functionapp' in conn_id_lower:
+        all_matches.append(("Azure Function", "ID contains AzureFunction/FunctionApp"))
+        is_azure_function_filename = True
     
-    # 3. AMA Detection - must have explicit AMA references
-    if 'AMA' in connector_title or 'via AMA' in connector_title:
-        return "AMA", "Title indicates AMA"
-    if 'ama' in conn_id_lower.split('-'):
-        return "AMA", "ID indicates AMA"
+    # === PRIORITY 3: CCF Content Detection (strong patterns - before Azure Diagnostics) ===
+    is_ccf_content = False
+    # CCF Push variant - uses DCR/DCE for partner push ingestion
+    if 'DeployPushConnectorButton' in content and 'HasDataConnectors' in content:
+        all_matches.append(("CCF", "CCF Push connector (DCR/DCE based)"))
+        is_ccf_content = True
+    # Check content-based patterns (more reliable than name-based)
+    if 'pollingConfig' in content:
+        all_matches.append(("CCF", "Has pollingConfig"))
+        is_ccf_content = True
+    if 'dcrConfig' in content and '"type"' in content and 'RestApiPoller' in content:
+        all_matches.append(("CCF", "Has dcrConfig with RestApiPoller"))
+        is_ccf_content = True
+    if 'GCPAuthConfig' in content:
+        all_matches.append(("CCF", "Has GCPAuthConfig"))
+        is_ccf_content = True
+    # dataConnectorDefinitions - but not if AMA is in title
+    if 'dataConnectorDefinitions' in content and not title_indicates_ama:
+        all_matches.append(("CCF", "Uses dataConnectorDefinitions"))
+        is_ccf_content = True
+    
+    # === PRIORITY 4: Azure Diagnostics patterns (before CCF name patterns) ===
+    is_azure_diagnostics = False
+    if not is_azure_function_filename:
+        if 'AzureDiagnostics' in content or 'diagnostic settings' in conn_desc_lower:
+            all_matches.append(("Azure Diagnostics", "References Azure Diagnostics"))
+            is_azure_diagnostics = True
+        if 'Microsoft.Insights/diagnosticSettings' in content:
+            all_matches.append(("Azure Diagnostics", "Uses diagnostic settings resource"))
+            is_azure_diagnostics = True
+        if 'policyDefinitionGuid' in content and 'PolicyAssignment' in content:
+            all_matches.append(("Azure Diagnostics", "Uses Azure Policy for diagnostics"))
+            is_azure_diagnostics = True
+    
+    # === PRIORITY 5: CCF Name-based Detection (lower priority - after Azure Diagnostics) ===
+    # Only use name-based CCF if no Azure Diagnostics patterns found
+    is_ccf_name = False
+    if not is_azure_diagnostics:
+        if ('ccp' in conn_id_lower or 'ccf' in conn_id_lower or 'codeless' in conn_title_lower):
+            all_matches.append(("CCF", "ID/title contains CCP/CCF/Codeless"))
+            is_ccf_name = True
+        if 'polling' in conn_id_lower and 'function' not in conn_id_lower:
+            all_matches.append(("CCF", "ID contains Polling pattern (CCF)"))
+            is_ccf_name = True
+    
+    is_ccf = is_ccf_content or is_ccf_name
+    
+    # === PRIORITY 6: Azure Function Content Detection (lower priority) ===
+    # Content-based Azure Function patterns - only if not already detected as CCF content
+    is_azure_function_content = False
+    if not is_ccf_content:
+        if 'azure functions' in conn_desc_lower:
+            all_matches.append(("Azure Function", "Description mentions Azure Functions"))
+            is_azure_function_content = True
+        if 'Deploy to Azure' in content and 'Function App' in content:
+            all_matches.append(("Azure Function", "Deploy Azure Function pattern"))
+            is_azure_function_content = True
+        if 'Azure Function App' in content:
+            all_matches.append(("Azure Function", "Content mentions Azure Function App"))
+            is_azure_function_content = True
+        if 'azure-functions' in content.lower() and 'pricing/details/functions' in content.lower():
+            all_matches.append(("Azure Function", "References Azure Functions pricing"))
+            is_azure_function_content = True
+    
+    is_azure_function = is_azure_function_filename or is_azure_function_content
+    
+    # === PRIORITY 7: Native Microsoft Integration (skip if CCF content detected) ===
+    # Native patterns are broad, so only use if no CCF content patterns found
+    is_native = False
+    if not is_ccf_content:
+        if 'SentinelKinds' in content:
+            all_matches.append(("Native", "Uses SentinelKinds (Native integration)"))
+            is_native = True
+        if any(x in connector_title for x in ['Microsoft Defender', 'Microsoft 365', 'Office 365', 'Microsoft Entra ID']):
+            all_matches.append(("Native", "Microsoft native integration"))
+            is_native = True
+        if any(x in connector_id for x in ['AzureActivity', 'AzureActiveDirectory', 'Office365', 'MicrosoftDefender']):
+            all_matches.append(("Native", "Known native connector ID"))
+            is_native = True
+    
+    # === PRIORITY 8: Additional AMA/MMA patterns (lower priority) ===
     if 'Azure Monitor Agent' in connector_description and 'AMA' in content:
-        return "AMA", "Description mentions Azure Monitor Agent"
+        all_matches.append(("AMA", "Description mentions Azure Monitor Agent"))
     if 'sent_by_ama' in content:
-        return "AMA", "Uses sent_by_ama field"
+        all_matches.append(("AMA", "Uses sent_by_ama field"))
     if 'CEF via AMA' in content or 'Syslog via AMA' in content:
-        return "AMA", "References CEF/Syslog via AMA"
-    
-    # 4. MMA Detection - legacy agent patterns
-    if 'Legacy Agent' in connector_title or 'via Legacy Agent' in connector_title:
-        return "MMA", "Title mentions Legacy Agent"
+        all_matches.append(("AMA", "References CEF/Syslog via AMA"))
     if 'cef_installer.py' in content:
-        return "MMA", "Uses CEF installer script"
+        all_matches.append(("MMA", "Uses CEF installer script"))
     if 'omsagent' in content.lower():
-        return "MMA", "References omsagent"
+        all_matches.append(("MMA", "References omsagent"))
     if 'Install the agent' in content and 'Syslog' in content and 'AMA' not in content:
-        return "MMA", "Syslog with agent installation (no AMA)"
+        all_matches.append(("MMA", "Syslog with agent installation (no AMA)"))
     if ('workspaceId' in content.lower() and 'sharedKeys' in content.lower() and 
         'Azure Function' not in connector_description):
-        return "MMA", "Uses workspace ID/key pattern"
+        all_matches.append(("MMA", "Uses workspace ID/key pattern"))
     
-    # 5. Azure Diagnostics Detection
-    if 'AzureDiagnostics' in content or 'diagnostic settings' in conn_desc_lower:
-        return "Azure Diagnostics", "References Azure Diagnostics"
-    if 'Microsoft.Insights/diagnosticSettings' in content:
-        return "Azure Diagnostics", "Uses diagnostic settings resource"
-    
-    # 6. Native Microsoft Integration - built-in connectors with special resource types
-    if 'SentinelKinds' in content:
-        return "Native", "Uses SentinelKinds (Native integration)"
-    if any(x in connector_title for x in ['Microsoft Defender', 'Microsoft 365', 'Office 365', 'Microsoft Entra ID']):
-        return "Native", "Microsoft native integration"
-    if any(x in connector_id for x in ['AzureActivity', 'AzureActiveDirectory', 'Office365', 'MicrosoftDefender']):
-        return "Native", "Known native connector ID"
-    
-    # 7. REST API patterns - including webhooks and push connectors
+    # === PRIORITY 9: REST API patterns ===
     if 'REST API' in connector_title or 'REST API' in connector_description:
-        return "REST API", "Title/description mentions REST API"
+        all_matches.append(("REST API", "Title/description mentions REST API"))
     if 'push' in conn_title_lower or 'push' in conn_id_lower:
-        return "REST API", "Push connector (REST API based)"
+        all_matches.append(("REST API", "Push connector (REST API based)"))
     if 'webhook' in conn_title_lower or ('webhook' in conn_desc_lower and 'http' in conn_desc_lower):
-        return "REST API", "Webhook pattern (REST API based)"
+        all_matches.append(("REST API", "Webhook pattern (REST API based)"))
     if 'http endpoint' in conn_desc_lower or 'http trigger' in conn_desc_lower:
-        return "REST API", "HTTP endpoint/trigger (REST API)"
+        all_matches.append(("REST API", "HTTP endpoint/trigger (REST API)"))
     
-    # 8. Check for custom log tables without clear method
-    if '_CL' in content:
-        return "Unknown (Custom Log)", "Custom log table - needs analysis"
+    # === PRIORITY 10: Table metadata-based detection (lowest content-based priority) ===
+    # Only use if no stronger patterns detected - this is a fallback
+    if table_metadata and not is_azure_function and not is_ccf and not is_native and not is_azure_diagnostics:
+        for table_info in table_metadata:
+            category = table_info.get('category', '')
+            resource_types = table_info.get('resource_types', '').lower()
+            
+            # Azure Resources category -> Azure Diagnostics
+            if category == 'Azure Resources':
+                all_matches.append(("Azure Diagnostics", f"Table category is 'Azure Resources'"))
+                break  # Only add once
+            
+            # virtualmachines in resource_types -> AMA
+            if 'virtualmachines' in resource_types:
+                all_matches.append(("AMA", f"Table resource_types includes 'virtualmachines'"))
+                break  # Only add once
     
-    return "Unknown", "Method not detected"
-
+    # === PRIORITY 11: Custom log fallback ===
+    if '_CL' in content and not all_matches:
+        all_matches.append(("Unknown (Custom Log)", "Custom log table - needs analysis"))
+    
+    # Determine final method based on priority
+    # Priority order reflects detection order - higher = selected first
+    # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST API
+    priority_order = ["Azure Diagnostics", "CCF", "Azure Function", "Native", "AMA", "MMA", "REST API", "Unknown (Custom Log)", "Unknown"]
+    
+    # Special case: If title explicitly indicates AMA/MMA, prioritize that
+    if title_indicates_ama:
+        priority_order = ["AMA"] + [m for m in priority_order if m != "AMA"]
+    elif title_indicates_mma:
+        priority_order = ["MMA"] + [m for m in priority_order if m != "MMA"]
+    
+    if all_matches:
+        # Select based on priority
+        for method in priority_order:
+            for match in all_matches:
+                if match[0] == method:
+                    return match[0], match[1], all_matches
+    
+    return "Unknown", "Method not detected", all_matches
 
 def add_issue(
     issues: List[Dict[str, str]],
@@ -1019,6 +1130,17 @@ def main() -> None:
     report_path = args.report.resolve()
     report_parent = report_path.parent
     report_parent.mkdir(parents=True, exist_ok=True)
+
+    # Load tables_reference.csv early for use in collection method detection
+    tables_reference: Dict[str, Dict[str, str]] = {}
+    tables_reference_path = args.tables_reference_csv.resolve()
+    if tables_reference_path.exists():
+        with tables_reference_path.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                table_name = row.get('table_name', '')
+                if table_name:
+                    tables_reference[table_name] = row
 
     grouped_rows: Dict[Tuple[str, ...], Dict[str, bool]] = defaultdict(dict)
     row_key_metadata: Dict[Tuple[str, ...], Dict[str, str]] = {}
@@ -1462,17 +1584,49 @@ def main() -> None:
                 except Exception:
                     continue
     
+    # Build connector -> tables mapping for table-based collection method detection
+    connector_tables_map: Dict[str, List[str]] = defaultdict(list)
+    for row in rows:
+        connector_id = row.get('connector_id', '')
+        table_name = row.get('Table', '')
+        if connector_id and table_name:
+            connector_tables_map[connector_id].append(table_name)
+    
     # Build connectors with collection method info
     connectors_data: List[Dict[str, str]] = []
+    multi_method_connectors: List[Dict[str, Any]] = []  # Track connectors with multiple matches
+    
     for connector_id, info in sorted(connector_info_map.items()):
         json_content, filename = connector_json_content.get(connector_id, ("", ""))
-        collection_method, detection_reason = determine_collection_method(
+        
+        # Get table metadata for this connector's tables
+        table_metadata_list = []
+        for table_name in connector_tables_map.get(connector_id, []):
+            if table_name in tables_reference:
+                table_metadata_list.append(tables_reference[table_name])
+        
+        collection_method, detection_reason, all_matches = determine_collection_method(
             connector_id=info['connector_id'],
             connector_title=info['connector_title'],
             connector_description=info['connector_description'],
             json_content=json_content,
             filename=filename,
+            table_metadata=table_metadata_list if table_metadata_list else None,
         )
+        
+        # Track connectors with multiple DISTINCT methods for reporting
+        # Get unique methods from all_matches
+        unique_methods = set(m[0] for m in all_matches)
+        if len(unique_methods) > 1:
+            multi_method_connectors.append({
+                'connector_id': info['connector_id'],
+                'connector_title': info['connector_title'],
+                'selected_method': collection_method,
+                'selected_reason': detection_reason,
+                'all_matches': all_matches,
+                'unique_methods': unique_methods,
+            })
+        
         connectors_data.append({
             'connector_id': info['connector_id'],
             'connector_publisher': info['connector_publisher'],
@@ -1505,18 +1659,7 @@ def main() -> None:
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
         })
     
-    # Build tables data from tables_reference.csv metadata
-    # First, load the tables_reference.csv if it exists
-    tables_reference: Dict[str, Dict[str, str]] = {}
-    tables_reference_path = args.tables_reference_csv.resolve()
-    if tables_reference_path.exists():
-        with tables_reference_path.open("r", encoding="utf-8") as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                table_name = row.get('table_name', '')
-                if table_name:
-                    tables_reference[table_name] = row
-    
+    # Build tables data from tables_reference.csv metadata (tables_reference was loaded early)
     # Collect all unique tables from connector data
     all_tables: Set[str] = set()
     for row in rows:
@@ -1739,6 +1882,44 @@ def main() -> None:
     for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
         pct = (count / len(connectors_data) * 100) if connectors_data else 0
         print(f"  {method:30} {count:4} ({pct:.1f}%)")
+
+    # Generate multi-method detection report (only for connectors with DISTINCT methods)
+    if multi_method_connectors:
+        multi_method_report_path = args.output.parent / "multi_method_connectors_report.csv"
+        multi_method_fieldnames = [
+            'connector_id',
+            'connector_title',
+            'selected_method',
+            'selected_reason',
+            'other_methods_detected',
+            'all_reasons',
+        ]
+        with multi_method_report_path.open("w", encoding="utf-8", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=multi_method_fieldnames, quoting=csv.QUOTE_ALL)
+            writer.writeheader()
+            for conn in multi_method_connectors:
+                # Get other methods (excluding selected)
+                other_methods = sorted(conn['unique_methods'] - {conn['selected_method']})
+                # Group reasons by method for cleaner output
+                method_reasons: Dict[str, List[str]] = {}
+                for method, reason in conn['all_matches']:
+                    if method not in method_reasons:
+                        method_reasons[method] = []
+                    method_reasons[method].append(reason)
+                # Format all reasons grouped by method
+                all_reasons_formatted = '; '.join([
+                    f"{method}: {', '.join(reasons)}" 
+                    for method, reasons in sorted(method_reasons.items())
+                ])
+                writer.writerow({
+                    'connector_id': conn['connector_id'],
+                    'connector_title': conn['connector_title'],
+                    'selected_method': conn['selected_method'],
+                    'selected_reason': conn['selected_reason'],
+                    'other_methods_detected': ' | '.join(other_methods),
+                    'all_reasons': all_reasons_formatted,
+                })
+        print(f"\nWrote {len(multi_method_connectors)} connectors with multiple distinct methods to {safe_relative(multi_method_report_path, repo_root)}")
 
     print(f"\nWrote {len(rows)} rows to {safe_relative(output_path, repo_root)}")
     print(f"Wrote {len(connectors_data)} connectors to {safe_relative(connectors_path, repo_root)}")

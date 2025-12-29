@@ -40,7 +40,7 @@ This solution takes a dependency on the following technologies, and some of thes
 
 [→ View full connector details](../connectors/1password.md)
 
-### [1Password (Serverless)](../connectors/1password(serverless).md)
+### [1Password (Serverless)](../connectors/1password%28serverless%29.md)
 
 **Publisher:** Unknown (ARM variable)
 
@@ -51,7 +51,7 @@ The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & 
 | **Tables Ingested** | `OnePasswordEventLogs_CL` |
 | **Connector Definition Files** | [azuredeploy_1Password_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password/Data%20Connectors/1Password_ccpv2/azuredeploy_1Password_poller_connector.json) |
 
-[→ View full connector details](../connectors/1password(serverless).md)
+[→ View full connector details](../connectors/1password%28serverless%29.md)
 
 ### [1Password (Serverless)](../connectors/1passwordccpdefinition.md)
 
@@ -72,6 +72,14 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `OnePasswordEventLogs_CL` | [1Password](../connectors/1password.md), [1Password (Serverless)](../connectors/1password(serverless).md), [1Password (Serverless)](../connectors/1passwordccpdefinition.md) |
+| `OnePasswordEventLogs_CL` | [1Password](../connectors/1password.md), [1Password (Serverless)](../connectors/1passwordccpdefinition.md), [1Password (Serverless)](../connectors/1password(serverless).md) |
+
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                     |
+|-------------|--------------------------------|----------------------------------------|
+| 3.0.2       | 17-09-2024                     | Added new CCP **Data Connector**.               | 
+| 3.0.1       | 27-06-2024                     | Fixed typo error in **Analytic Rule**  1Password - Changes to SSO configuration.yaml. </br> Fixed Logo link and typo in CreateUI.              |
+| 3.0.0       | 12-06-2024                     | Initial Solution Release.               |
 
 [← Back to Solutions Index](../solutions-index.md)

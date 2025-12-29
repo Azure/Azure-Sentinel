@@ -47,4 +47,10 @@ This solution ingests data into **4 table(s)**:
 | `TrendMicro_XDR_RCA_Task_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
 | `TrendMicro_XDR_WORKBENCH_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.1       | 30-01-2025                     | Updated hyperlink in **Data Connector**     |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -71,7 +71,16 @@ This connector ingests data into the following tables:
 
 > **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)
 
-**STEP 4 - Assign role of Contributor to application in Microsoft Entra ID**
+**STEP 4 - Get Object ID of your application in Microsoft Entra ID**
+
+ After creating your app registration, follow the steps in this section to get Object ID:
+ 1. Go to **Microsoft Entra ID**.
+ 2. Select **Enterprise applications** from the left menu.
+ 3. Find your newly created application in the list (you can search by the name you provided).
+ 4. Click on the application.
+ 5. On the overview page, copy the **Object ID**. This is the **AzureEntraObjectId** needed for your ARM template role assignment.
+
+**STEP 5 - Assign role of Contributor to application in Microsoft Entra ID**
 
  Follow the steps in this section to assign the role:
  1. In the Azure portal, Go to **Resource Group** and select your resource group.
@@ -84,7 +93,7 @@ This connector ingests data into the following tables:
 
 > **Reference link:** [https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal)
 
-**STEP 5 - Create a Keyvault**
+**STEP 6 - Create a Keyvault**
 
  Follow these instructions to create a new Keyvault.
  1. In the Azure portal, Go to **Key vaults**. Click create.
@@ -92,7 +101,7 @@ This connector ingests data into the following tables:
 
 > **NOTE:** Create a separate key vault for each **API key** within one workspace.
 
-**STEP 6 - Create Access Policy in Keyvault**
+**STEP 7 - Create Access Policy in Keyvault**
 
  Follow these instructions to create access policy in Keyvault.
  1. Go to keyvaults, select your keyvault, go to Access policies on left side panel. Click create.
@@ -101,15 +110,11 @@ This connector ingests data into the following tables:
 
 > **NOTE:** Ensure the Permission model in the Access Configuration of Key Vault is set to **'Vault access policy'**
 
-**STEP 7 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**
+**STEP 8 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**
 
->**IMPORTANT:** Before deploying the Armis Device data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following) readily available.., as well as the Armis API Authorization Key(s)
-- **Workspace ID**: `WorkspaceId`
-  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
-- **Primary Key**: `PrimaryKey`
-  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+>**IMPORTANT:** Before deploying the Armis Device data connector, have the Armis API Authorization Key(s) readily available..
 
-**8. Option 1 - Azure Resource Manager (ARM) Template**
+**9. Option 1 - Azure Resource Manager (ARM) Template**
 
 Use this method for automated deployment of the Armis connector.
 
@@ -119,8 +124,8 @@ Use this method for automated deployment of the Armis connector.
 2. Select the preferred **Subscription**, **Resource Group** and **Location**. 
 3. Enter the below information : 
 		Function Name 
-		Workspace ID 
-		Workspace Key 
+		Location 
+		Workspace Name 
 		Armis Secret Key 
 		Armis URL (https://<armis-instance>.armis.com/api/v1/) 
 		Armis Device Table Name 
@@ -128,11 +133,12 @@ Use this method for automated deployment of the Armis connector.
 		KeyVault Name 
 		Azure Client Id 
 		Azure Client Secret 
+		Azure Entra ObjectID 
 		Tenant Id 
 4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
 5. Click **Purchase** to deploy.
 
-**9. Option 2 - Manual Deployment of Azure Functions**
+**10. Option 2 - Manual Deployment of Azure Functions**
 
 Use the following step-by-step instructions to deploy the Armis Device data connector manually with Azure Functions (Deployment via Visual Studio Code).
 
@@ -140,7 +146,7 @@ Use the following step-by-step instructions to deploy the Armis Device data conn
 
 > **NOTE:** You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.
 
-1. Download the [Azure Function App](https://aka.ms/sentinel-ArmisDevice311-functionapp) file. Extract archive to your local development computer.
+1. Download the [Azure Function App](https://aka.ms/sentinel-ArmisDevice320-functionapp) file. Extract archive to your local development computer.
 2. Start VS Code. Choose File in the main menu and select Open Folder.
 3. Select the top level folder from extracted files.
 4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.
@@ -156,7 +162,7 @@ If you're already signed in, go to the next step.
 
 	d. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. ARMISXXXXX).
 
-	e. **Select a runtime:** Choose Python 3.11
+	e. **Select a runtime:** Choose Python 3.12
 
 	f. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.
 
@@ -168,8 +174,8 @@ If you're already signed in, go to the next step.
 1. In the Function App, select the Function App Name and select **Configuration**.
 2. In the **Application settings** tab, select **+ New application setting**.
 3. Add each of the following application settings individually, with their respective values (case-sensitive): 
-		Workspace ID 
-		Workspace Key 
+		Location 
+		Workspace Name 
 		Armis Secret Key 
 		Armis URL (https://<armis-instance>.armis.com/api/v1/) 
 		Armis Device Table Name 
@@ -177,9 +183,74 @@ If you're already signed in, go to the next step.
 		KeyVault Name 
 		Azure Client Id 
 		Azure Client Secret 
+		Azure Entra ObjectID 
 		Tenant Id 
 		logAnalyticsUri (optional) 
  - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.
 4. Once all application settings have been entered, click **Save**.
+
+## Additional Documentation
+
+> 📄 *Source: [Armis\Data Connectors\ArmisDevice\README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis\Data Connectors\ArmisDevice\README.md)*
+
+# ArmisDevice Integration for Microsoft Sentinel
+
+## Introduction
+
+This folder contains the Azure function time trigger code for ArmisDevice-Microsoft Sentinel connector. The connector will run periodically and ingest the ArmisDevice data into the Microsoft Sentinel logs custom table `Armis_Device_CL`.
+## Folders
+
+1. `ArmisDevice/` - This contains the package, requirements, ARM JSON file, connector page template JSON, and other dependencies.
+2. `ArmisDeviceSentinelConnector/` - This contains the Azure function source code along with sample data.
+
+
+## Installing for the users
+
+After the solution is published, we can find the connector in the connector gallery of Microsoft Sentinel among other connectors in Data connectors section of Sentinel.
+
+i. Go to Microsoft Sentinel -> Data Connectors
+
+ii. Click on the ArmisDevice connector, connector page will open.
+
+iii. Click on the blue `Deploy to Azure` button.
+
+
+It will lead to a custom deployment page where after user need to select **Subscription**, **Resource Group** and **Location**.
+And need to enter below information to configure Armis Device data connector.
+```Function Name
+   Workspace ID
+   Workspace Key
+   Armis Secret Key
+   Armis URL (https://<armis-instance>.armis.com/api/v1/)
+   Armis Device Table Name
+   Armis Schedule
+   Avoid Duplicates (Default: true)
+```
+
+
+The connector should start ingesting the data into the logs at every time interval specified during configuration.
+
+
+## Installing for testing
+
+
+i. Log in to Azure portal using the URL - [https://preview.portal.azure.com/?feature.BringYourOwnConnector=true](https://preview.portal.azure.com/?feature.BringYourOwnConnector=true).
+
+ii. Go to Microsoft Sentinel -> Data Connectors
+
+iii. Click the “import” button at the top and select the json file `Armis_Device_API_FunctionApp.json` downloaded on your local machine from Github.
+
+iv. This will load the connector page and rest of the process will be same as the Installing for users guideline above.
+
+
+Each invocation and its logs of the function can be seen in Function App service of Azure, available in the Azure Portal outside the Microsoft Sentinel.
+
+i. Go to Function App and click on the function which you have deployed, identified with the given name at the deployment stage.
+
+ii. Go to Functions -> ArmisDeviceSentinelConnector -> Monitor
+
+iii. By clicking on invocation time, you can see all the logs for that run.
+
+**Note: Furthermore we can check logs in Application Insights of the given function in detail if needed. We can search the logs by operation ID in Transaction search section.**
 
 [← Back to Connectors Index](../connectors-index.md)

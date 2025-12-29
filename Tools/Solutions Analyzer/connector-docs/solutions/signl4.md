@@ -43,4 +43,10 @@ This solution ingests data into **2 table(s)**:
 | `SIGNL4_CL` | [Derdack SIGNL4](../connectors/derdacksignl4.md) |
 | `SecurityIncident` | [Derdack SIGNL4](../connectors/derdacksignl4.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
+|-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.0       | 02-06-2025                     | This version introduces several updates to the SIGNL4 solution for Microsoft Sentinel, focusing on improving metadata, updating templates, and enhancing descriptions for better clarity and functionality.  |
+
 [← Back to Solutions Index](../solutions-index.md)

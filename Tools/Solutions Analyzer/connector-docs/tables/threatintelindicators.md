@@ -1,15 +1,11 @@
 # ThreatIntelIndicators
 
-Reference for ThreatIntelIndicators table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `ThreatIntelIndicators` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 6 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/threatintelindicators) |
 
@@ -22,7 +18,7 @@ Reference for ThreatIntelIndicators table in Azure Monitor Logs.
 This table is used by the following solutions:
 
 - [Lumen Defender Threat Feed](../solutions/lumen-defender-threat-feed.md)
-- [Threat Intelligence (NEW)](../solutions/threat-intelligence-(new).md)
+- [Threat Intelligence (NEW)](../solutions/threat-intelligence-%28new%29.md)
 
 ## Connectors (6)
 
@@ -34,12 +30,6 @@ This table is ingested by the following connectors:
 - [Threat Intelligence Platforms](../connectors/threatintelligence.md)
 - [Threat intelligence - TAXII](../connectors/threatintelligencetaxii.md)
 - [Threat Intelligence Upload API (Preview)](../connectors/threatintelligenceuploadindicatorsapi.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.securityinsights/threatintelligence`
 
 ---
 

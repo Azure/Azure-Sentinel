@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `SINECSecurityGuard_CL` | [SINEC Security Guard](../connectors/ssg.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                |
+|-------------|--------------------------------|-----------------------------------|
+| 3.0.0       | 12-11-2024                     | Initial Solution Release          |
+
 [← Back to Solutions Index](../solutions-index.md)

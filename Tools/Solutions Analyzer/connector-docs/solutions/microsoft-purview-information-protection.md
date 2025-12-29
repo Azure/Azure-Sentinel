@@ -38,4 +38,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `MicrosoftPurviewInformationProtection` | [Microsoft Purview Information Protection](../connectors/microsoftpurviewinformationprotection.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
+|-------------|--------------------------------|--------------------------------------------------------------|
+| 3.0.0       | 19-03-2024                     | Adjust wording for Microsoft Purview Information Protection logs - log source isn't Azure Diagnostics for this one                                     |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -40,4 +40,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [Silverfort Admin Console](../connectors/silverfortama.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                |
+|-------------|--------------------------------|-----------------------------------|
+| 3.0.0       | 13-09-2024                     | Initial Solution Release          |
+
 [← Back to Solutions Index](../solutions-index.md)

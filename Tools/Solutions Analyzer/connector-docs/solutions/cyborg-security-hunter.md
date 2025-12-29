@@ -41,4 +41,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `SecurityEvent` | [Cyborg Security HUNTER Hunt Packages](../connectors/cyborgsecurity-hunter.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 22-11-2023                     | Initial Submission                          |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -35,4 +35,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Gigamon_CL` | [Gigamon AMX Data Connector](../connectors/gigamondataconnector.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 25-10-2023                     | Initial Solution Release                    |
+
 [← Back to Solutions Index](../solutions-index.md)

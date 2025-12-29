@@ -17,4 +17,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                              |
+|-------------|--------------------------------|-------------------------------------------------|
+| 3.0.0       | 30-06-2025                     | Initial Release                                 |
+
 [← Back to Solutions Index](../solutions-index.md)

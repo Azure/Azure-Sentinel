@@ -1,7 +1,5 @@
 # AzureDiagnostics
 
-Reference for AzureDiagnostics table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `AzureDiagnostics` |
@@ -31,7 +29,7 @@ This table is used by the following solutions:
 - [Azure SQL Database solution for sentinel](../solutions/azure-sql-database-solution-for-sentinel.md)
 - [Azure Service Bus](../solutions/azure-service-bus.md)
 - [Azure Stream Analytics](../solutions/azure-stream-analytics.md)
-- [Azure Web Application Firewall (WAF)](../solutions/azure-web-application-firewall-(waf).md)
+- [Azure Web Application Firewall (WAF)](../solutions/azure-web-application-firewall-%28waf%29.md)
 - [Azure kubernetes Service](../solutions/azure-kubernetes-service.md)
 - [SlashNext](../solutions/slashnext.md)
 

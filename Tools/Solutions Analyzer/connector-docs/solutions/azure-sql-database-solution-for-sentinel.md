@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AzureDiagnostics` | [Azure SQL Databases](../connectors/azuresql.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
+|-------------|--------------------------------|--------------------------------------------------------------------------|   
+| 3.0.0       | 25-10-2024                     | Updated description of CreateUi and **Analytic Rule**					  |
+
 [← Back to Solutions Index](../solutions-index.md)

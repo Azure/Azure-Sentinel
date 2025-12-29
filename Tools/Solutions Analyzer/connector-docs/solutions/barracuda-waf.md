@@ -44,4 +44,10 @@ This solution ingests data into **3 table(s)**:
 | `CommonSecurityLog` | [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md) |
 | `barracuda_CL` | [[Deprecated] Barracuda Web Application Firewall via Legacy Agent](../connectors/barracuda.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                             |
+|-------------|--------------------------------|------------------------------------------------|
+| 3.0.0       | 09-07-2024                     | Deprecating data connectors.                   |
+
 [← Back to Solutions Index](../solutions-index.md)

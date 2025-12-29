@@ -42,4 +42,10 @@ This solution ingests data into **4 table(s)**:
 | `VMware_CWS_Weblogs_CL` | [VMware SD-WAN and SASE Connector](../connectors/vmwaresdwan.md) |
 | `VMware_VECO_EventLogs_CL` | [VMware SD-WAN and SASE Connector](../connectors/vmwaresdwan.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
+|-------------|--------------------------------|---------------------------------------------------------------|
+| 3.0.0       | 13-03-2024                     | Initial Solution Release                                      |
+
 [← Back to Solutions Index](../solutions-index.md)

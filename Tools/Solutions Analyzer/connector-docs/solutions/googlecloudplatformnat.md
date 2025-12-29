@@ -38,4 +38,11 @@ This solution ingests data into **2 table(s)**:
 | `GCPNAT` | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) |
 | `GCPNATAudit` | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) |
 
+## Release Notes
+
+**Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+|------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.1      | 03-09-2025                    | Google Cloud Platform NAT **CCF Data Connector** moving to GA							 |
+| 3.0.0      | 17-07-2025                    | Initial Solution Release. <br/> Added new **CCF Connector** - *GCPNATLogsCCPDefinition.*	 |
+
 [← Back to Solutions Index](../solutions-index.md)

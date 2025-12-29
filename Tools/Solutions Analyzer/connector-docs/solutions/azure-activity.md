@@ -36,4 +36,13 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AzureActivity` | [Azure Activity](../connectors/azureactivity.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                         |
+|-------------|--------------------------------|----------------------------------------------------------------------------|
+| 3.0.3       | 19-02-2025                     | Added new **Workbook** Azure Service Health to the Solution and added new **Hunting query** Machine_Learning_Creation.yaml. <br/> Added new **Analytic Rule** Machine_Learning_Creation.yaml          |
+| 3.0.2       | 21-02-2024                     | Modified Entity Mappings of **Analytic Rules**                             |
+| 3.0.1       | 23-01-2024                     | Added subTechniques in Template                                            |
+| 3.0.0       | 06-11-2023                     | Modified text as there is rebranding from Azure Active Directory to Microsoft Entra ID. <br/> Optimized the **Analytic Rule** query logic to achieve expected results    |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `WAF` |
 | **Publisher** | Microsoft |
-| **Used in Solutions** | [Azure Web Application Firewall (WAF)](../solutions/azure-web-application-firewall-(waf).md) |
+| **Used in Solutions** | [Azure Web Application Firewall (WAF)](../solutions/azure-web-application-firewall-%28waf%29.md) |
 | **Collection Method** | Azure Diagnostics |
 | **Connector Definition Files** | [template_WAF.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Web%20Application%20Firewall%20%28WAF%29/Data%20Connectors/template_WAF.JSON) |
 

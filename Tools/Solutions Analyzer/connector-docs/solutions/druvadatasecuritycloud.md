@@ -40,4 +40,10 @@ This solution ingests data into **3 table(s)**:
 | `DruvaPlatformEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
 | `DruvaSecurityEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
+|-------------|--------------------------------|--------------------------------------------------------|
+| 3.0.0       | 09-01-2025                     | Initial Solution Release                               |
+
 [← Back to Solutions Index](../solutions-index.md)

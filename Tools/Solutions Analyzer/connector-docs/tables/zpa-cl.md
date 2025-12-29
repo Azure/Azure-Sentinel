@@ -15,7 +15,7 @@
 This table is used by the following solutions:
 
 - [CustomLogsAma](../solutions/customlogsama.md)
-- [Zscaler Private Access (ZPA)](../solutions/zscaler-private-access-(zpa).md)
+- [Zscaler Private Access (ZPA)](../solutions/zscaler-private-access-%28zpa%29.md)
 
 ## Connectors (2)
 

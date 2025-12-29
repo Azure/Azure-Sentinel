@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `secRMM_CL` | [Squadra Technologies secRMM](../connectors/squadratechnologiessecrmm.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 15-11-2025                     | Added **Analytical Rule** 					 |
+
 [← Back to Solutions Index](../solutions-index.md)

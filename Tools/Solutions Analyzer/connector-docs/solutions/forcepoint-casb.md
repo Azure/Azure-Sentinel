@@ -49,4 +49,12 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] Forcepoint CASB via AMA](../connectors/forcepointcasbama.md), [[Deprecated] Forcepoint CASB via Legacy Agent](../connectors/forcepointcasb.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.2       | 27-11-2024                     |    Removed Deprecated **Data Connectors**                          |
+| 3.0.1       | 15-07-2024                     |	Deprecating data connectors                                     |
+| 3.0.0       | 31-08-2023                     |	Addition of new Forcepoint CASB AMA **Data Connector**          |
+
 [← Back to Solutions Index](../solutions-index.md)

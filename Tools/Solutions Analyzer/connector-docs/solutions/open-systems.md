@@ -50,4 +50,10 @@ This solution ingests data into **8 table(s)**:
 | `OpenSystemsProxyLogs_CL` | [Open Systems Data Connector](../connectors/opensystems.md) |
 | `OpenSystemsZtnaLogs_CL` | [Open Systems Data Connector](../connectors/opensystems.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                               |
+|-------------|--------------------------------|------------------------------------------------------------------|
+|  3.0.0      |  12-05-2025                    | Initial Solution release.										  |
+
 [← Back to Solutions Index](../solutions-index.md)

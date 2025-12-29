@@ -6,7 +6,7 @@ Browse all data connectors available in Microsoft Sentinel Solutions.
 
 **Browse by:**
 
-- [Solutions](connector-reference-index.md)
+- [Solutions](solutions-index.md)
 - [Connectors](connectors-index.md) (this page)
 - [Tables](tables-index.md)
 
@@ -14,7 +14,7 @@ Browse all data connectors available in Microsoft Sentinel Solutions.
 
 ## Overview
 
-This page lists **521 unique connectors** across all solutions.
+This page lists **527 unique connectors** across all solutions.
 
 **Jump to:** [#](##) | [A](#a) | [B](#b) | [C](#c) | [D](#d) | [E](#e) | [F](#f) | [G](#g) | [H](#h) | [I](#i) | [J](#j) | [K](#k) | [L](#l) | [M](#m) | [N](#n) | [O](#o) | [P](#p) | [Q](#q) | [R](#r) | [S](#s) | [T](#t) | [V](#v) | [W](#w) | [Z](#z)
 
@@ -58,7 +58,7 @@ The [Dragos Platform](https://www.dragos.com/) is the leading Industrial Cyber S
 
 **Solution:** [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `SecurityEvent`
 
@@ -90,7 +90,7 @@ This solution takes a dependency on the following technologies, and some of thes
 
 ---
 
-### [1Password (Serverless)](connectors/1password(serverless).md)
+### [1Password (Serverless)](connectors/1password%28serverless%29.md)
 
 **Publisher:** Unknown (ARM variable)
 
@@ -102,7 +102,7 @@ This solution takes a dependency on the following technologies, and some of thes
 
 The 1Password CCP connector allows the user to ingest 1Password Audit, Signin & ItemUsage events into Microsoft Sentinel.
 
-[→ View full connector details](connectors/1password(serverless).md)
+[→ View full connector details](connectors/1password%28serverless%29.md)
 
 ---
 
@@ -683,7 +683,7 @@ The Authomize Data Connector provides the capability to ingest custom log types 
 
 **Solution:** [ALC-WebCTRL](solutions/alc-webctrl.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Event`
 
@@ -699,7 +699,7 @@ You can stream the audit logs from the WebCTRL SQL server hosted on Windows mach
 
 **Solution:** [Azure Activity](solutions/azure-activity.md)
 
-**Collection Method:** Native
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureActivity`
 
@@ -715,7 +715,7 @@ Azure Activity Log is a subscription log that provides insight into subscription
 
 **Solution:** [Azure Batch Account](solutions/azure-batch-account.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -747,7 +747,7 @@ Cloud Next-Generation Firewall by Palo Alto Networks - an Azure Native ISV Servi
 
 **Solution:** [Azure Cognitive Search](solutions/azure-cognitive-search.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -779,7 +779,7 @@ Connect to Azure DDoS Protection Standard logs via Public IP Address Diagnostic 
 
 **Solution:** [Azure Data Lake Storage Gen1](solutions/azure-data-lake-storage-gen1.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -811,7 +811,7 @@ The Azure DevOps Audit Logs data connector allows you to ingest audit events fro
 
 **Solution:** [Azure Event Hubs](solutions/azure-event-hubs.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -875,7 +875,7 @@ Azure Kubernetes Service (AKS) is an open-source, fully-managed container orches
 
 **Solution:** [Azure Logic Apps](solutions/azure-logic-apps.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -921,7 +921,7 @@ Azure SQL is a fully managed, Platform-as-a-Service (PaaS) database engine that 
 
 **Solution:** [Azure Service Bus](solutions/azure-service-bus.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -937,7 +937,7 @@ Azure Service Bus is a fully managed enterprise message broker with message queu
 
 **Solution:** [Azure Storage](solutions/azure-storage.md)
 
-**Collection Method:** Unknown
+**Collection Method:** Azure Diagnostics
 
 **Tables (5):** `AzureMetrics`, `StorageBlobLogs`, `StorageFileLogs`, `StorageQueueLogs`, `StorageTableLogs`
 
@@ -953,7 +953,7 @@ Azure Storage account is a cloud solution for modern data storage scenarios. It 
 
 **Solution:** [Azure Stream Analytics](solutions/azure-stream-analytics.md)
 
-**Collection Method:** CCF
+**Collection Method:** Azure Diagnostics
 
 **Tables (1):** `AzureDiagnostics`
 
@@ -967,7 +967,7 @@ Azure Stream Analytics is a real-time analytics and complex event-processing eng
 
 **Publisher:** Microsoft
 
-**Solution:** [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-(waf).md)
+**Solution:** [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-%28waf%29.md)
 
 **Collection Method:** Azure Diagnostics
 
@@ -985,7 +985,7 @@ Connect to the Azure Web Application Firewall (WAF) for Application Gateway, Fro
 
 **Publisher:** BETTER Mobile
 
-**Solution:** [BETTER Mobile Threat Defense (MTD)](solutions/better-mobile-threat-defense-(mtd).md)
+**Solution:** [BETTER Mobile Threat Defense (MTD)](solutions/better-mobile-threat-defense-%28mtd%29.md)
 
 **Collection Method:** Unknown (Custom Log)
 
@@ -1149,7 +1149,7 @@ Citrix Analytics (Security) integration with Microsoft Sentinel helps you to exp
 
 **Solution:** [CTERA](solutions/ctera.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -1421,7 +1421,7 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
 
 ---
 
-### [Cisco Meraki (using REST API)](connectors/ciscomeraki(usingrestapi).md)
+### [Cisco Meraki (using REST API)](connectors/ciscomeraki%28usingrestapi%29.md)
 
 **Publisher:** Microsoft
 
@@ -1436,7 +1436,7 @@ The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily co
  **Supported ASIM schema:** 
  1. Network Session
 
-[→ View full connector details](connectors/ciscomeraki(usingrestapi).md)
+[→ View full connector details](connectors/ciscomeraki%28usingrestapi%29.md)
 
 ---
 
@@ -1481,7 +1481,7 @@ The Cisco Secure Endpoint (formerly AMP for Endpoints) data connector provides t
 
 **Solution:** [Cisco SD-WAN](solutions/cisco-sd-wan.md)
 
-**Collection Method:** Unknown (Custom Log)
+**Collection Method:** AMA
 
 **Tables (2):** `CiscoSDWANNetflow_CL`, `Syslog`
 
@@ -1497,7 +1497,7 @@ The Cisco Software Defined WAN(SD-WAN) data connector provides the capability to
 
 **Solution:** [Claroty xDome](solutions/claroty-xdome.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -1630,7 +1630,7 @@ The Cohesity function apps provide the ability to ingest Cohesity Datahawk ranso
 
 **Solution:** [Common Event Format](solutions/common-event-format.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -1806,7 +1806,7 @@ This connector enables the ingestion of FDR data into Microsoft Sentinel using A
 
 **Solution:** [CustomLogsAma](solutions/customlogsama.md)
 
-**Collection Method:** CCF
+**Collection Method:** AMA
 
 **Tables (16):** `ApacheHTTPServer_CL`, `JBossEvent_CL`, `JuniperIDP_CL`, `MarkLogicAudit_CL`, `MongoDBAudit_CL`, `NGINX_CL`, `OracleWebLogicServer_CL`, `PostgreSQL_CL`, `SecurityBridgeLogs_CL`, `SquidProxy_CL`, `Tomcat_CL`, `Ubiquiti_CL`, `VectraStream_CL`, `ZPA_CL`, `meraki_CL`, `vcenter_CL`
 
@@ -1882,13 +1882,29 @@ Actionable alerts provide customized alerts based on configured assets
 
 ---
 
+### [Cyble Vision Alerts](connectors/cyblevisionalerts.md)
+
+**Publisher:** Cyble
+
+**Solution:** [Cyble Vision](solutions/cyble-vision.md)
+
+**Collection Method:** CCF
+
+**Tables (1):** `CybleVisionAlerts_CL`
+
+The **Cyble Vision Alerts** CCF Data Connector enables Ingestion of Threat Alerts from Cyble Vision into Microsoft Sentinel using the Codeless Connector Framework Connector. It collects alert data via API, normalizes it, and stores it in a custom table for advanced detection, correlation, and response.
+
+[→ View full connector details](connectors/cyblevisionalerts.md)
+
+---
+
 ### [Cyborg Security HUNTER Hunt Packages](connectors/cyborgsecurity-hunter.md)
 
 **Publisher:** Cyborg Security
 
 **Solution:** [Cyborg Security HUNTER](solutions/cyborg-security-hunter.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `SecurityEvent`
 
@@ -1956,7 +1972,7 @@ The [Cynerio](https://www.cynerio.com/) connector allows you to easily connect y
 
 **Solution:** [Windows Server DNS](solutions/windows-server-dns.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (2):** `DnsEvents`, `DnsInventory`
 
@@ -2419,9 +2435,9 @@ The Forcepoint DLP (Data Loss Prevention) connector allows you to automatically 
 
 **Publisher:** Forescout
 
-**Solution:** [Forescout (Legacy)](solutions/forescout-(legacy).md)
+**Solution:** [Forescout (Legacy)](solutions/forescout-%28legacy%29.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -2943,7 +2959,7 @@ The connector provides the capability to poll data from Holm Security Center int
 
 **Solution:** [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `W3CIISLog`
 
@@ -3343,7 +3359,7 @@ The [Imperva Cloud WAF](https://www.imperva.com/resources/resource-library/datas
 
 **Solution:** [Imperva WAF Gateway](solutions/imperva-waf-gateway.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -3407,7 +3423,7 @@ The Infoblox SOC Insight Data Connector allows you to easily connect your Infobl
 
 **Solution:** [IronNet IronDefense](solutions/ironnet-irondefense.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -3918,7 +3934,7 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 **Solution:** [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Event`
 
@@ -3950,7 +3966,7 @@ Microsoft Entra ID Protection provides a consolidated view at risk users, risk e
 
 **Solution:** [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Event`
 
@@ -4174,6 +4190,75 @@ The Mimecast products included within the connector are:
 
 
 [→ View full connector details](connectors/mimecastttpapi.md)
+
+---
+
+### [Miro Audit Logs (Enterprise Plan)](connectors/miroauditlogsdataconnector.md)
+
+**Publisher:** Miro
+
+**Solution:** [Miro](solutions/miro.md)
+
+**Collection Method:** CCF
+
+**Tables (1):** `MiroAuditLogs_CL`
+
+The [Miro Audit Logs](https://help.miro.com/hc/en-us/articles/360017571434-Audit-logs) data connector enables you to ingest organization-wide audit events from Miro into Microsoft Sentinel. Monitor user activities, security events, content access, team changes, and administrative actions to enhance your security operations and compliance capabilities.
+
+**Key features:**
+- Track user authentication and access patterns.
+- Monitor content creation, sharing, and deletion.
+- Audit team and organization configuration changes.
+- Detect suspicious activities and policy violations.
+- Meet compliance and regulatory requirements.
+
+**Requirements:**
+- **Miro Plan**: [Enterprise Plan](https://miro.com/pricing/).
+- **OAuth scope**: `auditlogs:read`.
+- **Role**: Company Admin in your Miro organization.
+
+💡 **Not on Enterprise Plan yet?** Upgrade to [Miro Enterprise](https://miro.com/enterprise/) to unlock audit logs and gain comprehensive visibility into your team's activities in Microsoft Sentinel.
+
+For detailed instructions, refer to the [documentation](https://help.miro.com/hc/en-us/articles/31325908249362).
+
+[→ View full connector details](connectors/miroauditlogsdataconnector.md)
+
+---
+
+### [Miro Content Logs (Enterprise Plan + Enterprise Guard)](connectors/mirocontentlogsdataconnector.md)
+
+**Publisher:** Miro
+
+**Solution:** [Miro](solutions/miro.md)
+
+**Collection Method:** CCF
+
+**Tables (1):** `MiroContentLogs_CL`
+
+The [Miro Content Logs](https://help.miro.com/hc/en-us/articles/17774729839378-Content-Logs-overview) data connector enables you to ingest content activity logs from Miro into Microsoft Sentinel. Part of Miro's Enterprise Guard eDiscovery capabilities, this connector provides content-level visibility for compliance, legal hold, and advanced threat detection.
+
+**Key features:**
+- Track all content item changes.
+- Monitor content modifications by user and timestamp.
+- Support compliance and eDiscovery requirements.
+- Detect data exfiltration and insider threats.
+- Meet regulatory and legal hold obligations.
+
+**Requirements:**
+- **Miro Plan**: [Enterprise Plan](https://miro.com/pricing/) + **Enterprise Guard** add-on.
+- **OAuth scope**: `contentlogs:export`.
+- **Role**: Company Admin in your Miro organization.
+- **Organization ID**: Your Miro organization identifier.
+
+💡 **Not on Enterprise Plan yet?** Upgrade to [Miro Enterprise](https://miro.com/enterprise/) to unlock advanced security and compliance features for your team's collaboration activities in Microsoft Sentinel.
+
+💡 **Need Content Logs?** Content activity logging is part of [Miro Enterprise Guard](https://miro.com/enterprise-guard/), which provides advanced security, compliance, and eDiscovery features. Contact your Miro account manager to add Enterprise Guard to your Enterprise Plan and unlock content-level monitoring in Microsoft Sentinel.
+
+**Note:** If you only have the base Enterprise Plan (without Enterprise Guard), please use the **Miro Audit Logs** connector instead for organization-level event monitoring.
+
+For detailed instructions, refer to the [documentation](https://help.miro.com/hc/en-us/articles/31325908249362).
+
+[→ View full connector details](connectors/mirocontentlogsdataconnector.md)
 
 ---
 
@@ -4548,7 +4633,7 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 
 ---
 
-### [Okta Single Sign-On (using Azure Functions)](connectors/oktasinglesignon(usingazurefunctions).md)
+### [Okta Single Sign-On (using Azure Functions)](connectors/oktasinglesignon%28usingazurefunctions%29.md)
 
 **Publisher:** Okta
 
@@ -4560,7 +4645,7 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 
 The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) connector provides the capability to ingest audit and event logs from the Okta API into Microsoft Sentinel. The connector provides visibility into these log types in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
 
-[→ View full connector details](connectors/oktasinglesignon(usingazurefunctions).md)
+[→ View full connector details](connectors/oktasinglesignon%28usingazurefunctions%29.md)
 
 ---
 
@@ -4570,7 +4655,7 @@ The [Okta Single Sign-On (SSO)](https://www.okta.com/products/single-sign-on/) c
 
 **Solution:** [Onapsis Defend](solutions/onapsis-defend.md)
 
-**Collection Method:** Unknown (Custom Log)
+**Collection Method:** CCF
 
 **Tables (1):** `Onapsis_Defend_CL`
 
@@ -4586,7 +4671,7 @@ Onapsis Defend Integration is aimed at forwarding alerts and logs collected and 
 
 **Solution:** [OneIdentity](solutions/oneidentity.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -4730,9 +4815,9 @@ The Palo Alto Cortex Xpanse data connector ingests alerts data into Microsoft Se
 
 **Publisher:** Palo Alto Networks
 
-**Solution:** [Palo Alto - XDR (Cortex)](solutions/palo-alto---xdr-(cortex).md)
+**Solution:** [Palo Alto - XDR (Cortex)](solutions/palo-alto---xdr-%28cortex%29.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -4796,7 +4881,7 @@ The [Palo Alto Prisma Cloud CWPP](https://prisma.pan.dev/api/cloud/cwpp/audits/#
 
 **Solution:** [Pathlock_TDnR](solutions/pathlock-tdnr.md)
 
-**Collection Method:** Unknown (Custom Log)
+**Collection Method:** CCF
 
 **Tables (2):** `ABAPAuditLog`, `Pathlock_TDnR_CL`
 
@@ -4896,7 +4981,7 @@ Microsoft Sentinel provides you the capability to import threat intelligence gen
 
 **Publisher:** Proofpoint
 
-**Solution:** [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand(pod)-email-security.md)
+**Solution:** [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand%28pod%29-email-security.md)
 
 **Collection Method:** CCF
 
@@ -5098,7 +5183,7 @@ The SAP Enterprise Threat Detection, cloud edition (ETD) data connector enables 
 
 **Solution:** [SAP LogServ](solutions/sap-logserv.md)
 
-**Collection Method:** Unknown (Custom Log)
+**Collection Method:** CCF
 
 **Tables (1):** `SAPLogServ_CL`
 
@@ -5153,7 +5238,7 @@ The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest se
 
 **Tables (1):** `SOCPrimeAuditLogs_CL`
 
-The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
+The [SOC Prime Audit Logs](https://tdm.socprime.com/login) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
 
 [→ View full connector details](connectors/socprimeauditlogsdataconnector.md)
 
@@ -5325,7 +5410,7 @@ SecurityScorecard is the leader in cybersecurity risk ratings. The [SecurityScor
 
 **Solution:** [Semperis Directory Services Protector](solutions/semperis-directory-services-protector.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `SecurityEvent`
 
@@ -5424,7 +5509,7 @@ The Sevco Platform - Devices connector allows you to easily connect your Sevco D
 
 **Solution:** [Silverfort](solutions/silverfort.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -5865,7 +5950,7 @@ Microsoft Sentinel integrates with TAXII 2.0 and 2.1 data sources to enable moni
 
 **Publisher:** Microsoft
 
-**Solution:** [Threat Intelligence (NEW)](solutions/threat-intelligence-(new).md)
+**Solution:** [Threat Intelligence (NEW)](solutions/threat-intelligence-%28new%29.md)
 
 **Collection Method:** Native
 
@@ -5924,6 +6009,54 @@ The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detect
 The Trend Vision One connector is supported in Microsoft Sentinel in the following regions: Australia East, Australia Southeast, Brazil South, Canada Central, Canada East, Central India, Central US, East Asia, East US, East US 2, France Central, Japan East, Korea Central, North Central US, North Europe, Norway East, South Africa North, South Central US, Southeast Asia, Sweden Central, Switzerland North, UAE North, UK South, UK West, West Europe, West US, West US 2, West US 3.
 
 [→ View full connector details](connectors/trendmicroxdr.md)
+
+---
+
+### [Tropico Security - Alerts](connectors/tropicoalertsdefinition.md)
+
+**Publisher:** Tropico Security
+
+**Solution:** [Tropico](solutions/tropico.md)
+
+**Collection Method:** CCF
+
+**Tables (1):** `{{graphQueriesTableName}}`
+
+Ingest security alerts from Tropico Security Platform in OCSF Security Finding format.
+
+[→ View full connector details](connectors/tropicoalertsdefinition.md)
+
+---
+
+### [Tropico Security - Events](connectors/tropicoeventsdefinition.md)
+
+**Publisher:** Tropico Security
+
+**Solution:** [Tropico](solutions/tropico.md)
+
+**Collection Method:** CCF
+
+**Tables (1):** `{{graphQueriesTableName}}`
+
+Ingest security events from Tropico Security Platform in OCSF Security Finding format.
+
+[→ View full connector details](connectors/tropicoeventsdefinition.md)
+
+---
+
+### [Tropico Security - Incidents](connectors/tropicoincidentsdefinition.md)
+
+**Publisher:** Tropico Security
+
+**Solution:** [Tropico](solutions/tropico.md)
+
+**Collection Method:** CCF
+
+**Tables (1):** `{{graphQueriesTableName}}`
+
+Ingest attacker session incidents from Tropico Security Platform.
+
+[→ View full connector details](connectors/tropicoincidentsdefinition.md)
 
 ---
 
@@ -6075,7 +6208,7 @@ The connector supports integration with Veeam Backup & Replication, Veeam ONE an
 
 **Solution:** [VirtualMetric DataStream](solutions/virtualmetric-datastream.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -6091,7 +6224,7 @@ VirtualMetric DataStream connector deploys Data Collection Rules to ingest secur
 
 **Solution:** [VirtualMetric DataStream](solutions/virtualmetric-datastream.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -6154,7 +6287,7 @@ For more information, see the [Microsoft Sentinel documentation](https://go.micr
 
 **Solution:** [Windows Firewall](solutions/windows-firewall.md)
 
-**Collection Method:** Azure Diagnostics
+**Collection Method:** MMA
 
 **Tables (1):** `WindowsFirewall`
 
@@ -6814,7 +6947,7 @@ The Awake Security CEF connector allows users to send detection model matches fr
 
 **Solution:** [Barracuda CloudGen Firewall](solutions/barracuda-cloudgen-firewall.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -6848,7 +6981,7 @@ The Barracuda Web Application Firewall (WAF) connector allows you to easily conn
 
 **Solution:** [Blackberry CylancePROTECT](solutions/blackberry-cylanceprotect.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -6896,7 +7029,7 @@ The [Broadcom Symantec Data Loss Prevention (DLP)](https://www.broadcom.com/prod
 
 **Solution:** [Cisco ACI](solutions/cisco-aci.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -6944,7 +7077,7 @@ eStreamer is a Client Server API designed for the Cisco Firepower NGFW Solution.
 
 **Solution:** [Cisco ISE](solutions/cisco-ise.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -6976,7 +7109,7 @@ The [Cisco Meraki](https://meraki.cisco.com/) connector allows you to easily con
 
 **Solution:** [Cisco Secure Cloud Analytics](solutions/cisco-secure-cloud-analytics.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7024,7 +7157,7 @@ The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/se
 
 **Solution:** [Cisco UCS](solutions/cisco-ucs.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7040,7 +7173,7 @@ The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/product
 
 **Solution:** [CiscoWSA](solutions/ciscowsa.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7056,7 +7189,7 @@ The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/product
 
 **Solution:** [Citrix ADC](solutions/citrix-adc.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7202,7 +7335,7 @@ The [CrowdStrike Falcon Endpoint Protection](https://www.crowdstrike.com/endpoin
 
 **Publisher:** Cyber-Ark
 
-**Solution:** [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-(epv)-events.md)
+**Solution:** [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-%28epv%29-events.md)
 
 **Collection Method:** MMA
 
@@ -7218,7 +7351,7 @@ CyberArk Enterprise Password Vault generates an xml Syslog message for every act
 
 **Publisher:** Cyber-Ark
 
-**Solution:** [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-(epv)-events.md)
+**Solution:** [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-%28epv%29-events.md)
 
 **Collection Method:** AMA
 
@@ -7268,7 +7401,7 @@ Common Event Format (CEF) from Delinea Secret Server
 
 **Solution:** [Digital Guardian Data Loss Prevention](solutions/digital-guardian-data-loss-prevention.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7284,7 +7417,7 @@ Common Event Format (CEF) from Delinea Secret Server
 
 **Solution:** [ESETPROTECT](solutions/esetprotect.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7300,7 +7433,7 @@ This connector gathers all events generated by ESET software through the central
 
 **Solution:** [Exabeam Advanced Analytics](solutions/exabeam-advanced-analytics.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7314,7 +7447,7 @@ The [Exabeam Advanced Analytics](https://www.exabeam.com/ueba/advanced-analytics
 
 **Publisher:** ExtraHop Networks
 
-**Solution:** [ExtraHop Reveal(x)](solutions/extrahop-reveal(x).md)
+**Solution:** [ExtraHop Reveal(x)](solutions/extrahop-reveal%28x%29.md)
 
 **Collection Method:** AMA
 
@@ -7330,7 +7463,7 @@ The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(
 
 **Publisher:** ExtraHop Networks
 
-**Solution:** [ExtraHop Reveal(x)](solutions/extrahop-reveal(x).md)
+**Solution:** [ExtraHop Reveal(x)](solutions/extrahop-reveal%28x%29.md)
 
 **Collection Method:** MMA
 
@@ -7508,7 +7641,7 @@ The Forcepoint NGFW (Next Generation Firewall) connector allows you to automatic
 
 **Solution:** [ForgeRock Common Audit for CEF](solutions/forgerock-common-audit-for-cef.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -7592,7 +7725,7 @@ The GitHub audit log connector provides the capability to ingest GitHub logs int
 
 **Solution:** [GitLab](solutions/gitlab.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7608,7 +7741,7 @@ The [GitLab](https://about.gitlab.com/solutions/devops-platform/) connector allo
 
 **Solution:** [ISC Bind](solutions/isc-bind.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7704,7 +7837,7 @@ The Infoblox Cloud Data Connector allows you to easily connect your Infoblox Blo
 
 **Solution:** [Infoblox NIOS](solutions/infoblox-nios.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7742,7 +7875,7 @@ This data connector ingests Infoblox SOC Insight CDC logs into your Log Analytic
 
 **Solution:** [Ivanti Unified Endpoint Management](solutions/ivanti-unified-endpoint-management.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7790,7 +7923,7 @@ The [Juniper](https://www.juniper.net/) IDP data connector provides the capabili
 
 **Solution:** [Juniper SRX](solutions/juniper-srx.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7822,7 +7955,7 @@ MarkLogic data connector provides the capability to ingest [MarkLogicAudit](http
 
 **Solution:** [McAfee Network Security Platform](solutions/mcafee-network-security-platform.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7838,7 +7971,7 @@ The [McAfee® Network Security Platform](https://www.mcafee.com/enterprise/en-us
 
 **Solution:** [McAfee ePolicy Orchestrator](solutions/mcafee-epolicy-orchestrator.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -7854,7 +7987,7 @@ The McAfee ePolicy Orchestrator data connector provides the capability to ingest
 
 **Solution:** [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md)
 
-**Collection Method:** Unknown (Custom Log)
+**Collection Method:** AMA
 
 **Tables (5):** `Event`, `ExchangeHttpProxy_CL`, `MessageTrackingLog_CL`, `SecurityEvent`, `W3CIISLog`
 
@@ -7870,7 +8003,7 @@ Deprecated, use the 'ESI-Opt' dataconnectors. You can stream all Exchange Audit 
 
 **Solution:** [Microsoft Sysmon For Linux](solutions/microsoft-sysmon-for-linux.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (2):** `Syslog`, `vimProcessCreateLinuxSysmon`
 
@@ -7919,7 +8052,7 @@ The NGINX HTTP Server data connector provides the capability to ingest [NGINX](h
 
 **Solution:** [Nasuni](solutions/nasuni.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (2):** `Nasuni`, `Syslog`
 
@@ -8031,7 +8164,7 @@ OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec
 
 **Solution:** [Onapsis Platform](solutions/onapsis-platform.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -8047,7 +8180,7 @@ The Onapsis Connector allows you to export the alarms triggered in the Onapsis P
 
 **Solution:** [OpenVPN](solutions/openvpn.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8063,7 +8196,7 @@ The [OpenVPN](https://github.com/OpenVPN) data connector provides the capability
 
 **Solution:** [OracleDatabaseAudit](solutions/oracledatabaseaudit.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8205,7 +8338,7 @@ PostgreSQL data connector provides the capability to ingest [PostgreSQL](https:/
 
 **Publisher:** Proofpoint
 
-**Solution:** [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand(pod)-email-security.md)
+**Solution:** [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand%28pod%29-email-security.md)
 
 **Collection Method:** Azure Function
 
@@ -8239,7 +8372,7 @@ The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/
 
 **Solution:** [Pulse Connect Secure](solutions/pulse-connect-secure.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8271,7 +8404,7 @@ The RidgeBot connector lets users connect RidgeBot with Microsoft Sentinel, allo
 
 **Solution:** [RSA SecurID](solutions/rsa-securid.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8319,7 +8452,7 @@ Common Event Format (CEF) is an industry standard format on top of Syslog messag
 
 **Solution:** [Sophos XG Firewall](solutions/sophos-xg-firewall.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8351,7 +8484,7 @@ The [Squid Proxy](http://www.squid-cache.org/) connector allows you to easily co
 
 **Solution:** [Symantec Endpoint Protection](solutions/symantec-endpoint-protection.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8367,7 +8500,7 @@ The [Broadcom Symantec Endpoint Protection (SEP)](https://www.broadcom.com/produ
 
 **Solution:** [SymantecProxySG](solutions/symantecproxysg.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8383,7 +8516,7 @@ The [Symantec ProxySG](https://www.broadcom.com/products/cyber-security/network/
 
 **Solution:** [Symantec VIP](solutions/symantec-vip.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8431,7 +8564,7 @@ The [Trend Micro Apex One](https://www.trendmicro.com/en_us/business/products/us
 
 **Solution:** [Trend Micro Deep Security](solutions/trend-micro-deep-security.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -8447,7 +8580,7 @@ The Trend Micro Deep Security connector allows you to easily connect your Deep S
 
 **Solution:** [Trend Micro TippingPoint](solutions/trend-micro-tippingpoint.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -8479,7 +8612,7 @@ The [Ubiquiti UniFi](https://www.ui.com/) data connector provides the capability
 
 **Solution:** [VMWareESXi](solutions/vmwareesxi.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8543,7 +8676,7 @@ The AI Vectra Detect connector allows users to connect Vectra Detect logs with M
 
 **Solution:** [Votiro](solutions/votiro.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -8559,7 +8692,7 @@ The Votiro data connector allows you to easily connect your Votiro Event logs wi
 
 **Solution:** [Watchguard Firebox](solutions/watchguard-firebox.md)
 
-**Collection Method:** Unknown
+**Collection Method:** AMA
 
 **Tables (1):** `Syslog`
 
@@ -8607,7 +8740,7 @@ The WireX Systems data connector allows security professional to integrate with 
 
 **Solution:** [WithSecureElementsViaConnector](solutions/withsecureelementsviaconnector.md)
 
-**Collection Method:** MMA
+**Collection Method:** AMA
 
 **Tables (1):** `CommonSecurityLog`
 
@@ -8624,7 +8757,7 @@ The Common Event Format (CEF) provides natively search & correlation, alerting a
 
 **Publisher:** Zscaler
 
-**Solution:** [Zscaler Private Access (ZPA)](solutions/zscaler-private-access-(zpa).md)
+**Solution:** [Zscaler Private Access (ZPA)](solutions/zscaler-private-access-%28zpa%29.md)
 
 **Collection Method:** MMA
 

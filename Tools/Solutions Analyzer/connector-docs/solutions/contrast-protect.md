@@ -49,4 +49,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] Contrast Protect via AMA](../connectors/contrastprotectama.md), [[Deprecated] Contrast Protect via Legacy Agent](../connectors/contrastprotect.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
+| 3.0.0       | 07-09-2023                     |	Addition of new Contrast Protect AMA **Data Connector**         |
+
 [← Back to Solutions Index](../solutions-index.md)

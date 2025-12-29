@@ -78,4 +78,56 @@ Use this method for automated deployment of the Cyera DSPM Functions and all req
 
 Follow the [install pack’s step-by-step guide]({{userguide-url}}.\n\n1) Create/update the 5 custom tables, data collection rule with format `sentinel-dce-<functuion_name>`, and data collection endpoint with format `sentinel-dcr-<functuion_name>` using the scripts in [install-pack-v0_7_0/scripts]({{deployment-script-zip-url}}).\n2) Deploy the Azure Function from the repo`s Function folder (Timer-trigger; schedule typically 5–15 minutes).\n3) Configure Function App settings:\n   - `CyeraBaseUrl` — Cyera API Base URL\n   - `CyeraClientId` — Client ID (PAT)\n   - `CyeraSecret` — Client Secret (PAT)\n   - `DCR_IMMUTABLE_ID` — DCR immutable ID\n   - `DCE_ENDPOINT` — Logs ingestion endpoint URL\n   - `STREAM_ASSETS`=`Custom-CyeraAssets`, `STREAM_IDENTITIES`=`Custom-CyeraIdentities`, `STREAM_ISSUES`=`Custom-CyeraIssues`, `STREAM_CLASSIFICATIONS`=`Custom-CyeraClassifications`\n4) Save and Start the Function App.
 
+## Additional Documentation
+
+> 📄 *Source: [CyeraDSPM\Data Connectors\CyeraDSPM_Functions\INSTALL.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyeraDSPM\Data Connectors\CyeraDSPM_Functions\INSTALL.md)*
+
+# Cyera DSPM for Microsoft Sentinel — v5 Install Pack
+
+This pack deploys the v5 integration using **DCE + DCR (Direct)** and custom **Log Analytics tables**.
+
+## Prereqs
+- Azure CLI (`az`) logged in
+- `jq` installed
+- Existing Log Analytics Workspace
+
+## 1) Configure env
+```bash
+cd scripts
+cp 00_env.sample 00_env.sh && $EDITOR 00_env.sh
+. ./00_env.sh
+```
+
+## 2) Create/Update tables
+```bash
+./10_put_tables.sh
+```
+
+## 3) Create/Update DCR (Direct)
+```bash
+./20_put_dcr.sh
+```
+
+## 4) Verify resources
+```bash
+./30_show_resources.sh
+```
+Ensure:
+- `immutableId` is non-empty
+- `dataCollectionEndpointId` shows your DCE ARM ID
+- DCE `logsIngestion.endpoint` is a real URL
+
+Optionally export the immutableId for seeding:
+```bash
+export DCR_IMMUTABLE_ID=$(az monitor data-collection rule show -g "$RG" -n "$DCR_NAME" --query properties.immutableId -o tsv)
+```
+
+## 5) (Optional) Seed sample data
+```bash
+./40_seed_samples.sh
+```
+
+## 6) Validate in Logs
+Open `scripts/50_verify.kql` and run the queries in the Logs blade.
+
 [← Back to Connectors Index](../connectors-index.md)

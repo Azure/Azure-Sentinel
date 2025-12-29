@@ -256,26 +256,51 @@ The analyzer determines the data collection method used by each connector throug
 
 | Method | Description | Detection Criteria |
 |--------|-------------|-------------------|
-| **Codeless Connector Framework** | Microsoft's native codeless connector platform (CCP/CCF) | Connector ID contains "CCP" or "CCF", `pollingConfig` present, `dcrConfig` with "RestApiPoller", `GCPAuthConfig`, `dataConnectorDefinitions` resource type |
-| **Azure Function** | Azure Functions-based data collection | Filename contains "FunctionApp", description mentions "Azure Function", function app deployment patterns |
-| **Azure Monitor Agent (AMA)** | Modern log collection agent | Title/ID contains "AMA" or "(using Azure Monitor Agent)", Azure Monitor Agent deployment references |
-| **Log Analytics Agent (MMA)** | Legacy Microsoft Monitoring Agent (deprecated) | Legacy agent references, "omsagent" installation, "cef_installer.py" scripts, explicit MMA documentation |
-| **Azure Diagnostics** | Azure resource diagnostic settings | "AzureDiagnostics" table references, "Enable Diagnostic logs" instructions, diagnostic settings deployment |
-| **REST API** | Direct API push/webhook collection | "REST API" mentions in description, webhook/HTTP endpoint patterns, "Push" in connector title |
-| **Native** | Built-in Sentinel integrations | `SentinelKinds` property present, Microsoft 365/Defender native integrations, first-party Microsoft connectors |
-| **Unknown (Custom Log)** | Method could not be determined | None of the above patterns matched |
+| **Azure Monitor Agent (AMA)** | Modern log collection agent | Title contains "AMA" or "via AMA", ID ends with "ama", Azure Monitor Agent deployment references, `sent_by_ama` field |
+| **Log Analytics Agent (MMA)** | Legacy Microsoft Monitoring Agent (deprecated) | Title mentions "Legacy Agent", "omsagent" references, "cef_installer.py" scripts, workspace ID/key patterns |
+| **Azure Diagnostics** | Azure resource diagnostic settings | "AzureDiagnostics" references in content, "diagnostic settings" in description, `Microsoft.Insights/diagnosticSettings` resource, Azure Policy diagnostics, table category "Azure Resources" |
+| **Native** | Built-in Sentinel integrations | `SentinelKinds` property present, Microsoft 365/Defender/Entra ID native integrations, known native connector IDs (only when CCF patterns not present) |
+| **Codeless Connector Framework (CCF)** | Microsoft's codeless connector platform (CCP/CCF) | `pollingConfig` present, `dcrConfig` with `RestApiPoller`, `GCPAuthConfig`, `dataConnectorDefinitions` (except AMA title connectors), ID contains "CCP"/"CCF"/"Codeless", **CCF Push variant**: `DeployPushConnectorButton` with `HasDataConnectors` (DCR/DCE-based push ingestion) |
+| **Azure Function** | Azure Functions-based data collection | Filename contains "FunctionApp"/"function_app"/"_api_function", description mentions "Azure Functions", ID contains "AzureFunction"/"FunctionApp", function app deployment patterns |
+| **REST API** | Direct API push/webhook collection | "REST API" in title/description, webhook/HTTP endpoint patterns, "Push" in connector title |
+| **Unknown (Custom Log)** | Method could not be determined | Only custom log table (`_CL`) references found, no other patterns matched |
 
 #### Detection Priority
 
-When multiple indicators are present, detection follows this priority order:
-1. CCF indicators (most specific)
-2. Native integration markers
-3. AMA references
-4. MMA/Legacy agent patterns
-5. Azure Function indicators
-6. Azure Diagnostics patterns
-7. REST API patterns
-8. Default to "Unknown (Custom Log)"
+The detection algorithm uses a tiered priority system to ensure accurate classification. When a connector explicitly declares its type in the title (e.g., "via AMA"), that takes precedence. Otherwise, the most specific detection patterns are prioritized over generic ones:
+
+1. **Explicit AMA/MMA in title** (highest priority) - Title/ID explicitly states the agent type (e.g., "via AMA", "via Legacy Agent", ID ends with "ama"). Special case: `WindowsFirewall` (without Ama suffix) is treated as MMA.
+2. **Azure Function filename patterns** - Filename contains "FunctionApp"/"function_app"/"_api_function", ID contains "AzureFunction"/"FunctionApp"
+3. **CCF content patterns** - `pollingConfig`, `dcrConfig` with RestApiPoller, `GCPAuthConfig`, `dataConnectorDefinitions` (unless AMA title), CCF Push variant (`DeployPushConnectorButton` + `HasDataConnectors`)
+4. **Azure Diagnostics patterns** - References to "AzureDiagnostics" table, "diagnostic settings" in description, `Microsoft.Insights/diagnosticSettings` resource, Azure Policy diagnostics (skipped if Azure Function filename detected)
+5. **CCF name-based patterns** (lower than Azure Diagnostics) - ID contains "CCP"/"CCF"/"Codeless", ID contains "Polling" (skipped if Azure Diagnostics patterns found)
+6. **Azure Function content patterns** (lower than CCF content) - "Azure Functions" in description, "Deploy to Azure" with "Function App", Azure Functions pricing references (skipped if CCF content detected)
+7. **Native Microsoft integrations** - `SentinelKinds` property, Microsoft Defender/365/Entra ID connectors (skipped if CCF content detected)
+8. **Additional AMA/MMA patterns** - Secondary indicators like `sent_by_ama`, `omsagent`, workspace keys
+9. **REST API patterns** - Push/webhook/HTTP endpoint references
+10. **Table metadata fallback** - Uses table category from Azure Monitor reference (e.g., "Azure Resources" → Azure Diagnostics, "virtualmachines" in resource_types → AMA) - only applied when no Azure Function, CCF, Native, or Azure Diagnostics patterns detected
+11. **Custom log fallback** (lowest priority) - `_CL` table suffix indicates custom log
+
+> **Key Design Decisions:**
+> - **Azure Diagnostics > CCF name**: Connectors with `_CCP` suffix that reference "AzureDiagnostics" are Azure Diagnostics (the CCP suffix indicates the connector was built using the CCF framework, but it still collects via Azure Diagnostics)
+> - **CCF content > Azure Function content**: Connectors with `dcrConfig`/`dataConnectorDefinitions` that also have "Deploy Azure Function" patterns are CCF (e.g., OktaSSOv2)
+> - **Azure Function filename is strong**: Connectors with "FunctionApp" in the filename are Azure Functions regardless of content patterns
+> - **Title-based AMA/MMA is strongest**: When a connector title explicitly includes "AMA" or "Legacy Agent", it overrides all other patterns
+
+> **Note:** When multiple patterns match, the system selects based on priority order. A connector may match multiple methods; the `multi_method_connectors_report.csv` file lists connectors where multiple distinct methods were detected.
+
+### 7. multi_method_connectors_report.csv (Multi-Method Detection Report)
+
+Lists connectors where multiple distinct collection methods were detected, showing which method was selected and why.
+
+| Column | Description |
+|--------|-------------|
+| `connector_id` | Connector identifier |
+| `connector_title` | Connector display title |
+| `selected_method` | The collection method that was selected based on priority |
+| `selected_reason` | The reason/pattern that triggered the selected method |
+| `other_methods_detected` | Other methods that were also detected (pipe-separated) |
+| `all_reasons` | All detection reasons grouped by method |
 
 ### Parser Resolution
 
@@ -522,6 +547,7 @@ The script automatically calls `compare_connector_catalogs.py` and `collect_tabl
 | `--input` | `solutions_connectors_tables_mapping.csv` | Path to connector mapping CSV |
 | `--tables-csv` | `tables_reference.csv` | Path to tables reference CSV |
 | `--output-dir` | `connector-docs/` | Output directory for documentation |
+| `--solutions-dir` | `../../Solutions` | Path to Solutions directory for reading ReleaseNotes.md and connector documentation files |
 | `--solutions` | All | Generate docs only for specific solutions |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
@@ -558,6 +584,7 @@ connector-docs/
 - Required permissions and prerequisites
 - Tables ingested by each connector
 - Links to connector definition files
+- **Release Notes** from `ReleaseNotes.md` (if present in solution directory)
 
 **Connector Pages** include:
 - Connector description and metadata
@@ -566,6 +593,7 @@ connector-docs/
 - List of solutions using this connector
 - Tables ingested with transformation and ingestion API support indicators
 - Links to GitHub connector definition files
+- **Additional Documentation** from README.md files associated with the connector (see below)
 
 **Table Pages** include:
 - Table description from Azure Monitor documentation
@@ -647,7 +675,48 @@ Instructions are formatted with:
 
 ---
 
+## Additional Documentation Sources
+
+The documentation generator enriches pages with content from markdown files in the Solutions directory:
+
+### Release Notes (Solution Pages)
+
+The script looks for `ReleaseNotes.md` in each solution's root directory (e.g., `Solutions/{SolutionName}/ReleaseNotes.md`). If found, the release notes are included in the solution documentation page under a "Release Notes" section. This typically includes a version history table with dates and change descriptions.
+
+### Connector Documentation Files (Connector Pages)
+
+The script attempts to find and include markdown documentation associated with each connector. The association rules are:
+
+1. **Dedicated subfolder**: If the connector has a dedicated subfolder in the Data Connectors directory with `.md` files (e.g., `Data Connectors/ConnectorName/*.md`), the README.md is preferred, otherwise the first `.md` file found is used.
+
+2. **Filename-based association**: Any `.md` file with a name matching the connector ID (e.g., `ConnectorName.md` or `ConnectorName_README.md`).
+
+3. **Single connector fallback**: If a solution has only one connector and there are `.md` files directly in the Data Connectors folder, README.md is preferred, otherwise the first `.md` file is used.
+
+The documentation content is included in an "Additional Documentation" section with a link to the source file in GitHub.
+
+> **Note**: The generator searches for all markdown files (`.md`) in the `Data Connectors` folder and its subfolders, following various naming conventions used across solutions.
+
+---
+
 ## Version History
+
+### v4.1
+
+- Added additional documentation sources for generated documentation:
+  - Solution pages now include Release Notes from `ReleaseNotes.md` files in solution directories
+  - Connector pages now include associated markdown documentation (any `.md` file) when available
+- Improved connector documentation file association with multiple strategies:
+  - Dedicated subfolder: Any `.md` file in connector's subfolder (prefers README.md)
+  - Filename match: `.md` files containing connector name in the filename
+  - Single-connector fallback: Any `.md` file when solution has only one connector
+- Added `--solutions-dir` command line argument for configurable solution directory path
+- Improved collection method detection priority:
+  - Fixed WindowsFirewall to correctly detect as MMA (special case)
+  - Fixed OktaSSOv2 to correctly detect as CCF (content patterns now higher priority)
+  - Fixed Azure `_CCP` connectors to correctly detect as Azure Diagnostics
+  - Separated CCF detection into content patterns (high priority) and name patterns (lower)
+  - Azure Diagnostics patterns now checked before CCF name-based patterns
 
 ### v4.0
 
@@ -672,7 +741,6 @@ Instructions are formatted with:
 - Added `connector_id_generated` column to track when connector ID was auto-generated from title
 - Added connectors with `no_table_definitions` to output with empty table field (previously excluded)
   - Adds connectors such as Azure Resource Graph, Microsoft 365 Assets, Microsoft Entra ID Assets
-- Added `compare_connector_catalogs.py` script to compare GitHub connectors with Sentinel catalog
 - Added `collect_table_info.py` script to collect comprehensive table metadata from Azure Monitor documentation
   - Fetches from Azure Monitor Logs reference, Defender XDR schema, feature support, and ingestion API pages
   - Includes transformation support, basic logs eligibility, retention info, and documentation links

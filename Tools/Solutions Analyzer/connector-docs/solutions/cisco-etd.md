@@ -35,4 +35,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CiscoETD_CL` | [Cisco ETD](../connectors/ciscoetd.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 11-02-2024                 | Initial Solution Release                    |
+
 [← Back to Solutions Index](../solutions-index.md)

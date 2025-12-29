@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | [[Deprecated] OpenVPN Server](../connectors/openvpn.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.1       | 18-12-2024                     | Removed Deprecated **Data Connector**       |
+| 3.0.0       | 19-07-2024                     | Deprecated **Data Connector**               |
+
 [← Back to Solutions Index](../solutions-index.md)

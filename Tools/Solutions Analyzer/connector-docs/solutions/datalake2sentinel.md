@@ -37,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `ThreatIntelligenceIndicator` | [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                   |
+| ----------- | ------------------------------ | -------------------------------------|
+| 3.0.0       | 31-01-2024                     | Initial Solution Release             |
+
 [← Back to Solutions Index](../solutions-index.md)

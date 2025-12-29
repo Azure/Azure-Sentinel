@@ -1,15 +1,11 @@
 # CommonSecurityLog
 
-Reference for CommonSecurityLog table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `CommonSecurityLog` |
 | **Category** | Security |
 | **Solutions Using Table** | 59 |
 | **Connectors Ingesting** | 100 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✓ Yes |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/commonsecuritylog) |
 
@@ -36,9 +32,9 @@ This table is used by the following solutions:
 - [Common Event Format](../solutions/common-event-format.md)
 - [Contrast Protect](../solutions/contrast-protect.md)
 - [CrowdStrike Falcon Endpoint Protection](../solutions/crowdstrike-falcon-endpoint-protection.md)
-- [CyberArk Enterprise Password Vault (EPV) Events](../solutions/cyberark-enterprise-password-vault-(epv)-events.md)
+- [CyberArk Enterprise Password Vault (EPV) Events](../solutions/cyberark-enterprise-password-vault-%28epv%29-events.md)
 - [Delinea Secret Server](../solutions/delinea-secret-server.md)
-- [ExtraHop Reveal(x)](../solutions/extrahop-reveal(x).md)
+- [ExtraHop Reveal(x)](../solutions/extrahop-reveal%28x%29.md)
 - [F5 Networks](../solutions/f5-networks.md)
 - [FireEye Network Security](../solutions/fireeye-network-security.md)
 - [Forcepoint CASB](../solutions/forcepoint-casb.md)
@@ -59,7 +55,7 @@ This table is used by the following solutions:
 - [OSSEC](../solutions/ossec.md)
 - [Onapsis Platform](../solutions/onapsis-platform.md)
 - [OneIdentity](../solutions/oneidentity.md)
-- [Palo Alto - XDR (Cortex)](../solutions/palo-alto---xdr-(cortex).md)
+- [Palo Alto - XDR (Cortex)](../solutions/palo-alto---xdr-%28cortex%29.md)
 - [PaloAlto-PAN-OS](../solutions/paloalto-pan-os.md)
 - [PaloAltoCDL](../solutions/paloaltocdl.md)
 - [PingFederate](../solutions/pingfederate.md)
@@ -68,7 +64,7 @@ This table is used by the following solutions:
 - [Silverfort](../solutions/silverfort.md)
 - [SonicWall Firewall](../solutions/sonicwall-firewall.md)
 - [Threat Intelligence](../solutions/threat-intelligence.md)
-- [Threat Intelligence (NEW)](../solutions/threat-intelligence-(new).md)
+- [Threat Intelligence (NEW)](../solutions/threat-intelligence-%28new%29.md)
 - [Trend Micro Apex One](../solutions/trend-micro-apex-one.md)
 - [Trend Micro Deep Security](../solutions/trend-micro-deep-security.md)
 - [Trend Micro TippingPoint](../solutions/trend-micro-tippingpoint.md)
@@ -185,17 +181,6 @@ This table is ingested by the following connectors:
 - [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md)
 - [[Deprecated] vArmour Application Controller via Legacy Agent](../connectors/varmourac.md)
 - [[Deprecated] vArmour Application Controller via AMA](../connectors/varmouracama.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.securityinsights/cef`
-- `microsoft.compute/virtualmachines`
-- `microsoft.conenctedvmwarevsphere/virtualmachines`
-- `microsoft.azurestackhci/virtualmachines`
-- `microsoft.scvmm/virtualmachines`
-- `microsoft.compute/virtualmachinescalesets`
 
 ---
 

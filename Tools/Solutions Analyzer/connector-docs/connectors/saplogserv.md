@@ -5,7 +5,7 @@
 | **Connector ID** | `SAPLogServ` |
 | **Publisher** | SAP SE |
 | **Used in Solutions** | [SAP LogServ](../solutions/sap-logserv.md) |
-| **Collection Method** | Unknown (Custom Log) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [SAPLogServ.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Data%20Connectors/SAPLogServ.json), [SAPLogServ_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Data%20Connectors/SAPLogServ_PUSH_CCP/SAPLogServ_connectorDefinition.json) |
 
 SAP LogServ is an SAP Enterprise Cloud Services (ECS) service aimed at collection, storage, forwarding and access of logs. LogServ centralizes the logs from all systems, applications, and ECS services used by a registered customer. 

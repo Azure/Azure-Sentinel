@@ -37,4 +37,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `ExtraHop_Detections_CL` | [ExtraHop Detections Data Connector](../connectors/extrahop.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.1       | 04-06-2025                     | Updated **Parser** and **Workbook** to fix issue.    |
+| 3.0.0       | 19-03-2025                     | Initial Solution Release.                    |
+
 [← Back to Solutions Index](../solutions-index.md)

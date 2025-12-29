@@ -57,4 +57,12 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `WsSecurityEvents_CL` | [WithSecure Elements API (Azure Function)](../connectors/withsecureelementsviafunction.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                           |
+|-------------|--------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| 3.0.2       | 08-05-2025                     | Fix major incident connected to wrong deployment of version 3.0.1                                                            |
+| 3.0.1       | 28-03-2025                     | Memory overflow fix - process events via batches<br/>Fix wrong workspace name in sentinel connector installation instruction |
+| 3.0.0       | 22-02-2024                     | Initial commit - Data Connector based on Azure Function and "Top computers by infections" Workbook                           |
+
 [← Back to Solutions Index](../solutions-index.md)

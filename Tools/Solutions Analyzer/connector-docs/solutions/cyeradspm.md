@@ -62,4 +62,10 @@ This solution ingests data into **5 table(s)**:
 | `CyeraIdentities_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
 | `CyeraIssues_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                    |
+|-------------|--------------------------------|-------------------------------------------------------|
+| 3.0.0       | 29-10-2025                     | Initial Creation of CCF and Azure Functions Connector |
+
 [← Back to Solutions Index](../solutions-index.md)

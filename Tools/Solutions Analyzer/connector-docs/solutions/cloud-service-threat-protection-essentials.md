@@ -17,4 +17,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                            |
+|-------------|--------------------------------|-----------------------------------------------|
+| 3.0.0       | 09-02-2024                     | Tagged for dependent solutions for deployment |
+
 [← Back to Solutions Index](../solutions-index.md)

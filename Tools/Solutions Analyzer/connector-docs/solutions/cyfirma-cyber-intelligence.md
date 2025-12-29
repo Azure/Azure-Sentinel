@@ -42,4 +42,12 @@ This solution ingests data into **4 table(s)**:
 | `CyfirmaMalware_CL` | [CYFIRMA Cyber Intelligence](../connectors/cyfirmacyberintelligencedc.md) |
 | `CyfirmaThreatActors_CL` | [CYFIRMA Cyber Intelligence](../connectors/cyfirmacyberintelligencedc.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                     |
+|-------------|--------------------------------|------------------------------------------------------------------------|
+| 3.0.2       | 04-09-2025                     | Bugs fixes to **CCF Data Connector**.                                  |
+| 3.0.1       | 24-07-2025                     | Minor changes and New analytics rules added to **CCF Data Connector**. |
+| 3.0.0       | 17-06-2025                     | Initial Solution Release.                                              |
+
 [← Back to Solutions Index](../solutions-index.md)

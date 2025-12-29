@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `JuniperIDP_CL` | [[Deprecated] Juniper IDP](../connectors/juniperidp.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
+|-------------|--------------------------------|-------------------------------------------------------------|
+| 3.0.1       | 31-12-2024                     | Removed Deprecated **Data connector**                       |
+| 3.0.0       | 13-08-2024                     | Deprecating data connector                                  |
+
 [← Back to Solutions Index](../solutions-index.md)

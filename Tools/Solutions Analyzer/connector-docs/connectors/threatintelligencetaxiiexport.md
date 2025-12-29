@@ -4,7 +4,7 @@
 |:----------|:------|
 | **Connector ID** | `ThreatIntelligenceTaxiiExport` |
 | **Publisher** | Microsoft |
-| **Used in Solutions** | [Threat Intelligence (NEW)](../solutions/threat-intelligence-(new).md) |
+| **Used in Solutions** | [Threat Intelligence (NEW)](../solutions/threat-intelligence-%28new%29.md) |
 | **Collection Method** | Native |
 | **Connector Definition Files** | [template_ThreatIntelligenceTaxiiExport.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Data%20Connectors/template_ThreatIntelligenceTaxiiExport.json) |
 
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`ThreatIntelExportOperation`](../tables/threatintelexportoperation.md) | ✗ | ✗ |
+| [`ThreatIntelExportOperation`](../tables/threatintelexportoperation.md) | — | ✗ |
 
 ## Permissions
 

@@ -36,4 +36,16 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `Syslog` | [[Deprecated] VMware ESXi](../connectors/vmwareesxi.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                     |
+|-------------|--------------------------------|------------------------------------------------------------------------|
+| 3.0.5       | 03-11-2025                     | Added new **Analytic Rule** (VMware ESXi - Root change password) and (VMware ESXi - Multiple Failed SSH Login)      |
+| 3.0.4       | 09-10-2025                     | Added new **Analytic Rule** (VMware ESXi - SSH Enable on ESXi Host)    |
+| 3.0.3       | 02-12-2024                     | Removed Deprecated **Data connectors**                                 |
+| 3.0.2       | 01-08-2024                     | Update **Parser** as part of Syslog migration                          |
+|             |                                | Deprecating data connectors                                            |
+| 3.0.1       | 30-04-2024                     | Repackaged for parser name issue                                       |
+| 3.0.0       | 15-04-2024                     | Updated **Parser** VMwareESXi.yaml to automatic update applicable logs |
+
 [← Back to Solutions Index](../solutions-index.md)

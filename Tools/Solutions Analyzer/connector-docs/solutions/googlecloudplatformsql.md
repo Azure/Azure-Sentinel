@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `GCPCloudSQL` | [GCP Cloud SQL (via Codeless Connector Framework)](../connectors/gcpcloudsqlccfdefinition.md) |
 
+## Release Notes
+
+**Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+|------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.1      | 02-09-2025                    | GCP Cloud SQL **CCF Conector** moving to GA  |
+| 3.0.0      | 16-07-2025                    | Initial Solution Release and Added new **CCF Data Connector**. |
+
 [← Back to Solutions Index](../solutions-index.md)

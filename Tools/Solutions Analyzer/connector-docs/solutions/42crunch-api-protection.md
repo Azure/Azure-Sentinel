@@ -36,4 +36,10 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `apifirewall_log_1_CL` | [API Protection](../connectors/42crunchapiprotection.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.0       | 15-07-2024                     |	Missing Tactics and Techniques added     						|
+
 [← Back to Solutions Index](../solutions-index.md)

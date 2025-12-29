@@ -77,4 +77,10 @@ This solution ingests data into **2 table(s)**:
 | `Malware_Data_CL` | [Cofense Intelligence Threat Indicators Ingestion](../connectors/cofenseintelligence.md) |
 | `ThreatIntelligenceIndicator` | [Cofense Intelligence Threat Indicators Ingestion](../connectors/cofenseintelligence.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       | 10-12-2022                     | Initial Solution Release                    |
+
 [← Back to Solutions Index](../solutions-index.md)

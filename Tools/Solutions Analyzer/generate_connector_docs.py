@@ -8,7 +8,7 @@ of https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference
 import csv
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 import argparse
 from urllib.parse import quote
 import json
@@ -17,9 +17,214 @@ import subprocess
 import sys
 
 
+# Default Solutions directory path (relative to this script)
+DEFAULT_SOLUTIONS_DIR = Path(__file__).parent.parent.parent / "Solutions"
+
+
 def sanitize_anchor(text: str) -> str:
     """Convert text to URL-safe anchor."""
     return text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+
+
+def sanitize_filename(text: str) -> str:
+    """Convert text to URL-safe filename, encoding special characters that break Markdown links."""
+    result = text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+    # URL-encode parentheses to avoid breaking Markdown link syntax
+    result = result.replace("(", "%28").replace(")", "%29")
+    return result
+
+
+def get_release_notes(solution_name: str, solutions_dir: Path) -> Optional[str]:
+    """
+    Read ReleaseNotes.md from a solution directory if it exists.
+    
+    Args:
+        solution_name: Name of the solution folder
+        solutions_dir: Path to the Solutions directory
+    
+    Returns:
+        Content of ReleaseNotes.md or None if not found
+    """
+    release_notes_path = solutions_dir / solution_name / "ReleaseNotes.md"
+    if release_notes_path.exists():
+        try:
+            return release_notes_path.read_text(encoding='utf-8')
+        except Exception as e:
+            print(f"  Warning: Could not read {release_notes_path}: {e}")
+    return None
+
+
+# Folders to exclude when searching for documentation files
+EXCLUDED_FOLDERS = {
+    '.python_packages', 'node_modules', '__pycache__', '.venv', 'venv', 
+    'site-packages', 'dist-info', 'egg-info', '.git', '.vs', 'bin', 'obj'
+}
+
+# Files to exclude (non-documentation markdown files)
+EXCLUDED_FILES = {
+    'license', 'licence', 'copying', 'notice', 'authors', 'contributors',
+    'history', 'news', 'todo', 'metadata'
+}
+
+
+def is_valid_doc_file(md_file: Path) -> bool:
+    """
+    Check if a markdown file is a valid documentation file.
+    Excludes files in package/dependency folders and non-documentation files.
+    """
+    # Check if any parent folder is in the excluded list
+    for parent in md_file.parents:
+        if parent.name.lower() in EXCLUDED_FOLDERS or parent.name.endswith('.dist-info') or parent.name.endswith('.egg-info'):
+            return False
+    
+    # Check if the file itself is a non-documentation file
+    if md_file.stem.lower() in EXCLUDED_FILES:
+        return False
+    
+    return True
+
+
+def get_connector_readme(solution_name: str, connector_id: str, connector_files: str, 
+                         solutions_dir: Path) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Find and read documentation markdown file associated with a connector.
+    
+    Association rules:
+    1. If connector has a dedicated subfolder with .md files (e.g., Data Connectors/ConnectorName/*.md)
+    2. .md file with connector name in filename anywhere in Data Connectors folder
+    3. If solution has only one connector, any .md file in Data Connectors folder (handled by caller)
+    
+    Args:
+        solution_name: Name of the solution folder
+        connector_id: The connector identifier
+        connector_files: Semicolon-separated list of connector definition file URLs
+        solutions_dir: Path to the Solutions directory
+    
+    Returns:
+        Tuple of (readme_content, readme_path) or (None, None) if not found
+    """
+    solution_path = solutions_dir / solution_name
+    if not solution_path.exists():
+        return None, None
+    
+    # Find the Data Connectors folder (with various naming conventions)
+    data_connector_folders = []
+    for folder in solution_path.iterdir():
+        if folder.is_dir() and ('data' in folder.name.lower() and 'connector' in folder.name.lower()):
+            data_connector_folders.append(folder)
+    
+    if not data_connector_folders:
+        return None, None
+    
+    # Parse connector file paths to find the connector's folder
+    connector_folder_name = None
+    connector_json_folder = None
+    if connector_files:
+        for file_url in connector_files.split(';'):
+            file_url = file_url.strip()
+            if not file_url:
+                continue
+            # Extract path after solution name
+            # URL format: .../Solutions/{solution}/Data Connectors/{subfolder}/file.json
+            parts = file_url.split('/')
+            try:
+                dc_idx = None
+                for i, part in enumerate(parts):
+                    if 'data' in part.lower() and 'connector' in part.lower():
+                        dc_idx = i
+                        break
+                if dc_idx is not None and dc_idx + 1 < len(parts):
+                    next_part = parts[dc_idx + 1]
+                    # Check if this is a subfolder (not a JSON file)
+                    if not next_part.endswith('.json'):
+                        connector_folder_name = next_part
+                        connector_json_folder = "/".join(parts[dc_idx:dc_idx+2])
+            except (IndexError, ValueError):
+                pass
+    
+    # Strategy 1: Look for any .md file in connector's dedicated subfolder
+    for dc_folder in data_connector_folders:
+        if connector_folder_name:
+            connector_subfolder = dc_folder / connector_folder_name
+            if connector_subfolder.exists() and connector_subfolder.is_dir():
+                # Find all .md files in the subfolder (excluding package folders)
+                md_files = [f for f in connector_subfolder.glob('*.md') if is_valid_doc_file(f)]
+                if md_files:
+                    # Prefer README.md if it exists, otherwise use the first .md file
+                    readme_file = None
+                    for md_file in md_files:
+                        if md_file.stem.lower() == 'readme':
+                            readme_file = md_file
+                            break
+                    if readme_file is None:
+                        readme_file = md_files[0]
+                    try:
+                        content = readme_file.read_text(encoding='utf-8')
+                        rel_path = str(readme_file.relative_to(solutions_dir))
+                        return content, rel_path
+                    except Exception:
+                        pass
+    
+    # Strategy 2: Look for README with connector name in filename
+    for dc_folder in data_connector_folders:
+        # Look for files like ConnectorName_README.md or ConnectorName.md
+        connector_id_lower = connector_id.lower()
+        for md_file in dc_folder.glob('**/*.md'):
+            if not is_valid_doc_file(md_file):
+                continue
+            file_stem_lower = md_file.stem.lower()
+            if connector_id_lower in file_stem_lower or file_stem_lower in connector_id_lower:
+                try:
+                    content = md_file.read_text(encoding='utf-8')
+                    rel_path = str(md_file.relative_to(solutions_dir))
+                    return content, rel_path
+                except Exception:
+                    pass
+    
+    # Strategy 3: If only one connector in solution, use README in Data Connectors folder
+    # We'll check this in the caller where we have access to all connectors for a solution
+    
+    return None, None
+
+
+def get_single_connector_readme(solution_name: str, solutions_dir: Path) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Get documentation .md file from Data Connectors folder when solution has only one connector.
+    Prefers README.md if it exists, otherwise uses the first .md file found.
+    
+    Args:
+        solution_name: Name of the solution folder
+        solutions_dir: Path to the Solutions directory
+    
+    Returns:
+        Tuple of (readme_content, readme_path) or (None, None) if not found
+    """
+    solution_path = solutions_dir / solution_name
+    if not solution_path.exists():
+        return None, None
+    
+    # Find the Data Connectors folder
+    for folder in solution_path.iterdir():
+        if folder.is_dir() and ('data' in folder.name.lower() and 'connector' in folder.name.lower()):
+            # Look for any .md file directly in Data Connectors folder (excluding package folders)
+            md_files = [f for f in folder.glob('*.md') if is_valid_doc_file(f)]
+            if md_files:
+                # Prefer README.md if it exists, otherwise use the first .md file
+                readme_file = None
+                for md_file in md_files:
+                    if md_file.stem.lower() == 'readme':
+                        readme_file = md_file
+                        break
+                if readme_file is None:
+                    readme_file = md_files[0]
+                try:
+                    content = readme_file.read_text(encoding='utf-8')
+                    rel_path = str(readme_file.relative_to(solutions_dir))
+                    return content, rel_path
+                except Exception:
+                    pass
+    
+    return None, None
 
 
 def format_instruction_steps(instruction_steps: str) -> str:
@@ -711,6 +916,111 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write(f"| Unique Connectors | {len(all_connector_ids)} |\n")
         f.write(f"| Unique Tables | {len(all_tables)} |\n\n")
         
+        # Build collection method summary
+        # Collect all unique connectors with their metadata
+        # Track all solutions per connector (some connectors appear in multiple solutions)
+        connectors_map: Dict[str, Dict[str, any]] = {}
+        connector_solutions: Dict[str, Set[str]] = defaultdict(set)  # connector_id -> set of solution names
+        
+        for solution_name_iter, connectors in solutions.items():
+            for conn in connectors:
+                connector_id = conn.get('connector_id', '')
+                if not connector_id:
+                    continue
+                
+                # Track all solutions this connector belongs to
+                connector_solutions[connector_id].add(solution_name_iter)
+                
+                if connector_id in connectors_map:
+                    continue
+                
+                connector_title = conn.get('connector_title', connector_id)
+                connectors_map[connector_id] = {
+                    'title': connector_title,
+                    'collection_method': conn.get('collection_method', ''),
+                }
+        
+        # Separate deprecated and active connectors
+        deprecated_connectors = {}
+        active_connectors_map = {}
+        
+        for connector_id, info in connectors_map.items():
+            title = info['title']
+            if '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]'):
+                deprecated_connectors[connector_id] = info
+            else:
+                active_connectors_map[connector_id] = info
+        
+        # Build solutions_all_connectors using the complete mapping
+        solutions_all_connectors: Dict[str, List[str]] = defaultdict(list)
+        for connector_id, solution_names in connector_solutions.items():
+            for solution_name_iter in solution_names:
+                solutions_all_connectors[solution_name_iter].append(connector_id)
+        
+        # Identify deprecated solutions
+        deprecated_solutions: Set[str] = set()
+        for solution_name_iter, connector_ids in solutions_all_connectors.items():
+            if '[DEPRECATED]' in solution_name_iter.upper() or solution_name_iter.startswith('[Deprecated]'):
+                deprecated_solutions.add(solution_name_iter)
+            elif all(cid in deprecated_connectors for cid in connector_ids):
+                deprecated_solutions.add(solution_name_iter)
+        
+        # Build collection method stats - count all solutions each connector belongs to
+        collection_method_stats: Dict[str, Dict[str, any]] = defaultdict(lambda: {
+            'total_connectors': 0,
+            'active_connectors': 0,
+            'total_solutions': set(),
+            'active_solutions': set(),
+        })
+        
+        for connector_id, info in connectors_map.items():
+            method = info.get('collection_method', 'Unknown') or 'Unknown'
+            is_deprecated_connector = connector_id in deprecated_connectors
+            
+            collection_method_stats[method]['total_connectors'] += 1
+            
+            if not is_deprecated_connector:
+                collection_method_stats[method]['active_connectors'] += 1
+            
+            # Add ALL solutions this connector belongs to
+            for solution_name_iter in connector_solutions[connector_id]:
+                collection_method_stats[method]['total_solutions'].add(solution_name_iter)
+                if solution_name_iter not in deprecated_solutions:
+                    collection_method_stats[method]['active_solutions'].add(solution_name_iter)
+        
+        # Write collection method summary table
+        f.write("### Collection Methods\n\n")
+        f.write("| Collection Method | Total Connectors | Active Connectors* | Total Solutions | Active Solutions* |\n")
+        f.write("|:-----------------|:----------------:|:-----------------:|:---------------:|:----------------:|\n")
+        
+        sorted_methods = sorted(
+            collection_method_stats.items(),
+            key=lambda x: x[1]['total_connectors'],
+            reverse=True
+        )
+        
+        total_all_connectors = 0
+        total_active_connectors = 0
+        all_solutions_set: Set[str] = set()
+        all_active_solutions_set: Set[str] = set()
+        
+        for method, stats in sorted_methods:
+            total_connectors_count = stats['total_connectors']
+            active_connectors_count = stats['active_connectors']
+            total_solutions_count = len(stats['total_solutions'])
+            active_solutions_count = len(stats['active_solutions'])
+            
+            total_all_connectors += total_connectors_count
+            total_active_connectors += active_connectors_count
+            all_solutions_set.update(stats['total_solutions'])
+            all_active_solutions_set.update(stats['active_solutions'])
+            
+            f.write(f"| {method} | {total_connectors_count} | {active_connectors_count} | {total_solutions_count} | {active_solutions_count} |\n")
+        
+        f.write(f"| **Total** | **{total_all_connectors}** | **{total_active_connectors}** | **{len(all_solutions_set)}** | **{len(all_active_solutions_set)}** |\n")
+        f.write("\n")
+        f.write("*\\*Active excludes connectors and solutions marked as deprecated.*\n\n")
+        
         # Organization section
         f.write("## How This Documentation is Organized\n\n")
         f.write("Each solution has its own page containing:\n\n")
@@ -751,7 +1061,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 support_name = connectors[0].get('solution_support_name', 'N/A')
                 first_published = connectors[0].get('solution_first_publish_date', 'N/A')
                 
-                solution_link = f"[{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)"
+                solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 f.write(f"| {solution_link} | {first_published} | {support_name} |\n")
             
             f.write("\n")
@@ -804,7 +1114,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         
         # Add navigation
         f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](connector-reference-index.md)\n")
+        f.write("- [Solutions](solutions-index.md)\n")
         f.write("- [Connectors](connectors-index.md) (this page)\n")
         f.write("- [Tables](tables-index.md)\n\n")
         f.write("---\n\n")
@@ -851,9 +1161,9 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 tables = sorted(info['tables'])
                 collection_method = info.get('collection_method', '')
                 
-                f.write(f"### [{title}](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
+                f.write(f"### [{title}](connectors/{sanitize_filename(connector_id)}.md)\n\n")
                 f.write(f"**Publisher:** {publisher}\n\n")
-                f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)\n\n")
+                f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_filename(solution_name)}.md)\n\n")
                 
                 if collection_method:
                     f.write(f"**Collection Method:** {collection_method}\n\n")
@@ -869,7 +1179,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     description = description.replace('<br>', '\n')
                     f.write(f"{description}\n\n")
                 
-                f.write(f"[→ View full connector details](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
+                f.write(f"[→ View full connector details](connectors/{sanitize_filename(connector_id)}.md)\n\n")
                 f.write("---\n\n")
         
         # Add deprecated connectors section at the end
@@ -885,9 +1195,9 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 tables = sorted(info['tables'])
                 collection_method = info.get('collection_method', '')
                 
-                f.write(f"### [{title}](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
+                f.write(f"### [{title}](connectors/{sanitize_filename(connector_id)}.md)\n\n")
                 f.write(f"**Publisher:** {publisher}\n\n")
-                f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)\n\n")
+                f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_filename(solution_name)}.md)\n\n")
                 
                 if collection_method:
                     f.write(f"**Collection Method:** {collection_method}\n\n")
@@ -903,7 +1213,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     description = description.replace('<br>', '\n')
                     f.write(f"{description}\n\n")
                 
-                f.write(f"[→ View full connector details](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
+                f.write(f"[→ View full connector details](connectors/{sanitize_filename(connector_id)}.md)\n\n")
                 f.write("---\n\n")
     
     print(f"Generated connectors index: {index_path}")
@@ -980,38 +1290,38 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 num_connectors = len(info['connectors'])
                 
                 # All tables get individual pages now
-                table_cell = f"[`{table}`](tables/{sanitize_anchor(table)}.md)"
+                table_cell = f"[`{table}`](tables/{sanitize_filename(table)}.md)"
                 
                 # Solutions cell - limit to 3 items, link to table page for more
                 if num_solutions == 1:
                     solution_name = list(info['solutions'])[0]
-                    solutions_cell = f"[{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)"
+                    solutions_cell = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 elif num_solutions <= 3:
                     solution_links = []
                     for solution_name in sorted(info['solutions']):
-                        solution_links.append(f"[{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)")
+                        solution_links.append(f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)")
                     solutions_cell = ", ".join(solution_links)
                 else:
                     solution_links = []
                     for solution_name in sorted(info['solutions'])[:3]:
-                        solution_links.append(f"[{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)")
-                    more_link = f"[+{num_solutions - 3} more](tables/{sanitize_anchor(table)}.md)"
+                        solution_links.append(f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)")
+                    more_link = f"[+{num_solutions - 3} more](tables/{sanitize_filename(table)}.md)"
                     solutions_cell = ", ".join(solution_links) + " " + more_link
                 
                 # Connectors cell - limit to 5 items, link to table page for more
                 if num_connectors == 1:
                     connector_id, connector_title = list(info['connectors'])[0]
-                    connectors_cell = f"[{connector_title}](connectors/{sanitize_anchor(connector_id)}.md)"
+                    connectors_cell = f"[{connector_title}](connectors/{sanitize_filename(connector_id)}.md)"
                 elif num_connectors <= 5:
                     connector_links = []
                     for connector_id, connector_title in sorted(info['connectors']):
-                        connector_links.append(f"[{connector_title}](connectors/{sanitize_anchor(connector_id)}.md)")
+                        connector_links.append(f"[{connector_title}](connectors/{sanitize_filename(connector_id)}.md)")
                     connectors_cell = ", ".join(connector_links)
                 else:
                     connector_links = []
                     for connector_id, connector_title in sorted(info['connectors'])[:5]:
-                        connector_links.append(f"[{connector_title}](connectors/{sanitize_anchor(connector_id)}.md)")
-                    more_link = f"[+{num_connectors - 5} more](tables/{sanitize_anchor(table)}.md)"
+                        connector_links.append(f"[{connector_title}](connectors/{sanitize_filename(connector_id)}.md)")
+                    more_link = f"[+{num_connectors - 5} more](tables/{sanitize_filename(table)}.md)"
                     connectors_cell = ", ".join(connector_links) + " " + more_link
                 
                 # Get transformation and ingestion API support from tables_reference
@@ -1120,7 +1430,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 f.write(f"## Solutions ({num_solutions})\n\n")
                 f.write("This table is used by the following solutions:\n\n")
                 for solution_name in sorted(info['solutions']):
-                    f.write(f"- [{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)\n")
+                    f.write(f"- [{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)\n")
                 f.write("\n")
             
             # Connectors section
@@ -1128,7 +1438,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 f.write(f"## Connectors ({num_connectors})\n\n")
                 f.write("This table is ingested by the following connectors:\n\n")
                 for connector_id, connector_title in sorted(info['connectors']):
-                    f.write(f"- [{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)\n")
+                    f.write(f"- [{connector_title}](../connectors/{sanitize_filename(connector_id)}.md)\n")
                 f.write("\n")
             
             # Additional reference information
@@ -1165,8 +1475,17 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
     print(f"Generated {pages_created} individual table pages")
 
 
-def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]]) -> None:
-    """Generate individual connector documentation pages."""
+def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, 
+                            tables_reference: Dict[str, Dict[str, str]],
+                            solutions_dir: Path = None) -> None:
+    """Generate individual connector documentation pages.
+    
+    Args:
+        solutions: Dictionary of solution name to list of connector entries
+        output_dir: Output directory for documentation
+        tables_reference: Dictionary of table metadata
+        solutions_dir: Path to Solutions directory for reading additional markdown files
+    """
     
     connector_dir = output_dir / "connectors"
     connector_dir.mkdir(parents=True, exist_ok=True)
@@ -1209,7 +1528,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 f.write(f"| **Publisher** | {publisher} |\n")
             
             # Solutions
-            solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
+            solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
             f.write(f"| **Used in Solutions** | {solutions_list} |\n")
             
             # Collection Method
@@ -1250,7 +1569,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
                     ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
                     
-                    table_link = f"[`{table}`](../tables/{sanitize_anchor(table)}.md)"
+                    table_link = f"[`{table}`](../tables/{sanitize_filename(table)}.md)"
                     f.write(f"| {table_link} | {transforms_cell} | {ingestion_cell} |\n")
                 
                 f.write("\n")
@@ -1278,14 +1597,52 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 formatted_instructions = format_instruction_steps(instruction_steps)
                 f.write(f"{formatted_instructions}\n\n")
             
+            # Additional Documentation section (from README.md files)
+            if solutions_dir:
+                readme_content = None
+                readme_path = None
+                
+                # Get solution name for this connector
+                solution_name = list(data['solutions'])[0] if data['solutions'] else None
+                
+                if solution_name:
+                    # Count connectors in this solution to determine if we can use general README
+                    solution_connector_count = sum(
+                        1 for cid in by_connector.keys() 
+                        if solution_name in by_connector[cid]['solutions']
+                    )
+                    
+                    # Try to find connector-specific README
+                    readme_content, readme_path = get_connector_readme(
+                        solution_name, connector_id, connector_files, solutions_dir
+                    )
+                    
+                    # If no specific README found and only one connector, try general README
+                    if readme_content is None and solution_connector_count == 1:
+                        readme_content, readme_path = get_single_connector_readme(solution_name, solutions_dir)
+                
+                if readme_content:
+                    f.write("## Additional Documentation\n\n")
+                    f.write(f"> 📄 *Source: [{readme_path}](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{readme_path})*\n\n")
+                    f.write(readme_content.strip())
+                    f.write("\n\n")
+            
             # Back navigation
             f.write("[← Back to Connectors Index](../connectors-index.md)\n")
         
         print(f"Generated connector page: {connector_path}")
 
 
-def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]], output_dir: Path) -> None:
-    """Generate individual solution documentation page."""
+def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]], output_dir: Path,
+                          solutions_dir: Path = None) -> None:
+    """Generate individual solution documentation page.
+    
+    Args:
+        solution_name: Name of the solution
+        connectors: List of connector entries for this solution
+        output_dir: Output directory for documentation
+        solutions_dir: Path to Solutions directory for reading additional markdown files
+    """
     
     solution_dir = output_dir / "solutions"
     solution_dir.mkdir(parents=True, exist_ok=True)
@@ -1297,6 +1654,11 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     
     # Check if this solution has any connectors (connector_id will be empty for all entries if not)
     has_connectors = any(bool(conn.get('connector_id', '').strip()) for conn in connectors)
+    
+    # Get release notes if available
+    release_notes = None
+    if solutions_dir:
+        release_notes = get_release_notes(solution_name, solutions_dir)
     
     with solution_path.open("w", encoding="utf-8") as f:
         f.write(f"# {solution_name}\n\n")
@@ -1360,7 +1722,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 first_conn = conn_entries[0]
                 
                 connector_title = first_conn.get('connector_title', connector_id)
-                connector_link = f"[{connector_title}](../connectors/{sanitize_anchor(connector_id)}.md)"
+                connector_link = f"[{connector_title}](../connectors/{sanitize_filename(connector_id)}.md)"
                 f.write(f"### {connector_link}\n\n")
                 
                 # Connector metadata
@@ -1404,7 +1766,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 f.write("\n")
                 
                 # Link to connector page
-                f.write(f"[→ View full connector details](../connectors/{sanitize_anchor(connector_id)}.md)\n\n")
+                f.write(f"[→ View full connector details](../connectors/{sanitize_filename(connector_id)}.md)\n\n")
         
             # Tables summary section (only for solutions with connectors)
             all_tables = sorted(set(conn['Table'] for conn in connectors if conn.get('Table', '').strip()))
@@ -1434,6 +1796,13 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                     f.write(f"| `{table}` | {connector_list} |\n")
                 
                 f.write("\n")
+        
+        # Release Notes section (if available)
+        if release_notes:
+            f.write("## Release Notes\n\n")
+            # The release notes are usually already in markdown table format
+            f.write(release_notes.strip())
+            f.write("\n\n")
         
         # Back navigation
         f.write("[← Back to Solutions Index](../solutions-index.md)\n")
@@ -1475,6 +1844,12 @@ def main() -> None:
         help="Generate docs only for specific solutions (default: all solutions)",
     )
     parser.add_argument(
+        "--solutions-dir",
+        type=Path,
+        default=DEFAULT_SOLUTIONS_DIR,
+        help="Path to Solutions directory for reading ReleaseNotes.md and connector README files",
+    )
+    parser.add_argument(
         "--skip-input-generation",
         action="store_true",
         help="Skip running input CSV generation scripts",
@@ -1502,12 +1877,12 @@ def main() -> None:
             else:
                 print(f"    Done.")
         
-        # Run collect_table_info.py --fetch-details (without cache update)
+        # Run collect_table_info.py (uses local cache by default, no web fetching)
         collect_script = script_dir / "collect_table_info.py"
         if collect_script.exists():
-            print(f"  Running {collect_script.name} --fetch-details...")
+            print(f"  Running {collect_script.name} (using local cache)...")
             result = subprocess.run(
-                [sys.executable, str(collect_script), "--fetch-details"],
+                [sys.executable, str(collect_script)],
                 cwd=str(script_dir),
                 capture_output=True,
                 text=True
@@ -1583,6 +1958,13 @@ def main() -> None:
     
     print(f"Generating documentation for {len(by_solution)} solution(s)...")
     
+    # Check if solutions directory exists for additional markdown content
+    solutions_dir = args.solutions_dir if args.solutions_dir.exists() else None
+    if solutions_dir:
+        print(f"Reading additional markdown from: {solutions_dir}")
+    else:
+        print(f"Warning: Solutions directory not found: {args.solutions_dir} - skipping ReleaseNotes and README enrichment")
+    
     # Generate index pages
     generate_index_page(by_solution, args.output_dir)
     generate_connectors_index(by_solution, args.output_dir)
@@ -1592,11 +1974,11 @@ def main() -> None:
     generate_table_pages(tables_map, args.output_dir, tables_reference)
     
     # Generate individual connector pages
-    generate_connector_pages(by_solution, args.output_dir, tables_reference)
+    generate_connector_pages(by_solution, args.output_dir, tables_reference, solutions_dir)
     
     # Generate individual solution pages
     for solution_name, connectors in sorted(by_solution.items()):
-        generate_solution_page(solution_name, connectors, args.output_dir)
+        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir)
     
     # Count unique connectors and tables
     all_connector_ids = set()

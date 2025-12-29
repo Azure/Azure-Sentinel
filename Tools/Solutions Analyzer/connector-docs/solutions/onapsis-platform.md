@@ -36,4 +36,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] Onapsis Platform](../connectors/onapsisplatform.md) |
 
+## Release Notes
+
+| **Version**   | **Date Modified**              | **Change History**                      |
+|---------------|--------------------------------|-----------------------------------------|
+| 3.0.0         | 28-06-2024                     | Deprecating data connectors  |
+| 2.0.1         | 01-02-2023                     | Updated CreateUi file |
+
 [← Back to Solutions Index](../solutions-index.md)

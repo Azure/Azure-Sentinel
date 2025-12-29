@@ -49,4 +49,11 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `CommonSecurityLog` | [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md), [[Deprecated] Illusive Platform via Legacy Agent](../connectors/illusiveattackmanagementsystem.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
+|-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.1       | 12-07-2024                     |    Deprecating data connector                                      |
+| 3.0.0       | 13-09-2023                     |	Addition of new Illusive Platform AMA **Data Connector**        |
+
 [← Back to Solutions Index](../solutions-index.md)

@@ -1,15 +1,11 @@
 # StorageTableLogs
 
-Reference for StorageTableLogs table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `StorageTableLogs` |
 | **Category** | Azure Resources |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
-| **Basic Logs Eligible** | ✓ Yes |
-| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/storagetablelogs) |
 
@@ -28,12 +24,6 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Azure Storage Account](../connectors/azurestorageaccount.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.storage/storageaccounts`
 
 ---
 

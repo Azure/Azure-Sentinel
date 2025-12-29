@@ -1,15 +1,12 @@
 # Event
 
-Reference for Event table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `Event` |
-| **Category** | Security, Virtual Machines |
+| **Category** | Security |
 | **Solutions Using Table** | 3 |
 | **Connectors Ingesting** | 5 |
-| **Basic Logs Eligible** | ✗ No |
-| **Supports Transformations** | ✓ Yes |
+| **Basic Logs Eligible** | Partial support. Data arriving from Log Analytics agent (MMA) or Azure Monitor Agent (AMA) is fully supported. Data arriving from Diagnostics Extension is collected through Azure storage. This path isn't supported. |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/event) |
 
@@ -34,18 +31,6 @@ This table is ingested by the following connectors:
 - [Microsoft Exchange Admin Audit Logs by Event Logs](../connectors/esi-opt1exchangeadminauditlogsbyeventlogs.md)
 - [Microsoft Exchange Logs and Events](../connectors/esi-opt2exchangeserverseventlogs.md)
 - [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.operationalinsights/workspaces`
-- `microsoft.compute/virtualmachines`
-- `microsoft.conenctedvmwarevsphere/virtualmachines`
-- `microsoft.azurestackhci/virtualmachines`
-- `microsoft.scvmm/virtualmachines`
-- `microsoft.compute/virtualmachinescalesets`
-- `microsoft.azurestackhci/clusters`
 
 ---
 

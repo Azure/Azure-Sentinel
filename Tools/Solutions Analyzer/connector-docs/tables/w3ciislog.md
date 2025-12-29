@@ -1,15 +1,12 @@
 # W3CIISLog
 
-Reference for W3CIISLog table in Azure Monitor Logs.
-
 | Attribute | Value |
 |:----------|:------|
 | **Table Name** | `W3CIISLog` |
-| **Category** | IT & Management Tools, Virtual Machines |
+| **Category** | IT & Management Tools |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |
-| **Basic Logs Eligible** | ✗ No |
-| **Supports Transformations** | ✓ Yes |
+| **Basic Logs Eligible** | Partial support - data arriving from Log Analytics agent (MMA) or Azure Monitor Agent (AMA) is fully supported. Data arriving via Diagnostics Extension agent is collected though storage while this path isn't supported. |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/w3ciislog) |
 
@@ -29,16 +26,6 @@ This table is ingested by the following connectors:
 
 - [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md)
 - [IIS Logs of Microsoft Exchange Servers](../connectors/esi-opt5exchangeiislogs.md)
-
-## Resource Types
-
-This table collects data from the following Azure resource types:
-
-- `microsoft.compute/virtualmachines`
-- `microsoft.conenctedvmwarevsphere/virtualmachines`
-- `microsoft.azurestackhci/virtualmachines`
-- `microsoft.scvmm/virtualmachines`
-- `microsoft.compute/virtualmachinescalesets`
 
 ---
 

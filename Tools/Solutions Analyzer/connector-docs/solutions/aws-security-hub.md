@@ -37,4 +37,12 @@ This solution ingests data into **1 table(s)**:
 |-------|-------------------|
 | `AWSSecurityHubFindings` | [AWS Security Hub Findings (via Codeless Connector Framework)](../connectors/awssecurityhubfindingsccpdefinition.md) |
 
+## Release Notes
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.2       | 27-08-2025                     | AWS Security Hub added **Analytical Rule** and **Hunting Queries** |
+| 3.0.1       | 27-06-2025                     | AWS Security Hub **CCF Data Connector** moving to GA |
+| 3.0.0       | 14-05-2025                     | New **Data Connector**, Pre Release    |
+
 [← Back to Solutions Index](../solutions-index.md)
