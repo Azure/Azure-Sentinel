@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -62,8 +62,8 @@ Configure the facilities you want to collect and their severities.
 
 [Follow these instructions](https://www.cisco.com/c/en/us/td/docs/security/ise/2-7/admin_guide/b_ise_27_admin_guide/b_ISE_admin_27_maintain_monitor.html#ID58) to configure remote syslog collection locations in your Cisco ISE deployment.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Syslog` |
 | **Connector Definition Files** | [Connector_Cisco_ISE.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ISE/Data%20Connectors/Connector_Cisco_ISE.json) |
 

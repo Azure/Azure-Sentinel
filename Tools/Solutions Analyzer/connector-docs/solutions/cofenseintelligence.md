@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cofense Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cofense.com/contact-support/](https://cofense.com/contact-support/) |
@@ -234,8 +234,8 @@ If you're already signed in, go to the next step.
 		Schedule 
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Malware_Data_CL` |
 | | `ThreatIntelligenceIndicator` |
 | **Connector Definition Files** | [CofenseIntelligence_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence/Data%20Connectors/CofenseIntelligenceDataConnector/CofenseIntelligence_API_FunctionApp.json) |

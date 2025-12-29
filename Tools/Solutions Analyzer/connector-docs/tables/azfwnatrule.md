@@ -2,8 +2,8 @@
 
 Reference for AZFWNatRule table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWNatRule` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

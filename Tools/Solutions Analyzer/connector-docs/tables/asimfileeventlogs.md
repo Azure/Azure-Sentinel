@@ -2,8 +2,8 @@
 
 Reference for ASimFileEventLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimFileEventLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |

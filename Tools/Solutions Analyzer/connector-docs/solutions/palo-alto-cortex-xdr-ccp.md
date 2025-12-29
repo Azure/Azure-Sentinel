@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -49,8 +49,8 @@ The [Palo Alto Cortex XDR](https://cortex-panw.stoplight.io/docs/cortex-xdr/bran
 - **API Token**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `PaloAltoCortexXDR_Alerts_CL` |
 | | `PaloAltoCortexXDR_Audit_Agent_CL` |
 | | `PaloAltoCortexXDR_Audit_Management_CL` |

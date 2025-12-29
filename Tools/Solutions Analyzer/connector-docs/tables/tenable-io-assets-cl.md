@@ -1,7 +1,7 @@
 # Tenable_IO_Assets_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Tenable_IO_Assets_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

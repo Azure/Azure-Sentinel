@@ -2,8 +2,8 @@
 
 Reference for AWSCloudTrail table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSCloudTrail` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

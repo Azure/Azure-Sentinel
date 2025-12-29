@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Obsidian Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://obsidiansecurity.com/contact](https://obsidiansecurity.com/contact) |
@@ -58,8 +58,8 @@ Use the following parameters to configure the your machine to send the logs to t
 - **Activity Stream Name**: `Custom-ObsidianActivity_CL`
 - **Threat Stream Name**: `Custom-ObsidianThreat_CL`
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ObsidianActivity_CL` |
 | | `ObsidianThreat_CL` |
 | **Connector Definition Files** | [ObsidianDatasharing_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Obsidian%20Datasharing/Data%20Connectors/ObsidianDatasharing_CCP/ObsidianDatasharing_ConnectorDefinition.json) |

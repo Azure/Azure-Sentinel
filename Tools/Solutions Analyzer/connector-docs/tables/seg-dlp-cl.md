@@ -1,7 +1,7 @@
 # Seg_Dlp_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Seg_Dlp_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

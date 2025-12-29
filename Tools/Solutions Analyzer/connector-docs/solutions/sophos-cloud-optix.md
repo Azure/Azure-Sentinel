@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Sophos |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.sophos.com/en-us/support](https://www.sophos.com/en-us/support) |
@@ -51,8 +51,8 @@ In Alert Levels, select which Sophos Cloud Optix alerts you want to send to Micr
 
 To turn on the integration, select Enable, and then click Save.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SophosCloudOptix_CL` |
 | **Connector Definition Files** | [Connector_REST_API_SophosCloudOptix.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20Cloud%20Optix/Data%20Connectors/Connector_REST_API_SophosCloudOptix.json) |
 

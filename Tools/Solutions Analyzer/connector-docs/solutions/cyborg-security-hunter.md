@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cyborg Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://hunter.cyborgsecurity.io/customer-support](https://hunter.cyborgsecurity.io/customer-support) |
@@ -59,8 +59,8 @@ Identify a Cyborg Security HUNTER hunt package to deploy and use the **Open In T
 
 ![image](https://7924572.fs1.hubspotusercontent-na1.net/hubfs/7924572/HUNTER/Screenshots/openintool-ms-new.png)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SecurityEvent` |
 | **Connector Definition Files** | [CyborgSecurity_HUNTER.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyborg%20Security%20HUNTER/Data%20Connectors/CyborgSecurity_HUNTER.json) |
 

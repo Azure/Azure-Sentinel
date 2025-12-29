@@ -1,10 +1,11 @@
 # AbnormalSecurity 
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `AbnormalSecurity` |
 | **Publisher** | AbnormalSecurity |
 | **Used in Solutions** | [AbnormalSecurity](../solutions/abnormalsecurity.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [AbnormalSecurity_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AbnormalSecurity/Data%20Connectors/AbnormalSecurity_API_FunctionApp.json) |
 
 The Abnormal Security data connector provides the capability to ingest threat and case logs into Microsoft Sentinel using the [Abnormal Security Rest API.](https://app.swaggerhub.com/apis/abnormal-security/abx/)

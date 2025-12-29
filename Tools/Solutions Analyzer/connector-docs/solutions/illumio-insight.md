@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Illumio |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.illumio.com/support/support](https://www.illumio.com/support/support) |
@@ -65,8 +65,8 @@ Please fill in the required fields below with the credentials obtained from the 
 Enable the Illumio Insights Summary connector.
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `IllumioInsightsSummary_CL` |
 | **Connector Definition Files** | [IllumioInsightsSummary_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Insight/Data%20Connectors/IllumioInsightsSummaryConnector_CCP/IllumioInsightsSummary_ConnectorDefinition.json) |
 

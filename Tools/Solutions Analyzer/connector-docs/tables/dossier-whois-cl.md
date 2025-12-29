@@ -1,7 +1,7 @@
 # dossier_whois_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `dossier_whois_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

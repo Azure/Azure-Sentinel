@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ExtraHop Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.extrahop.com/customer-support](https://www.extrahop.com/customer-support) |
@@ -143,8 +143,8 @@ From your ExtraHop system, configure the Microsoft Sentinel integration to estab
 
 *After notification rules have been configured and Microsoft Sentinel is receiving webhook data, the Function App is triggered and you can view ExtraHop detections from the Log Analytics workspace table named "ExtraHop_Detections_CL".*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ExtraHop_Detections_CL` |
 | **Connector Definition Files** | [ExtraHop_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ExtraHop/Data%20Connectors/ExtraHopDataConnector/ExtraHop_FunctionApp.json) |
 

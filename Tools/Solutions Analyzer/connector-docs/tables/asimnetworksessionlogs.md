@@ -2,8 +2,8 @@
 
 Reference for ASimNetworkSessionLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimNetworkSessionLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 4 |

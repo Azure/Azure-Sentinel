@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ESET Enterprise Integrations |
 | **Support Tier** | Partner |
 | **Support Link** | [https://help.eset.com/eset_connect/en-US/integrations.html](https://help.eset.com/eset_connect/en-US/integrations.html) |
@@ -64,8 +64,8 @@ Create a Microsoft Entra ID registered application by following the steps in the
 
 5. Select one or more ESET products (ESET PROTECT, ESET Inspect, ESET Cloud Office Security) from which detections are retrieved.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `IntegrationTableIncidents_CL` |
 | | `IntegrationTable_CL` |
 | **Connector Definition Files** | [ESETProtectPlatform_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ESET%20Protect%20Platform/Data%20Connectors/ESETProtectPlatform_API_FunctionApp.json) |

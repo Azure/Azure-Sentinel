@@ -1,7 +1,7 @@
 # DefendAuditData
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DefendAuditData` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

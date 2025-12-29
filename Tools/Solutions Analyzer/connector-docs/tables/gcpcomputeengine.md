@@ -2,8 +2,8 @@
 
 Reference for GCPComputeEngine table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPComputeEngine` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

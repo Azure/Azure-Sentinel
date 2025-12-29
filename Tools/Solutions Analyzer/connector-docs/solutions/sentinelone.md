@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -50,8 +50,8 @@ The [SentinelOne](https://usea1-nessat.sentinelone.net/api-doc/overview) data co
 - **API Token**: API Token
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SentinelOneActivities_CL` |
 | | `SentinelOneAgents_CL` |
 | | `SentinelOneAlerts_CL` |

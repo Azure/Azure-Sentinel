@@ -2,8 +2,8 @@
 
 Reference for GKEApplication table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GKEApplication` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | CYFIRMA |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.cyfirma.com/contact-us/](https://www.cyfirma.com/contact-us/) |
@@ -41,8 +41,8 @@ This connector provides the Indicators, Threat actors, Malware and Campaigns log
 - **Threat Actor Associated**: Is any Threat Actor Associated with the IoC's
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CyfirmaCampaigns_CL` |
 | | `CyfirmaIndicators_CL` |
 | | `CyfirmaMalware_CL` |

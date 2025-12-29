@@ -2,8 +2,8 @@
 
 Reference for DnsEvents table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DnsEvents` |
 | **Category** | Network |
 | **Solutions Using Table** | 1 |
@@ -34,9 +34,9 @@ This table is ingested by the following connectors:
 This table collects data from the following Azure resource types:
 
 - `microsoft.compute/virtualmachines`
-- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
-- `<br>microsoft.azurestackhci/virtualmachines`
-- `<br>microsoft.scvmm/virtualmachines`
+- `microsoft.conenctedvmwarevsphere/virtualmachines`
+- `microsoft.azurestackhci/virtualmachines`
+- `microsoft.scvmm/virtualmachines`
 
 ---
 

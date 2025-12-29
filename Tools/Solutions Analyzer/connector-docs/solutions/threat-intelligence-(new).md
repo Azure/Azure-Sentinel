@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
@@ -86,8 +86,8 @@ Mooncake: https://api.ti.sentinel.azure.cn/workspaces/[WorkspaceID]/threatintell
  
 >Body: The body is a JSON object containing an array of STIX objects.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ThreatIntelIndicators` |
 | | `ThreatIntelObjects` |
 | **Connector Definition Files** | [template_ThreatIntelligenceUploadIndicators_ForGov.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Threat%20Intelligence%20%28NEW%29/Data%20Connectors/template_ThreatIntelligenceUploadIndicators_ForGov.json) |

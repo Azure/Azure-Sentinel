@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Styx Intelligence |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.styxintel.com/contact-us/](https://www.styxintel.com/contact-us/) |
@@ -39,8 +39,8 @@ Contact Styx Intelligence Support (support.team@styxintel.com) to get access to 
 - **API Token**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `StyxViewAlerts_CL` |
 | **Connector Definition Files** | [StyxView%20Alerts_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Styx%20Intelligence/Data%20Connectors/Alerts/StyxView%20Alerts_ConnectorDefinition.json) |
 

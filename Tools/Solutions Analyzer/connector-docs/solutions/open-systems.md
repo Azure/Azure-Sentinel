@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Open Systems |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.open-systems.com/support](https://www.open-systems.com/support) |
@@ -64,8 +64,8 @@ After successful deployment:
 2. Check the `OpenSystemsZtnaLogs_CL`, `OpenSystemsFirewallLogs_CL`, `OpenSystemsAuthenticationLogs_CL`, and `OpenSystemsProxyLogs_CL` tables in your Log Analytics workspace for incoming data. It may take some time for logs to appear after initial setup. 
 3. Use the sample queries provided in the 'Next Steps' tab of this data connector page to view and analyze your logs.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `OpenSystemsAuthenticationLogs_CL` |
 | | `OpenSystemsFirewallLogs_CL` |
 | | `OpenSystemsImAuthentication` |

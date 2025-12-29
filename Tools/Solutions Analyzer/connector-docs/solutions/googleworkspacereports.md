@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
@@ -148,8 +148,8 @@ If you're already signed in, go to the next step.
 5. Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`. 
 6. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `GWorkspace_ReportsAPI_access_transparency_CL` |
 | | `GWorkspace_ReportsAPI_admin_CL` |
 | | `GWorkspace_ReportsAPI_calendar_CL` |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | NetClean |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.netclean.com/contact](https://www.netclean.com/contact) |
@@ -56,8 +56,8 @@ Replace the content in $json variable to the sample data found here: https://git
 Set the LogType varible to **Netclean_Incidents_CL**
 Run the script
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Netclean_Incidents_CL` |
 | **Connector Definition Files** | [Connector_NetClean.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NetClean%20ProActive/Data%20Connectors/Connector_NetClean.json) |
 

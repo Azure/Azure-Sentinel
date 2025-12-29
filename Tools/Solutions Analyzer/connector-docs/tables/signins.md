@@ -1,7 +1,7 @@
 # signIns
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `signIns` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

@@ -1,7 +1,7 @@
 # WizIssues_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `WizIssues_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

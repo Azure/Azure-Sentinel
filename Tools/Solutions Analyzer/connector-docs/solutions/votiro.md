@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Votiro |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.votiro.com/](https://support.votiro.com/) |
@@ -73,8 +73,8 @@ Make sure to configure the machine's security according to your organization's s
 
 [Learn more >](https://aka.ms/SecureCEF)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommonSecurityLog` |
 | **Connector Definition Files** | [VotiroEvents.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Votiro/Data%20Connectors/VotiroEvents.json) |
 

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | HYAS |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.hyas.com/contact](https://www.hyas.com/contact) |

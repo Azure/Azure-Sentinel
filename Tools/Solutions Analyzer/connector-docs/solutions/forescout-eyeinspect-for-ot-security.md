@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Forescout Technologies |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.forescout.com/support](https://www.forescout.com/support) |
@@ -39,8 +39,8 @@ Instructions on how to configure Forescout eyeInspect Microsoft Sentinel Integra
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ForescoutOtAlert_CL` |
 | | `ForescoutOtAsset_CL` |
 | **Connector Definition Files** | [Forescout%20eyeInspect%20for%20OT%20Security.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forescout%20eyeInspect%20for%20OT%20Security/Data%20Connectors/Forescout%20eyeInspect%20for%20OT%20Security.json) |

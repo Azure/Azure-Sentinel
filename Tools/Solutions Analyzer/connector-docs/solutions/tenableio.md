@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Tenable |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.tenable.com/support/technical-support](https://www.tenable.com/support/technical-support) |
@@ -109,8 +109,8 @@ If you're already signed in, go to the next step.
 > - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<WorkspaceID>.ods.opinsights.azure.us`.
 3. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Tenable_IO_Assets_CL` |
 | | `Tenable_IO_Vuln_CL` |
 | **Connector Definition Files** | [TenableIO.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Data%20Connectors/TenableIO.json) |

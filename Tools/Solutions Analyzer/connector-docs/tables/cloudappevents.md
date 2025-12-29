@@ -2,8 +2,8 @@
 
 Events involving accounts and objects in Office 365 and other cloud apps and services
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CloudAppEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

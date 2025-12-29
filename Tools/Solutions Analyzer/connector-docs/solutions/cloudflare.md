@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cloudflare |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.cloudflare.com](https://support.cloudflare.com) |
@@ -51,8 +51,8 @@ To enable Cloudflare logs for Microsoft Sentinel, provide the required informati
 - **The event grid topic name of the blob container's storage account if exist. else keep empty.**
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CloudflareV2_CL` |
 | **Connector Definition Files** | [CloudflareLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare/Data%20Connectors/CloudflareLog_CCF/CloudflareLog_ConnectorDefinition.json) |
 

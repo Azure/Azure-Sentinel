@@ -1,7 +1,7 @@
 # MessageTrackingLog_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `MessageTrackingLog_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

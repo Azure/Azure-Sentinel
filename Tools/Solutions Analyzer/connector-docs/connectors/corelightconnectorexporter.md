@@ -1,10 +1,11 @@
 # Corelight Connector Exporter
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CorelightConnectorExporter` |
 | **Publisher** | Corelight |
 | **Used in Solutions** | [Corelight](../solutions/corelight.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [CorelightConnectorExporter.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Corelight/Data%20Connectors/CorelightConnectorExporter.json) |
 
 The [Corelight](https://corelight.com/) data connector enables incident responders and threat hunters who use Microsoft Sentinel to work faster and more effectively. The data connector enables ingestion of events from [Zeek](https://zeek.org/) and [Suricata](https://suricata-ids.org/) via Corelight Sensors into Microsoft Sentinel.

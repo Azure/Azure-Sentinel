@@ -1,10 +1,11 @@
 # Cisco ASA via Legacy Agent
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CiscoASA` |
 | **Publisher** | Cisco |
 | **Used in Solutions** | [CiscoASA](../solutions/ciscoasa.md) |
+| **Collection Method** | MMA |
 | **Connector Definition Files** | [CiscoASA.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Data%20Connectors/CiscoASA.JSON) |
 
 The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.

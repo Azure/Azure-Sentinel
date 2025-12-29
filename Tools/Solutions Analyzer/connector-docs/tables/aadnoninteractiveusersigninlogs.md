@@ -2,10 +2,10 @@
 
 Reference for AADNonInteractiveUserSignInLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AADNonInteractiveUserSignInLogs` |
-| **Category** | Audit |
+| **Category** | Audit, Security |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
 | **Basic Logs Eligible** | ✓ Yes |

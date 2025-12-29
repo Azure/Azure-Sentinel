@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ESET Netherlands |
 | **Support Tier** | Partner |
 | **Support Link** | [https://techcenter.eset.nl/en/](https://techcenter.eset.nl/en/) |
@@ -69,8 +69,8 @@ Configure ESET PROTECT to send all events through Syslog.
 Note:- Refer to the [documentation](https://learn.microsoft.com/en-us/azure/sentinel/connect-log-forwarder?tabs=rsyslog#security-considerations) for setting up the log forwarder for both local and cloud storage.
 - **Open Syslog settings**
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Syslog` |
 | **Connector Definition Files** | [Connector_Syslog_ESETPROTECT.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ESETPROTECT/Data%20Connectors/Connector_Syslog_ESETPROTECT.json) |
 

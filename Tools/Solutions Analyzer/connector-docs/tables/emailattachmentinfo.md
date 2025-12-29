@@ -2,8 +2,8 @@
 
 Information about files attached to emails
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `EmailAttachmentInfo` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cyera Inc |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.cyera.io](https://support.cyera.io) |
@@ -82,8 +82,8 @@ Use this method for automated deployment of the Cyera DSPM Functions and all req
 
 Follow the [install pack’s step-by-step guide]({{userguide-url}}.\n\n1) Create/update the 5 custom tables, data collection rule with format `sentinel-dce-<functuion_name>`, and data collection endpoint with format `sentinel-dcr-<functuion_name>` using the scripts in [install-pack-v0_7_0/scripts]({{deployment-script-zip-url}}).\n2) Deploy the Azure Function from the repo`s Function folder (Timer-trigger; schedule typically 5–15 minutes).\n3) Configure Function App settings:\n   - `CyeraBaseUrl` — Cyera API Base URL\n   - `CyeraClientId` — Client ID (PAT)\n   - `CyeraSecret` — Client Secret (PAT)\n   - `DCR_IMMUTABLE_ID` — DCR immutable ID\n   - `DCE_ENDPOINT` — Logs ingestion endpoint URL\n   - `STREAM_ASSETS`=`Custom-CyeraAssets`, `STREAM_IDENTITIES`=`Custom-CyeraIdentities`, `STREAM_ISSUES`=`Custom-CyeraIssues`, `STREAM_CLASSIFICATIONS`=`Custom-CyeraClassifications`\n4) Save and Start the Function App.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CyeraAssets_CL` |
 | | `CyeraAssets_MS_CL` |
 | | `CyeraClassifications_CL` |

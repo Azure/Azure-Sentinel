@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Forescout Technologies |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.forescout.com/support](https://www.forescout.com/support) |
@@ -40,8 +40,8 @@ Instructions on how to configure Forescout Microsoft Sentinel plugin are provide
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ForescoutComplianceStatus_CL` |
 | | `ForescoutHostProperties_CL` |
 | | `ForescoutPolicyStatus_CL` |

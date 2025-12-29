@@ -2,8 +2,8 @@
 
 Reference for GoogleCloudSCC table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GoogleCloudSCC` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

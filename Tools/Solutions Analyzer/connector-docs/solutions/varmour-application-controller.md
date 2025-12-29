@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | vArmour Networks |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.varmour.com/contact-us/](https://www.varmour.com/contact-us/) |
@@ -88,8 +88,8 @@ Make sure to configure the machine's security according to your organization's s
 
 [Learn more >](https://aka.ms/SecureCEF)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommonSecurityLog` |
 | **Connector Definition Files** | [template_vArmour_AppControllerAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/vArmour%20Application%20Controller/Data%20Connectors/template_vArmour_AppControllerAMA.json) |
 

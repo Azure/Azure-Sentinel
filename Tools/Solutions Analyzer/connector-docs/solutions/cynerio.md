@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cynerio |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cynerio.com](https://cynerio.com) |
@@ -48,8 +48,8 @@ Cynerio can integrate with and export events directly to Microsoft Sentinel via 
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CynerioEvent_CL` |
 | **Connector Definition Files** | [Cynerio_Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Data%20Connectors/Cynerio_Connector.json) |
 

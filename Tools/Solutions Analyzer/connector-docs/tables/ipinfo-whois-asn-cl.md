@@ -1,7 +1,7 @@
 # Ipinfo_WHOIS_ASN_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_WHOIS_ASN_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

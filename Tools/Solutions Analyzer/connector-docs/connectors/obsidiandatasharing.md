@@ -1,10 +1,11 @@
 # Obsidian Datasharing Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ObsidianDatasharing` |
 | **Publisher** | Obsidian Security |
 | **Used in Solutions** | [Obsidian Datasharing](../solutions/obsidian-datasharing.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [ObsidianDatasharing_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Obsidian%20Datasharing/Data%20Connectors/ObsidianDatasharing_CCP/ObsidianDatasharing_ConnectorDefinition.json) |
 
 The Obsidian Datasharing connector provides the capability to read raw event data from Obsidian Datasharing in Microsoft Sentinel.

@@ -1,7 +1,7 @@
 # AlsidForADLog_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AlsidForADLog_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

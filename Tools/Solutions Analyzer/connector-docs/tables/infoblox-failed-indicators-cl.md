@@ -1,7 +1,7 @@
 # Infoblox_Failed_Indicators_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Infoblox_Failed_Indicators_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

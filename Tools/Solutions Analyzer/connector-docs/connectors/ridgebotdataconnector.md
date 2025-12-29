@@ -1,10 +1,11 @@
 # [Deprecated] RIDGEBOT - data connector for Microsoft Sentinel
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `RidgeBotDataConnector` |
 | **Publisher** | RidgeSecurity |
 | **Used in Solutions** | [RidgeSecurity](../solutions/ridgesecurity.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [RidgeSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Data%20Connectors/RidgeSecurity.json) |
 
 The RidgeBot connector lets users connect RidgeBot with Microsoft Sentinel, allowing creation of Dashboards, Workbooks, Notebooks and Alerts.

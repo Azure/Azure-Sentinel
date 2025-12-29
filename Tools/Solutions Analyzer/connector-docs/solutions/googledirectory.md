@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** |  |
 | **Support Tier** |  |
 | **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleDirectory](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleDirectory) |

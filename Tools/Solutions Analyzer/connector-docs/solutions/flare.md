@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Flare |
 | **Support Tier** | Partner |
 | **Support Link** | [https://flare.io/company/contact/](https://flare.io/company/contact/) |
@@ -46,8 +46,8 @@ At this point, you may configure alerts to be sent to Microsoft Sentinel the sam
 
   For a more detailed guide, refer to the Flare documentation.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Firework_CL` |
 | **Connector Definition Files** | [Connector_REST_API_FlareSystemsFirework.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Flare/Data%20Connectors/Connector_REST_API_FlareSystemsFirework.json) |
 

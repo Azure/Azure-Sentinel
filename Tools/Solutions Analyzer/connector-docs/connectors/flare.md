@@ -1,10 +1,11 @@
 # Flare
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Flare` |
 | **Publisher** | Flare |
 | **Used in Solutions** | [Flare](../solutions/flare.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Connector_REST_API_FlareSystemsFirework.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Flare/Data%20Connectors/Connector_REST_API_FlareSystemsFirework.json) |
 
 [Flare](https://flare.systems/platform/) connector allows you to receive data and intelligence from Flare on Microsoft Sentinel.

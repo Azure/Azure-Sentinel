@@ -1,7 +1,7 @@
 # CitrixAnalytics_indicatorEventDetails_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CitrixAnalytics_indicatorEventDetails_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

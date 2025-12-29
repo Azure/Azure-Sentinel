@@ -2,8 +2,8 @@
 
 Reference for GCPMonitoring table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPMonitoring` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

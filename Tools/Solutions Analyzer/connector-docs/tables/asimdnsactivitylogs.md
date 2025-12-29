@@ -2,8 +2,8 @@
 
 Reference for ASimDnsActivityLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimDnsActivityLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |

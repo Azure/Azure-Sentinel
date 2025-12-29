@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ARGOS Cloud Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://argos-security.io/contact-us](https://argos-security.io/contact-us) |
@@ -53,8 +53,8 @@ New detections will automatically be forwarded.
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ARGOS_CL` |
 | **Connector Definition Files** | [Connector_ARGOS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ARGOSCloudSecurity/Data%20Connectors/Connector_ARGOS.json) |
 

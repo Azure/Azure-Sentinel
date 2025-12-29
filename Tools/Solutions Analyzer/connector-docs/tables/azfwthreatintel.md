@@ -2,8 +2,8 @@
 
 Reference for AZFWThreatIntel table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWThreatIntel` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

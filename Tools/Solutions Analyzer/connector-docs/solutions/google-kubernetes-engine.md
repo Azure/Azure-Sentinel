@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -60,8 +60,8 @@ When you click "Add new collector" in the portal, you'll be prompted to provide:
 
 > 💡 **Portal-Only Feature**: This configuration form is only available in the Microsoft Sentinel portal.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `GKEAPIServer` |
 | | `GKEApplication` |
 | | `GKEAudit` |

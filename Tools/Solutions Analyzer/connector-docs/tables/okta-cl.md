@@ -1,7 +1,7 @@
 # Okta_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Okta_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 3 |

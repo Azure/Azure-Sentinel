@@ -2,8 +2,8 @@
 
 Reference for GCPCDN table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPCDN` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

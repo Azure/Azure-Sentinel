@@ -1,7 +1,7 @@
 # SquidProxy_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SquidProxy_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

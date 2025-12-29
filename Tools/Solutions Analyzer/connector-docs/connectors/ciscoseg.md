@@ -1,10 +1,11 @@
 # [Deprecated] Cisco Secure Email Gateway via Legacy Agent
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CiscoSEG` |
 | **Publisher** | Cisco |
 | **Used in Solutions** | [CiscoSEG](../solutions/ciscoseg.md) |
+| **Collection Method** | MMA |
 | **Connector Definition Files** | [Connector_Cisco_SEG_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoSEG/Data%20Connectors/Connector_Cisco_SEG_CEF.json) |
 
 The [Cisco Secure Email Gateway (SEG)](https://www.cisco.com/c/en/us/products/security/email-security/index.html) data connector provides the capability to ingest [Cisco SEG Consolidated Event Logs](https://www.cisco.com/c/en/us/td/docs/security/esa/esa14-0/user_guide/b_ESA_Admin_Guide_14-0/b_ESA_Admin_Guide_12_1_chapter_0100111.html#con_1061902) into Microsoft Sentinel.

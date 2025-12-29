@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Tenable |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.tenable.com/support/technical-support](https://www.tenable.com/support/technical-support) |
@@ -213,8 +213,8 @@ If you're already signed in, go to the next step.
 	 u. **PyTenableUABuild** - Value must be set to **0.0.1**.
 3. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Tenable_VM_Asset_CL` |
 | | `Tenable_VM_Compliance_CL` |
 | | `Tenable_VM_Vuln_CL` |

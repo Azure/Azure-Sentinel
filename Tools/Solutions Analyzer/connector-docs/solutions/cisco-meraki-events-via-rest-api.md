@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -58,8 +58,8 @@ Currently, this connector allows to ingest events from the following [Cisco Mera
 - **API Key**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ASimAuditEventLogs` |
 | | `ASimNetworkSessionLogs` |
 | | `ASimWebSessionLogs` |

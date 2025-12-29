@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | VirtualMetric |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.virtualmetric.com](https://support.virtualmetric.com) |
@@ -201,8 +201,8 @@ The assigned roles provide the following capabilities:
      ```
    - Check the **Microsoft Sentinel Overview** dashboard for new data sources and event counts.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommonSecurityLog` |
 | **Connector Definition Files** | [Template_SentinelDataLake.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirtualMetric%20DataStream/Data%20Connectors/VirtualMetric-SentinelDataLake/Template_SentinelDataLake.json) |
 

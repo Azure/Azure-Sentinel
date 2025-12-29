@@ -1,10 +1,11 @@
 # SAP BTP
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SAPBTPAuditEvents` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [SAP BTP](../solutions/sap-btp.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [SAPBTP_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Data%20Connectors/SAPBTPPollerConnector/SAPBTP_DataConnectorDefinition.json) |
 
 SAP Business Technology Platform (SAP BTP) brings together data management, analytics, artificial intelligence, application development, automation, and integration in one, unified environment.

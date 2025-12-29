@@ -1,7 +1,7 @@
 # ZNSegmentAuditNativePoller_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ZNSegmentAuditNativePoller_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

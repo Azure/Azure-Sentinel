@@ -2,8 +2,8 @@
 
 Network properties of devices, including physical adapters, IP and MAC addresses, as well as connected networks and domains
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceNetworkInfo` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

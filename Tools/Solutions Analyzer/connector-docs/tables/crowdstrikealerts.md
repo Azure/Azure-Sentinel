@@ -2,8 +2,8 @@
 
 Reference for CrowdStrikeAlerts table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CrowdStrikeAlerts` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

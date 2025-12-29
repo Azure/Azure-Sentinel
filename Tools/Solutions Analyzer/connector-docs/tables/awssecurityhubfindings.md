@@ -2,8 +2,8 @@
 
 Reference for AWSSecurityHubFindings table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSSecurityHubFindings` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

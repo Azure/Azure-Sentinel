@@ -1,7 +1,7 @@
 # Cymru_Scout_IP_Data_Communications_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Cymru_Scout_IP_Data_Communications_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

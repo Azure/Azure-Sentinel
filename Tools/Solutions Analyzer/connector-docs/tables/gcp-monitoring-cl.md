@@ -1,7 +1,7 @@
 # GCP_MONITORING_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCP_MONITORING_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

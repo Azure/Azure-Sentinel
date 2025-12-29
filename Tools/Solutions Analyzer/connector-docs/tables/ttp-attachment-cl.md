@@ -1,7 +1,7 @@
 # Ttp_Attachment_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ttp_Attachment_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

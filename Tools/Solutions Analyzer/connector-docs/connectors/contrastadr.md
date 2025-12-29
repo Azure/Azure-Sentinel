@@ -1,10 +1,11 @@
 # ContrastADR
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ContrastADR` |
 | **Publisher** | Contrast Security |
 | **Used in Solutions** | [ContrastADR](../solutions/contrastadr.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [ContrastADR_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ContrastADR/Data%20Connectors/ContrastADR_API_FunctionApp.json) |
 
 The ContrastADR data connector provides the capability to ingest Contrast ADR attack events into Microsoft Sentinel using the ContrastADR Webhook. ContrastADR data connector can enrich the incoming webhook data with ContrastADR API enrichment calls.

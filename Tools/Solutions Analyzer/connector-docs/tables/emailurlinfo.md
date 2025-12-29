@@ -2,8 +2,8 @@
 
 Information about URLs on emails
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `EmailUrlInfo` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

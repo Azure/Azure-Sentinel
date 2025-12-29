@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SecurityBridge |
 | **Support Tier** | Partner |
 | **Support Link** | [https://securitybridge.com/contact/](https://securitybridge.com/contact/) |
@@ -96,8 +96,8 @@ Open Log Analytics to check if the logs are received using the SecurityBridgeLog
 
 >**NOTE:** It may take up to 30 minutes before new logs will appear in SecurityBridgeLogs_CL table.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SecurityBridgeLogs_CL` |
 | **Connector Definition Files** | [Connector_SecurityBridge.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityBridge%20App/Data%20Connectors/Connector_SecurityBridge.json) |
 

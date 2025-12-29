@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Nominet PDNS Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.protectivedns.service.ncsc.gov.uk/pdns](https://www.protectivedns.service.ncsc.gov.uk/pdns) |
@@ -47,8 +47,8 @@ This application enables you to ingest your PDNS block data into your SIEM tool
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `PDNSBlockData_CL` |
 | **Connector Definition Files** | [PDNSBlockDataConnector_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PDNS%20Block%20Data%20Connector/Data%20Connectors/PDNSBlockDataConnector_API_FunctionApp.json) |
 

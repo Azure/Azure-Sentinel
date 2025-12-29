@@ -1,7 +1,7 @@
 # NetskopeEventsConnection_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NetskopeEventsConnection_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

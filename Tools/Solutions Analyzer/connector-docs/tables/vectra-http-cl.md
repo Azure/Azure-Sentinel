@@ -1,7 +1,7 @@
 # vectra_http_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_http_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

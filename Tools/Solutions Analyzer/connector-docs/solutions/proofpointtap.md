@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Proofpoint, Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://proofpoint.my.site.com/community/s/](https://proofpoint.my.site.com/community/s/) |
@@ -51,8 +51,8 @@ The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/
 - **Secret**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ProofPointTAPClicksBlockedV2_CL` |
 | | `ProofPointTAPClicksPermittedV2_CL` |
 | | `ProofPointTAPMessagesBlockedV2_CL` |

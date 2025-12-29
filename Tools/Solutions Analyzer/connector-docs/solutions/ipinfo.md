@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | IPinfo |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.ipinfo.io/](https://www.ipinfo.io/) |
@@ -152,8 +152,8 @@ Use the following step-by-step instructions to deploy the IPinfo data connector 
 		LOCATION 
 5. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Ipinfo_WHOIS_POC_CL` |
 | **Connector Definition Files** | [IPinfo_WHOIS_POC_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IPinfo/Data%20Connectors/WHOIS%20POC/IPinfo_WHOIS_POC_API_AzureFunctionApp.json) |
 

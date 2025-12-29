@@ -2,8 +2,8 @@
 
 Reference for ProjectActivity table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ProjectActivity` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

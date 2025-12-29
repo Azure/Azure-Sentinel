@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | MongoDB |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.mongodb.com/company/contact](https://www.mongodb.com/company/contact) |
@@ -67,8 +67,8 @@ Click **Next**
 7. Review the schedule. Click **Next** 
 8. Review the settings then click **Create**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `MDBALogTable_CL` |
 | **Connector Definition Files** | [MongoDBAtlasLogs_AzureFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MongoDBAtlas/Data%20Connectors/MongoDBAtlasLogs/MongoDBAtlasLogs_AzureFunction.json) |
 

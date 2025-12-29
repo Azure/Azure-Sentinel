@@ -1,10 +1,11 @@
 # GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `GitHubAuditDefinitionV2` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [GitHub](../solutions/github.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [GitHubAuditLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GitHubAuditLogs_CCF/GitHubAuditLogs_ConnectorDefinition.json) |
 
 The GitHub audit log connector provides the capability to ingest GitHub logs into Microsoft Sentinel. By connecting GitHub audit logs into Microsoft Sentinel, you can view this data in workbooks, use it to create custom alerts, and improve your investigation process. 

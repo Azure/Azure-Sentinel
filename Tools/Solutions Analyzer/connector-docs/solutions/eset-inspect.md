@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ESET Enterprise |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.eset.com/int/business/solutions/endpoint-detection-and-response/](https://www.eset.com/int/business/solutions/endpoint-detection-and-response/) |
@@ -70,8 +70,8 @@ Use this method for automated deployment of the ESET Inspect connector using an 
 4. Mark the checkbox labelled **I agree to the terms and conditions stated above**. 
 5. Click **Purchase** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ESETInspect_CL` |
 | **Connector Definition Files** | [ESETInspect_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ESET%20Inspect/Data%20Connectors/ESETInspect_API_FunctionApp.json) |
 

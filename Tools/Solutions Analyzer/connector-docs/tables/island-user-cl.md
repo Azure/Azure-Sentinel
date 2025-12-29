@@ -1,7 +1,7 @@
 # Island_User_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Island_User_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

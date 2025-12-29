@@ -781,6 +781,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 'solution_folder': conn.get('solution_folder', ''),
                 'tables': set(),
                 'description': conn.get('connector_description', ''),
+                'collection_method': conn.get('collection_method', ''),
             }
         
         # Collect all tables for each connector
@@ -848,10 +849,14 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
+                collection_method = info.get('collection_method', '')
                 
                 f.write(f"### [{title}](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
                 f.write(f"**Publisher:** {publisher}\n\n")
                 f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)\n\n")
+                
+                if collection_method:
+                    f.write(f"**Collection Method:** {collection_method}\n\n")
                 
                 if tables:
                     f.write(f"**Tables ({len(tables)}):** ")
@@ -878,10 +883,14 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
+                collection_method = info.get('collection_method', '')
                 
                 f.write(f"### [{title}](connectors/{sanitize_anchor(connector_id)}.md)\n\n")
                 f.write(f"**Publisher:** {publisher}\n\n")
                 f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_anchor(solution_name)}.md)\n\n")
+                
+                if collection_method:
+                    f.write(f"**Collection Method:** {collection_method}\n\n")
                 
                 if tables:
                     f.write(f"**Tables ({len(tables)}):** ")
@@ -1052,8 +1061,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 f.write(f"{description}\n\n")
             
             # Metadata table
-            f.write("| | |\n")
-            f.write("|----------|-------|\n")
+            f.write("| Attribute | Value |\n")
+            f.write("|:----------|:------|\n")
             f.write(f"| **Table Name** | `{table}` |\n")
             
             category = table_ref.get('category', '')
@@ -1190,9 +1199,9 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
         with connector_path.open("w", encoding="utf-8") as f:
             f.write(f"# {connector_title}\n\n")
             
-            # Connector metadata table (no column headers)
-            f.write("| | |\n")
-            f.write("|----------|-------|\n")
+            # Connector metadata table
+            f.write("| Attribute | Value |\n")
+            f.write("|:----------|:------|\n")
             f.write(f"| **Connector ID** | `{connector_id}` |\n")
             
             publisher = first_entry.get('connector_publisher', '')
@@ -1202,6 +1211,11 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             # Solutions
             solutions_list = ", ".join([f"[{solution_name}](../solutions/{sanitize_anchor(solution_name)}.md)" for solution_name in sorted(data['solutions'])])
             f.write(f"| **Used in Solutions** | {solutions_list} |\n")
+            
+            # Collection Method
+            collection_method = first_entry.get('collection_method', '')
+            if collection_method:
+                f.write(f"| **Collection Method** | {collection_method} |\n")
             
             # Connector files
             connector_files = first_entry.get('connector_files', '')
@@ -1289,8 +1303,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         # Solution metadata section
         f.write("## Solution Information\n\n")
-        f.write("| | |\n")
-        f.write("|------------------------|-------|\n")
+        f.write("| Attribute | Value |\n")
+        f.write("|:------------------------|:------|\n")
         f.write(f"| **Publisher** | {metadata.get('solution_support_name', 'N/A')} |\n")
         f.write(f"| **Support Tier** | {metadata.get('solution_support_tier', 'N/A')} |\n")
         
@@ -1380,8 +1394,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             connector_files = first_conn.get('connector_files', '')
             files = [f.strip() for f in connector_files.split(';') if f.strip()] if connector_files else []
             
-            f.write("| | |\n")
-            f.write("|--------------------------|---|\n")
+            f.write("| Attribute | Value |\n")
+            f.write("|:-------------------------|:---|\n")
             
             # Tables Ingested
             if len(tables) == 1:
@@ -1451,6 +1465,12 @@ def main() -> None:
         type=Path,
         default=Path(__file__).parent / "solutions_connectors_tables_mapping.csv",
         help="Path to input CSV file (default: solutions_connectors_tables_mapping.csv)",
+    )
+    parser.add_argument(
+        "--connectors-csv",
+        type=Path,
+        default=Path(__file__).parent / "connectors.csv",
+        help="Path to connectors CSV file with collection methods (default: connectors.csv)",
     )
     parser.add_argument(
         "--tables-csv",
@@ -1529,6 +1549,20 @@ def main() -> None:
     else:
         print(f"Warning: Tables reference CSV not found: {args.tables_csv}")
     
+    # Load connectors CSV for collection method info
+    connectors_reference: Dict[str, Dict[str, str]] = {}
+    if args.connectors_csv.exists():
+        print(f"Reading {args.connectors_csv}...")
+        with args.connectors_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                connector_id = row.get('connector_id', '')
+                if connector_id:
+                    connectors_reference[connector_id] = row
+        print(f"Loaded {len(connectors_reference)} connectors from connectors CSV")
+    else:
+        print(f"Warning: Connectors CSV not found: {args.connectors_csv}")
+    
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -1537,6 +1571,13 @@ def main() -> None:
     with args.input.open("r", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
         rows = list(reader)
+    
+    # Enrich rows with collection method from connectors CSV
+    for row in rows:
+        connector_id = row.get('connector_id', '')
+        if connector_id and connector_id in connectors_reference:
+            row['collection_method'] = connectors_reference[connector_id].get('collection_method', '')
+            row['collection_method_reason'] = connectors_reference[connector_id].get('collection_method_reason', '')
     
     print(f"Loaded {len(rows)} rows")
     

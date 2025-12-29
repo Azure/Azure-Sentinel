@@ -1,10 +1,11 @@
 # Bloodhound Enterprise
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `BloodHoundEnterprise` |
 | **Publisher** | SpecterOps |
 | **Used in Solutions** | [BloodHound Enterprise](../solutions/bloodhound-enterprise.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [BloodHoundFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundFunction.json) |
 
 The solution is designed to test Bloodhound Enterprise package creation process.

@@ -2,8 +2,8 @@
 
 Reference for AWSRoute53Resolver table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSRoute53Resolver` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

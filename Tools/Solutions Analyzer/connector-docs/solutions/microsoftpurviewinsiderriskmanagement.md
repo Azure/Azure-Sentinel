@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -63,8 +63,8 @@ Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
 Connecting Microsoft 365 Insider Risk Management will cause your data that is collected by Microsoft 365 Insider Risk Management service to be stored and processed in the location that you have configured your Microsoft Sentinel workspace.
 - Connect Microsoft 365 Insider Risk Management
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SecurityAlert` |
 | **Connector Definition Files** | [template_OfficeIRM.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MicrosoftPurviewInsiderRiskManagement/Data%20Connectors/template_OfficeIRM.JSON) |
 

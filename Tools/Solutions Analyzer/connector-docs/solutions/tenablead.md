@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** |  |
 | **Support Tier** |  |
 | **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableAD](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableAD) |
@@ -110,8 +110,8 @@ Configure the agent to collect the logs.
 
 > You should now be able to receive logs in the *Tenable_ad_CL* table, logs data can be parse using the **afad_parser()** function, used by all query samples, workbooks and analytic templates.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Tenable_ad_CL` |
 | **Connector Definition Files** | [Tenable.ad.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableAD/Data%20Connectors/Tenable.ad.json) |
 

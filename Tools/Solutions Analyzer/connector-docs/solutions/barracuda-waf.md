@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Barracuda |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.barracuda.com/support](https://www.barracuda.com/support) |
@@ -50,8 +50,8 @@ The Barracuda Web Application Firewall can integrate with and export logs direct
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 - **Open Syslog settings**
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Barracuda_CL` |
 | | `CommonSecurityLog` |
 | | `barracuda_CL` |

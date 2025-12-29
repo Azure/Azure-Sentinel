@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Mimecast |
 | **Support Tier** | Partner |
 | **Support Link** | [https://mimecastsupport.zendesk.com/](https://mimecastsupport.zendesk.com/) |
@@ -117,8 +117,8 @@ Go to ***Azure portal ---> App registrations ---> [your_app] ---> Certificates &
 
 6. Go to ***Azure portal ---> Resource groups ---> [your_resource_group] --->  [appName](type: Storage account) ---> Storage Explorer ---> BLOB CONTAINERS ---> TTP checkpoints ---> Upload*** and create empty files on your machine named attachment-checkpoint.txt, impersonation-checkpoint.txt, url-checkpoint.txt and select them for upload (this is done so that date_range for TTP logs are stored in consistent state)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `MimecastTTPAttachment_CL` |
 | | `MimecastTTPImpersonation_CL` |
 | | `MimecastTTPUrl_CL` |

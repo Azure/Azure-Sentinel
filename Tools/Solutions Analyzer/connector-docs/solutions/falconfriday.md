@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | FalconForce |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.falconforce.nl/en/](https://www.falconforce.nl/en/) |

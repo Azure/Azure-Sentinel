@@ -2,10 +2,10 @@
 
 Reference for PurviewDataSensitivityLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `PurviewDataSensitivityLogs` |
-| **Category** | Azure Resources |
+| **Category** | Azure Resources, Security |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
 | **Basic Logs Eligible** | ✗ No |
@@ -34,7 +34,7 @@ This table is ingested by the following connectors:
 This table collects data from the following Azure resource types:
 
 - `microsoft.securityinsights/purview`
-- `<br>microsoft.purview/accounts`
+- `microsoft.purview/accounts`
 
 ---
 

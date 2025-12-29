@@ -1,7 +1,7 @@
 # eventspagedata_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `eventspagedata_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

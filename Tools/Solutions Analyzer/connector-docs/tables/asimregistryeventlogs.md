@@ -2,8 +2,8 @@
 
 Reference for ASimRegistryEventLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimRegistryEventLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |

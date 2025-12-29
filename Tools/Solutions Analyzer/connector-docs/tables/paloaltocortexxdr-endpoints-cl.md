@@ -1,7 +1,7 @@
 # PaloAltoCortexXDR_Endpoints_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `PaloAltoCortexXDR_Endpoints_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 1 |

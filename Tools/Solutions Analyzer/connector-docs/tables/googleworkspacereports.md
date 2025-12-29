@@ -2,8 +2,8 @@
 
 Reference for GoogleWorkspaceReports table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GoogleWorkspaceReports` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

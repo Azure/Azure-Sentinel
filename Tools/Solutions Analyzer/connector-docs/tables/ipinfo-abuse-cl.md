@@ -1,7 +1,7 @@
 # Ipinfo_Abuse_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_Abuse_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

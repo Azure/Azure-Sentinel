@@ -1,7 +1,7 @@
 # NXLog_DNS_Server_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NXLog_DNS_Server_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

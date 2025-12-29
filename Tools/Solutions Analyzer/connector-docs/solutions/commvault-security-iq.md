@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Commvault |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.commvault.com/support](https://www.commvault.com/support) |
@@ -63,8 +63,8 @@ Use this method for automated deployment of the Commvault Security IQ data conne
 3. Enter the **Workspace ID**, **Workspace Key** 'and/or Other required fields' and click Next. 
 4. Click **Create** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommvaultSecurityIQ_CL` |
 | **Connector Definition Files** | [CommvaultSecurityIQ_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Commvault%20Security%20IQ/Data%20Connectors/CommvaultSecurityIQ_API_AzureFunctionApp.json) |
 

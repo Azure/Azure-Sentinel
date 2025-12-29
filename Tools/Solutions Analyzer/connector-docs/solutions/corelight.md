@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Corelight |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.corelight.com/](https://support.corelight.com/) |
@@ -54,8 +54,8 @@ Using the following values, configure your Corelight Sensor to use the Microsoft
 - **Primary Workspace Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Corelight_CL` |
 | | `Corelight_v2_bacnet_CL` |
 | | `Corelight_v2_capture_loss_CL` |

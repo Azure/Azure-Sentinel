@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Community |
 | **Support Tier** | Community |
 | **Support Link** | [https://github.com/Azure/Azure-Sentinel/issues](https://github.com/Azure/Azure-Sentinel/issues) |
@@ -176,8 +176,8 @@ To be able to collect Exchange Online information and to be able to retrieve Use
 3. Click on 'No member selected' and search your Managed Identity account Name beginning by **the name of your automation account** like 'ESI-Collector'. Select it and click on 'Select'.
 4. Click **Next** and validate the assignment by clicking **Assign**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ESIExchangeOnlineConfig_CL` |
 | **Connector Definition Files** | [ESI-ExchangeOnlineCollector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/Data%20Connectors/ESI-ExchangeOnlineCollector.json) |
 

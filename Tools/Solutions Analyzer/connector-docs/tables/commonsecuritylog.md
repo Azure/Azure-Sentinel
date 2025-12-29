@@ -2,8 +2,8 @@
 
 Reference for CommonSecurityLog table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CommonSecurityLog` |
 | **Category** | Security |
 | **Solutions Using Table** | 59 |
@@ -191,11 +191,11 @@ This table is ingested by the following connectors:
 This table collects data from the following Azure resource types:
 
 - `microsoft.securityinsights/cef`
-- `<br>microsoft.compute/virtualmachines`
-- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
-- `<br>microsoft.azurestackhci/virtualmachines`
-- `<br>microsoft.scvmm/virtualmachines`
-- `<br>microsoft.compute/virtualmachinescalesets`
+- `microsoft.compute/virtualmachines`
+- `microsoft.conenctedvmwarevsphere/virtualmachines`
+- `microsoft.azurestackhci/virtualmachines`
+- `microsoft.scvmm/virtualmachines`
+- `microsoft.compute/virtualmachinescalesets`
 
 ---
 

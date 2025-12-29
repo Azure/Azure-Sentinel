@@ -1,7 +1,7 @@
 # darktrace_model_alerts_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `darktrace_model_alerts_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

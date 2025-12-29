@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Netskope |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.netskope.com/services#support](https://www.netskope.com/services#support) |
@@ -110,8 +110,8 @@ This method provides the step-by-step instructions to deploy the Netskope connec
 4. Once all application settings have been entered, click **Save**.
 5. After successfully deploying the connector, download the Kusto Function to normalize the data fields. [Follow the steps](https://aka.ms/sentinelgithubparsersnetskope) to use the Kusto function alias, **Netskope**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Netskope_CL` |
 | **Connector Definition Files** | [Netskope_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskope/Data%20Connectors/Netskope/Netskope_API_FunctionApp.json) |
 

@@ -1,7 +1,7 @@
 # SentinelOneGroups_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SentinelOneGroups_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

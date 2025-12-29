@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | MailGuard 365 |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.mailguard365.com/support/](https://www.mailguard365.com/support/) |
@@ -44,8 +44,8 @@ MailGuard 365 Enhanced Email Security for Microsoft 365. Exclusive to the Micros
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `MailGuard365_Threats_CL` |
 | **Connector Definition Files** | [MailGuard365.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MailGuard%20365/Data%20Connectors/MailGuard365.json) |
 

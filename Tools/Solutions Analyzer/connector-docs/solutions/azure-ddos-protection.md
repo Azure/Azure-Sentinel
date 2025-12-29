@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -51,8 +51,8 @@ Inside your Public IP Address resource:
   -   Select the categories that you want to analyze (recommended: DDoSProtectionNotifications, DDoSMitigationFlowLogs, DDoSMitigationReports)
   -   Click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `AzureDiagnostics` |
 | **Connector Definition Files** | [DDOS.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20DDoS%20Protection/Data%20Connectors/DDOS.JSON) |
 

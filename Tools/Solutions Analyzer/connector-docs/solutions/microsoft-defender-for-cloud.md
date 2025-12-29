@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -44,8 +44,8 @@ After connecting this connector, **all** your Microsoft Defender for Cloud subsc
 > Your Microsoft Defender for Cloud alerts are connected to stream through the Microsoft 365 Defender. To benefit from automated grouping of the alerts into incidents, connect the Microsoft 365 Defender incidents connector. Incidents can be viewed in the incidents queue.
 Tenant-based Microsoft Defender for Cloud
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SecurityAlert` |
 | **Connector Definition Files** | [MicrosoftDefenderForCloudTenantBased.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud/Data%20Connectors/MicrosoftDefenderForCloudTenantBased.json) |
 

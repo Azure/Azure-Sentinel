@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Veritas Technologies LLC |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.veritas.com/content/support/en_US/contact-us](https://www.veritas.com/content/support/en_US/contact-us) |

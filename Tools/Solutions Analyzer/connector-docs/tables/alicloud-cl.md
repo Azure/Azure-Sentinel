@@ -1,7 +1,7 @@
 # AliCloud_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AliCloud_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

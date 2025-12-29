@@ -1,7 +1,7 @@
 # vectra_ntlm_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_ntlm_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

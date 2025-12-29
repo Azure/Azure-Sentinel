@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -37,8 +37,8 @@ The Dynamics 365 Common Data Service (CDS) activities connector provides insight
 Connect [Dynamics 365 CRM](https://aka.ms/Sentinel/Dynamics365) activity logs to your Microsoft Sentinel workspace.
 - Connect Dynamics365
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Dynamics365Activity` |
 | **Connector Definition Files** | [template_Dynamics365.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynamics%20365/Data%20Connectors/template_Dynamics365.json) |
 

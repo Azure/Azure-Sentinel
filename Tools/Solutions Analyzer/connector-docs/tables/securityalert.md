@@ -2,8 +2,8 @@
 
 Reference for SecurityAlert table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SecurityAlert` |
 | **Category** | Security |
 | **Solutions Using Table** | 9 |

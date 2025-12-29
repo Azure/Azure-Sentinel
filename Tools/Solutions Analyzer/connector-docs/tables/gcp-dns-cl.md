@@ -1,7 +1,7 @@
 # GCP_DNS_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCP_DNS_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

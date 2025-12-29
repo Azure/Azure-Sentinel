@@ -1,7 +1,7 @@
 # NCProtectUAL_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NCProtectUAL_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

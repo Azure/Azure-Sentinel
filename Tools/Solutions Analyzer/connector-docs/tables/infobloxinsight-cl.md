@@ -1,7 +1,7 @@
 # InfobloxInsight_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `InfobloxInsight_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 1 |

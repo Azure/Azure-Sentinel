@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -125,8 +125,8 @@ You can ingest the following type of logs from AWS Route 53 to Microsoft Sentine
 
     To ingest audit and management logs from  `AWS CloudTrail` to Microsoft Sentinel, follow the instructions provided in the [Amazon Web Services S3 connector](https://learn.microsoft.com/en-us/azure/sentinel/connect-aws?tabs=s3)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `AWSRoute53Resolver` |
 | **Connector Definition Files** | [AWSRoute53Resolver_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services%20Route%2053/Data%20Connectors/AWSRoute53Resolver_CCP/AWSRoute53Resolver_DataConnectorDefinition.json) |
 

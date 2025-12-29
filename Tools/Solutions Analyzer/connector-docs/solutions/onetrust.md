@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | OneTrust, LLC |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.onetrust.com/support/](https://www.onetrust.com/support/) |
@@ -58,8 +58,8 @@ Use the following parameters to configure the your machine to send the logs to t
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 - **OneTrust Metadata Stream Name**: `Custom-OneTrustMetadataV3`
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `OneTrustMetadataV3_CL` |
 | **Connector Definition Files** | [OneTrustLogs_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/OneTrust/Data%20Connectors/OneTrustLogs_CCF/OneTrustLogs_connectorDefinition.json) |
 

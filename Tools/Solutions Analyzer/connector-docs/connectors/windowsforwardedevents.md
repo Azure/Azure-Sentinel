@@ -1,10 +1,11 @@
 # Windows Forwarded Events
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `WindowsForwardedEvents` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Windows Forwarded Events](../solutions/windows-forwarded-events.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [WindowsForwardedEvents.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Forwarded%20Events/Data%20Connectors/WindowsForwardedEvents.JSON) |
 
 You can stream all Windows Event Forwarding (WEF) logs from the Windows Servers connected to your Microsoft Sentinel workspace using Azure Monitor Agent (AMA).

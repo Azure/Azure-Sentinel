@@ -2,8 +2,8 @@
 
 Reference for ABAPAuditLog table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ABAPAuditLog` |
 | **Category** | Security |
 | **Solutions Using Table** | 3 |

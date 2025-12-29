@@ -1,7 +1,7 @@
 # Phosphorus_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Phosphorus_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

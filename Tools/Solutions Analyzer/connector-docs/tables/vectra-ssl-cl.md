@@ -1,7 +1,7 @@
 # vectra_ssl_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_ssl_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

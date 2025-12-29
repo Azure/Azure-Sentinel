@@ -1,7 +1,7 @@
 # ExchangeHttpProxy_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ExchangeHttpProxy_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

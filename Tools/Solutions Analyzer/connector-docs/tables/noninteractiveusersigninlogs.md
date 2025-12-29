@@ -1,7 +1,7 @@
 # NonInteractiveUserSignInLogs
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NonInteractiveUserSignInLogs` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

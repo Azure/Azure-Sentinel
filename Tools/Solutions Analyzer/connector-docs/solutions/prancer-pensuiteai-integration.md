@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Prancer PenSuiteAI Integration |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.prancer.io](https://www.prancer.io) |
@@ -44,8 +44,8 @@ STEP 3: Create follow the configuration wizard to select where in Azure the resu
 
 STEP 4: Data should start to get fed into Microsoft Sentinel for processing.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `prancer_CL` |
 | **Connector Definition Files** | [PrancerLogData.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Prancer%20PenSuiteAI%20Integration/Data%20Connectors/PrancerLogData.json) |
 

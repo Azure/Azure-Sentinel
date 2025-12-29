@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ZeroFox |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.zerofox.com/contact-us/](https://www.zerofox.com/contact-us/) |
@@ -68,8 +68,8 @@ The ZeroFox CTI data connectors provide the capability to ingest the different [
 4.
 5. Click **Review + Create** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ZeroFox_CTI_C2_CL` |
 | | `ZeroFox_CTI_advanced_dark_web_CL` |
 | | `ZeroFox_CTI_botnet_CL` |

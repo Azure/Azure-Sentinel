@@ -1,7 +1,7 @@
 # ProvisioningLogs
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ProvisioningLogs` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

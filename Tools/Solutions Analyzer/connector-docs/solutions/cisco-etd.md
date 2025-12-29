@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cisco Systems |
 | **Support Tier** | Partner |
 | **Categories** | domains |
@@ -55,8 +55,8 @@ Use this method for automated deployment of the Cisco ETD data connector using a
 3. Enter the **WorkspaceID**, **SharedKey**, **ClientID**, **ClientSecret**, **ApiKey**, **Verdicts**, **ETD Region**
 4. Click **Create** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CiscoETD_CL` |
 | **Connector Definition Files** | [CiscoETD_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ETD/Data%20Connectors/CiscoETD_API_FunctionApp.json) |
 

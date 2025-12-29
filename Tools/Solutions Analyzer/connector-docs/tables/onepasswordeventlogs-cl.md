@@ -1,7 +1,7 @@
 # OnePasswordEventLogs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OnePasswordEventLogs_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 3 |

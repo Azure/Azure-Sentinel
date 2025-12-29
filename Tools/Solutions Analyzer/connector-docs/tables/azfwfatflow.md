@@ -2,8 +2,8 @@
 
 Reference for AZFWFatFlow table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWFatFlow` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | IPQS Plugins Team |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.ipqualityscore.com/contact-us](https://www.ipqualityscore.com/contact-us) |

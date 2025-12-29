@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Dragos Inc |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.dragos.com](https://www.dragos.com) |
@@ -42,8 +42,8 @@ Please provide the following information to allow Microsoft Sentinel to connect 
 - **Maximum Notification Severity. Valid values are 0-5 inclusive. Ensure greater than or equal to minimum severity.**: Enter the max severity (recommend 5 for all notifications)
 - Click 'Connect to Sitestore' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `DragosAlerts_CL` |
 | **Connector Definition Files** | [dragosSitestoreDataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dragos/Data%20Connectors/DragosSiteStore_CCP/dragosSitestoreDataConnectorDefinition.json) |
 

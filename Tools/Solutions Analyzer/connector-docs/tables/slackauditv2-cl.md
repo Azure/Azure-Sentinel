@@ -1,7 +1,7 @@
 # SlackAuditV2_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SlackAuditV2_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -1,7 +1,7 @@
 # MuleSoft_Cloudhub_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `MuleSoft_Cloudhub_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

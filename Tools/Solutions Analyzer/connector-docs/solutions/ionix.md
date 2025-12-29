@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | IONIX |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.ionix.io/contact-us/](https://www.ionix.io/contact-us/) |
@@ -40,8 +40,8 @@ Follow the [instructions](https://www.ionix.io/integrations/azure-sentinel/) to 
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CyberpionActionItems_CL` |
 | **Connector Definition Files** | [IONIXSecurityLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IONIX/Data%20Connectors/IONIXSecurityLogs.json) |
 

@@ -2,8 +2,8 @@
 
 Reference for StorageQueueLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `StorageQueueLogs` |
 | **Category** | Azure Resources |
 | **Solutions Using Table** | 1 |

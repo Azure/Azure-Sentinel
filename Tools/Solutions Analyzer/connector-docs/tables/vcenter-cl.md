@@ -1,7 +1,7 @@
 # vcenter_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vcenter_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

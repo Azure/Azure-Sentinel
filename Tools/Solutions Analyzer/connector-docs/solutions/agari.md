@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Agari |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support](https://support.agari.com/hc/en-us/articles/360000645632-How-to-access-Agari-Support) |
@@ -127,8 +127,8 @@ Follow the instrcutions found on article [Connect Azure Sentinel to your threat 
 
 1. Once all application settings have been entered, click **Save**. Note that it will take some time to have the required dependencies download, so you may see some inital failure messages.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `agari_apdpolicy_log_CL` |
 | | `agari_apdtc_log_CL` |
 | | `agari_bpalerts_log_CL` |

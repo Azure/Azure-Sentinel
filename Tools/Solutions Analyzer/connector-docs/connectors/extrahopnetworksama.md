@@ -1,10 +1,11 @@
 # [Deprecated] ExtraHop Reveal(x) via AMA
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ExtraHopNetworksAma` |
 | **Publisher** | ExtraHop Networks |
 | **Used in Solutions** | [ExtraHop Reveal(x)](../solutions/extrahop-reveal(x).md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_ExtraHopReveal%28x%29AMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ExtraHop%20Reveal%28x%29/Data%20Connectors/template_ExtraHopReveal%28x%29AMA.json) |
 
 The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(x) system with Microsoft Sentinel to view dashboards, create custom alerts, and improve investigation. This integration gives you the ability to gain insight into your organization's network and improve your security operation capabilities.

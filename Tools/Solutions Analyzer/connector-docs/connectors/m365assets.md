@@ -1,10 +1,11 @@
 # Microsoft 365 Assets (formerly, Office 365)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `M365Assets` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Microsoft 365 Assets](../solutions/microsoft-365-assets.md) |
+| **Collection Method** | Native |
 | **Connector Definition Files** | [M365Asset_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20365%20Assets/Data%20Connectors/M365Asset_DataConnectorDefinition.json) |
 
 The Microsoft 365 (formerly, Office 365) asset connector gives richer insights into ongoing user activities in Microsoft Sentinel by supplementing activity logs with details such as owners, permissions, retention policies and sensitivity labels.

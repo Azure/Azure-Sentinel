@@ -2,8 +2,8 @@
 
 Reference for StorageBlobLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `StorageBlobLogs` |
 | **Category** | Azure Resources |
 | **Solutions Using Table** | 1 |

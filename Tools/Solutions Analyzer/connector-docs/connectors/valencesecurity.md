@@ -1,10 +1,11 @@
 # SaaS Security
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ValenceSecurity` |
 | **Publisher** | Valence Security |
 | **Used in Solutions** | [Valence Security](../solutions/valence-security.md) |
+| **Collection Method** | REST API |
 | **Connector Definition Files** | [ValenceSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Valence%20Security/Data%20Connectors/ValenceSecurity.json) |
 
 Connects the Valence SaaS security platform Azure Log Analytics via the REST API interface.

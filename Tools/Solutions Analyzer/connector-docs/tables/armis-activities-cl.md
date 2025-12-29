@@ -1,7 +1,7 @@
 # Armis_Activities_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Armis_Activities_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

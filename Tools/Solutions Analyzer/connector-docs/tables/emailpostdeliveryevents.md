@@ -2,8 +2,8 @@
 
 Security events that occur post-delivery, after Microsoft 365 delivers the emails to the recipient mailbox
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `EmailPostDeliveryEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ReversingLabs |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.reversinglabs.com/hc/en-us](https://support.reversinglabs.com/hc/en-us) |

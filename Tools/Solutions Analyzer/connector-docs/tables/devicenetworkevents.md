@@ -2,8 +2,8 @@
 
 Network connection and related events
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceNetworkEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Orange Cyberdefense |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.orangecyberdefense.com/global/contact](https://www.orangecyberdefense.com/global/contact) |
@@ -37,8 +37,8 @@ Use the documentation from this Github repository to install and configure the D
 
 https://github.com/cert-orangecyberdefense/datalake2sentinel
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ThreatIntelligenceIndicator` |
 | **Connector Definition Files** | [Datalake2SentinelConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Datalake2Sentinel/Data%20Connectors/Datalake2SentinelConnector.json) |
 

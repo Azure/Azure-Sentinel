@@ -2,8 +2,8 @@
 
 Files, IP addresses, URLs, users, or devices associated with alerts
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AlertEvidence` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

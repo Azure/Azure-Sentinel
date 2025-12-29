@@ -1,7 +1,7 @@
 # RiskyUsers
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `RiskyUsers` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

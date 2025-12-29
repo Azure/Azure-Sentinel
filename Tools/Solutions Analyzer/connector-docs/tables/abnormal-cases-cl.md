@@ -1,7 +1,7 @@
 # ABNORMAL_CASES_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ABNORMAL_CASES_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

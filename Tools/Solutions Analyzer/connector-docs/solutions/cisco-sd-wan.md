@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cisco Systems |
 | **Support Tier** | Partner |
 | **Support Link** | [https://globalcontacts.cloudapps.cisco.com/contacts/contactDetails/en_US/c1o1-c2o2-c3o8](https://globalcontacts.cloudapps.cisco.com/contacts/contactDetails/en_US/c1o1-c2o2-c3o8) |
@@ -143,8 +143,8 @@ To Ingest Netflow data into Microsoft sentinel, Filebeat and Logstash needs to b
 2. This command will start running the logstash in the background. To see the logs of logstash kill the above process and run the following command : 
 > `/usr/share/logstash/bin/logstash --path.settings /etc/logstash -f /etc/logstash/cisco-netflow-to-sentinel.conf`
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CiscoSDWANNetflow_CL` |
 | | `Syslog` |
 | **Connector Definition Files** | [CiscoSDWAN.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20SD-WAN/Data%20Connectors/CiscoSDWAN.json) |

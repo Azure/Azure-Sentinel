@@ -1,7 +1,7 @@
 # BitsightFindings_data_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `BitsightFindings_data_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

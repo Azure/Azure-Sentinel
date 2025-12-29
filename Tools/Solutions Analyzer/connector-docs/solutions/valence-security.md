@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Valence Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.valencesecurity.com/](https://www.valencesecurity.com/) |
@@ -48,8 +48,8 @@ Copy the values shown below and save them for configuration of the API log forwa
 
 As a Valence Security Platform admin, go to the [configuration screen](https://app.valencesecurity.com/settings/configuration), click Connect in the SIEM Integration card, and choose Microsoft Sentinel. Paste the values from the previous step and click Connect. Valence will test the connection so when success is reported, the connection worked.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ValenceAlert_CL` |
 | **Connector Definition Files** | [ValenceSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Valence%20Security/Data%20Connectors/ValenceSecurity.json) |
 

@@ -1,7 +1,7 @@
 # vectra_smbfiles_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_smbfiles_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

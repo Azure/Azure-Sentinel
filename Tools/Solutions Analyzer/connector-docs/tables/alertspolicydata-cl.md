@@ -1,7 +1,7 @@
 # alertspolicydata_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `alertspolicydata_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

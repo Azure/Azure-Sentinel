@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Darktrace |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.darktrace.com/en/contact/](https://www.darktrace.com/en/contact/) |
@@ -54,8 +54,8 @@ The Darktrace REST API connector pushes real-time events from Darktrace to Micro
  6. Click "Verify Alert Settings" to attempt authentication and send out a test alert
  7. Run a "Look for Test Alerts" sample query to validate that the test alert has been received
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `darktrace_model_alerts_CL` |
 | **Connector Definition Files** | [DarktraceConnectorRESTAPI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Darktrace/Data%20Connectors/DarktraceConnectorRESTAPI.json) |
 

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Netskope |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.netskope.com/services#support](https://www.netskope.com/services#support) |
@@ -141,8 +141,8 @@ Use the following step-by-step instructions to deploy the docker based data conn
 1. Use the command 'sudo docker container ps' to list the running docker containers. Note down your container id.
 2. Now stop the container using the command: 'sudo docker stop *<*container-id*>*'.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `NetskopeWebtxData_CL` |
 | | `NetskopeWebtxErrors_CL` |
 | **Connector Definition Files** | [Netskope_WebTransactions.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Data%20Connectors/NetskopeWebTransactionsDataConnector/Netskope_WebTransactions.json) |

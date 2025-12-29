@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Phosphorus Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://phosphorus.io](https://phosphorus.io) |
@@ -55,8 +55,8 @@ The Phosphorus Device Connector provides the capability to Phosphorus to ingest 
 >**IMPORTANT:** Before deploying the Phosphorus Device data connector, have the Phosphorus Instance Domain Name readily available as well as the Phosphorus API  Key(s)
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Phosphorus_CL` |
 | **Connector Definition Files** | [PhosphorusDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Phosphorus/Data%20Connectors/PhosphorusDataConnector.json) |
 

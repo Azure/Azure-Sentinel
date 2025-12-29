@@ -2,8 +2,8 @@
 
 Reference for GCPVPCFlow table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPVPCFlow` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

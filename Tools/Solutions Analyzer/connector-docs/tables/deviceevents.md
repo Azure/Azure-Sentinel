@@ -2,8 +2,8 @@
 
 Multiple event types, including events triggered by security controls such as Microsoft Defender Antivirus and exploit protection
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

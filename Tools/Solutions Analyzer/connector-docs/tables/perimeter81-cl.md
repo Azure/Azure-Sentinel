@@ -1,7 +1,7 @@
 # Perimeter81_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Perimeter81_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

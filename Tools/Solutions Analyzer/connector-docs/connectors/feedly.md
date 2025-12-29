@@ -1,10 +1,11 @@
 # Feedly
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Feedly` |
 | **Publisher** | Feedly |
 | **Used in Solutions** | [Feedly](../solutions/feedly.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [Feedly_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Feedly/Data%20Connectors/Feedly_API_AzureFunctionApp.json) |
 
 This connector allows you to ingest IoCs from Feedly.

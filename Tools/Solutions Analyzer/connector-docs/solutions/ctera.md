@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | CTERA |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.ctera.com/](https://www.ctera.com/) |
@@ -44,8 +44,8 @@ Set up your CTERA portal syslog connection and Edge-Filer Syslog connector
 
 Install the Azure Monitor Agent (AMA) on your syslog server to enable data collection.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Syslog` |
 | **Connector Definition Files** | [CTERA_Data_Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA/Data%20Connectors/CTERA_Data_Connector.json) |
 

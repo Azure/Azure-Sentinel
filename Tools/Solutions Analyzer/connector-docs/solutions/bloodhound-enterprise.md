@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SpecterOps |
 | **Support Tier** | Partner |
 | **Support Link** | [https://bloodhoundenterprise.io/](https://bloodhoundenterprise.io/) |
@@ -177,8 +177,8 @@ Set the `ClassificationFilterOperation` value to: `exclude` for exclude function
    - Navigate to your **Log Analytics Workspace** (linked to Microsoft Sentinel).
    - Under the **Tables** section, verify that the **BloodHoundTable_CL** table has been created successfully and is ready to receive data.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `BHEAttackPathsData_CL` |
 | **Connector Definition Files** | [BloodHoundFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Data%20Connectors/BloodHoundFunction.json) |
 

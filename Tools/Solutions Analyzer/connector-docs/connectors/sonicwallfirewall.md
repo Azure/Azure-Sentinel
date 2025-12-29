@@ -1,10 +1,11 @@
 # [Deprecated] SonicWall Firewall via Legacy Agent
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SonicWallFirewall` |
 | **Publisher** | SonicWall |
 | **Used in Solutions** | [SonicWall Firewall](../solutions/sonicwall-firewall.md) |
+| **Collection Method** | MMA |
 | **Connector Definition Files** | [SonicwallFirewall.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Data%20Connectors/SonicwallFirewall.json) |
 
 Common Event Format (CEF) is an industry standard format on top of Syslog messages, used by SonicWall to allow event interoperability among different platforms. By connecting your CEF logs to Microsoft Sentinel, you can take advantage of search & correlation, alerting, and threat intelligence enrichment for each log.

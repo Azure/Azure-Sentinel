@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | egress1589289169584 |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.egress.com/s/](https://support.egress.com/s/) |
@@ -38,8 +38,8 @@ The Egress Defend audit connector provides the capability to ingest Egress Defen
 Enter your Egress Defend API URl, Egress Domain and API token.
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `EgressDefend_CL` |
 | **Connector Definition Files** | [DefendAPIConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Data%20Connectors/DefendAPIConnector.json) |
 

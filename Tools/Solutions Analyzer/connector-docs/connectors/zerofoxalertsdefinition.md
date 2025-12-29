@@ -1,10 +1,11 @@
 # ZeroFox Enterprise - Alerts (Polling CCF)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ZeroFoxAlertsDefinition` |
 | **Publisher** | ZeroFox Enterprise |
 | **Used in Solutions** | [ZeroFox](../solutions/zerofox.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [ZeroFoxAlerts_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ZeroFox/Data%20Connectors/Alerts/ZeroFoxAlerts_ConnectorDefinition.json) |
 
 Collects alerts from ZeroFox API.

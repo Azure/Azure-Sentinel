@@ -1,7 +1,7 @@
 # ABNORMAL_THREAT_MESSAGES_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ABNORMAL_THREAT_MESSAGES_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

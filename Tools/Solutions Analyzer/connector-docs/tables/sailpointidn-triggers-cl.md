@@ -1,7 +1,7 @@
 # SailPointIDN_Triggers_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SailPointIDN_Triggers_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -1,7 +1,7 @@
 # ASimFileEventLogs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimFileEventLogs_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Island |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.island.io](https://www.island.io) |
@@ -44,8 +44,8 @@ Provide the Island API URL and Key.  API URL is https://management.island.io/api
   Generate the API Key in the Management Console under Settings > API.
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Island_User_CL` |
 | **Connector Definition Files** | [IslandUserAPIConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Island/Data%20Connectors/IslandUserAPIConnector.json) |
 

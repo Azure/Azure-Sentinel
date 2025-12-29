@@ -2,8 +2,8 @@
 
 Safe Links clicks from email messages, Teams, and Office 365 apps
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `UrlClickEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

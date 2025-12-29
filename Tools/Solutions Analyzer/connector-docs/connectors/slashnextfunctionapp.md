@@ -1,10 +1,11 @@
 # SlashNext Function App
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SlashNextFunctionApp` |
 | **Publisher** | SlashNext |
 | **Used in Solutions** | [SlashNext](../solutions/slashnext.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [SlashNext_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/Data%20Connectors/SlashNext_FunctionApp.json) |
 
 The SlashNext function app utilizes python to perform the analysis of the raw logs and returns URLs present in the logs.

@@ -1,10 +1,11 @@
 # CYFIRMA Attack Surface
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CyfirmaAttackSurfaceAlertsConnector` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Cyfirma Attack Surface](../solutions/cyfirma-attack-surface.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [CyfirmaASAlerts_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Attack%20Surface/Data%20Connectors/CyfirmaASAlerts_ccp/CyfirmaASAlerts_DataConnectorDefinition.json) |
 
 ## Tables Ingested

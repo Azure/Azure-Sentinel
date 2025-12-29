@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Tanium Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.tanium.com](https://support.tanium.com) |

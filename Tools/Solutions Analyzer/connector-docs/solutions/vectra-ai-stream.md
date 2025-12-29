@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Vectra AI |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.vectra.ai/support](https://www.vectra.ai/support) |
@@ -121,8 +121,8 @@ From the Vectra UI, navigate to Settings > Stream and Edit the destination confi
 
 **3. Run the following command to validate (or set up) that syslog-ng is listening on port 514**
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `vectra_beacon_CL` |
 | | `vectra_dcerpc_CL` |
 | | `vectra_dhcp_CL` |

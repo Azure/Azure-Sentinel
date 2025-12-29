@@ -1,7 +1,7 @@
 # VMware_VECO_EventLogs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `VMware_VECO_EventLogs_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

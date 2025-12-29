@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Torq Support Team |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.torq.io](https://support.torq.io) |

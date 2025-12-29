@@ -1,10 +1,11 @@
 # Morphisec API Data Connector (via Codeless Connector Framework)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `MorphisecCCF` |
 | **Publisher** | Morphisec |
 | **Used in Solutions** | [Morphisec](../solutions/morphisec.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [Morphisec_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec/Data%20Connectors/Morphisec_CCF/Morphisec_ConnectorDefinition.json) |
 
 The [Morphisec](https://www.morphisec.com/) solution for Microsoft Sentinel enables you to seamlessly ingest security alerts directly from the Morphisec API. By leveraging Morphisec's proactive breach prevention and moving target defense capabilities, this integration enriches your security operations with high-fidelity, low-noise alerts on evasive threats.

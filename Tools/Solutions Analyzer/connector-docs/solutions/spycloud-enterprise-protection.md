@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Spycloud |
 | **Support Tier** | Partner |
 | **Support Link** | [https://portal.spycloud.com](https://portal.spycloud.com) |

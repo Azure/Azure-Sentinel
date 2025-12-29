@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Veeam Software |
 | **Support Tier** | Partner |
 | **Support Link** | [https://helpcenter.veeam.com/docs/security_plugins_microsoft_sentinel/guide/](https://helpcenter.veeam.com/docs/security_plugins_microsoft_sentinel/guide/) |
@@ -75,8 +75,8 @@ Use this method for automated deployment of the Veeam data connector using an AR
 3. Enter the **Microsoft Sentinel Workspace Name**. 
 4. Click **Review + Create**, **Create**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `VeeamAuthorizationEvents_CL` |
 | | `VeeamCovewareFindings_CL` |
 | | `VeeamMalwareEvents_CL` |

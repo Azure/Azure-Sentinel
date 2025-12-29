@@ -1,10 +1,11 @@
 # Samsung Knox Asset Intelligence
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SamsungDCDefinition` |
 | **Publisher** | Samsung |
 | **Used in Solutions** | [Samsung Knox Asset Intelligence](../solutions/samsung-knox-asset-intelligence.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Template_Samsung.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Data%20Connectors/Template_Samsung.json) |
 
 Samsung Knox Asset Intelligence Data Connector lets you centralize your mobile security events and logs in order to view customized insights using the Workbook template, and identify incidents based on Analytics Rules templates.

@@ -1,10 +1,11 @@
 # Egress Iris Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `EgressSiemPolling` |
 | **Publisher** | Egress Software Technologies |
 | **Used in Solutions** | [Egress Iris](../solutions/egress-iris.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [EgressDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Iris/Data%20Connectors/EgressDataConnector.json) |
 
 The Egress Iris connector will allow you to ingest Egress data into Sentinel.

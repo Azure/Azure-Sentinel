@@ -1,7 +1,7 @@
 # PaloAltoCortexXDR_Audit_Agent_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `PaloAltoCortexXDR_Audit_Agent_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 1 |

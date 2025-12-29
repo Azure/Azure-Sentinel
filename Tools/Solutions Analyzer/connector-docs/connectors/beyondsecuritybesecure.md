@@ -1,10 +1,11 @@
 # Beyond Security beSECURE
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `BeyondSecuritybeSECURE` |
 | **Publisher** | Beyond Security |
 | **Used in Solutions** | [Beyond Security beSECURE](../solutions/beyond-security-besecure.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Beyond%20Security%20beSECURE.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Beyond%20Security%20beSECURE/Data%20Connectors/Beyond%20Security%20beSECURE.json) |
 
 The [Beyond Security beSECURE](https://beyondsecurity.com/) connector allows you to easily connect your Beyond Security beSECURE scan events, scan results and audit trail with Azure Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.

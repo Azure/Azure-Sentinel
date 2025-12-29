@@ -1,7 +1,7 @@
 # Onapsis_Defend_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Onapsis_Defend_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

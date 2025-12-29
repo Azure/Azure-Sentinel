@@ -2,8 +2,8 @@
 
 Reference for AWSWAF table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSWAF` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 Reference for ASimWebSessionLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimWebSessionLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

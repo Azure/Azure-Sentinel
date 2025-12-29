@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | CYFIRMA |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.cyfirma.com/contact-us/](https://www.cyfirma.com/contact-us/) |
@@ -38,8 +38,8 @@ Connect to CYFIRMA Digital Risk Alerts to ingest logs into Microsoft Sentinel. T
 - **API Delta**: API Delta
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CyfirmaDBWMDarkWebAlerts_CL` |
 | | `CyfirmaDBWMPhishingAlerts_CL` |
 | | `CyfirmaDBWMRansomwareAlerts_CL` |

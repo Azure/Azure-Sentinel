@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cohesity |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.cohesity.com/](https://support.cohesity.com/) |
@@ -57,8 +57,8 @@ Use this method for automated deployment of the Cohesity data connector using an
 4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.
 5. Click **Purchase** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Cohesity_CL` |
 | **Connector Definition Files** | [Cohesity_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Data%20Connectors/Helios2Sentinel/Cohesity_API_FunctionApp.json) |
 

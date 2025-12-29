@@ -1,7 +1,7 @@
 # SnowflakeLoad_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SnowflakeLoad_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -2,8 +2,8 @@
 
 Reference for GCPCloudSQL table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPCloudSQL` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

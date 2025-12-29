@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Shadowbyte |
 | **Support Tier** | Partner |
 | **Support Link** | [https://shadowbyte.com/products/aria/](https://shadowbyte.com/products/aria/) |

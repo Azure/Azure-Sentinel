@@ -1,10 +1,11 @@
 # Agari Phishing Defense and Brand Protection
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Agari` |
 | **Publisher** | Agari |
 | **Used in Solutions** | [Agari](../solutions/agari.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [Agari_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Agari/Data%20Connectors/Agari_API_FunctionApp.json) |
 
 This connector uses a Agari REST API connection to push data into Azure Sentinel Log Analytics.

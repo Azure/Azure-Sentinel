@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Pathlock Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://pathlock.com/support/](https://pathlock.com/support/) |
@@ -71,8 +71,8 @@ Please do not hesitate to contact Pathlock if support is needed.
 - **DCR Immutable ID**: `DataCollectionRuleId`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ABAPAuditLog` |
 | | `Pathlock_TDnR_CL` |
 | **Connector Definition Files** | [Pathlock_TDnR_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pathlock_TDnR/Data%20Connectors/Pathlock_TDnR_PUSH_CCP/Pathlock_TDnR_connectorDefinition.json) |

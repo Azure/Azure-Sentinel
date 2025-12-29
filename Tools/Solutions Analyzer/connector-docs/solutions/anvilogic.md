@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Anvilogic |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.anvilogic.com/](https://www.anvilogic.com/) |
@@ -44,8 +44,8 @@ Complete the form to ingest Anvilogic Alerts into your Microsoft Sentinel
   - Client Secret
   - Click 'Connect' to authenticate
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Anvilogic_Alerts_CL` |
 | **Connector Definition Files** | [Anvilogic_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Anvilogic/Data%20Connectors/AnviLogic_CCF/Anvilogic_DataConnectorDefinition.json) |
 

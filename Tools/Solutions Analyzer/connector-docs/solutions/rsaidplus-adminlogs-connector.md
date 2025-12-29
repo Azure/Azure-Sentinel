@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | RSA Support Team |
 | **Support Tier** | Partner |
 | **Support Link** | [https://community.rsa.com/](https://community.rsa.com/) |
@@ -54,8 +54,8 @@ Provide the required values below:
 Verify all the fields above were filled in correctly. Press Connect to start the connector.
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `RSAIDPlus_AdminLogs_CL` |
 | **Connector Definition Files** | [RSAIDPlus_AdminLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RSAIDPlus_AdminLogs_Connector/Data%20Connectors/RSIDPlus_AdminLogs_Connector_CCP/RSAIDPlus_AdminLogs_ConnectorDefinition.json) |
 

@@ -1,7 +1,7 @@
 # Dynamics365Activity
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Dynamics365Activity` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

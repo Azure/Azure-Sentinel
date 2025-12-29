@@ -1,7 +1,7 @@
 # SentinelOneAlerts_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SentinelOneAlerts_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

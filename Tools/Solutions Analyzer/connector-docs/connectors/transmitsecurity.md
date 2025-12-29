@@ -1,10 +1,11 @@
 # Transmit Security Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `TransmitSecurity` |
 | **Publisher** | TransmitSecurity |
 | **Used in Solutions** | [TransmitSecurity](../solutions/transmitsecurity.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [TransmitSecurity_API_FunctionApp.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TransmitSecurity/Data%20Connectors/TransmitSecurity_API_FunctionApp.JSON) |
 
 The [Transmit Security] data connector provides the capability to ingest common Transmit Security API events into Microsoft Sentinel through the REST API. [Refer to API documentation for more information](https://developer.transmitsecurity.com/). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.

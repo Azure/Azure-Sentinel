@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Contrast Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.contrastsecurity.com/hc/en-us](https://support.contrastsecurity.com/hc/en-us) |
@@ -50,8 +50,8 @@ Use this method to automate deployment of the ContrastADR Data Connector using A
 	[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ContrastADR-azuredeploy)
 2. Provide the following parameters: Region, Function Name, LOG_ANALYTICS_SHARED_KEY, LOG_ANALYTICS_WORKSPACE_ID
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ContrastADRIncident_CL` |
 | | `ContrastADR_CL` |
 | **Connector Definition Files** | [ContrastADR_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ContrastADR/Data%20Connectors/ContrastADR_API_FunctionApp.json) |

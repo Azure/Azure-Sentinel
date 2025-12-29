@@ -1,7 +1,7 @@
 # ESIExchangeConfig_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ESIExchangeConfig_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Better Mobile Security Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.better.mobi/about#contact-us](https://www.better.mobi/about#contact-us) |
@@ -48,8 +48,8 @@ The BETTER MTD Connector allows Enterprises to connect their Better MTD instance
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `BetterMTDAppLog_CL` |
 | | `BetterMTDDeviceLog_CL` |
 | | `BetterMTDIncidentLog_CL` |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | One Identity |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.oneidentity.com/](https://support.oneidentity.com/) |
@@ -76,8 +76,8 @@ Make sure to configure the machine's security according to your organization's s
 
 [Learn more >](https://aka.ms/SecureCEF)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommonSecurityLog` |
 | **Connector Definition Files** | [OneIdentity.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/OneIdentity/Data%20Connectors/OneIdentity.JSON) |
 

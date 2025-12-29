@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Secure Practice |
 | **Support Tier** | Partner |
 | **Support Link** | [https://securepractice.co/support](https://securepractice.co/support) |
@@ -45,8 +45,8 @@ Enter your Secure Practice API credentials below. The credentials will be secure
 - **API Secret**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `MailRiskEventEmails_CL` |
 | **Connector Definition Files** | [MailRisk_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MailRisk/Data%20Connectors/MailRisk_CCP/MailRisk_ConnectorDefinition.json) |
 

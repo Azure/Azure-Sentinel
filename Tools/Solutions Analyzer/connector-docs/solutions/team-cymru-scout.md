@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Team Cymru |
 | **Support Tier** | Partner |
 | **Support Link** | [http://team-cymru.com](http://team-cymru.com) |
@@ -198,8 +198,8 @@ If you're already signed in, go to the next step.
 		AZURE_DATA_COLLECTION_RULE_ID_SUB_TABLES
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Cymru_Scout_Account_Usage_Data_CL` |
 | | `Cymru_Scout_Domain_Data_CL` |
 | | `Cymru_Scout_IP_Data_Communications_CL` |

@@ -2,8 +2,8 @@
 
 Reference for GKEAPIServer table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GKEAPIServer` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

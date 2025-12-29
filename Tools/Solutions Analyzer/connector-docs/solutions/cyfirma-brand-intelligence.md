@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | CYFIRMA |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.cyfirma.com/contact-us/](https://www.cyfirma.com/contact-us/) |
@@ -36,8 +36,8 @@ Connect to CYFIRMA Brand Intelligence to ingest alerts data into Microsoft Senti
 - **API Delta**: API Delta
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CyfirmaBIDomainITAssetAlerts_CL` |
 | | `CyfirmaBIExecutivePeopleAlerts_CL` |
 | | `CyfirmaBIMaliciousMobileAppsAlerts_CL` |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -134,8 +134,8 @@ Due to the potentially large amount of Qualys host detection data being ingested
 
 > NOTE: If a longer timeout duration is required, consider upgrading to an [App Service Plan](https://docs.microsoft.com/azure/azure-functions/functions-scale#timeout)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `QualysHostDetectionV2_CL` |
 | | `QualysHostDetection_CL` |
 | **Connector Definition Files** | [QualysVM_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Data%20Connectors/QualysVM_API_FunctionApp.json) |

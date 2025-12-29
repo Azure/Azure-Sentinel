@@ -2,8 +2,8 @@
 
 Reference for ASimAuditEventLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimAuditEventLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 3 |

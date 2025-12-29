@@ -1,7 +1,7 @@
 # ProofpointPODMessage_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ProofpointPODMessage_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

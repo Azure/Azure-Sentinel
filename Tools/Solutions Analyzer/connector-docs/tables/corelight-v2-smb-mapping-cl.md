@@ -1,7 +1,7 @@
 # Corelight_v2_smb_mapping_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Corelight_v2_smb_mapping_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

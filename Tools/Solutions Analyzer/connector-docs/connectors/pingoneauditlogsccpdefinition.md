@@ -1,10 +1,11 @@
 # Ping One (via Codeless Connector Framework)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `PingOneAuditLogsCCPDefinition` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [PingOne](../solutions/pingone.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [PingOneAuditLogs_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PingOne/Data%20Connectors/PingOneAuditLogs_ccp/PingOneAuditLogs_DataConnectorDefinition.json) |
 
 This connector ingests **audit activity logs** from the PingOne Identity platform into Microsoft Sentinel using a Codeless Connector Framework.

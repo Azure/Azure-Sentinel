@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Garrison |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.ultra.garrison.com](https://support.ultra.garrison.com) |
@@ -46,8 +46,8 @@ These steps outline the automated deployment of the Garrison ULTRA Remote Logs d
 3. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
 4. Click **Purchase** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Garrison_ULTRARemoteLogs_CL` |
 | **Connector Definition Files** | [GarrisonULTRARemoteLogs_ConnectorUI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Garrison%20ULTRA/Data%20Connectors/GarrisonULTRARemoteLogs/GarrisonULTRARemoteLogs_ConnectorUI.json) |
 

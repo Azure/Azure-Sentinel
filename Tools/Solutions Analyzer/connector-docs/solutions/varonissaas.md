@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Varonis |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.varonis.com/resources/support](https://www.varonis.com/resources/support) |
@@ -70,8 +70,8 @@ Use this method for automated deployment of the data connector using an ARM Temp
 3. Enter Log Analytics Workspace Name, Varonis FQDN, Varonis SaaS API Key.
 4. Click Review + Create, Create.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `VaronisAlerts_CL` |
 | **Connector Definition Files** | [VaronisSaaS_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS/Data%20Connectors/VaronisSaaS_API_FunctionApp.json) |
 

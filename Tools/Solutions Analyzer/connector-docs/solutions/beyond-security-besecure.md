@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Beyond Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://beyondsecurity.freshdesk.com/support/home](https://beyondsecurity.freshdesk.com/support/home) |
@@ -52,8 +52,8 @@ Follow the steps below to configure your beSECURE solution to send out scan resu
   - **Primary Key**: `PrimaryKey`
     > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `beSECURE_Audit_CL` |
 | | `beSECURE_ScanEvent_CL` |
 | | `beSECURE_ScanResults_CL` |

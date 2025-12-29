@@ -1,7 +1,7 @@
 # ZeroFox_CTI_disruption_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ZeroFox_CTI_disruption_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

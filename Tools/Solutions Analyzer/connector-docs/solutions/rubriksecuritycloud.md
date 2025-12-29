@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Rubrik |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.rubrik.com](https://support.rubrik.com) |
@@ -139,8 +139,8 @@ Follow the Rubrik User Guide instructions to [Add a Webhook](https://docs.rubrik
 
 *Now we are done with the rubrik Webhook configuration. Once the webhook events triggered , you should be able to see the Anomaly, Anomaly Detection Analysis, Threat Hunt events and Other Events from the Rubrik into respective LogAnalytics workspace table called "Rubrik_Anomaly_Data_CL", "Rubrik_Ransomware_Data_CL", "Rubrik_ThreatHunt_Data_CL", and "Rubrik_Events_Data_CL".*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Rubrik_Anomaly_Data_CL` |
 | | `Rubrik_Events_Data_CL` |
 | | `Rubrik_Ransomware_Data_CL` |

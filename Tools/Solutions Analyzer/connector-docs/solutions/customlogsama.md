@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -43,8 +43,8 @@ Many applications log information to text or JSON files instead of standard logg
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `CustomLogsAMA`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 - **Create data collection rule**
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ApacheHTTPServer_CL` |
 | | `JBossEvent_CL` |
 | | `JuniperIDP_CL` |

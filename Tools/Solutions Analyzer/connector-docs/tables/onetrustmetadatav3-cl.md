@@ -1,7 +1,7 @@
 # OneTrustMetadataV3_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OneTrustMetadataV3_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

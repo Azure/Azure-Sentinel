@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cognni |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cognni.ai/contact-support/](https://cognni.ai/contact-support/) |
@@ -45,8 +45,8 @@ Not a Cognni user? [Join us](https://azuremarketplace.microsoft.com/en-us/market
 - **Shared Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CognniIncidents_CL` |
 | **Connector Definition Files** | [CognniSentinelConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cognni/Data%20Connectors/CognniSentinelConnector.json) |
 

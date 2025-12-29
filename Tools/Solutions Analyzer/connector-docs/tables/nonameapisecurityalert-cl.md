@@ -1,7 +1,7 @@
 # NonameAPISecurityAlert_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NonameAPISecurityAlert_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

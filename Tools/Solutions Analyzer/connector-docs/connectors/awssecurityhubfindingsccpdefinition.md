@@ -1,10 +1,11 @@
 # AWS Security Hub Findings (via Codeless Connector Framework)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `AwsSecurityHubFindingsCcpDefinition` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [AWS Security Hub](../solutions/aws-security-hub.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [AWSSecurityHubFindings_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AWS%20Security%20Hub/Data%20Connectors/AWSSecurityHubFindings_CCP/AWSSecurityHubFindings_DataConnectorDefinition.json) |
 
 This connector enables the ingestion of AWS Security Hub Findings, which are collected in AWS S3 buckets, into Microsoft Sentinel. It helps streamline the process of monitoring and managing security alerts by integrating AWS Security Hub Findings with Microsoft Sentinel's advanced threat detection and response capabilities.

@@ -1,7 +1,7 @@
 # CitrixAnalytics_userProfile_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CitrixAnalytics_userProfile_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

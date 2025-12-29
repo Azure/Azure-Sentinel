@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Endace |
 | **Support Tier** | Partner |
 | **Support Link** | [https://endace.com](https://endace.com) |

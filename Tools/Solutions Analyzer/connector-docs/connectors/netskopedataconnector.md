@@ -1,10 +1,11 @@
 # Netskope Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `NetskopeDataConnector` |
 | **Publisher** | Netskope |
 | **Used in Solutions** | [Netskopev2](../solutions/netskopev2.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [Netskope_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Data%20Connectors/NetskopeDataConnector/Netskope_FunctionApp.json) |
 
 The [Netskope](https://docs.netskope.com/en/netskope-help/admin-console/rest-api/rest-api-v2-overview-312207/) data connector provides the following capabilities: 

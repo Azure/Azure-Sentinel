@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Egress Software Technologies Ltd |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.egress.com](https://support.egress.com) |
@@ -38,8 +38,8 @@ The Egress Iris connector will allow you to ingest Egress data into Sentinel.
 Enter your Egress API Hostname and secret.
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `DefendAuditData` |
 | | `EgressEvents_CL` |
 | **Connector Definition Files** | [EgressDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Iris/Data%20Connectors/EgressDataConnector.json) |

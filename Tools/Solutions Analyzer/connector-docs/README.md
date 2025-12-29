@@ -26,9 +26,12 @@ Individual solution pages are organized in the [`solutions/`](solutions/) direct
 
 Individual connector pages are organized in the [`connectors/`](connectors/) directory. Each connector page includes:
 
-- Connector metadata (ID, publisher)
+- Connector metadata (ID, publisher, collection method)
 - Full connector description
 - Required permissions and prerequisites
+- **Collection Method** - How the connector collects data:
+  - **Codeless Connector Framework** - Uses the CCP/CCF framework
+  - **Azure Function** - Uses Azure Functions for data collection
 - **Tables Ingested** with transformation and ingestion API support indicators
 - **Setup Instructions** - Step-by-step configuration guidance rendered from connector UI definitions using AI
   - ⚠️ **Note**: Instructions are automatically rendered from the user interface definition files using AI and may not be fully accurate. Always verify configuration steps in the Microsoft Sentinel portal.
@@ -64,6 +67,7 @@ Use the [Connectors Index](connectors-index.md) to find specific connectors. Eac
 - Publisher name
 - Full connector description
 - Associated solution
+- Collection method (if known)
 - List of tables ingested by the connector
 
 ### Find Information by Table
@@ -115,6 +119,7 @@ The documentation is based on analysis of:
 1. **`solutions_connectors_tables_mapping.csv`** - Contains:
    - Solution metadata
    - Connector configurations
+   - Collection methods
    - Table mappings
    - Detection methods
    - Parser references

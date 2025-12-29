@@ -1,7 +1,7 @@
 # CriblAccess_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CriblAccess_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -1,7 +1,7 @@
 # Cisco_Umbrella_dlp_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Cisco_Umbrella_dlp_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

@@ -1,7 +1,7 @@
 # BHEAttackPathsData_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `BHEAttackPathsData_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

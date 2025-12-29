@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Lumen Technologies, Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.lumen.com/en-us/contact-us/support.html](https://www.lumen.com/en-us/contact-us/support.html) |
@@ -91,8 +91,8 @@ The [Lumen Defender Threat Feed](https://bll-analytics.mss.lumen.com/analytics) 
 2. Monitor the Function App logs in the Azure Portal to verify successful execution
 3. After the app performs its first run, review the indicators ingested by either viewing the “Lumen Defender Threat Feed Overview” workbook or viewing the “Threat Intelligence” section in Microsoft Sentinel. In Microsoft Sentinel “Threat Intelligence”, filter for source “Lumen” to display only Lumen generated indicators.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ThreatIntelIndicators` |
 | **Connector Definition Files** | [LumenThreatFeedConnector_ConnectorUI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lumen%20Defender%20Threat%20Feed/Data%20Connectors/LumenThreatFeed/LumenThreatFeedConnector_ConnectorUI.json) |
 

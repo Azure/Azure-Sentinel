@@ -2,10 +2,10 @@
 
 Reference for NetworkAccessTraffic table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NetworkAccessTraffic` |
-| **Category** | IT & Management Tools |
+| **Category** | IT & Management Tools, Network, Security |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
 | **Basic Logs Eligible** | ✓ Yes |

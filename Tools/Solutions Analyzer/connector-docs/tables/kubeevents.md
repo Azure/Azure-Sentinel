@@ -2,8 +2,8 @@
 
 Reference for KubeEvents table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `KubeEvents` |
 | **Category** | Containers |
 | **Solutions Using Table** | 1 |
@@ -34,8 +34,8 @@ This table is ingested by the following connectors:
 This table collects data from the following Azure resource types:
 
 - `microsoft.containerservice/managedclusters`
-- `<br>microsoft.kubernetes/connectedclusters`
-- `<br>microsoft.hybridcontainerservice/provisionedclusters`
+- `microsoft.kubernetes/connectedclusters`
+- `microsoft.hybridcontainerservice/provisionedclusters`
 
 ---
 

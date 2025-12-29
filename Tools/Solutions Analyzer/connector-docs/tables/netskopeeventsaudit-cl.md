@@ -1,7 +1,7 @@
 # NetskopeEventsAudit_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NetskopeEventsAudit_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

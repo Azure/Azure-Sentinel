@@ -2,8 +2,8 @@
 
 Reference for GCPAuditLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPAuditLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

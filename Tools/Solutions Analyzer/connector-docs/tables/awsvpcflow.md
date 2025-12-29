@@ -2,8 +2,8 @@
 
 Reference for AWSVPCFlow table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSVPCFlow` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |

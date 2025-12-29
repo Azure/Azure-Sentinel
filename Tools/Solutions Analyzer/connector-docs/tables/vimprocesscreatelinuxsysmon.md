@@ -1,7 +1,7 @@
 # vimProcessCreateLinuxSysmon
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vimProcessCreateLinuxSysmon` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

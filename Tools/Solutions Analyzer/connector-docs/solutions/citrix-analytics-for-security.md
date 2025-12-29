@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Citrix Systems |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.citrix.com/support/](https://www.citrix.com/support/) |
@@ -40,8 +40,8 @@ To get access to this capability and the configuration steps on Citrix Analytics
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CitrixAnalytics_indicatorEventDetails_CL` |
 | | `CitrixAnalytics_indicatorSummary_CL` |
 | | `CitrixAnalytics_riskScoreChange_CL` |

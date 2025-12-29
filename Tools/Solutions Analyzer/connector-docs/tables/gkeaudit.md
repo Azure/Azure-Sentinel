@@ -2,8 +2,8 @@
 
 Reference for GKEAudit table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GKEAudit` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -1,7 +1,7 @@
 # CyfirmaCompromisedAccounts_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CyfirmaCompromisedAccounts_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

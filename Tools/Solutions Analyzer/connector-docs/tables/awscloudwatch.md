@@ -2,8 +2,8 @@
 
 Reference for AWSCloudWatch table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSCloudWatch` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

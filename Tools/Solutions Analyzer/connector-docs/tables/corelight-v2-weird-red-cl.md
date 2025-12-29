@@ -1,7 +1,7 @@
 # Corelight_v2_weird_red_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Corelight_v2_weird_red_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -1,10 +1,11 @@
 # AliCloud
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `AliCloud` |
 | **Publisher** | AliCloud |
 | **Used in Solutions** | [Alibaba Cloud](../solutions/alibaba-cloud.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [AliCloud_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Alibaba%20Cloud/Data%20Connectors/AliCloud_API_FunctionApp.json) |
 
 The [AliCloud](https://www.alibabacloud.com/product/log-service) data connector provides the capability to retrieve logs from cloud applications using the Cloud API and store events into Microsoft Sentinel through the [REST API](https://aliyun-log-python-sdk.readthedocs.io/api.html). The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.

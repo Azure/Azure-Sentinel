@@ -1,7 +1,7 @@
 # prancer_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `prancer_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

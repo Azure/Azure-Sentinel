@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Transmit Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://transmitsecurity.com/support](https://transmitsecurity.com/support) |
@@ -133,8 +133,8 @@ Use the following step-by-step instructions to deploy the Transmit Security data
 
 4. Once all application settings have been entered, click **Apply**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `TransmitSecurityActivity_CL` |
 | **Connector Definition Files** | [TransmitSecurity_API_FunctionApp.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TransmitSecurity/Data%20Connectors/TransmitSecurity_API_FunctionApp.JSON) |
 

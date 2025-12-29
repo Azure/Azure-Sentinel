@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -33,8 +33,8 @@ Azure Resource Graph connector gives richer insights into Azure events by supple
 Connect Azure Resource Graph to Microsoft Sentinel
 **Entities**
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `` |
 | **Connector Definition Files** | [AzureResourceGraph_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Resource%20Graph/Data%20Connectors/AzureResourceGraph_DataConnectorDefinition.json) |
 

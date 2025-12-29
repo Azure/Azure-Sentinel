@@ -2,8 +2,8 @@
 
 Reference for AZFWInternalFqdnResolutionFailure table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWInternalFqdnResolutionFailure` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

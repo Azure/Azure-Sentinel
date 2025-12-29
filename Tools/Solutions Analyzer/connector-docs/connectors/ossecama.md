@@ -1,10 +1,11 @@
 # [Deprecated] OSSEC via AMA
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `OSSECAma` |
 | **Publisher** | OSSEC |
 | **Used in Solutions** | [OSSEC](../solutions/ossec.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_OSSECAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/OSSEC/Data%20Connectors/template_OSSECAMA.json) |
 
 OSSEC data connector provides the capability to ingest [OSSEC](https://www.ossec.net/) events into Microsoft Sentinel. Refer to [OSSEC documentation](https://www.ossec.net/docs) for more information.

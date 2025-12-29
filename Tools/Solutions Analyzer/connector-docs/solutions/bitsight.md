@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | BitSight Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.bitsight.com/customer-success-support](https://www.bitsight.com/customer-success-support) |
@@ -253,8 +253,8 @@ If you're already signed in, go to the next step.
 	 y. **AppInsightsWorkspaceResourceID** - Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'. 
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `BitsightAlerts_data_CL` |
 | | `BitsightBreaches_data_CL` |
 | | `BitsightCompany_details_CL` |

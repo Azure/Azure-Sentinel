@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Digital Shadows |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.digitalshadows.com/](https://www.digitalshadows.com/) |
@@ -106,8 +106,8 @@ Set the `ClassificationFilterOperation` value to: `exclude` for exclude function
  - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: https://<CustomerId>.ods.opinsights.azure.us. 
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `DigitalShadows_CL` |
 | **Connector Definition Files** | [DigitalShadowsSearchlight_API_functionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Data%20Connectors/Digital%20Shadows/DigitalShadowsSearchlight_API_functionApp.json) |
 

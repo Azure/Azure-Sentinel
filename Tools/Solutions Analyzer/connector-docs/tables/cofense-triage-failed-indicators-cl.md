@@ -1,7 +1,7 @@
 # Cofense_Triage_failed_indicators_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Cofense_Triage_failed_indicators_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

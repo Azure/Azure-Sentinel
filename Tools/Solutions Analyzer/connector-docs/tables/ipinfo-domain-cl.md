@@ -1,7 +1,7 @@
 # Ipinfo_Domain_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_Domain_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -195,6 +195,7 @@ This page lists **825 unique tables** ingested by connectors.
 | [`ContainerInventory`](tables/containerinventory.md) | [Azure kubernetes Service](solutions/azure-kubernetes-service.md) | [Azure Kubernetes Service (AKS)](connectors/azurekubernetes.md) | ✓ | — |
 | [`ContrastADRIncident_CL`](tables/contrastadrincident-cl.md) | [ContrastADR](solutions/contrastadr.md) | [ContrastADR](connectors/contrastadr.md) |  |  |
 | [`ContrastADR_CL`](tables/contrastadr-cl.md) | [ContrastADR](solutions/contrastadr.md) | [ContrastADR](connectors/contrastadr.md) |  |  |
+| [`CopilotActivity`](tables/copilotactivity.md) | [Microsoft Copilot](solutions/microsoft-copilot.md) | [Microsoft Copilot](connectors/microsoftcopilot.md) |  |  |
 | [`Corelight_CL`](tables/corelight-cl.md) | [Corelight](solutions/corelight.md) | [Corelight Connector Exporter](connectors/corelightconnectorexporter.md) |  |  |
 | [`Corelight_v2_bacnet_CL`](tables/corelight-v2-bacnet-cl.md) | [Corelight](solutions/corelight.md) | [Corelight Connector Exporter](connectors/corelightconnectorexporter.md) |  |  |
 | [`Corelight_v2_capture_loss_CL`](tables/corelight-v2-capture-loss-cl.md) | [Corelight](solutions/corelight.md) | [Corelight Connector Exporter](connectors/corelightconnectorexporter.md) |  |  |
@@ -604,7 +605,6 @@ This page lists **825 unique tables** ingested by connectors.
 
 | Table | Solutions | Connectors | Transforms | Ingestion API |
 |-------|-----------|------------|:----------:|:-------------:|
-| [`LLMActivity`](tables/llmactivity.md) | [Microsoft Copilot](solutions/microsoft-copilot.md) | [Microsoft Copilot](connectors/microsoftcopilot.md) | — | — |
 | [`LastPassNativePoller_CL`](tables/lastpassnativepoller-cl.md) | [LastPass](solutions/lastpass.md) | [LastPass Enterprise - Reporting (Polling CCP)](connectors/lastpass-polling.md) |  |  |
 | [`LinuxAudit_CL`](tables/linuxaudit-cl.md) | [NXLog LinuxAudit](solutions/nxlog-linuxaudit.md) | [NXLog LinuxAudit](connectors/nxloglinuxaudit.md) |  |  |
 | [`Lockdown_Data_CL`](tables/lockdown-data-cl.md) | [Vectra XDR](solutions/vectra-xdr.md) | [Vectra XDR](connectors/vectraxdr.md) |  |  |

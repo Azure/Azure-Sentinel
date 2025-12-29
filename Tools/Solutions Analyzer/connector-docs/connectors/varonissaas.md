@@ -1,10 +1,11 @@
 # Varonis SaaS
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `VaronisSaaS` |
 | **Publisher** | Varonis |
 | **Used in Solutions** | [VaronisSaaS](../solutions/varonissaas.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [VaronisSaaS_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VaronisSaaS/Data%20Connectors/VaronisSaaS_API_FunctionApp.json) |
 
 Varonis SaaS provides the capability to ingest [Varonis Alerts](https://www.varonis.com/products/datalert) into Microsoft Sentinel.

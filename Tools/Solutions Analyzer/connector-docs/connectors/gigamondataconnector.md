@@ -1,10 +1,11 @@
 # Gigamon AMX Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `GigamonDataConnector` |
 | **Publisher** | Gigamon |
 | **Used in Solutions** | [Gigamon Connector](../solutions/gigamon-connector.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Connector_Analytics_Gigamon.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Gigamon%20Connector/Data%20Connectors/Connector_Analytics_Gigamon.json) |
 
 Use this data connector to integrate with Gigamon Application Metadata Exporter (AMX) and get data sent directly to Microsoft Sentinel. 

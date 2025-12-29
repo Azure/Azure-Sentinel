@@ -1,10 +1,11 @@
 # Windows Firewall Events via AMA
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `WindowsFirewallAma` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Windows Firewall](../solutions/windows-firewall.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_WindowsFirewallAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/template_WindowsFirewallAma.JSON) |
 
 Windows Firewall is a Microsoft Windows application that filters information coming to your system from the internet and blocking potentially harmful programs. The firewall software blocks most programs from communicating through the firewall. To stream your Windows Firewall application logs collected from your machines, use the Azure Monitor agent (AMA) to stream those logs to the Microsoft Sentinel workspace.

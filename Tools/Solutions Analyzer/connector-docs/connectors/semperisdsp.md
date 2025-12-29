@@ -1,10 +1,11 @@
 # Semperis Directory Services Protector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SemperisDSP` |
 | **Publisher** | SEMPERIS |
 | **Used in Solutions** | [Semperis Directory Services Protector](../solutions/semperis-directory-services-protector.md) |
+| **Collection Method** | Unknown |
 | **Connector Definition Files** | [SemperisDSP-connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Semperis%20Directory%20Services%20Protector/Data%20Connectors/SemperisDSP-connector.json) |
 
 Semperis Directory Services Protector data connector allows for the export of its Windows event logs (i.e. Indicators of Exposure and Indicators of Compromise) to Microsoft Sentinel in real time.

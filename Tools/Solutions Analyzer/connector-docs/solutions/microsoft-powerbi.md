@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -41,8 +41,8 @@ Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
 This connector uses the Office Management API to get your PowerBI audit logs. The logs will be stored and processed in your existing Microsoft Sentinel workspace. You can find the data in the **PowerBIActivity** table.
 - Connect Microsoft PowerBI
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `PowerBIActivity` |
 | **Connector Definition Files** | [template_OfficePowerBI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20PowerBI/Data%20Connectors/template_OfficePowerBI.json) |
 

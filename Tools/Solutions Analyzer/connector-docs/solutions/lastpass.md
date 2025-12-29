@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | The Collective Consulting |
 | **Support Tier** | Partner |
 | **Support Link** | [https://thecollective.eu](https://thecollective.eu) |
@@ -39,8 +39,8 @@ The [LastPass Enterprise](https://www.lastpass.com/products/enterprise-password-
 Provide the LastPass Provisioning API Key.
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `LastPassNativePoller_CL` |
 | **Connector Definition Files** | [LastPassAPIConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/LastPass/Data%20Connectors/LastPassAPIConnector.json) |
 

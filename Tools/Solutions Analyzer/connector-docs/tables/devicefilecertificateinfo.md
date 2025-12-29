@@ -2,8 +2,8 @@
 
 Certificate information of signed files obtained from certificate verification events on endpoints
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceFileCertificateInfo` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

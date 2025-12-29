@@ -1,10 +1,11 @@
 # Symantec Integrated Cyber Defense Exchange
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Symantec` |
 | **Publisher** | Symantec |
 | **Used in Solutions** | [Symantec Integrated Cyber Defense](../solutions/symantec-integrated-cyber-defense.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [SymantecICDX.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20Integrated%20Cyber%20Defense/Data%20Connectors/SymantecICDX.JSON) |
 
 Symantec ICDx connector allows you to easily connect your Symantec security solutions logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s network and improves your security operation capabilities.

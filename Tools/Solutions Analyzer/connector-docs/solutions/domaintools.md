@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | DomainTools |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.domaintools.com/support/](https://www.domaintools.com/support/) |

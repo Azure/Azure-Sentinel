@@ -1,7 +1,7 @@
 # BetterMTDIncidentLog_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `BetterMTDIncidentLog_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

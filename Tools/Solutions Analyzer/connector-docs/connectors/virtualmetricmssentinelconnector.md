@@ -1,10 +1,11 @@
 # VirtualMetric DataStream for Microsoft Sentinel
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `VirtualMetricMSSentinelConnector` |
 | **Publisher** | VirtualMetric |
 | **Used in Solutions** | [VirtualMetric DataStream](../solutions/virtualmetric-datastream.md) |
+| **Collection Method** | Unknown |
 | **Connector Definition Files** | [Template_Sentinel.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirtualMetric%20DataStream/Data%20Connectors/VirtualMetric-Sentinel/Template_Sentinel.json) |
 
 VirtualMetric DataStream connector deploys Data Collection Rules to ingest security telemetry into Microsoft Sentinel.

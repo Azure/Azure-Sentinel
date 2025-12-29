@@ -1,7 +1,7 @@
 # vectra_smtp_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_smtp_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

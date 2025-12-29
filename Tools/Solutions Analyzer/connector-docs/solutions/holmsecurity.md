@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Holm Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.holmsecurity.com/](https://support.holmsecurity.com/) |
@@ -66,8 +66,8 @@ Use this method for automated deployment of the Holm Security connector.
 4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
 5. Click **Purchase** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `net_assets_CL` |
 | | `web_assets_CL` |
 | **Connector Definition Files** | [HolmSecurityAssets_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HolmSecurity/Data%20Connectors/HolmSecurityAssets_API_FunctionApp.json) |

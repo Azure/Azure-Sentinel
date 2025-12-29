@@ -2,8 +2,8 @@
 
 Machine information, including OS information
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceInfo` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

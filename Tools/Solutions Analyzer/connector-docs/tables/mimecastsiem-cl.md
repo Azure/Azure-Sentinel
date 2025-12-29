@@ -1,7 +1,7 @@
 # MimecastSIEM_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `MimecastSIEM_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

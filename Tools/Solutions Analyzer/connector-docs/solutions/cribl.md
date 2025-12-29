@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cribl |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.cribl.io/support/](https://www.cribl.io/support/) |
@@ -38,8 +38,8 @@ Use the documentation from this Github repository and configure Cribl Stream usi
 
 https://docs.cribl.io/stream/usecase-azure-workspace/
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CriblAccess_CL` |
 | | `CriblAudit_CL` |
 | | `CriblInternal_CL` |

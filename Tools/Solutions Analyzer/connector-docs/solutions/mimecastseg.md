@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Mimecast |
 | **Support Tier** | Partner |
 | **Support Link** | [https://mimecastsupport.zendesk.com/](https://mimecastsupport.zendesk.com/) |
@@ -107,8 +107,8 @@ Go to ***Azure portal ---> App registrations ---> [your_app] ---> Certificates &
 
 6. Go to ***Azure portal ---> Resource groups ---> [your_resource_group] --->  [appName](type: Storage account) ---> Storage Explorer ---> BLOB CONTAINERS ---> SIEM checkpoints ---> Upload*** and create empty file on your machine named checkpoint.txt, dlp-checkpoint.txt and select it for upload (this is done so that date_range for SIEM logs is stored in consistent state)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `MimecastDLP_CL` |
 | | `MimecastSIEM_CL` |
 | **Connector Definition Files** | [MimecastSEG_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastSEG/Data%20Connectors/MimecastSEG_API_AzureFunctionApp.json) |

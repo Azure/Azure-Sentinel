@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
@@ -54,8 +54,8 @@ Each data type may have specific licensing requirements. Review the information 
 Microsoft Sentinel now enables Office 365 single-tenant connection. You can modify your previously connected tenants and click **Save**.
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `Office365`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `OfficeActivity` |
 | | `exchange` |
 | | `sharePoint` |

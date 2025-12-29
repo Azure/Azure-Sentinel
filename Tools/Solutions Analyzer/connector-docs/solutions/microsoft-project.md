@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -41,8 +41,8 @@ Requires GlobalAdmin, SecurityAdmin on the workspace's tenant
 This connector uses the Office Management API to get your Project audit logs. The logs will be stored and processed in your existing Microsoft Sentinel workspace. You can find the data in the **ProjectActivity** table.
 - Connect Microsoft Project
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ProjectActivity` |
 | **Connector Definition Files** | [template_Office365Project.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Project/Data%20Connectors/template_Office365Project.JSON) |
 

@@ -1,7 +1,7 @@
 # CrowdStrike_Registry_Events_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CrowdStrike_Registry_Events_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

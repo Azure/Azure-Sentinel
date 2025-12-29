@@ -1,10 +1,11 @@
 # Imperva Cloud WAF
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ImpervaCloudWAFLogsCCFDefinition` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [ImpervaCloudWAF](../solutions/impervacloudwaf.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [ImpervaCloudWAFLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ImpervaCloudWAF/Data%20Connectors/ImpervaCloudWAFLogs_ccf/ImpervaCloudWAFLogs_ConnectorDefinition.json) |
 
 The Imperva WAF Cloud data connector provides the capability to ingest logs into Microsoft Sentinel using the Imperva Log Integration through AWS S3 Bucket. Refer to [Imperva WAF Cloud Log Integration](https://docs.imperva.com/bundle/cloud-application-security/page/settings/log-integration.htm) for more information.

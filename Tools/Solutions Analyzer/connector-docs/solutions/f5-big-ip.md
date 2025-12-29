@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | F5 Networks |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.f5.com/csp/home](https://support.f5.com/csp/home) |
@@ -39,8 +39,8 @@ To connect your F5 BIGIP, you have to post a JSON declaration to the system’s 
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `F5Telemetry_ASM_CL` |
 | | `F5Telemetry_LTM_CL` |
 | | `F5Telemetry_system_CL` |

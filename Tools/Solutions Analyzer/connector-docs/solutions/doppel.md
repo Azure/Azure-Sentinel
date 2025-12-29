@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Doppel |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.doppel.com/request-a-demo](https://www.doppel.com/request-a-demo) |
@@ -129,8 +129,8 @@ Configure the Webhook in Doppel and Endpoint with permissions in Microsoft Senti
    - Check that alerts from Doppel are successfully forwarded to Microsoft Sentinel.
    - Validate that the **Workbook** in Microsoft Sentinel is updated with the alert statistics, ensuring seamless data integration.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `DoppelTable_CL` |
 | **Connector Definition Files** | [Template_Doppel.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Doppel/Data%20Connectors/Template_Doppel.json) |
 

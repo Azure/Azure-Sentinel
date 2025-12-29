@@ -2,8 +2,8 @@
 
 Microsoft 365 email events, including email delivery and blocking events
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `EmailEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

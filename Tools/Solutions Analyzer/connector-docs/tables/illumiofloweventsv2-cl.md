@@ -1,7 +1,7 @@
 # IllumioFlowEventsV2_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `IllumioFlowEventsV2_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

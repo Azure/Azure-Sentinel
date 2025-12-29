@@ -1,7 +1,7 @@
 # Auth0AM_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Auth0AM_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -1,7 +1,7 @@
 # Island_Admin_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Island_Admin_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

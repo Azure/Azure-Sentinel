@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Zimperium |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.zimperium.com/support/](https://www.zimperium.com/support/) |
@@ -48,8 +48,8 @@ Zimperium Mobile Threat Defense connector gives you the ability to connect the Z
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ZimperiumMitigationLog_CL` |
 | | `ZimperiumThreatLog_CL` |
 | **Connector Definition Files** | [Zimperium%20MTD%20Alerts.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Zimperium%20Mobile%20Threat%20Defense/Data%20Connectors/Zimperium%20MTD%20Alerts.json) |

@@ -1,10 +1,11 @@
 # [Deprecated] Akamai Security Events via AMA
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `AkamaiSecurityEventsAma` |
 | **Publisher** | Akamai |
 | **Used in Solutions** | [Akamai Security Events](../solutions/akamai-security-events.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_AkamaiSecurityEventsAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Akamai%20Security%20Events/Data%20Connectors/template_AkamaiSecurityEventsAMA.json) |
 
 Akamai Solution for Microsoft Sentinel provides the capability to ingest [Akamai Security Events](https://www.akamai.com/us/en/products/security/) into Microsoft Sentinel. Refer to [Akamai SIEM Integration documentation](https://developer.akamai.com/tools/integrations/siem) for more information.

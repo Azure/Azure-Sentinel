@@ -2,8 +2,8 @@
 
 Reference for AZFWDnsQuery table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWDnsQuery` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

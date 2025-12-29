@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Bitwarden Inc |
 | **Support Tier** | Partner |
 | **Support Link** | [https://bitwarden.com](https://bitwarden.com) |
@@ -47,8 +47,8 @@ Self-hosted Bitwarden servers may need to reconfigure their installation's URL.
   - Client Secret
   - Click 'Connect' to authenticate
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `BitwardenEventLogs_CL` |
 | | `BitwardenGroups_CL` |
 | | `BitwardenMembers_CL` |

@@ -2,8 +2,8 @@
 
 Reference for GKEHPADecision table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GKEHPADecision` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

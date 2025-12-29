@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Zero Networks |
 | **Support Tier** | Partner |
 | **Support Link** | [https://zeronetworks.com](https://zeronetworks.com) |
@@ -40,8 +40,8 @@ The [Zero Networks Segment](https://zeronetworks.com/) Audit data connector prov
 Enable Zero Networks audit Logs.
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ZNSegmentAuditNativePoller_CL` |
 | **Connector Definition Files** | [azuredeploy_ZeroNetworks_Segment_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ZeroNetworks/Data%20Connectors/SegmentNativePollerConnector/azuredeploy_ZeroNetworks_Segment_native_poller_connector.json) |
 

@@ -1,7 +1,7 @@
 # web_assets_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `web_assets_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

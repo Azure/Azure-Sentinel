@@ -1,7 +1,7 @@
 # UserRiskEvents
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `UserRiskEvents` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

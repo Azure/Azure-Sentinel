@@ -1,10 +1,11 @@
 # Amazon Web Services S3
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `AwsS3` |
 | **Publisher** | Amazon |
 | **Used in Solutions** | [Amazon Web Services](../solutions/amazon-web-services.md) |
+| **Collection Method** | Native |
 | **Connector Definition Files** | [template_AwsS3.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Amazon%20Web%20Services/Data%20Connectors/template_AwsS3.json) |
 
 This connector allows you to ingest AWS service logs, collected in AWS S3 buckets, to Microsoft Sentinel. The currently supported data types are: 

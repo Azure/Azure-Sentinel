@@ -2,10 +2,10 @@
 
 Reference for Event table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Event` |
-| **Category** | Security |
+| **Category** | Security, Virtual Machines |
 | **Solutions Using Table** | 3 |
 | **Connectors Ingesting** | 5 |
 | **Basic Logs Eligible** | ✗ No |
@@ -40,12 +40,12 @@ This table is ingested by the following connectors:
 This table collects data from the following Azure resource types:
 
 - `microsoft.operationalinsights/workspaces`
-- `<br>microsoft.compute/virtualmachines`
-- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
-- `<br>microsoft.azurestackhci/virtualmachines`
-- `<br>microsoft.scvmm/virtualmachines`
-- `<br>microsoft.compute/virtualmachinescalesets`
-- `<br>microsoft.azurestackhci/clusters`
+- `microsoft.compute/virtualmachines`
+- `microsoft.conenctedvmwarevsphere/virtualmachines`
+- `microsoft.azurestackhci/virtualmachines`
+- `microsoft.scvmm/virtualmachines`
+- `microsoft.compute/virtualmachinescalesets`
+- `microsoft.azurestackhci/clusters`
 
 ---
 

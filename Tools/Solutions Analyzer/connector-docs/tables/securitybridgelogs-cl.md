@@ -1,7 +1,7 @@
 # SecurityBridgeLogs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SecurityBridgeLogs_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

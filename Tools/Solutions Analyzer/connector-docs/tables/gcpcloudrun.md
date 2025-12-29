@@ -2,8 +2,8 @@
 
 Reference for GCPCloudRun table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPCloudRun` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

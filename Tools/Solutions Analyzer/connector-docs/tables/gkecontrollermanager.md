@@ -2,8 +2,8 @@
 
 Reference for GKEControllerManager table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GKEControllerManager` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

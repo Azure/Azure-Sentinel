@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Senserva |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.senserva.com/contact/](https://www.senserva.com/contact/) |
@@ -39,8 +39,8 @@ Visit [Senserva Setup](https://www.senserva.com/senserva-microsoft-sentinel-edit
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SenservaPro_CL` |
 | **Connector Definition Files** | [SenservaPro.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SenservaPro/Data%20Connectors/SenservaPro.json) |
 

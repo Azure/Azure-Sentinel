@@ -1,7 +1,7 @@
 # jamfprotecttelemetryv2_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `jamfprotecttelemetryv2_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

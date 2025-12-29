@@ -2,10 +2,10 @@
 
 Reference for SigninLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SigninLogs` |
-| **Category** | Azure Resources |
+| **Category** | Azure Resources, Security |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |
 | **Basic Logs Eligible** | ✓ Yes |

@@ -1,7 +1,7 @@
 # atlassian_beacon_alerts_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `atlassian_beacon_alerts_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

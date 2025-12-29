@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Seraphic Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://seraphicsecurity.com](https://seraphicsecurity.com) |
@@ -39,8 +39,8 @@ The Seraphic Web Security data connector provides the capability to ingest [Sera
 Please insert the integration name, the Seraphic integration URL and your workspace name for Microsoft Sentinel:
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `APIKey`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SeraphicWebSecurity_CL` |
 | **Connector Definition Files** | [SeraphicSecurityConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SeraphicSecurity/Data%20Connectors/SeraphicSecurityConnector.json) |
 

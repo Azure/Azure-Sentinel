@@ -2,8 +2,8 @@
 
 Reference for CrowdStrikeVulnerabilities table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CrowdStrikeVulnerabilities` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

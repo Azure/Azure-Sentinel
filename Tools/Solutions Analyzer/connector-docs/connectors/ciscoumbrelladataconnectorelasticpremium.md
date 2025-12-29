@@ -1,10 +1,11 @@
 # Cisco Cloud Security (using elastic premium plan)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CiscoUmbrellaDataConnectorelasticpremium` |
 | **Publisher** | Cisco |
 | **Used in Solutions** | [CiscoUmbrella](../solutions/ciscoumbrella.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [CiscoUmbrella_API_FunctionApp_elasticpremium.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Data%20Connectors/CiscoUmbrella_API_FunctionApp_elasticpremium.json) |
 
 The Cisco Umbrella data connector provides the capability to ingest [Cisco Umbrella](https://docs.umbrella.com/) events stored in Amazon S3 into Microsoft Sentinel using the Amazon S3 REST API. Refer to [Cisco Umbrella log management documentation](https://docs.umbrella.com/deployment-umbrella/docs/log-management) for more information.

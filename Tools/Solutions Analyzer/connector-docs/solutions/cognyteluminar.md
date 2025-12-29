@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cognyte Luminar |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.cognyte.com/contact/](https://www.cognyte.com/contact/) |
@@ -102,8 +102,8 @@ If you're already signed in, go to the next step.
 
 **2. Configure the Function App**\n\n1. In the Function App, select the Function App Name and select **Configuration**.\n2. In the **Application settings** tab, select **+ New application setting**.\n3. Add each of the following application settings individually, with their respective string values (case-sensitive): \n\tApplication ID\n\tTenant ID\n\tClient Secret\n\tLuminar API Client ID\n\tLuminar API Account ID\n\tLuminar API Client Secret\n\tLuminar Initial Fetch Date\n\tTimeInterval - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`\n3. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ThreatIntelligenceIndicator` |
 | **Connector Definition Files** | [CognyteLuminar_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CognyteLuminar/Data%20Connectors/CognyteLuminar_FunctionApp.json) |
 

@@ -2,8 +2,8 @@
 
 DLL loading events
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceImageLoadEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

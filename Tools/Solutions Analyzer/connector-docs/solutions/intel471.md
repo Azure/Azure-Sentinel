@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Intel 471 |
 | **Support Tier** | Partner |
 | **Support Link** | [https://intel471.com/company/contact](https://intel471.com/company/contact) |

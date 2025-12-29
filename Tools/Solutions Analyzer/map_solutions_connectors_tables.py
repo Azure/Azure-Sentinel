@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
 import argparse
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import quote
@@ -805,6 +807,119 @@ def extract_log_analytics_tables(data: Any) -> Set[str]:
     return tables
 
 
+def determine_collection_method(
+    connector_id: str,
+    connector_title: str,
+    connector_description: str,
+    json_content: Optional[str] = None,
+    filename: Optional[str] = None,
+) -> Tuple[str, str]:
+    """
+    Determine the data collection method based on connector metadata and JSON content.
+    
+    Collection Methods:
+    - CCF (Codeless Connector Framework): Uses pollingConfig, RestApiPoller, CCP/CCF patterns
+    - Azure Function: Uses Azure Functions to collect and ingest data
+    - AMA (Azure Monitor Agent): Uses Azure Monitor Agent for CEF/Syslog collection
+    - MMA (Log Analytics Agent): Legacy agent using workspace ID/key
+    - Azure Diagnostics: Uses Azure diagnostic settings
+    - REST API: Direct REST API integration
+    - Native: Built-in Microsoft integrations
+    
+    Returns:
+        Tuple of (collection_method, detection_reason)
+    """
+    # Normalize inputs for case-insensitive matching
+    conn_id_lower = (connector_id or "").lower()
+    conn_title_lower = (connector_title or "").lower()
+    conn_desc_lower = (connector_description or "").lower()
+    content = json_content or ""
+    file_lower = (filename or "").lower()
+    
+    # 1. CCF Detection - check patterns and JSON content
+    if 'ccp' in conn_id_lower or 'ccf' in conn_id_lower or 'codeless' in conn_title_lower:
+        return "CCF", "ID/title contains CCP/CCF/Codeless"
+    if 'polling' in conn_id_lower and 'function' not in conn_id_lower:
+        return "CCF", "ID contains Polling pattern (CCF)"
+    if 'pollingConfig' in content:
+        return "CCF", "Has pollingConfig"
+    if 'dcrConfig' in content and '"type"' in content and 'RestApiPoller' in content:
+        return "CCF", "Has dcrConfig with RestApiPoller"
+    if 'GCPAuthConfig' in content:
+        return "CCF", "Has GCPAuthConfig"
+    if 'dataConnectorDefinitions' in content:
+        return "CCF", "Uses dataConnectorDefinitions"
+    
+    # 2. Azure Function Detection - check both filename and content patterns
+    if 'functionapp' in file_lower or 'function_app' in file_lower or '_api_function' in file_lower:
+        return "Azure Function", "Filename indicates Azure Function"
+    if 'azure functions' in conn_desc_lower:
+        return "Azure Function", "Description mentions Azure Functions"
+    if 'azurefunction' in conn_id_lower:
+        return "Azure Function", "ID contains AzureFunction"
+    if 'Deploy to Azure' in content and 'Function App' in content:
+        return "Azure Function", "Deploy Azure Function pattern"
+    if 'Azure Function App' in content:
+        return "Azure Function", "Content mentions Azure Function App"
+    if 'azure-functions' in content.lower() and 'pricing/details/functions' in content.lower():
+        return "Azure Function", "References Azure Functions pricing"
+    
+    # 3. AMA Detection - must have explicit AMA references
+    if 'AMA' in connector_title or 'via AMA' in connector_title:
+        return "AMA", "Title indicates AMA"
+    if 'ama' in conn_id_lower.split('-'):
+        return "AMA", "ID indicates AMA"
+    if 'Azure Monitor Agent' in connector_description and 'AMA' in content:
+        return "AMA", "Description mentions Azure Monitor Agent"
+    if 'sent_by_ama' in content:
+        return "AMA", "Uses sent_by_ama field"
+    if 'CEF via AMA' in content or 'Syslog via AMA' in content:
+        return "AMA", "References CEF/Syslog via AMA"
+    
+    # 4. MMA Detection - legacy agent patterns
+    if 'Legacy Agent' in connector_title or 'via Legacy Agent' in connector_title:
+        return "MMA", "Title mentions Legacy Agent"
+    if 'cef_installer.py' in content:
+        return "MMA", "Uses CEF installer script"
+    if 'omsagent' in content.lower():
+        return "MMA", "References omsagent"
+    if 'Install the agent' in content and 'Syslog' in content and 'AMA' not in content:
+        return "MMA", "Syslog with agent installation (no AMA)"
+    if ('workspaceId' in content.lower() and 'sharedKeys' in content.lower() and 
+        'Azure Function' not in connector_description):
+        return "MMA", "Uses workspace ID/key pattern"
+    
+    # 5. Azure Diagnostics Detection
+    if 'AzureDiagnostics' in content or 'diagnostic settings' in conn_desc_lower:
+        return "Azure Diagnostics", "References Azure Diagnostics"
+    if 'Microsoft.Insights/diagnosticSettings' in content:
+        return "Azure Diagnostics", "Uses diagnostic settings resource"
+    
+    # 6. Native Microsoft Integration - built-in connectors with special resource types
+    if 'SentinelKinds' in content:
+        return "Native", "Uses SentinelKinds (Native integration)"
+    if any(x in connector_title for x in ['Microsoft Defender', 'Microsoft 365', 'Office 365', 'Microsoft Entra ID']):
+        return "Native", "Microsoft native integration"
+    if any(x in connector_id for x in ['AzureActivity', 'AzureActiveDirectory', 'Office365', 'MicrosoftDefender']):
+        return "Native", "Known native connector ID"
+    
+    # 7. REST API patterns - including webhooks and push connectors
+    if 'REST API' in connector_title or 'REST API' in connector_description:
+        return "REST API", "Title/description mentions REST API"
+    if 'push' in conn_title_lower or 'push' in conn_id_lower:
+        return "REST API", "Push connector (REST API based)"
+    if 'webhook' in conn_title_lower or ('webhook' in conn_desc_lower and 'http' in conn_desc_lower):
+        return "REST API", "Webhook pattern (REST API based)"
+    if 'http endpoint' in conn_desc_lower or 'http trigger' in conn_desc_lower:
+        return "REST API", "HTTP endpoint/trigger (REST API)"
+    
+    # 8. Check for custom log tables without clear method
+    if '_CL' in content:
+        return "Unknown (Custom Log)", "Custom log table - needs analysis"
+    
+    return "Unknown", "Method not detected"
+
+
 def add_issue(
     issues: List[Dict[str, str]],
     *,
@@ -848,6 +963,36 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         type=Path,
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "solutions_connectors_tables_issues_and_exceptions_report.csv",
         help="Path for the no-table issues report file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--connectors-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "connectors.csv",
+        help="Path for the connectors CSV file with collection methods (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--solutions-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solutions.csv",
+        help="Path for the solutions CSV file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--tables-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "tables.csv",
+        help="Path for the tables CSV file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--tables-reference-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "tables_reference.csv",
+        help="Path to tables_reference.csv for table metadata (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--mapping-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solutions_connectors_tables_mapping_simplified.csv",
+        help="Path for the simplified mapping CSV file (default: %(default)s)",
     )
     parser.add_argument(
         "--show-detection-methods",
@@ -1216,6 +1361,12 @@ def main() -> None:
         grouped_rows[row_key] = {}  # Empty file map for solutions without connectors
 
     rows: List[Dict[str, str]] = []
+    
+    # Track unique connectors for connectors.csv with collection method info
+    connector_info_map: Dict[str, Dict[str, Any]] = {}
+    # Track connector -> json_content for collection method detection
+    connector_json_content: Dict[str, Tuple[str, str]] = {}  # connector_id -> (json_content, filename)
+    
     for row_key in sorted(grouped_rows.keys()):
         path_map = grouped_rows[row_key]
         combo_key = (row_key[0], row_key[12], row_key[19])  # solution_name, connector_id, table_name
@@ -1238,6 +1389,7 @@ def main() -> None:
         
         support_info = row_key_metadata.get(row_key, {"table_detection_methods": set()})
         
+        # Build row data WITHOUT collection_method for main CSV (to match master branch format)
         row_data = {
             "Table": row_key[19],
             "solution_name": row_key[0],
@@ -1269,7 +1421,147 @@ def main() -> None:
         
         rows.append(row_data)
         solution_rows_kept[row_key[0]] += 1
+        
+        # Track connector info for connectors.csv
+        connector_id = row_key[12]
+        if connector_id and connector_id not in connector_info_map:
+            connector_info_map[connector_id] = {
+                'connector_id': connector_id,
+                'connector_publisher': row_key[13],
+                'connector_title': row_key[14],
+                'connector_description': row_key[15],
+                'connector_instruction_steps': row_key[16],
+                'connector_permissions': row_key[17],
+                'connector_id_generated': "true" if row_key[18] else "false",
+                'connector_files': ";".join(github_urls),
+                'solution_name': row_key[0],  # First solution name (can be multiple)
+            }
 
+    # Now analyze collection methods for all connectors
+    # We need to read JSON files again to get content for analysis
+    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
+        for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
+            data_connectors_dir = solution_dir / dc_folder_name
+            if not data_connectors_dir.exists():
+                continue
+            for json_path in sorted(data_connectors_dir.rglob("*.json")):
+                # Skip non-connector files
+                filename = json_path.name.lower()
+                if filename in ['function.json', 'host.json', 'proxies.json', 'local.settings.json']:
+                    continue
+                try:
+                    content = json_path.read_text(encoding='utf-8')
+                    data = read_json(json_path)
+                    if data is None:
+                        continue
+                    connector_entries = find_connector_objects(data)
+                    for entry in connector_entries:
+                        conn_id = entry.get('id', '')
+                        if conn_id and conn_id not in connector_json_content:
+                            connector_json_content[conn_id] = (content, json_path.name)
+                except Exception:
+                    continue
+    
+    # Build connectors with collection method info
+    connectors_data: List[Dict[str, str]] = []
+    for connector_id, info in sorted(connector_info_map.items()):
+        json_content, filename = connector_json_content.get(connector_id, ("", ""))
+        collection_method, detection_reason = determine_collection_method(
+            connector_id=info['connector_id'],
+            connector_title=info['connector_title'],
+            connector_description=info['connector_description'],
+            json_content=json_content,
+            filename=filename,
+        )
+        connectors_data.append({
+            'connector_id': info['connector_id'],
+            'connector_publisher': info['connector_publisher'],
+            'connector_title': info['connector_title'],
+            'connector_description': info['connector_description'],
+            'connector_instruction_steps': info['connector_instruction_steps'],
+            'connector_permissions': info['connector_permissions'],
+            'connector_id_generated': info['connector_id_generated'],
+            'connector_files': info['connector_files'],
+            'collection_method': collection_method,
+            'collection_method_reason': detection_reason,
+        })
+    
+    # Build solutions data
+    solutions_data: List[Dict[str, str]] = []
+    for solution_name, info in sorted(all_solutions_info.items()):
+        solutions_data.append({
+            'solution_name': info['solution_name'],
+            'solution_folder': f"{GITHUB_REPO_URL}/Solutions/{quote(info['solution_folder'])}",
+            'solution_publisher_id': info['solution_publisher_id'],
+            'solution_offer_id': info['solution_offer_id'],
+            'solution_first_publish_date': info['solution_first_publish_date'],
+            'solution_last_publish_date': info['solution_last_publish_date'],
+            'solution_version': info['solution_version'],
+            'solution_support_name': info['solution_support_name'],
+            'solution_support_tier': info['solution_support_tier'],
+            'solution_support_link': info['solution_support_link'],
+            'solution_author_name': info['solution_author_name'],
+            'solution_categories': info['solution_categories'],
+            'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
+        })
+    
+    # Build tables data from tables_reference.csv metadata
+    # First, load the tables_reference.csv if it exists
+    tables_reference: Dict[str, Dict[str, str]] = {}
+    tables_reference_path = args.tables_reference_csv.resolve()
+    if tables_reference_path.exists():
+        with tables_reference_path.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                table_name = row.get('table_name', '')
+                if table_name:
+                    tables_reference[table_name] = row
+    
+    # Collect all unique tables from connector data
+    all_tables: Set[str] = set()
+    for row in rows:
+        table = row.get('Table', '')
+        if table:
+            all_tables.add(table)
+    
+    # Build tables data with metadata from tables_reference.csv
+    tables_data: List[Dict[str, str]] = []
+    for table_name in sorted(all_tables):
+        ref = tables_reference.get(table_name, {})
+        tables_data.append({
+            'table_name': table_name,
+            'description': ref.get('description', ''),
+            'category': ref.get('category', ''),
+            'resource_types': ref.get('resource_types', ''),
+            'table_type': ref.get('table_type', ''),
+            'source_azure_monitor': ref.get('source_azure_monitor', ''),
+            'source_defender_xdr': ref.get('source_defender_xdr', ''),
+            'azure_monitor_doc_link': ref.get('azure_monitor_doc_link', ''),
+            'defender_xdr_doc_link': ref.get('defender_xdr_doc_link', ''),
+            'basic_logs_eligible': ref.get('basic_logs_eligible', ''),
+            'auxiliary_table_eligible': ref.get('auxiliary_table_eligible', ''),
+            'supports_transformations': ref.get('supports_transformations', ''),
+            'search_job_support': ref.get('search_job_support', ''),
+            'ingestion_api_supported': ref.get('ingestion_api_supported', ''),
+            'retention_default': ref.get('retention_default', ''),
+            'retention_max': ref.get('retention_max', ''),
+            'plan': ref.get('plan', ''),
+        })
+    
+    # Build simplified mapping (key fields only)
+    mapping_data: List[Dict[str, str]] = []
+    seen_mappings: Set[Tuple[str, str, str]] = set()
+    for row in rows:
+        key = (row['solution_name'], row.get('connector_id', ''), row.get('Table', ''))
+        if key not in seen_mappings:
+            seen_mappings.add(key)
+            mapping_data.append({
+                'solution_name': row['solution_name'],
+                'connector_id': row.get('connector_id', ''),
+                'table_name': row.get('Table', ''),
+            })
+
+    # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
         "Table",
         "solution_name",
@@ -1302,6 +1594,81 @@ def main() -> None:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(rows)
+    
+    # Write connectors.csv
+    connectors_fieldnames = [
+        'connector_id',
+        'connector_publisher',
+        'connector_title',
+        'connector_description',
+        'connector_instruction_steps',
+        'connector_permissions',
+        'connector_id_generated',
+        'connector_files',
+        'collection_method',
+        'collection_method_reason',
+    ]
+    connectors_path = args.connectors_csv.resolve()
+    with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=connectors_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(connectors_data)
+    
+    # Write solutions.csv
+    solutions_fieldnames = [
+        'solution_name',
+        'solution_folder',
+        'solution_publisher_id',
+        'solution_offer_id',
+        'solution_first_publish_date',
+        'solution_last_publish_date',
+        'solution_version',
+        'solution_support_name',
+        'solution_support_tier',
+        'solution_support_link',
+        'solution_author_name',
+        'solution_categories',
+        'has_connectors',
+    ]
+    solutions_path = args.solutions_csv.resolve()
+    with solutions_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=solutions_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(solutions_data)
+    
+    # Write tables.csv
+    tables_fieldnames = [
+        'table_name',
+        'description',
+        'category',
+        'resource_types',
+        'table_type',
+        'source_azure_monitor',
+        'source_defender_xdr',
+        'azure_monitor_doc_link',
+        'defender_xdr_doc_link',
+        'basic_logs_eligible',
+        'auxiliary_table_eligible',
+        'supports_transformations',
+        'search_job_support',
+        'ingestion_api_supported',
+        'retention_default',
+        'retention_max',
+        'plan',
+    ]
+    tables_path = args.tables_csv.resolve()
+    with tables_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=tables_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(tables_data)
+    
+    # Write simplified mapping CSV
+    mapping_fieldnames = ['solution_name', 'connector_id', 'table_name']
+    mapping_path = args.mapping_csv.resolve()
+    with mapping_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=mapping_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(mapping_data)
 
     report_fieldnames = [
         "solution_name",
@@ -1336,6 +1703,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(filtered_issues)
 
+    # Print summary
     if missing_connector_json:
         print("Solutions with Data Connectors folder but no connector JSON detected:")
         for name in missing_connector_json:
@@ -1361,7 +1729,22 @@ def main() -> None:
             skipped_list = ", ".join(sorted(solution_parser_skipped[name]))
             print(f" - {name} (parser tables: {skipped_list})")
 
-    print(f"Wrote {len(rows)} rows to {safe_relative(output_path, repo_root)}")
+    # Print collection method distribution
+    method_counts: Dict[str, int] = defaultdict(int)
+    for conn in connectors_data:
+        method_counts[conn['collection_method']] += 1
+    
+    print(f"\nCollection Method Distribution ({len(connectors_data)} connectors):")
+    print("-" * 50)
+    for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
+        pct = (count / len(connectors_data) * 100) if connectors_data else 0
+        print(f"  {method:30} {count:4} ({pct:.1f}%)")
+
+    print(f"\nWrote {len(rows)} rows to {safe_relative(output_path, repo_root)}")
+    print(f"Wrote {len(connectors_data)} connectors to {safe_relative(connectors_path, repo_root)}")
+    print(f"Wrote {len(solutions_data)} solutions to {safe_relative(solutions_path, repo_root)}")
+    print(f"Wrote {len(tables_data)} tables to {safe_relative(tables_path, repo_root)}")
+    print(f"Wrote {len(mapping_data)} mappings to {safe_relative(mapping_path, repo_root)}")
     print(f"Logged {len(issues)} connector issues to {safe_relative(report_path, repo_root)}")
 
 

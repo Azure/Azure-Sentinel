@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | GreyNoise |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.greynoise.io/contact/general](https://www.greynoise.io/contact/general) |
@@ -80,8 +80,8 @@ The function app installed in Step 6 queries the GreyNoise GNQL API once per day
 
  For more information on the GreyNoise API and the GreyNoise Query Language (GNQL), [click here](https://developer.greynoise.io/docs/using-the-greynoise-api).
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ThreatIntelligenceIndicator` |
 | **Connector Definition Files** | [GreyNoiseConnector_UploadIndicatorsAPI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GreyNoiseThreatIntelligence/Data%20Connectors/GreyNoiseConnector_UploadIndicatorsAPI.json) |
 

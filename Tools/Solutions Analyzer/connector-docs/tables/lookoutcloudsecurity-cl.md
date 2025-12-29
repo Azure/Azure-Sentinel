@@ -1,7 +1,7 @@
 # LookoutCloudSecurity_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `LookoutCloudSecurity_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

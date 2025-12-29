@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Varonis |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.varonis.com/resources/support](https://www.varonis.com/resources/support) |
@@ -58,8 +58,8 @@ Use the following parameters to configure the Varonis Purview Connector in your 
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 - **Resources Stream Name**: `Custom-varonisresources`
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `varonisresources_CL` |
 | **Connector Definition Files** | [VaronisPurview_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Varonis%20Purview/Data%20Connectors/VaronisPurview_ccp/VaronisPurview_connectorDefinition.json) |
 

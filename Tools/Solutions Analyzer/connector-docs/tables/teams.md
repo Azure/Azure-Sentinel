@@ -1,7 +1,7 @@
 # teams
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `teams` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

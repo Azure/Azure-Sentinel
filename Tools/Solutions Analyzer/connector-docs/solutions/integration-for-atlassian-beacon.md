@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | DEFEND Ltd. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.defend.co.nz/](https://www.defend.co.nz/) |
@@ -69,8 +69,8 @@ Atlassian Beacon is a cloud product that is built for Intelligent threat detecti
 
 > 8. If the analytic rule has been enabled, the above Test alert should have created an incident in Microsoft Sentinel
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `atlassian_beacon_alerts_CL` |
 | **Connector Definition Files** | [AtlassianBeacon_DataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Integration%20for%20Atlassian%20Beacon/Data%20Connectors/AtlassianBeacon_DataConnector.json) |
 

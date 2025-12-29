@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ThreatConnect, Inc. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://threatconnect.com/contact/](https://threatconnect.com/contact/) |

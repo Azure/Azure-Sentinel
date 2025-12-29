@@ -2,8 +2,8 @@
 
 Reference for ThreatIntelObjects table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ThreatIntelObjects` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

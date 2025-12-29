@@ -1,10 +1,11 @@
 # Cofense Triage Threat Indicators Ingestion
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CofenseTriage` |
 | **Publisher** | Cofense |
 | **Used in Solutions** | [CofenseTriage](../solutions/cofensetriage.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [CofenseTriage_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseTriage/Data%20Connectors/CofenseTriageDataConnector/CofenseTriage_API_FunctionApp.json) |
 
 The [Cofense-Triage](https://cofense.com/product-services/cofense-triage/) data connector provides the following capabilities: 

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Alsid |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.alsid.com/contact-us/](https://www.alsid.com/contact-us/) |
@@ -80,8 +80,8 @@ All of these steps are showcased [here](https://www.youtube.com/watch?v=JwV1uZSy
 
 > You should now be able to receive logs in the *AlsidForADLog_CL* table, logs data can be parse using the **afad_parser()** function, used by all query samples, workbooks and analytic templates.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `AlsidForADLog_CL` |
 | **Connector Definition Files** | [AlsidForAD.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Alsid%20For%20AD/Data%20Connectors/AlsidForAD.json) |
 

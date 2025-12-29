@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Nasuni |
 | **Support Tier** | Partner |
 | **Support Link** | [https://github.com/nasuni-labs/Azure-Sentinel](https://github.com/nasuni-labs/Azure-Sentinel) |
@@ -62,8 +62,8 @@ Configure the facilities you want to collect and their severities.
 
 Follow the instructions in the [Nasuni Management Console Guide](https://view.highspot.com/viewer/629a633ae5b4caaf17018daa?iid=5e6fbfcbc7143309f69fcfcf) to configure Nasuni Edge Appliances to forward syslog events. Use the IP address or hostname of the Linux device running the Azure Monitor Agent in the Servers configuration field for the syslog settings.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Nasuni` |
 | | `Syslog` |
 | **Connector Definition Files** | [Nasuni%20Data%20Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Nasuni/Data%20Connectors/Nasuni%20Data%20Connector.json) |

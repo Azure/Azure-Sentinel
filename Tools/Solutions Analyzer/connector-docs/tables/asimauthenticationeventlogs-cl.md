@@ -1,7 +1,7 @@
 # ASimAuthenticationEventLogs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimAuthenticationEventLogs_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

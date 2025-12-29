@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Jamf Software, LLC |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.jamf.com/support/](https://www.jamf.com/support/) |
@@ -60,8 +60,8 @@ Use the following parameters to configure the your machine to send the logs to t
 - **Telemetry Stream Name**: `Custom-jamfprotecttelemetryv2`
 - **Alerts Stream Name**: `Custom-jamfprotectalerts`
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `jamfprotectalerts_CL` |
 | | `jamfprotecttelemetryv2_CL` |
 | | `jamfprotectunifiedlogs_CL` |

@@ -2,8 +2,8 @@
 
 Reference for AZFWIdpsSignature table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWIdpsSignature` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 Reference for AWSNetworkFirewallTls table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSNetworkFirewallTls` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

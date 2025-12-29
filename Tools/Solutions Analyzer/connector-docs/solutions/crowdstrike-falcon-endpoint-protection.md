@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -126,8 +126,8 @@ Use the following step-by-step instructions to deploy the Crowdstrike Falcon Dat
 		Schedule //Add value as '0 */1 * * * *' to ensure the function runs every minute.
 5. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ASimAuditEventLogs` |
 | | `ASimAuthenticationEventLogs` |
 | | `ASimAuthenticationEventLogs_CL` |

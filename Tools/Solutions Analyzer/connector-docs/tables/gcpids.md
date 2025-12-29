@@ -2,8 +2,8 @@
 
 Reference for GCPIDS table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPIDS` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

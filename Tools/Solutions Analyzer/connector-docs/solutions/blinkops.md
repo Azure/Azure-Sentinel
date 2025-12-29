@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Blink Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.blinkops.com](https://support.blinkops.com) |

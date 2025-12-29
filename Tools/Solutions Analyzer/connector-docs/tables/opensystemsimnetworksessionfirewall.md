@@ -1,7 +1,7 @@
 # OpenSystemsImNetworkSessionFirewall
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OpenSystemsImNetworkSessionFirewall` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

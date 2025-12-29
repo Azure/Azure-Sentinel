@@ -1,7 +1,7 @@
 # Corelight_v2_rdp_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Corelight_v2_rdp_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

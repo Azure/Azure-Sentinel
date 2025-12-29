@@ -1,7 +1,7 @@
 # GCP_IAM_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCP_IAM_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

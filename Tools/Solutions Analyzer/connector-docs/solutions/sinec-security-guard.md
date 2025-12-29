@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Siemens AG |
 | **Support Tier** | Partner |
 | **Support Link** | [https://siemens.com/sinec-security-guard](https://siemens.com/sinec-security-guard) |
@@ -42,8 +42,8 @@ This Data Connector relies on the SINEC Security Guard Sensor Package to be able
 
   Instructions on configuring the data connector.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SINECSecurityGuard_CL` |
 | **Connector Definition Files** | [data_connector_GenericUI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SINEC%20Security%20Guard/Data%20Connectors/data_connector_GenericUI.json) |
 

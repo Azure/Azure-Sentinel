@@ -1,7 +1,7 @@
 # dossier_whitelist_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `dossier_whitelist_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

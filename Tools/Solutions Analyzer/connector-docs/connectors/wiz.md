@@ -1,10 +1,11 @@
 # Wiz
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Wiz` |
 | **Publisher** | Wiz |
 | **Used in Solutions** | [Wiz](../solutions/wiz.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [template_WIZ.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Wiz/Data%20Connectors/template_WIZ.json) |
 
 The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, and Audit logs to Microsoft Sentinel.

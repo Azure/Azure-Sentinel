@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | WithSecure |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.withsecure.com/en/support](https://www.withsecure.com/en/support) |
@@ -85,8 +85,8 @@ Create new Microsoft Entra application and credentials. Follow [the instructions
 5. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
 6. Click **Purchase** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `WsSecurityEvents_CL` |
 | **Connector Definition Files** | [WithSecureElementsViaFunction.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/WithSecureElementsViaFunction/Data%20Connectors/WithSecureElementsViaFunction.json) |
 

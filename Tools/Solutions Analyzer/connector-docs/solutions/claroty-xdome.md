@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | xDome Customer Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://claroty.com/support-policy](https://claroty.com/support-policy) |
@@ -74,8 +74,8 @@ Make sure to configure the machine's security according to your organization's s
 
 [Learn more >](https://aka.ms/SecureCEF)
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommonSecurityLog` |
 | **Connector Definition Files** | [Claroty_xDome.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty%20xDome/Data%20Connectors/Claroty_xDome.json) |
 

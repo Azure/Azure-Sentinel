@@ -1,7 +1,7 @@
 # Ttp_Url_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ttp_Url_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

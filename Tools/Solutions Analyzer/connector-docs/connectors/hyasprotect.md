@@ -1,10 +1,11 @@
 # HYAS Protect
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `HYASProtect` |
 | **Publisher** | HYAS |
 | **Used in Solutions** | [HYAS Protect](../solutions/hyas-protect.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [HYASProtect_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HYAS%20Protect/Data%20Connectors/HYASProtect_FunctionApp.json) |
 
 HYAS Protect provide logs based on reputation values - Blocked, Malicious, Permitted, Suspicious.

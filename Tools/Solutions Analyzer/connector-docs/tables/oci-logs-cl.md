@@ -1,7 +1,7 @@
 # OCI_Logs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OCI_Logs_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

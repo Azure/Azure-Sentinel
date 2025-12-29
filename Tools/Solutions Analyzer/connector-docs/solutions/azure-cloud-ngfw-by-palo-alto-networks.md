@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Palo Alto Networks |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.paloaltonetworks.com](https://support.paloaltonetworks.com) |
@@ -45,8 +45,8 @@ Inside your Cloud NGFW resource:
 4.  Confirm your selections and configurations.
 5.  Click **Save** to apply the settings.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `fluentbit_CL` |
 | **Connector Definition Files** | [CloudNgfwByPAN.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Data%20Connectors/CloudNgfwByPAN.json) |
 

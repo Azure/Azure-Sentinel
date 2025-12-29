@@ -2,8 +2,8 @@
 
 Reference for StorageFileLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `StorageFileLogs` |
 | **Category** | Azure Resources |
 | **Solutions Using Table** | 1 |

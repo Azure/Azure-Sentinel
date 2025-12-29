@@ -1,10 +1,11 @@
 # Bitwarden Event Logs
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `BitwardenEventLogs` |
 | **Publisher** | Bitwarden Inc |
 | **Used in Solutions** | [Bitwarden](../solutions/bitwarden.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [definitions.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Data%20Connectors/BitwardenEventLogs/definitions.json) |
 
 This connector provides insight into activity of your Bitwarden organization such as user's activity (logged in, changed password, 2fa, etc.), cipher activity (created, updated, deleted, shared, etc.), collection activity, organization activity, and more.

@@ -1,7 +1,7 @@
 # NGINX_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NGINX_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

@@ -1,7 +1,7 @@
 # VectraStream_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `VectraStream_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

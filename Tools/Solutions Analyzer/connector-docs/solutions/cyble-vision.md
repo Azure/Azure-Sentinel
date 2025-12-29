@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cyble Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cyble.com/talk-to-sales/](https://cyble.com/talk-to-sales/) |

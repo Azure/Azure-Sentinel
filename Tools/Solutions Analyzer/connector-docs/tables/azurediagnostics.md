@@ -2,8 +2,8 @@
 
 Reference for AzureDiagnostics table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AzureDiagnostics` |
 | **Category** | Azure Resources |
 | **Solutions Using Table** | 15 |

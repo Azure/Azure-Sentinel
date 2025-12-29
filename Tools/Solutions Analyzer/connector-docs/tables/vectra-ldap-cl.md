@@ -1,7 +1,7 @@
 # vectra_ldap_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_ldap_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

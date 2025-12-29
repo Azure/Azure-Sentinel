@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Salem Cyber |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.salemcyber.com/contact](https://www.salemcyber.com/contact) |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Druva Inc |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.druva.com/](https://support.druva.com/) |
@@ -50,8 +50,8 @@ Provide required values:
   - Client Secret
   - Click 'Connect' to authenticate
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `DruvaInsyncEvents_CL` |
 | | `DruvaPlatformEvents_CL` |
 | | `DruvaSecurityEvents_CL` |

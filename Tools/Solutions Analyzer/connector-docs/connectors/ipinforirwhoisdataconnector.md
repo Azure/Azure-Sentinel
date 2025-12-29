@@ -1,10 +1,11 @@
 # IPinfo RIRWHOIS Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `IPinfoRIRWHOISDataConnector` |
 | **Publisher** | IPinfo |
 | **Used in Solutions** | [IPinfo](../solutions/ipinfo.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [IPinfo_RIRWHOIS_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IPinfo/Data%20Connectors/RIRWHOIS/IPinfo_RIRWHOIS_API_AzureFunctionApp.json) |
 
 This IPinfo data connector installs an Azure Function app to download RIRWHOIS datasets and insert it into custom log table in Microsoft Sentinel

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Fortinet |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.fortinet.com/support](https://www.fortinet.com/support) |
@@ -65,8 +65,8 @@ Use this method for automated deployment of the Fortinet FortiNDR Cloud connecto
 3. Enter the **Workspace ID**, **Workspace Key**, **AwsAccessKeyId**, **AwsSecretAccessKey**, and/or Other required fields. 
 4. Click **Create** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `FncEventsDetections_CL` |
 | | `FncEventsObservation_CL` |
 | | `FncEventsSuricata_CL` |

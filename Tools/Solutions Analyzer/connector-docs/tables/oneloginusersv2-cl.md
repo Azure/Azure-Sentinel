@@ -1,7 +1,7 @@
 # OneLoginUsersV2_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OneLoginUsersV2_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

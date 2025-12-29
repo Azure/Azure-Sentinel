@@ -1,7 +1,7 @@
 # SecurityIncident
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `SecurityIncident` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

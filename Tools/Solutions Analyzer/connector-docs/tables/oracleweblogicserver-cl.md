@@ -1,7 +1,7 @@
 # OracleWebLogicServer_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OracleWebLogicServer_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

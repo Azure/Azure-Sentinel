@@ -2,8 +2,8 @@
 
 Reference for AWSGuardDuty table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSGuardDuty` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

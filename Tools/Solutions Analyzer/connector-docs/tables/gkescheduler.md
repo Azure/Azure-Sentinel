@@ -2,8 +2,8 @@
 
 Reference for GKEScheduler table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GKEScheduler` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

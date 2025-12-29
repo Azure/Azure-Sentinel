@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | iboss |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.iboss.com/contact-us/](https://www.iboss.com/contact-us/) |
@@ -84,8 +84,8 @@ Steps to configure the iboss AMA Data Connector
 
 3. It may take about 20 minutes until the connection streams data to your workspace.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `CommonSecurityLog` |
 | **Connector Definition Files** | [template_ibossAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/template_ibossAMA.json) |
 

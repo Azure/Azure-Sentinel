@@ -1,10 +1,11 @@
 # Holm Security Asset Data
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `HolmSecurityAssets` |
 | **Publisher** | Holm Security |
 | **Used in Solutions** | [HolmSecurity](../solutions/holmsecurity.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [HolmSecurityAssets_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HolmSecurity/Data%20Connectors/HolmSecurityAssets_API_FunctionApp.json) |
 
 The connector provides the capability to poll data from Holm Security Center into Microsoft Sentinel.

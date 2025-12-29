@@ -1,7 +1,7 @@
 # dossier_rpz_feeds_records_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `dossier_rpz_feeds_records_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

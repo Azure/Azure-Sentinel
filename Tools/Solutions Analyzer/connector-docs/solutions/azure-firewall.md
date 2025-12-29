@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com/](https://support.microsoft.com/) |
@@ -46,8 +46,8 @@ Inside your Firewall resource:
     -   Select the categories that you want to analyze ( Azure Firewall Network Rule, Azure Firewall Application Rule,Azure Firewall Nat Rule,Azure Firewall Threat Intelligence,Azure Firewall IDPS Signature,Azure Firewall DNS query,Azure Firewall FQDN Resolution Failure,Azure Firewall Fat Flow Log,Azure Firewall Flow Trace Log)
     -   Click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `AZFWApplicationRule` |
 | | `AZFWDnsQuery` |
 | | `AZFWFatFlow` |

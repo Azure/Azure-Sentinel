@@ -1,7 +1,7 @@
 # CyberSixgill_Alerts_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CyberSixgill_Alerts_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

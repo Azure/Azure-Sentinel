@@ -1,7 +1,7 @@
 # Ipinfo_WHOIS_POC_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_WHOIS_POC_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

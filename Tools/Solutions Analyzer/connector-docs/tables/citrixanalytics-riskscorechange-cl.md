@@ -1,7 +1,7 @@
 # CitrixAnalytics_riskScoreChange_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CitrixAnalytics_riskScoreChange_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

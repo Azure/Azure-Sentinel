@@ -2,8 +2,8 @@
 
 Reference for AZFWApplicationRule table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWApplicationRule` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

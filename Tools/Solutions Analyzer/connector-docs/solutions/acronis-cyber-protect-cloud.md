@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Acronis International GmbH |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.acronis.com/en/support](https://www.acronis.com/en/support) |

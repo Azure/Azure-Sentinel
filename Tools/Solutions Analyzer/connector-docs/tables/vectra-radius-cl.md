@@ -1,7 +1,7 @@
 # vectra_radius_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `vectra_radius_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

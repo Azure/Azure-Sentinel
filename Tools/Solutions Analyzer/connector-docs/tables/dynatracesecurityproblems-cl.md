@@ -1,7 +1,7 @@
 # DynatraceSecurityProblems_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DynatraceSecurityProblems_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Samsung Electronics Co., Ltd. |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www2.samsungknox.com/en/support](https://www2.samsungknox.com/en/support) |
@@ -79,8 +79,8 @@ Ensure the Entra Application created in STEP 1 has permissions to use the DCR cr
 
 6. To complete the Microsoft Sentinel integration, click **'Save'**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Samsung_Knox_Application_CL` |
 | | `Samsung_Knox_Audit_CL` |
 | | `Samsung_Knox_Network_CL` |

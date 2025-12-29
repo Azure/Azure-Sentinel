@@ -1,7 +1,7 @@
 # agari_apdpolicy_log_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `agari_apdpolicy_log_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

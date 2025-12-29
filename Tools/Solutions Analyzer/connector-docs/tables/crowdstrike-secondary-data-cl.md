@@ -1,7 +1,7 @@
 # CrowdStrike_Secondary_Data_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CrowdStrike_Secondary_Data_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

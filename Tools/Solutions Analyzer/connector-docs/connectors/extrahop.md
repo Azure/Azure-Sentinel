@@ -1,10 +1,11 @@
 # ExtraHop Detections Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ExtraHop` |
 | **Publisher** | ExtraHop |
 | **Used in Solutions** | [ExtraHop](../solutions/extrahop.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [ExtraHop_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ExtraHop/Data%20Connectors/ExtraHopDataConnector/ExtraHop_FunctionApp.json) |
 
 The [ExtraHop](https://extrahop.com/) Detections Data Connector enables you to import detection data from ExtraHop RevealX to Microsoft Sentinel through webhook payloads.

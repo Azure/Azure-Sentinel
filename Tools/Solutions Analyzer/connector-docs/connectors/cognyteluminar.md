@@ -1,10 +1,11 @@
 # Luminar IOCs and Leaked Credentials
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CognyteLuminar` |
 | **Publisher** | Cognyte Technologies Israel Ltd |
 | **Used in Solutions** | [CognyteLuminar](../solutions/cognyteluminar.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [CognyteLuminar_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CognyteLuminar/Data%20Connectors/CognyteLuminar_FunctionApp.json) |
 
 Luminar IOCs and Leaked Credentials connector allows integration of intelligence-based IOC data and customer-related leaked records identified by Luminar.

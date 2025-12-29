@@ -1,10 +1,11 @@
 # Sonrai Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SonraiDataConnector` |
 | **Publisher** | Sonrai |
 | **Used in Solutions** | [SonraiSecurity](../solutions/sonraisecurity.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Connector_REST_API_Sonrai.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonraiSecurity/Data%20Connectors/Connector_REST_API_Sonrai.json) |
 
 Use this data connector to integrate with Sonrai Security and get Sonrai tickets sent directly to Microsoft Sentinel.

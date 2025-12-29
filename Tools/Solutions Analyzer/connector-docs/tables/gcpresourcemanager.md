@@ -2,8 +2,8 @@
 
 Reference for GCPResourceManager table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPResourceManager` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

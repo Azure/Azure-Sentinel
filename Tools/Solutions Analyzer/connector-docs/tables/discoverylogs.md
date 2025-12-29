@@ -1,7 +1,7 @@
 # discoveryLogs
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `discoveryLogs` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

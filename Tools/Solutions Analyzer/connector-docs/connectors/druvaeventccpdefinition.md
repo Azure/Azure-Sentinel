@@ -1,10 +1,11 @@
 # Druva Events Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `DruvaEventCCPDefinition` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [DruvaDataSecurityCloud](../solutions/druvadatasecuritycloud.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [Druva_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Data%20Connectors/Druva_ccp/Druva_DataConnectorDefinition.json) |
 
 Provides capability to ingest the Druva events from Druva APIs

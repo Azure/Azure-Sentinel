@@ -1,7 +1,7 @@
 # ManagedIdentitySignInLogs
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ManagedIdentitySignInLogs` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

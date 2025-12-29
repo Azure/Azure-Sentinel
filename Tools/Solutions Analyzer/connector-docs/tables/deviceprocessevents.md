@@ -2,8 +2,8 @@
 
 Process creation and related events
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceProcessEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

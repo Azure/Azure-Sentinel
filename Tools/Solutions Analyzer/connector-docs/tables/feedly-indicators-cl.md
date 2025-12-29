@@ -1,7 +1,7 @@
 # feedly_indicators_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `feedly_indicators_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

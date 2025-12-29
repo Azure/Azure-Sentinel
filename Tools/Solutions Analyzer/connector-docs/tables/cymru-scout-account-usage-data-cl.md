@@ -1,7 +1,7 @@
 # Cymru_Scout_Account_Usage_Data_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Cymru_Scout_Account_Usage_Data_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

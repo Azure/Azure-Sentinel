@@ -1,7 +1,7 @@
 # Corelight_v2_dhcp_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Corelight_v2_dhcp_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

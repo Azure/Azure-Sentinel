@@ -1,10 +1,11 @@
 # Authomize Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Authomize` |
 | **Publisher** | Authomize |
 | **Used in Solutions** | [Authomize](../solutions/authomize.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [AuthomizeCustomConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Authomize/Data%20Connectors/AuthomizeCustomConnector.json) |
 
 The Authomize Data Connector provides the capability to ingest custom log types from Authomize into Microsoft Sentinel.

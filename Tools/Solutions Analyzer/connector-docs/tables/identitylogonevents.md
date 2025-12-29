@@ -2,8 +2,8 @@
 
 Authentication events on Active Directory and Microsoft online services
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `IdentityLogonEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

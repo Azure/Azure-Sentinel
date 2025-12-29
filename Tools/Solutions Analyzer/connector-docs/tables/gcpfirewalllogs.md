@@ -2,8 +2,8 @@
 
 Reference for GCPFirewallLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPFirewallLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

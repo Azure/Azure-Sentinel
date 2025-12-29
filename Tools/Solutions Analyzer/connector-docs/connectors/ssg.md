@@ -1,10 +1,11 @@
 # SINEC Security Guard
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SSG` |
 | **Publisher** | Siemens AG |
 | **Used in Solutions** | [SINEC Security Guard](../solutions/sinec-security-guard.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [data_connector_GenericUI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SINEC%20Security%20Guard/Data%20Connectors/data_connector_GenericUI.json) |
 
 The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest security events of your industrial networks from the [SINEC Security Guard](https://siemens.com/sinec-security-guard) into Microsoft Sentinel

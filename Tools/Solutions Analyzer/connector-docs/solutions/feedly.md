@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Feedly Inc |
 | **Support Tier** | Partner |
 | **Support Link** | [https://feedly.com/i/support/contactUs](https://feedly.com/i/support/contactUs) |
@@ -142,8 +142,8 @@ If you're already signed in, go to the next step.
 
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `feedly_indicators_CL` |
 | **Connector Definition Files** | [Feedly_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Feedly/Data%20Connectors/Feedly_API_AzureFunctionApp.json) |
 

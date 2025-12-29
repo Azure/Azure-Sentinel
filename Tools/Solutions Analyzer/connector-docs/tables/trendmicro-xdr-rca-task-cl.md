@@ -1,7 +1,7 @@
 # TrendMicro_XDR_RCA_Task_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `TrendMicro_XDR_RCA_Task_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

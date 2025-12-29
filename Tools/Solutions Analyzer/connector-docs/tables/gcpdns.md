@@ -2,8 +2,8 @@
 
 Reference for GCPDNS table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPDNS` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

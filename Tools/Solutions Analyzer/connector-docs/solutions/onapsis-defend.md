@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Onapsis |
 | **Support Tier** | Partner |
 | **Support Link** | [https://onapsis.com/support/](https://onapsis.com/support/) |
@@ -59,8 +59,8 @@ Share the data collection endpoint URL and authentication info with the Onapsis 
 - **DCR Immutable ID**: `DataCollectionRuleId`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Onapsis_Defend_CL` |
 | **Connector Definition Files** | [Onapsis.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Onapsis%20Defend/Data%20Connectors/Onapsis.json) |
 

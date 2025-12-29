@@ -2,8 +2,8 @@
 
 Reference for ThreatIntelExportOperation table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ThreatIntelExportOperation` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

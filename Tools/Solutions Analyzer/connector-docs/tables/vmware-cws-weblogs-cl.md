@@ -1,7 +1,7 @@
 # VMware_CWS_Weblogs_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `VMware_CWS_Weblogs_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -1,7 +1,7 @@
 # F5Telemetry_LTM_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `F5Telemetry_LTM_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

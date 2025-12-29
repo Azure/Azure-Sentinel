@@ -1,7 +1,7 @@
 # CommvaultSecurityIQ_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CommvaultSecurityIQ_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

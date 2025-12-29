@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | BigID |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.bigid.com/support](https://www.bigid.com/support) |
@@ -40,8 +40,8 @@ Provide your BigID domain name like 'customer.bigid.cloud' and your BigID token.
 - **BigID Token**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `BigIDDSPMCatalog_CL` |
 | **Connector Definition Files** | [BigIDDSPMLogs_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BigID/Data%20Connectors/BigIDDSPMLogs_ccp/BigIDDSPMLogs_connectorDefinition.json) |
 

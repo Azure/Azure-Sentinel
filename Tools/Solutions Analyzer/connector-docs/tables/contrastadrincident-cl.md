@@ -1,7 +1,7 @@
 # ContrastADRIncident_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ContrastADRIncident_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

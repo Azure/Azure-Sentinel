@@ -2,8 +2,8 @@
 
 Reference for WindowsFirewall table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `WindowsFirewall` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |
@@ -34,10 +34,10 @@ This table is ingested by the following connectors:
 This table collects data from the following Azure resource types:
 
 - `microsoft.compute/virtualmachines`
-- `<br>microsoft.conenctedvmwarevsphere/virtualmachines`
-- `<br>microsoft.azurestackhci/virtualmachines`
-- `<br>microsoft.scvmm/virtualmachines`
-- `<br>microsoft.compute/virtualmachinescalesets`
+- `microsoft.conenctedvmwarevsphere/virtualmachines`
+- `microsoft.azurestackhci/virtualmachines`
+- `microsoft.scvmm/virtualmachines`
+- `microsoft.compute/virtualmachinescalesets`
 
 ---
 

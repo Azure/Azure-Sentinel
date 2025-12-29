@@ -1,7 +1,7 @@
 # CarbonBlack_Watchlist_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CarbonBlack_Watchlist_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

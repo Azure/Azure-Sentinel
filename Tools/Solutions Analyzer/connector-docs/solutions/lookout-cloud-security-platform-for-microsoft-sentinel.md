@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Lookout |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.lookout.com/support](https://www.lookout.com/support) |
@@ -135,8 +135,8 @@ If you're already signed in, go to the next step.
  - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://WORKSPACE_ID.ods.opinsights.azure.us`. 
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `LookoutCloudSecurity_CL` |
 | **Connector Definition Files** | [LookoutCloudSecurityConnector_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout%20Cloud%20Security%20Platform%20for%20Microsoft%20Sentinel/Data%20Connectors/LookoutCSConnector/LookoutCloudSecurityConnector_API_FunctionApp.json) |
 

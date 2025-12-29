@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -68,8 +68,8 @@ Each data type may have specific licensing requirements. Review the information 
 
 > 💡 **Portal-Only Feature**: Data type selection is only available in the Microsoft Sentinel portal.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `McasShadowItReporting` |
 | | `SecurityAlert` |
 | | `discoveryLogs` |

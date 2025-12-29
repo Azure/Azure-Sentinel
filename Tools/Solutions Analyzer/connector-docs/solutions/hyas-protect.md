@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | HYAS |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.hyas.com/contact](https://www.hyas.com/contact) |
@@ -98,8 +98,8 @@ If you're already signed in, go to the next step.
 		WorkspaceKey
 . Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `HYASProtectDnsSecurityLogs_CL` |
 | **Connector Definition Files** | [HYASProtect_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HYAS%20Protect/Data%20Connectors/HYASProtect_FunctionApp.json) |
 

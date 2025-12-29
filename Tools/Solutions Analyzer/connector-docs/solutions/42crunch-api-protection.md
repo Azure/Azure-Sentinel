@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | 42Crunch API Protection |
 | **Support Tier** | Partner |
 | **Support Link** | [https://42crunch.com/](https://42crunch.com/) |
@@ -69,8 +69,8 @@ In order to test the data ingestion the user should deploy the sample *httpbin* 
 
   After approximately 20 minutes access the Log Analytics workspace on your Microsoft Sentinel installation, and locate the *Custom Logs* section verify that a *apifirewall_log_1_CL* table exists. Use the sample queries to examine the data.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `apifirewall_log_1_CL` |
 | **Connector Definition Files** | [42CrunchAPIProtection.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/42Crunch%20API%20Protection/Data%20Connectors/42CrunchAPIProtection.json) |
 

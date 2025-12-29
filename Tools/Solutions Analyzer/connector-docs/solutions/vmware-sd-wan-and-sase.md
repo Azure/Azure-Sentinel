@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | VMware by Broadcom |
 | **Support Tier** | Partner |
 | **Support Link** | [https://developer.vmware.com/](https://developer.vmware.com/) |
@@ -110,8 +110,8 @@ If you're already signed in, go to the next step.
 		stream_saseaudit
 3. In case you made changes to application settings have been entered, make sure that you click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `VMware_CWS_DLPLogs_CL` |
 | | `VMware_CWS_Health_CL` |
 | | `VMware_CWS_Weblogs_CL` |

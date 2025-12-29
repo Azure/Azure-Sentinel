@@ -1,10 +1,11 @@
 # Noname Security for Microsoft Sentinel
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `NonameSecurityMicrosoftSentinel` |
 | **Publisher** | Noname Security |
 | **Used in Solutions** | [NonameSecurity](../solutions/nonamesecurity.md) |
+| **Collection Method** | REST API |
 | **Connector Definition Files** | [Connector_RESTAPI_NonameSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NonameSecurity/Data%20Connectors/Connector_RESTAPI_NonameSecurity.json) |
 
 Noname Security solution to POST data into a Microsoft Sentinel SIEM workspace via the Azure Monitor REST API

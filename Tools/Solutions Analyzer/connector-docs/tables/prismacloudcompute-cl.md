@@ -1,7 +1,7 @@
 # PrismaCloudCompute_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `PrismaCloudCompute_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 2 |

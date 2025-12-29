@@ -1,7 +1,7 @@
 # Ipinfo_WHOIS_NET_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_WHOIS_NET_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

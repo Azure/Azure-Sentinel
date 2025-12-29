@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Keeper Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.keepersecurity.com](https://www.keepersecurity.com) |
@@ -81,8 +81,8 @@ To assemble the Endpoint URL:
 
 Example: `https://<Collection_URL>/dataCollectionRules/<DCR_ID>/streams/Custom-KeeperSecurityEventNewLogs?api-version=2023-01-01`
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `KeeperSecurityEventNewLogs_CL` |
 | **Connector Definition Files** | [KepperSecurity_Definition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Keeper%20Security/Data%20Connectors/KeeperSecurity_ccp/KepperSecurity_Definition.json) |
 

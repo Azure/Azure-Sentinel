@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Theom |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.theom.ai](https://www.theom.ai) |
@@ -42,8 +42,8 @@ Theom Data Connector enables organizations to connect their Theom environment to
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `TheomAlerts_CL` |
 | **Connector Definition Files** | [Theom.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Theom/Data%20Connectors/Theom.json) |
 

@@ -1,7 +1,7 @@
 # Workplace_Facebook_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Workplace_Facebook_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

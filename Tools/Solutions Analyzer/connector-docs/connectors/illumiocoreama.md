@@ -1,10 +1,11 @@
 # [Deprecated] Illumio Core via AMA
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `IllumioCoreAma` |
 | **Publisher** | Illumio |
 | **Used in Solutions** | [Illumio Core](../solutions/illumio-core.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_IllumioCoreAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Data%20Connectors/template_IllumioCoreAMA.json) |
 
 The [Illumio Core](https://www.illumio.com/products/) data connector provides the capability to ingest Illumio Core logs into Microsoft Sentinel.

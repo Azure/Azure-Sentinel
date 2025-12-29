@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SlashNext |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support@slashnext.com](https://support@slashnext.com) |
@@ -46,8 +46,8 @@ Follow these steps to perform custom deployment of the SlashNext function app us
 5. Select the preferred **Subscription**, **Resource Group**, and **Location**.
 6. Click **Create** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `AzureDiagnostics` |
 | | `AzureMetrics` |
 | **Connector Definition Files** | [SlashNext_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlashNext/Data%20Connectors/SlashNext_FunctionApp.json) |

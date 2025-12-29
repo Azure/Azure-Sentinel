@@ -2,8 +2,8 @@
 
 Reference for ASimProcessEventLogs table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ASimProcessEventLogs` |
 | **Category** | Security |
 | **Solutions Using Table** | 2 |

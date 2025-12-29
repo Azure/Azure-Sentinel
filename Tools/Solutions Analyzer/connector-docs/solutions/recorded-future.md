@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Recorded Future Support Team |
 | **Support Tier** | Partner |
 | **Support Link** | [http://support.recordedfuture.com/](http://support.recordedfuture.com/) |

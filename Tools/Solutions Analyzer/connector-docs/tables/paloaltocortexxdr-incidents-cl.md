@@ -1,7 +1,7 @@
 # PaloAltoCortexXDR_Incidents_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `PaloAltoCortexXDR_Incidents_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 2 |

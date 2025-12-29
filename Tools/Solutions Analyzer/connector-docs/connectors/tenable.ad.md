@@ -1,10 +1,11 @@
 # Tenable.ad
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Tenable.ad` |
 | **Publisher** | Tenable |
 | **Used in Solutions** | [TenableAD](../solutions/tenablead.md) |
+| **Collection Method** | MMA |
 | **Connector Definition Files** | [Tenable.ad.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableAD/Data%20Connectors/Tenable.ad.json) |
 
 Tenable.ad connector allows to export Tenable.ad Indicators of Exposures, trailflow and Indicators of Attacks logs to Azure Sentinel in real time.

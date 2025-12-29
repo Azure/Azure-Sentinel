@@ -1,10 +1,11 @@
 # [Deprecated] ExtraHop Reveal(x) via Legacy Agent
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ExtraHopNetworks` |
 | **Publisher** | ExtraHop Networks |
 | **Used in Solutions** | [ExtraHop Reveal(x)](../solutions/extrahop-reveal(x).md) |
+| **Collection Method** | MMA |
 | **Connector Definition Files** | [template_ExtraHopNetworks.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ExtraHop%20Reveal%28x%29/Data%20Connectors/template_ExtraHopNetworks.json) |
 
 The ExtraHop Reveal(x) data connector enables you to easily connect your Reveal(x) system with Microsoft Sentinel to view dashboards, create custom alerts, and improve investigation. This integration gives you the ability to gain insight into your organization's network and improve your security operation capabilities.

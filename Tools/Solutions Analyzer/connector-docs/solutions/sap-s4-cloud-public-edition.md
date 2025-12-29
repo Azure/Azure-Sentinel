@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SAP |
 | **Support Tier** | Partner |
 | **Support Link** | [https://api.sap.com/api/SecurityAuditLog_ODataService/overview](https://api.sap.com/api/SecurityAuditLog_ODataService/overview) |
@@ -78,8 +78,8 @@ This section is an interactive interface in the Microsoft Sentinel portal that a
 
 > 💡 **Portal-Only Feature**: This configuration interface is only available when viewing the connector in the Microsoft Sentinel portal. You cannot configure data collectors through this static documentation.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `ABAPAuditLog` |
 | **Connector Definition Files** | [SAPS4Public_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20S4%20Cloud%20Public%20Edition/Data%20Connectors/SAPS4PublicPollerConnector/SAPS4Public_connectorDefinition.json) |
 

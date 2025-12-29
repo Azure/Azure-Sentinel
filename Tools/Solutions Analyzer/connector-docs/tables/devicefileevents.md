@@ -2,8 +2,8 @@
 
 File creation, modification, and other file system events
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceFileEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

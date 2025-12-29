@@ -1,10 +1,11 @@
 # Microsoft Defender for IoT
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `IoT` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [IoTOTThreatMonitoringwithDefenderforIoT](../solutions/iototthreatmonitoringwithdefenderforiot.md) |
+| **Collection Method** | Native |
 | **Connector Definition Files** | [template_IoT.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IoTOTThreatMonitoringwithDefenderforIoT/Data%20Connectors/template_IoT.JSON) |
 
 Gain insights into your IoT security by connecting Microsoft Defender for IoT alerts to Microsoft Sentinel.

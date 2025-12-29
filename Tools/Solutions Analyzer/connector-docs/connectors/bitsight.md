@@ -1,10 +1,11 @@
 # Bitsight data connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `BitSight` |
 | **Publisher** | BitSight Technologies, Inc. |
 | **Used in Solutions** | [BitSight](../solutions/bitsight.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [BitSight_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BitSight/Data%20Connectors/BitSightDataConnector/BitSight_API_FunctionApp.json) |
 
 The [BitSight](https://www.BitSight.com/) Data Connector supports evidence-based cyber risk monitoring by bringing BitSight data in Microsoft Sentinel.

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Derdack |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.signl4.com](https://www.signl4.com) |
@@ -76,8 +76,8 @@ Finally, enter the IDs, that the script has outputted in the connector configura
 - **Workspace ID**: `WorkspaceId`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SIGNL4_CL` |
 | | `SecurityIncident` |
 | **Connector Definition Files** | [DerdackSIGNL4.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SIGNL4/Data%20Connectors/DerdackSIGNL4.json) |

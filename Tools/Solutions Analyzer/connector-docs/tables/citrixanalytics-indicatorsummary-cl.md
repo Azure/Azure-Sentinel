@@ -1,7 +1,7 @@
 # CitrixAnalytics_indicatorSummary_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CitrixAnalytics_indicatorSummary_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

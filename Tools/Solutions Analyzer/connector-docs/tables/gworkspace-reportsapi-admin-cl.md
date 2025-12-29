@@ -1,7 +1,7 @@
 # GWorkspace_ReportsAPI_admin_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GWorkspace_ReportsAPI_admin_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

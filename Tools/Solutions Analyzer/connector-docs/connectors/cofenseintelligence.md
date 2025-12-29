@@ -1,10 +1,11 @@
 # Cofense Intelligence Threat Indicators Ingestion
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CofenseIntelligence` |
 | **Publisher** | Cofense |
 | **Used in Solutions** | [CofenseIntelligence](../solutions/cofenseintelligence.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [CofenseIntelligence_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CofenseIntelligence/Data%20Connectors/CofenseIntelligenceDataConnector/CofenseIntelligence_API_FunctionApp.json) |
 
 The [Cofense-Intelligence](https://cofense.com/product-services/phishing-intelligence/) data connector provides the following capabilities: 

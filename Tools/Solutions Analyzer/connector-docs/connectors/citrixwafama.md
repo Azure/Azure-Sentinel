@@ -1,10 +1,11 @@
 # [Deprecated] Citrix WAF (Web App Firewall) via AMA
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CitrixWAFAma` |
 | **Publisher** | Citrix Systems Inc. |
 | **Used in Solutions** | [Citrix Web App Firewall](../solutions/citrix-web-app-firewall.md) |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [template_Citrix_WAFAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20Web%20App%20Firewall/Data%20Connectors/template_Citrix_WAFAMA.json) |
 
  Citrix WAF (Web App Firewall) is an industry leading enterprise-grade WAF solution. Citrix WAF mitigates threats against your public-facing assets, including websites, apps, and APIs. From layer 3 to layer 7, Citrix WAF includes protections such as IP reputation, bot mitigation, defense against the OWASP Top 10 application threats, built-in signatures to protect against application stack vulnerabilities, and more. 

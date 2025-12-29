@@ -1,7 +1,7 @@
 # BitsightBreaches_data_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `BitsightBreaches_data_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

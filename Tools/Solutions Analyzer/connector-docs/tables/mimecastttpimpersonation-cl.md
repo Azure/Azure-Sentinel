@@ -1,7 +1,7 @@
 # MimecastTTPImpersonation_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `MimecastTTPImpersonation_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

@@ -2,8 +2,8 @@
 
 Reference for AZFWFlowTrace table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AZFWFlowTrace` |
 | **Category** | Azure Resources |
 | **Solutions Using Table** | 1 |

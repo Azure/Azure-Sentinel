@@ -1,7 +1,7 @@
 # DynatraceAttacks_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DynatraceAttacks_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

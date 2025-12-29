@@ -1,10 +1,11 @@
 # Google Kubernetes Engine (via Codeless Connector Framework)
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `GKECCPDefinition` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Google Kubernetes Engine](../solutions/google-kubernetes-engine.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [GoogleKubernetesEngineLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Kubernetes%20Engine/Data%20Connectors/GoogleKubernetesEngineLogs_ccp/GoogleKubernetesEngineLogs_ConnectorDefinition.json) |
 
 The Google Kubernetes Engine (GKE) Logs enable you to capture cluster activity, workload behavior, and security events, allowing you to monitor Kubernetes workloads, analyze performance, and detect potential threats across GKE clusters.

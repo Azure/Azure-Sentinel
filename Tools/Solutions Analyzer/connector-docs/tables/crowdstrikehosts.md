@@ -2,8 +2,8 @@
 
 Reference for CrowdStrikeHosts table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CrowdStrikeHosts` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Trend Micro |
 | **Support Tier** | Partner |
 | **Support Link** | [https://success.trendmicro.com/dcx/s/?language=en_US](https://success.trendmicro.com/dcx/s/?language=en_US) |
@@ -70,8 +70,8 @@ This method provides an automated deployment of the Trend Vision One connector u
 4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
 5. Click **Purchase** to deploy.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `TrendMicro_XDR_OAT_CL` |
 | | `TrendMicro_XDR_RCA_Result_CL` |
 | | `TrendMicro_XDR_RCA_Task_CL` |

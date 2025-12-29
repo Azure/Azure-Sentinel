@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Dataminr Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.dataminr.com/dataminr-support#support](https://www.dataminr.com/dataminr-support#support) |
@@ -256,8 +256,8 @@ If you're already signed in, go to the next step.
 
 *Now we are done with the adding integration settings for Dataminr RTAP. Once the Dataminr RTAP send an alert data, Function app is triggered and you should be able to see the Alerts data from the Dataminr Pulse into LogAnalytics workspace table called "DataminrPulse_Alerts_CL".*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `DataminrPulse_Alerts_CL` |
 | **Connector Definition Files** | [DataminrPulseAlerts_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dataminr%20Pulse/Data%20Connectors/DataminrPulseAlerts/DataminrPulseAlerts_FunctionApp.json) |
 

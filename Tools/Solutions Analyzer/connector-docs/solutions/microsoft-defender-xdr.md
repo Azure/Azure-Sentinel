@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Microsoft Corporation |
 | **Support Tier** | Microsoft |
 | **Support Link** | [https://support.microsoft.com](https://support.microsoft.com) |
@@ -62,8 +62,8 @@ Connect Microsoft Defender XDR incidents to your Microsoft Sentinel. Incidents w
 **2. Connect events**
 > 📋 **Additional Configuration Step**: This connector includes a configuration step of type `MicrosoftDefenderATPEvents`. Please refer to the Microsoft Sentinel portal for detailed configuration options for this step.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `AlertEvidence` |
 | | `CloudAppEvents` |
 | | `DeviceEvents` |

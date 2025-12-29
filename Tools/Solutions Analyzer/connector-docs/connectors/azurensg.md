@@ -1,10 +1,11 @@
 # Network Security Groups
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `AzureNSG` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Azure Network Security Groups](../solutions/azure-network-security-groups.md) |
+| **Collection Method** | Azure Diagnostics |
 | **Connector Definition Files** | [AzureNSG.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Network%20Security%20Groups/Data%20Connectors/AzureNSG.JSON) |
 
 Azure network security groups (NSG) allow you to filter network traffic to and from Azure resources in an Azure virtual network. A network security group includes rules that allow or deny traffic to a virtual network subnet, network interface, or both.

@@ -1,7 +1,7 @@
 # Ipinfo_RIRWHOIS_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_RIRWHOIS_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

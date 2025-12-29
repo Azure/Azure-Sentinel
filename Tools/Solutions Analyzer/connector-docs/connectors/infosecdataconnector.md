@@ -1,10 +1,11 @@
 # InfoSecGlobal Data Connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `InfoSecDataConnector` |
 | **Publisher** | InfoSecGlobal |
 | **Used in Solutions** | [AgileSec Analytics Connector](../solutions/agilesec-analytics-connector.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Connector_Analytics_InfoSec.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AgileSec%20Analytics%20Connector/Data%20Connectors/Connector_Analytics_InfoSec.json) |
 
 Use this data connector to integrate with InfoSec Crypto Analytics and get data sent directly to Microsoft Sentinel.

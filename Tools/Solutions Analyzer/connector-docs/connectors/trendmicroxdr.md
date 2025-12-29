@@ -1,10 +1,11 @@
 # Trend Vision One
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `TrendMicroXDR` |
 | **Publisher** | Trend Micro |
 | **Used in Solutions** | [Trend Micro Vision One](../solutions/trend-micro-vision-one.md) |
+| **Collection Method** | Azure Function |
 | **Connector Definition Files** | [TrendMicroXDR.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Vision%20One/Data%20Connectors/TrendMicroXDR.json) |
 
 The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detection-response/xdr.html) connector allows you to easily connect your Workbench alert data with Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.

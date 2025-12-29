@@ -2,8 +2,8 @@
 
 Creation and modification of registry entries
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceRegistryEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

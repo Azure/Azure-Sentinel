@@ -2,8 +2,8 @@
 
 Reference for ThreatIntelligenceIndicator table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `ThreatIntelligenceIndicator` |
 | **Category** | Security |
 | **Solutions Using Table** | 10 |

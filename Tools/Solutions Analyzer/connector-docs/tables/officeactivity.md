@@ -2,8 +2,8 @@
 
 Reference for OfficeActivity table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `OfficeActivity` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

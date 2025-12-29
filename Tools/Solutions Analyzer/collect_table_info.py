@@ -607,7 +607,12 @@ def fetch_table_details(table_name: str, verbose: bool = False) -> Dict:
             # Clean up markdown formatting
             value = re.sub(r'\*\*([^*]+)\*\*', r'\1', value)  # Remove bold
             value = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', value)  # Remove links
-            details[key] = value.strip()
+            # Convert <br> tags to commas for multi-value fields
+            value = re.sub(r'<br\s*/?>', ', ', value)
+            value = re.sub(r'\s*,\s*', ', ', value)  # Normalize comma spacing
+            value = re.sub(r',\s*,', ',', value)  # Remove empty items (consecutive commas)
+            value = re.sub(r'\s*,\s*', ', ', value)  # Re-normalize comma spacing
+            details[key] = value.strip().strip(',')
     
     # If description not found in YAML, try to extract from content
     # The first paragraph after the title heading is usually the description
@@ -979,6 +984,16 @@ Examples:
                     info.solutions = details['solutions']
                 if details['resource_types'] and not info.resource_types:
                     info.resource_types = details['resource_types']
+                # Merge categories from individual page
+                if details['categories']:
+                    if info.category:
+                        # Merge if different
+                        existing_cats = set(c.strip() for c in info.category.split(','))
+                        new_cats = set(c.strip() for c in details['categories'].split(','))
+                        all_cats = existing_cats | new_cats
+                        info.category = ', '.join(sorted(all_cats))
+                    else:
+                        info.category = details['categories']
                 if details['retention_default'] and not info.retention_default:
                     info.retention_default = details['retention_default']
                 if details['retention_max'] and not info.retention_max:

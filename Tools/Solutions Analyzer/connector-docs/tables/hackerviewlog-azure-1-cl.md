@@ -1,7 +1,7 @@
 # HackerViewLog_Azure_1_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `HackerViewLog_Azure_1_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

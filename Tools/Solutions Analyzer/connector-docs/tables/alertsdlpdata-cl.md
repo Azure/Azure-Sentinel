@@ -1,7 +1,7 @@
 # alertsdlpdata_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `alertsdlpdata_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

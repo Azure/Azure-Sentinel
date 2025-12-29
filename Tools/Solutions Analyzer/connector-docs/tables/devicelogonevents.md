@@ -2,8 +2,8 @@
 
 Sign-ins and other authentication events on devices
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DeviceLogonEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

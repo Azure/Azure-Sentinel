@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SlashNext |
 | **Support Tier** | Partner |
 | **Support Link** | [https://slashnext.com/support](https://slashnext.com/support) |

@@ -2,8 +2,8 @@
 
 Events involving an on-premises domain controller running Active Directory (AD). This table covers a range of identity-related events and system events on the domain controller.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `IdentityDirectoryEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

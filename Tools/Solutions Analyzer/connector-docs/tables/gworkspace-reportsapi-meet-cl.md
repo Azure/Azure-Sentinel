@@ -1,7 +1,7 @@
 # GWorkspace_ReportsAPI_meet_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GWorkspace_ReportsAPI_meet_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

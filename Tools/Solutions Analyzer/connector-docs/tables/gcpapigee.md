@@ -2,8 +2,8 @@
 
 Reference for GCPApigee table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPApigee` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

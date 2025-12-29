@@ -1,10 +1,11 @@
 # Elastic Agent
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `ElasticAgent` |
 | **Publisher** | Elastic |
 | **Used in Solutions** | [ElasticAgent](../solutions/elasticagent.md) |
+| **Collection Method** | Unknown (Custom Log) |
 | **Connector Definition Files** | [Connector_ElasticAgent.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ElasticAgent/Data%20Connectors/Connector_ElasticAgent.json) |
 
 The [Elastic Agent](https://www.elastic.co/security) data connector provides the capability to ingest Elastic Agent logs, metrics, and security data into Microsoft Sentinel.

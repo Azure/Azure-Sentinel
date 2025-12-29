@@ -2,8 +2,8 @@
 
 Reference for AWSNetworkFirewallFlow table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSNetworkFirewallFlow` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

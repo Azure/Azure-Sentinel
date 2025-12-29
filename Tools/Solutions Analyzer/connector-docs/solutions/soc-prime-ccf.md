@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SOC Prime |
 | **Support Tier** | Partner |
 | **Support Link** | [https://socprime.com/](https://socprime.com/) |
@@ -42,8 +42,8 @@ The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) da
 - **SOC Prime API Key**: (password field)
 - Click 'Connect' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SOCPrimeAuditLogs_CL` |
 | **Connector Definition Files** | [SOCPrime_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Prime%20CCF/Data%20Connectors/SOCPrime_ccp/SOCPrime_DataConnectorDefinition.json) |
 

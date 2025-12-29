@@ -2,8 +2,8 @@
 
 Reference for GCPNATAudit table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPNATAudit` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

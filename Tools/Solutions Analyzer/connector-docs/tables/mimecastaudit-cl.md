@@ -1,7 +1,7 @@
 # MimecastAudit_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `MimecastAudit_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

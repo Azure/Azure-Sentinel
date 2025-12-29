@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Semperis |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.semperis.com/contact-us/](https://www.semperis.com/contact-us/) |
@@ -91,8 +91,8 @@ Configure your **Semperis DSP Management Server** to send CEF logs to the Linux 
 
 > You should now be able to receive logs in the *Windows event log* table and *common log* table, log data can be parsed using the **dsp_parser()** function, used by all query samples, workbooks and analytic templates.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SecurityEvent` |
 | **Connector Definition Files** | [SemperisDSP-connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Semperis%20Directory%20Services%20Protector/Data%20Connectors/SemperisDSP-connector.json) |
 

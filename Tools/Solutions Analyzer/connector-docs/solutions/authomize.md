@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Authomize |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.authomize.com](https://support.authomize.com) |
@@ -46,8 +46,8 @@ Follow the Instructions on [deploying the data connector to ingest data from Aut
 
 Validate that your script is running. Simple instructions are located under the [Authomize Data Connector area](https://github.com/authomize/Open-ITDR/blob/main/Open-Connectors/Platform/Azure-Sentinel/Data%20Connectors/readme.md).
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Authomize_v2_CL` |
 | **Connector Definition Files** | [AuthomizeCustomConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Authomize/Data%20Connectors/AuthomizeCustomConnector.json) |
 

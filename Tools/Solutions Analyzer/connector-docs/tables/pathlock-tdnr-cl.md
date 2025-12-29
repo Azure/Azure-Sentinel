@@ -1,7 +1,7 @@
 # Pathlock_TDnR_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Pathlock_TDnR_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

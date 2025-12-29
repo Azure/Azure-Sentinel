@@ -1,7 +1,7 @@
 # eventsconnectiondata_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `eventsconnectiondata_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

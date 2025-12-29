@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | ServiceNow |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.servicenow.com/now](https://support.servicenow.com/now) |

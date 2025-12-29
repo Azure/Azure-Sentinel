@@ -1,7 +1,7 @@
 # NexposeInsightVMCloud_vulnerabilities_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NexposeInsightVMCloud_vulnerabilities_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

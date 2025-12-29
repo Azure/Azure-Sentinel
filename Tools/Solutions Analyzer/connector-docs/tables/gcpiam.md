@@ -2,8 +2,8 @@
 
 Reference for GCPIAM table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GCPIAM` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

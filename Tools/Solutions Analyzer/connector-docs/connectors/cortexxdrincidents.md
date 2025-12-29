@@ -1,10 +1,11 @@
 # Cortex XDR - Incidents
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `CortexXDRIncidents` |
 | **Publisher** | DEFEND Ltd. |
 | **Used in Solutions** | [Cortex XDR](../solutions/cortex-xdr.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [CortexXDR_DataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cortex%20XDR/Data%20Connectors/CortexXDR_DataConnector.json) |
 
 Custom Data connector from DEFEND to utilise the Cortex API to ingest incidents from Cortex XDR platform into Microsoft Sentinel.

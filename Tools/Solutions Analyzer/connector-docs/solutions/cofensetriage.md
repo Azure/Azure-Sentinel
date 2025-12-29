@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Cofense Support |
 | **Support Tier** | Partner |
 | **Support Link** | [https://cofense.com/contact-support/](https://cofense.com/contact-support/) |
@@ -233,8 +233,8 @@ If you're already signed in, go to the next step.
  - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.
 4. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `Cofense_Triage_failed_indicators_CL` |
 | | `Report_links_data_CL` |
 | | `ThreatIntelligenceIndicator` |

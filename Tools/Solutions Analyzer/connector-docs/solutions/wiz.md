@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Wiz |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.wiz.io/](https://support.wiz.io/) |
@@ -71,8 +71,8 @@ Follow the instructions on [Wiz documentation](https://docs.wiz.io/wiz-docs/docs
 
 >Follow [Wiz documentation](https://docs.wiz.io/wiz-docs/docs/azure-sentinel-native-integration#manual-deployment) to deploy the connector manually.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `WizAuditLogsV2_CL` |
 | | `WizAuditLogs_CL` |
 | | `WizIssuesV2_CL` |

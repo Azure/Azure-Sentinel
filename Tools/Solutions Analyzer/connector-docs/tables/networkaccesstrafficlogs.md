@@ -1,7 +1,7 @@
 # NetworkAccessTrafficLogs
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `NetworkAccessTrafficLogs` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

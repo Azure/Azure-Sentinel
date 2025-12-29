@@ -1,7 +1,7 @@
 # RedCanaryDetections_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `RedCanaryDetections_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

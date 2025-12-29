@@ -1,7 +1,7 @@
 # MailGuard365_Threats_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `MailGuard365_Threats_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

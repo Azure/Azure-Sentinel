@@ -2,8 +2,8 @@
 
 Queries for Active Directory objects, such as users, groups, devices, and domains
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `IdentityQueryEvents` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

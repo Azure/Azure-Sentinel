@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | purestoragemarketplaceadmin |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.purestorage.com](https://support.purestorage.com) |

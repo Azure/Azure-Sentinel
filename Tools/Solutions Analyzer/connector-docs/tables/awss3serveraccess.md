@@ -2,8 +2,8 @@
 
 Reference for AWSS3ServerAccess table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSS3ServerAccess` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

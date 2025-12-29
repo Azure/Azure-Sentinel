@@ -1,10 +1,11 @@
 # BigID DSPM connector
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `BigIDDSPMLogsConnectorDefinition` |
 | **Publisher** | BigID |
 | **Used in Solutions** | [BigID](../solutions/bigid.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [BigIDDSPMLogs_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BigID/Data%20Connectors/BigIDDSPMLogs_ccp/BigIDDSPMLogs_connectorDefinition.json) |
 
 The [BigID DSPM](https://bigid.com/data-security-posture-management/) data connector provides the capability to ingest BigID DSPM cases with affected objects and datasource information into Microsoft Sentinel.

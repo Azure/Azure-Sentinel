@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Orca Security |
 | **Support Tier** | Partner |
 | **Support Link** | [https://orca.security/about/contact/](https://orca.security/about/contact/) |
@@ -37,8 +37,8 @@ Follow [guidance](https://orcasecurity.zendesk.com/hc/en-us/articles/36004394199
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `OrcaAlerts_CL` |
 | **Connector Definition Files** | [OrcaSecurityAlerts.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Orca%20Security%20Alerts/Data%20Connectors/OrcaSecurityAlerts.json) |
 

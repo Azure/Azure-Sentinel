@@ -1,7 +1,7 @@
 # CloudflareV2_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CloudflareV2_CL` |
 | **Solutions Using Table** | 2 |
 | **Connectors Ingesting** | 1 |

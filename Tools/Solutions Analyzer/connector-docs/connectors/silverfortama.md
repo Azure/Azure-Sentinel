@@ -1,10 +1,11 @@
 # Silverfort Admin Console
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `SilverfortAma` |
 | **Publisher** | Silverfort |
 | **Used in Solutions** | [Silverfort](../solutions/silverfort.md) |
+| **Collection Method** | MMA |
 | **Connector Definition Files** | [SilverfortAma.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Data%20Connectors/SilverfortAma.json) |
 
 The [Silverfort](https://silverfort.com) ITDR Admin Console connector solution allows ingestion of Silverfort events and logging into Microsoft Sentinel.

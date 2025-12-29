@@ -1,7 +1,7 @@
 # CyfirmaBIProductSolutionAlerts_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `CyfirmaBIProductSolutionAlerts_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

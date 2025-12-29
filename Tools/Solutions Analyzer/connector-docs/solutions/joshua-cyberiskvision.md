@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Joshua Cyberiskvision |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.cyberiskvision.com/](https://www.cyberiskvision.com/) |

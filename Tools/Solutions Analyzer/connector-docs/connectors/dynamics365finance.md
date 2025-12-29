@@ -1,10 +1,11 @@
 # Dynamics 365 Finance and Operations
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Connector ID** | `Dynamics365Finance` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Microsoft Business Applications](../solutions/microsoft-business-applications.md) |
+| **Collection Method** | CCF |
 | **Connector Definition Files** | [DynamicsFinOps_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Business%20Applications/Data%20Connectors/DynamicsFinOpsPollerConnector/DynamicsFinOps_DataConnectorDefinition.json) |
 
 Dynamics 365 for Finance and Operations is a comprehensive Enterprise Resource Planning (ERP) solution that combines financial and operational capabilities to help businesses manage their day-to-day operations. It offers a range of features that enable businesses to streamline workflows, automate tasks, and gain insights into operational performance.

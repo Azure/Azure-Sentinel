@@ -1,7 +1,7 @@
 # GoogleWorkspaceReports_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `GoogleWorkspaceReports_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

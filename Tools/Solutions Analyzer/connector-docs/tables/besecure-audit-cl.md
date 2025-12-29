@@ -1,7 +1,7 @@
 # beSECURE_Audit_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `beSECURE_Audit_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

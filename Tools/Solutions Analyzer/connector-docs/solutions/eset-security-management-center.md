@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Eset |
 | **Support Tier** | partner |
 | **Support Link** | [https://support.eset.com/en](https://support.eset.com/en) |
@@ -147,8 +147,8 @@ Configure Eset Logs using BSD style and JSON format.
 - Go to Syslog server configuration as described in [Eset documentation](https://help.eset.com/esmc_admin/72/en-US/admin_server_settings.html?admin_server_settings_syslog.html) and configure Host (your connector), Format BSD, Transport TCP
 - Go to Logging section as described in [Eset documentation](https://help.eset.com/esmc_admin/72/en-US/admin_server_settings.html?admin_server_settings_export_to_syslog.html) and enable JSON
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `eset_CL` |
 | **Connector Definition Files** | [esetSmc.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Eset%20Security%20Management%20Center/Data%20Connectors/esetSmc.json) |
 

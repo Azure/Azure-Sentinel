@@ -1,7 +1,7 @@
 # Ipinfo_Company_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `Ipinfo_Company_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

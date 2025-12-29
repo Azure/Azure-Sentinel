@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | Morphisec |
 | **Support Tier** | Partner |
 | **Support Link** | [https://support.morphisec.com/support/home](https://support.morphisec.com/support/home) |
@@ -44,8 +44,8 @@ With this solution, you can empower your SOC to leverage Morphisec's powerful th
 - **Tenant ID**: Enter your Morphisec Tenant ID
 - Click 'Connect to Morphisec' to establish connection
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `MorphisecAlerts_CL` |
 | **Connector Definition Files** | [Morphisec_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Morphisec/Data%20Connectors/Morphisec_CCF/Morphisec_ConnectorDefinition.json) |
 

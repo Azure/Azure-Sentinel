@@ -2,8 +2,8 @@
 
 Reference for AWSNetworkFirewallAlert table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `AWSNetworkFirewallAlert` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |

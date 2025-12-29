@@ -1,7 +1,7 @@
 # DruvaInsyncEvents_CL
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `DruvaInsyncEvents_CL` |
 | **Solutions Using Table** | 1 |
 | **Connectors Ingesting** | 1 |

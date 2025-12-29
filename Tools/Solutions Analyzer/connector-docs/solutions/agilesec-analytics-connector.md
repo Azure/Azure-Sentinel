@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | InfoSecGlobal |
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.infosecglobal.com/](https://www.infosecglobal.com/) |
@@ -40,8 +40,8 @@ Use this data connector to integrate with InfoSec Crypto Analytics and get data 
 - **Primary Key**: `PrimaryKey`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `InfoSecAnalytics_CL` |
 | **Connector Definition Files** | [Connector_Analytics_InfoSec.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AgileSec%20Analytics%20Connector/Data%20Connectors/Connector_Analytics_InfoSec.json) |
 

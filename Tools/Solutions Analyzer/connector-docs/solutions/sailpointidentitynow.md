@@ -2,8 +2,8 @@
 
 ## Solution Information
 
-| | |
-|------------------------|-------|
+| Attribute | Value |
+|:------------------------|:------|
 | **Publisher** | SailPoint |
 | **Support Tier** | Partner |
 | **Categories** | domains |
@@ -113,8 +113,8 @@ If you're already signed in, go to the next step.
 > - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.
 3. Once all application settings have been entered, click **Save**.
 
-| | |
-|--------------------------|---|
+| Attribute | Value |
+|:-------------------------|:---|
 | **Tables Ingested** | `SailPointIDN_Events_CL` |
 | | `SailPointIDN_Triggers_CL` |
 | **Connector Definition Files** | [SailPoint_IdentityNow_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Data%20Connectors/SailPoint_IdentityNow_FunctionApp.json) |

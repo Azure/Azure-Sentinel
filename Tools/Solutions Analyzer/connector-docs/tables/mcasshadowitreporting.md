@@ -2,8 +2,8 @@
 
 Reference for McasShadowItReporting table in Azure Monitor Logs.
 
-| | |
-|----------|-------|
+| Attribute | Value |
+|:----------|:------|
 | **Table Name** | `McasShadowItReporting` |
 | **Category** | Security |
 | **Solutions Using Table** | 1 |
