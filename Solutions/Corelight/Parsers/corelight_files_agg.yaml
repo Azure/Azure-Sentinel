@@ -1,0 +1,114 @@
+id: db9b0306-2100-4bb3-b731-50ae5c8b8fea
+Function:
+  Title: Corelight Files Aggregated Events
+  Version: '1.1.0'
+  LastUpdated: '2025-11-26'
+Category: Microsoft Sentinel Parser
+FunctionName: corelight_files_agg
+FunctionAlias: corelight_files_agg
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_files_agg = view () {
+        union isfuzzy=true
+            Corelight_v2_files_agg_CL,
+            dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+            ( corelight_conn
+            | project uid, local_orig, local_resp    
+            ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend
+            path=column_ifexists("_path_s", ""),
+            system_name=column_ifexists("_system_name_s", ""),
+            id_orig_h=column_ifexists("id_orig_h_s", ""),
+            id_orig_p=column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h=column_ifexists("id_resp_h_s", ""),
+            id_resp_p=column_ifexists("id_resp_p_d", real(null)),
+            source = column_ifexists("source_s", ""),
+            analyzers = column_ifexists("analyzers_s", ""),
+            filename = column_ifexists("filename_s", ""),
+            md5 = column_ifexists("md5_s", ""),
+            is_orig = column_ifexists("is_orig_b", ""),
+            local_orig = column_ifexists("local_orig_b", ""),
+            sha1 = column_ifexists("sha1_s", ""),
+            sha256 = column_ifexists("sha256_s", ""),
+            fuid = column_ifexists("fuid_s", ""),
+            uid=column_ifexists("uid_s", ""),
+            parent_fuid = column_ifexists("parent_fuid_s", ""),
+            mime_type = column_ifexists("mime_type_s", ""),
+            duration = column_ifexists("duration_d", real(null)),
+            seen_bytes = column_ifexists("seen_bytes_d", real(null)),
+            total_bytes = column_ifexists("total_bytes_d", real(null)),
+            missing_bytes = column_ifexists("missing_bytes_d", real(null)),
+            overflow_bytes = column_ifexists("overflow_bytes_d", real(null)),
+            timedout = column_ifexists("timedout_b", ""),
+            depth = column_ifexists("depth_d", real(null))
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "files_agg",
+            ts = TimeGenerated,
+            bytes = seen_bytes,
+            file_size = total_bytes,
+            file_name = filename,
+            object = filename,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            app = source,
+            file_hash = coalesce(md5, sha1, sha256, "unknown"),
+            sensor_name = coalesce(system_name, "unknown")
+        | extend
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false")
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            source,
+            analyzers,
+            filename,
+            md5,
+            is_orig,
+            local_orig,
+            sha1,
+            sha256,
+            fuid,
+            uid,
+            parent_fuid,
+            mime_type,
+            duration,
+            seen_bytes,
+            total_bytes,
+            missing_bytes,
+            overflow_bytes,
+            timedout,
+            depth,
+            bytes,
+            file_size,
+            file_name,
+            object,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            app,
+            file_hash,
+            sensor_name,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts
+    };
+    corelight_files_agg
