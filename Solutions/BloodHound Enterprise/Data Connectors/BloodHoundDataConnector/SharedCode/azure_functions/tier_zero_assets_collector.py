@@ -1,9 +1,11 @@
 import logging
 import time
+import datetime
+import json
 from azure.core.exceptions import ResourceNotFoundError
 
 from ..utility.utils import (
-    load_environment_configs
+    load_environment_configs, get_azure_batch_size
 )
 from ..utility.bloodhound_manager import BloodhoundManager
 
@@ -16,7 +18,7 @@ def send_tier_zero_assets_to_azure_monitor(
     filtered_domains_by_env,
 ):
     """
-    Sends tier zero assets data to Azure Monitor and returns the count of successful and failed submissions.
+    Sends tier zero assets data to Azure Monitor in batches of 100 and returns the count of successful and failed submissions.
     """
     successful_submissions = 0
     failed_submissions = 0
@@ -25,24 +27,77 @@ def send_tier_zero_assets_to_azure_monitor(
         logging.info("No Tier Zero Assets data to send to Azure Monitor for this environment.")
         return successful_submissions, failed_submissions
 
-    for idx, data in enumerate(nodes_array, 1):
-        logging.info(
-            f"Sending Tier Zero Asset data {idx}/{len(nodes_array)}: ID {data.get('nodeId')} ({data.get('name')})"
-        )
-        res = bloodhound_manager.send_tier_zero_assets_data(
-            data, azure_monitor_token, filtered_domains_by_env
-        )
-
-        if res.get("status") == "success":
-            successful_submissions += 1
-        else:
-            failed_submissions += 1
-            logging.error(
-                f"Failed to send Tier Zero Asset data ID {data.get('nodeId')}: "
-                f"{res.get('message', 'Unknown error')}"
+    batch_size = get_azure_batch_size()
+    logging.info(f"Sending {len(nodes_array)} Tier Zero Assets to Azure Monitor in batches of {batch_size}.")
+    
+    # Process in batches
+    for batch_start in range(0, len(nodes_array), batch_size):
+        batch_end = min(batch_start + batch_size, len(nodes_array))
+        batch = nodes_array[batch_start:batch_end]
+        
+        # Transform batch entries to the expected schema for Azure Monitor
+        log_entries = []
+        for node_data in batch:
+            properties = node_data.get("properties", {})
+            node_id = node_data.get("nodeId", "")
+            name = bloodhound_manager.extract_name(node_data, properties, node_id)
+            domain_name = bloodhound_manager.extract_domain_name(
+                node_data, properties, name, filtered_domains_by_env
             )
-
-        time.sleep(0.1)  # small pause for rate limiting
+            
+            # Initialize base log entry with common fields
+            log_entry = {
+                "nodeId": node_id,
+                "label": node_data.get("label", ""),
+                "kindType": node_data.get("kind", ""),
+                "objectId": node_data.get(
+                    "objectId", properties.get("owner_objectid", "")
+                ),  # Prioritize nodeId's objectId, then properties
+                "isTierZero": node_data.get("isTierZero", False),
+                "isOwnedObject": node_data.get("isOwnedObject", False),
+                "lastSeen": node_data.get("lastSeen", ""),
+                "tenant_url": current_tenant_domain,
+                "domain_name": domain_name.upper(),  # Ensure domain name is uppercase
+                "name": name,
+                "TimeGenerated": datetime.datetime.now(datetime.timezone.utc).isoformat(
+                    timespec="milliseconds"
+                )
+                + "Z",  # Standard Azure Monitor timestamp
+            }
+            
+            # Dynamically add all properties from the node
+            for prop_key, prop_value in properties.items():
+                # Flatten some common nested properties or rename for clarity if needed
+                if prop_key == "date":  # Example of specific mapping if desired
+                    log_entry["Date"] = prop_value
+                elif prop_key == "title":
+                    log_entry["Title"] = prop_value
+                else:
+                    # Add all other properties as is
+                    log_entry[prop_key] = prop_value
+            
+            log_entries.append(log_entry)
+        
+        logging.info(f"Sending batch {batch_start//batch_size + 1} ({len(log_entries)} entries): IDs {[log.get('nodeId', 'unknown') for log in log_entries[:5]]}...")
+        
+        # Send batch to Azure Monitor
+        result = bloodhound_manager._send_to_azure_monitor(
+            log_entries,
+            azure_monitor_token,
+            bloodhound_manager.dce_uri,
+            bloodhound_manager.dcr_immutable_id,
+            bloodhound_manager.table_name
+        )
+        
+        if result and result.get("status") == "success":
+            entries_sent = result.get("entries_sent", len(log_entries))
+            successful_submissions += entries_sent
+            logging.info(f"Successfully sent batch of {entries_sent} Tier Zero Assets")
+        else:
+            failed_submissions += len(log_entries)
+            logging.error(f"Failed to send batch: {result.get('message', 'Unknown error') if result else 'No response'}")
+        
+        # Rate limiting is handled automatically by azure_monitor_rate_limiter in _send_to_azure_monitor()
 
     logging.info(
         f"Tier Zero Asset processing for '{current_tenant_domain}' complete. "

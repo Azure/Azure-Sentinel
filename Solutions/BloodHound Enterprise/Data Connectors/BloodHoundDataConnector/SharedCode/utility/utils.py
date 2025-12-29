@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple, Optional, Any
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.core.exceptions import ResourceNotFoundError
+from .constant import DEFAULT_LOOKBACK_DAYS
 
 @dataclass
 class EnvironmentConfig:
@@ -99,8 +100,8 @@ def load_environment_configs(table_name: str) -> Tuple[List[EnvironmentConfig], 
         "DCR_IMMUTABLE_ID",
         table_name,
         "KEY_VAULT_URL",
-        # "BLOODHOUND_TOKEN_ID",
-        # "BLOODHOUND_TOKEN_KEY",
+        "BLOODHOUND_TOKEN_ID",
+        "BLOODHOUND_TOKEN_KEY",
         "SELECTED_BLOODHOUND_ENVIRONMENTS",
         "SELECTED_FINDING_TYPES"
     ])
@@ -108,21 +109,21 @@ def load_environment_configs(table_name: str) -> Tuple[List[EnvironmentConfig], 
     # Parse environment configs
     tenant_domains = [td.strip() for td in env_vars["BLOODHOUND_TENANT_DOMAIN"].split(',')]
     
-    # if env_vars["BLOODHOUND_TOKEN_ID"] and env_vars["BLOODHOUND_TOKEN_KEY"]:
-    #     token_ids = [tid.strip() for tid in env_vars["BLOODHOUND_TOKEN_ID"].split(',')]
-    #     token_keys = [tkey.strip() for tkey in env_vars["BLOODHOUND_TOKEN_KEY"].split(',')]
-    # else:
-    #     token_ids, token_keys = get_token_lists(
-    #         key_vault_url=env_vars["KEY_VAULT_URL"],
-    #         token_ids_secret_name=env_vars["BLOODHOUND_TOKEN_ID_SECRET_NAME"],
-    #         token_keys_secret_name=env_vars["BLOODHOUND_TOKEN_KEY_SECRET_NAME"]
-    #     )
-
-    token_ids, token_keys = get_token_lists(
+    if env_vars["BLOODHOUND_TOKEN_ID"] and env_vars["BLOODHOUND_TOKEN_KEY"]:
+        token_ids = [tid.strip() for tid in env_vars["BLOODHOUND_TOKEN_ID"].split(',')]
+        token_keys = [tkey.strip() for tkey in env_vars["BLOODHOUND_TOKEN_KEY"].split(',')]
+    else:
+        token_ids, token_keys = get_token_lists(
             key_vault_url=env_vars["KEY_VAULT_URL"],
             token_ids_secret_name=env_vars["BLOODHOUND_TOKEN_ID_SECRET_NAME"],
             token_keys_secret_name=env_vars["BLOODHOUND_TOKEN_KEY_SECRET_NAME"]
         )
+
+    # token_ids, token_keys = get_token_lists(
+    #         key_vault_url=env_vars["KEY_VAULT_URL"],
+    #         token_ids_secret_name=env_vars["BLOODHOUND_TOKEN_ID_SECRET_NAME"],
+    #         token_keys_secret_name=env_vars["BLOODHOUND_TOKEN_KEY_SECRET_NAME"]
+    #     )
 
     if not (len(tenant_domains) == len(token_ids) == len(token_keys)):
         raise ValueError("Environment variable lists for domains, token IDs, and token keys have a mismatch in length")
@@ -153,3 +154,52 @@ def load_environment_configs(table_name: str) -> Tuple[List[EnvironmentConfig], 
     )
 
     return env_configs, azure_config
+
+def get_lookup_days():
+    """
+    Fetch the LOOKUP_DAYS value from the environment variable.
+    If not set, fallback to the DEFAULT_LOOKBACK_DAYS from the constant file.
+    """
+    lookup_days = int(os.getenv("LOOKUP_DAYS", DEFAULT_LOOKBACK_DAYS))
+    return lookup_days
+
+def get_api_page_size():
+    """
+    Fetch the API_PAGE_SIZE value from the environment variable.
+    Used for pagination when fetching data from BloodHound API (audit logs, attack paths).
+    Default: 1000
+    Maximum: 1000 (values > 1000 will be capped at 1000)
+    """
+    page_size = int(os.getenv("API_PAGE_SIZE", "1000"))
+    return min(page_size, 1000)
+
+def get_azure_batch_size():
+    """
+    Fetch the AZURE_BATCH_SIZE value from the environment variable.
+    Used for batching when sending data to Azure Monitor.
+    Default: 100
+    Maximum: 100 (values > 100 will be capped at 100)
+    """
+    batch_size = int(os.getenv("AZURE_BATCH_SIZE", "100"))
+    return min(batch_size, 100)
+
+def get_max_retries():
+    """
+    Fetch the MAX_RETRIES value from the environment variable.
+    Used for retrying failed API requests (rate limit errors).
+    Default: 9
+    Maximum: 9 (values > 9 will be capped at 9)
+    """
+    max_retries = int(os.getenv("MAX_RETRIES", "9"))
+    return min(max_retries, 9)
+
+def get_max_requests_per_second():
+    """
+    Fetch the MAX_REQUESTS_PER_SECOND_LIMIT value from the environment variable.
+    Used for global rate limiting of BloodHound API requests.
+    Default: 50.0 (well under the 65 requests/second limit)
+    Recommended: Keep between 40-55 to provide safety margin
+    """
+    max_rps = float(os.getenv("MAX_REQUESTS_PER_SECOND_LIMIT", "50.0"))
+    # Cap at 50 to ensure we never exceed the 65 limit
+    return min(max_rps, 50.0)

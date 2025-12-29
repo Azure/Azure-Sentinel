@@ -1,9 +1,10 @@
 import logging
 import time
 import datetime
+import json
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
-from ..utility.utils import load_environment_configs, EnvironmentConfig, AzureConfig
+from ..utility.utils import load_environment_configs, EnvironmentConfig, AzureConfig, get_lookup_days, get_azure_batch_size
 from ..utility.bloodhound_manager import BloodhoundManager
 
 @dataclass
@@ -104,12 +105,12 @@ def collect_attack_paths(
     bloodhound_manager: BloodhoundManager,
     domains: List[Dict[str, Any]],
     tenant_domain: str,
-    last_attack_path_timestamps: Dict[str, Dict[str, str]],
-    default_lookback_days: int = 1
+    last_attack_path_timestamps: Dict[str, Dict[str, str]]
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """Collect attack paths for each domain and finding type."""
     all_collected_paths = []
     domain_latest_timestamps = {}
+    default_lookback_days = get_lookup_days()
 
     for domain in domains:
         domain_id = domain.get("id")
@@ -153,6 +154,64 @@ def collect_attack_paths(
 
     return all_collected_paths, domain_latest_timestamps
 
+def _prepare_attack_path_log_entry(attack_data: Dict[str, Any], unique_finding_types_data: Dict[str, Any], 
+                                     tenant_domain: str, domains_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Helper function to prepare a single attack path log entry."""
+    domain_name = ""
+    for domain in domains_data:
+        if domain.get("id") == attack_data.get("DomainSID"):
+            domain_name = domain.get("name", "")
+            break
+
+    finding_type = attack_data.get("Finding", "")
+    path_title = unique_finding_types_data.get(finding_type, "")
+    short_description = unique_finding_types_data.get(f"{finding_type}_short_description", "")
+    short_remediation = unique_finding_types_data.get(f"{finding_type}_short_remediation", "")
+    long_remediation = unique_finding_types_data.get(f"{finding_type}_long_remediation", "")
+
+    return {
+        "Accepted": attack_data.get("Accepted", False),
+        "AcceptedUntil": attack_data.get("AcceptedUntil", ""),
+        "ComboGraphRelationID": str(attack_data.get("ComboGraphRelationID", "")),
+        "created_at": attack_data.get("created_at", ""),
+        "deleted_at": json.dumps(attack_data.get("deleted_at", {})),
+        "DomainSID": attack_data.get("DomainSID", ""),
+        "Environment": attack_data.get("Environment", ""),
+        "ExposureCount": attack_data.get("ExposureCount", 0),
+        "ExposurePercentage": str(round(float(attack_data.get("ExposurePercentage", "0")) * 100, 2)),
+        "Finding": attack_data.get("Finding", ""),
+        "NonTierZeroPrincipalEnvironment": attack_data.get("FromEnvironment", ""),
+        "NonTierZeroPrincipalEnvironmentID": attack_data.get("FromEnvironmentID", ""),
+        "NonTierZeroPrincipal": attack_data.get("FromPrincipal", ""),
+        "NonTierZeroPrincipalKind": attack_data.get("FromPrincipalKind", ""),
+        "NonTierZeroPrincipalName": attack_data.get("FromPrincipalName", ""),
+        "NonTierZeroPrincipalProps": json.dumps(attack_data.get("FromPrincipalProps", {})),
+        "id": int(attack_data.get("id", 0)),
+        "ImpactCount": attack_data.get("ImpactCount", 0),
+        "ImpactPercentage": str(round(float(attack_data.get("ImpactPercentage", "0")) * 100, 2)),
+        "IsInherited": str(attack_data.get("IsInherited", "")),
+        "Principal": attack_data.get("ToPrincipal", ""),
+        "PrincipalHash": attack_data.get("PrincipalHash", ""),
+        "PrincipalKind": attack_data.get("ToPrincipalKind", ""),
+        "PrincipalName": attack_data.get("ToPrincipalName", ""),
+        "RelProps": json.dumps(attack_data.get("RelProps", {})),
+        "Severity": attack_data.get("Severity", ""),
+        "ImpactedPrincipalEnvironment": attack_data.get("ToEnvironment", attack_data.get("Environment")),
+        "ImpactedPrincipalEnvironmentID": attack_data.get("ToEnvironmentID", ""),
+        "ImpactedPrincipal": attack_data.get("ToPrincipal", attack_data.get("Principal")),
+        "ImpactedPrincipalKind": attack_data.get("ToPrincipalKind", attack_data.get("PrincipalKind")),
+        "ImpactedPrincipalName": attack_data.get("ToPrincipalName", attack_data.get("PrincipalName")),
+        "ImpactedPrincipalProps": json.dumps(attack_data.get("ToPrincipalProps", attack_data.get("Props"))),
+        "updated_at": attack_data.get("updated_at", ""),
+        "PathTitle": path_title,
+        "ShortDescription": short_description,
+        "ShortRemediation": short_remediation,
+        "LongRemediation": long_remediation,
+        "tenant_url": tenant_domain,
+        "domain_name": domain_name,
+        "Remediation": f"{tenant_domain}ui/remediation?findingType={finding_type}",
+    }
+
 def send_attack_paths_to_azure_monitor(
     attack_paths: List[Dict[str, Any]],
     bloodhound_manager: BloodhoundManager,
@@ -161,34 +220,58 @@ def send_attack_paths_to_azure_monitor(
     tenant_domain: str,
     domains_data: List[Dict[str, Any]]
 ) -> Tuple[int, int]:
-    """Send collected attack paths to Azure Monitor."""
+    """Send collected attack paths to Azure Monitor in batches."""
     successful_submissions = 0
     failed_submissions = 0
+    batch_size = get_azure_batch_size()
 
     if not attack_paths:
         logging.info("No attack path details to send to Azure Monitor.")
         return successful_submissions, failed_submissions
 
-    logging.info(f"Sending {len(attack_paths)} collected attack path details to Azure Monitor.")
-    for i, data_item in enumerate(attack_paths, 1):
-        result = bloodhound_manager.send_attack_data(
-            data_item,
-            azure_monitor_token,
-            finding_types_data,
-            tenant_domain,
-            domains_data
-        )
-        logging.info(f"Processing attack path log entry {i}/{len(attack_paths)}: {data_item.get('id')}")
-
-        if result and result.get("status") == "success":
-            successful_submissions += 1
-            logging.info(f"Successfully sent attack path for '{data_item.get('id')}'")
-        else:
-            failed_submissions += 1
-            logging.error(f"Failed to send attack path for '{data_item.get('id')}': {result.get('message', 'Unknown error')}")
+    logging.info(f"Sending {len(attack_paths)} collected attack path details to Azure Monitor in batches of {batch_size}.")
+    
+    # Process in batches
+    for batch_start in range(0, len(attack_paths), batch_size):
+        batch_end = min(batch_start + batch_size, len(attack_paths))
+        batch = attack_paths[batch_start:batch_end]
         
-        time.sleep(0.1)  # Rate limiting between requests
+        # Prepare log entries for this batch
+        log_entries = []
+        for data_item in batch:
+            try:
+                log_entry = _prepare_attack_path_log_entry(
+                    data_item, finding_types_data, tenant_domain, domains_data
+                )
+                log_entries.append(log_entry)
+            except Exception as e:
+                failed_submissions += 1
+                logging.error(f"Failed to prepare attack path log entry for ID {data_item.get('id')}: {str(e)}")
+        
+        if not log_entries:
+            continue
+        
+        # Send batch to Azure Monitor
+        logging.info(f"Sending batch {batch_start//batch_size + 1} ({len(log_entries)} entries): IDs {[item.get('id') for item in batch[:5]]}...")
+        result = bloodhound_manager._send_to_azure_monitor(
+            log_entries,
+            azure_monitor_token,
+            bloodhound_manager.dce_uri,
+            bloodhound_manager.dcr_immutable_id,
+            bloodhound_manager.table_name
+        )
+        
+        if result and result.get("status") == "success":
+            entries_sent = result.get("entries_sent", len(log_entries))
+            successful_submissions += entries_sent
+            logging.info(f"Successfully sent batch of {entries_sent} attack paths")
+        else:
+            failed_submissions += len(log_entries)
+            logging.error(f"Failed to send batch: {result.get('message', 'Unknown error')}")
+        
+        # Rate limiting is handled automatically by azure_monitor_rate_limiter in _send_to_azure_monitor()
 
+    logging.info(f"Attack path sending complete. Successful: {successful_submissions}, Failed: {failed_submissions}")
     return successful_submissions, failed_submissions
 
 def process_environment(
