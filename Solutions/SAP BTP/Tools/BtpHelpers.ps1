@@ -383,6 +383,178 @@ function Set-CfTarget {
     }
 }
 
+# Function to list all service keys for a CF service instance
+# Function to discover service instances by offering type
+function Get-CfServiceInstancesByOffering {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ServiceOffering
+    )
+    
+    try {
+        Write-Log "Discovering service instances with offering '$ServiceOffering'..."
+        
+        # Get all services
+        $rawOutput = cf services 2>&1 | Out-String
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "Failed to list services: $rawOutput" -Level "ERROR"
+            return @()
+        }
+        
+        # Parse service instances from the output
+        # Format: name    offering    plan    bound apps    last operation    broker    upgrade available
+        $matchingInstances = @()
+        $lines = $rawOutput -split "`n"
+        $headerPassed = $false
+        
+        foreach ($line in $lines) {
+            $trimmedLine = $line.Trim()
+            
+            # Skip empty lines and informational text
+            if ([string]::IsNullOrWhiteSpace($trimmedLine) -or 
+                $trimmedLine -match '^Getting service' -or 
+                $trimmedLine -match '^OK$' -or
+                $trimmedLine -match '^No services found' -or
+                $trimmedLine -match '^upgrade available') {
+                continue
+            }
+            
+            # Identify header line
+            if ($trimmedLine -match '^name\s+offering\s+plan') {
+                $headerPassed = $true
+                continue
+            }
+            
+            # Parse data rows
+            if ($headerPassed) {
+                # Split by multiple spaces to separate columns
+                $parts = $trimmedLine -split '\s{2,}'
+                
+                if ($parts.Count -ge 2) {
+                    $instanceName = $parts[0].Trim()
+                    $offering = $parts[1].Trim()
+                    
+                    if (-not [string]::IsNullOrWhiteSpace($instanceName) -and $offering -eq $ServiceOffering) {
+                        Write-Log "Found matching instance: $instanceName" -Level "SUCCESS"
+                        $matchingInstances += $instanceName
+                    }
+                }
+            }
+        }
+        
+        if ($matchingInstances.Count -gt 0) {
+            Write-Log "Discovered $($matchingInstances.Count) instance(s) with offering '$ServiceOffering'" -Level "SUCCESS"
+        }
+        else {
+            Write-Log "No instances found with offering '$ServiceOffering'" -Level "INFO"
+        }
+        
+        return $matchingInstances
+    }
+    catch {
+        Write-Log "Error discovering service instances: $_" -Level "ERROR"
+        return @()
+    }
+}
+
+function Get-CfServiceKeys {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InstanceName
+    )
+    
+    try {
+        Write-Log "Listing service keys for instance '$InstanceName'..."
+        
+        # Get service keys output
+        $rawOutput = cf service-keys $InstanceName 2>&1
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Log "Failed to list service keys: $rawOutput" -Level "ERROR"
+            return @()
+        }
+        
+        # Parse the output to extract key names
+        # Output format:
+        # Getting keys for service instance <name> as <user>...
+        # 
+        # name                     last operation     message
+        # key-name-1              create succeeded
+        # key-name-2              create succeeded
+        $keyNames = @()
+        $headerPassed = $false
+        
+        foreach ($line in $rawOutput) {
+            $trimmedLine = $line.Trim()
+            
+            # Skip empty lines and informational text
+            if ([string]::IsNullOrWhiteSpace($trimmedLine) -or 
+                $trimmedLine -match '^Getting keys' -or 
+                $trimmedLine -match '^OK$') {
+                continue
+            }
+            
+            # Skip the header line (starts with "name")
+            if ($trimmedLine -match '^name\s+') {
+                $headerPassed = $true
+                continue
+            }
+            
+            # Collect key names after header (first column before whitespace)
+            if ($headerPassed) {
+                # Split by multiple spaces and take first column
+                $parts = $trimmedLine -split '\s{2,}'
+                if ($parts.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($parts[0])) {
+                    $keyNames += $parts[0].Trim()
+                }
+            }
+        }
+        
+        if ($keyNames.Count -gt 0) {
+            Write-Log "Found $($keyNames.Count) service key(s)" -Level "SUCCESS"
+        }
+        else {
+            Write-Log "No service keys found for instance '$InstanceName'" -Level "INFO"
+        }
+        
+        return $keyNames
+    }
+    catch {
+        Write-Log "Error listing service keys: $_" -Level "ERROR"
+        return @()
+    }
+}
+
+# Function to check if a specific service key exists
+function Test-CfServiceKeyExists {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InstanceName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$KeyName
+    )
+    
+    try {
+        $existingKeys = Get-CfServiceKeys -InstanceName $InstanceName
+        $exists = $existingKeys -contains $KeyName
+        
+        if ($exists) {
+            Write-Log "Service key '$KeyName' exists for instance '$InstanceName'" -Level "INFO"
+        }
+        else {
+            Write-Log "Service key '$KeyName' does not exist for instance '$InstanceName'" -Level "INFO"
+        }
+        
+        return $exists
+    }
+    catch {
+        Write-Log "Error checking service key existence: $_" -Level "ERROR"
+        return $false
+    }
+}
+
 # Function to get CF service key and parse JSON
 function Get-CfServiceKey {
     param(
@@ -451,12 +623,14 @@ function Get-BtpServiceKeyCredentials {
         $credentials = $ServiceKey.credentials
         if ($null -eq $credentials) {
             Write-Log "Service key missing 'credentials' property" -Level "ERROR"
+            Write-Log "Service key structure: $($ServiceKey | ConvertTo-Json -Depth 3)" -Level "ERROR"
             return $null
         }
         
         # Validate required fields
         if ([string]::IsNullOrWhiteSpace($credentials.uaa.clientid)) {
             Write-Log "Service key missing UAA client ID" -Level "ERROR"
+            Write-Log "UAA structure: $($credentials.uaa | ConvertTo-Json -Depth 2)" -Level "ERROR"
             return $null
         }
         if ([string]::IsNullOrWhiteSpace($credentials.uaa.clientsecret)) {
@@ -717,6 +891,291 @@ function Export-BtpSubaccountsCsv {
     catch {
         Write-Log "Error exporting to CSV: $_" -Level "ERROR"
         return $false
+    }
+}
+
+# Function to export service key credentials to CSV (for split persona scenarios)
+# WARNING: This stores sensitive credentials in plaintext. Use only for testing or with secure file transfer.
+function Export-ServiceKeyToCsv {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CsvPath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId,
+        
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Credentials
+    )
+    
+    try {
+        if (-not (Test-Path $CsvPath)) {
+            Write-Log "CSV file not found at path: $CsvPath" -Level "ERROR"
+            return $false
+        }
+        
+        Write-Log "Exporting service key credentials for subaccount '$SubaccountId' to CSV..."
+        
+        # Load existing CSV
+        $csvData = Import-Csv -Path $CsvPath -Delimiter ';'
+        
+        # Find the row matching this subaccount
+        $updated = $false
+        foreach ($row in $csvData) {
+            if ($row.SubaccountId -eq $SubaccountId) {
+                # Add credential columns to this row
+                $row | Add-Member -NotePropertyName 'ClientId' -NotePropertyValue $Credentials.ClientId -Force
+                $row | Add-Member -NotePropertyName 'ClientSecret' -NotePropertyValue $Credentials.ClientSecret -Force
+                $row | Add-Member -NotePropertyName 'TokenEndpoint' -NotePropertyValue $Credentials.TokenEndpoint -Force
+                $row | Add-Member -NotePropertyName 'ApiUrl' -NotePropertyValue $Credentials.ApiUrl -Force
+                $row | Add-Member -NotePropertyName 'Subdomain' -NotePropertyValue $Credentials.Subdomain -Force
+                $updated = $true
+                Write-Log "Updated credentials for subaccount '$SubaccountId'" -Level "SUCCESS"
+                break
+            }
+        }
+        
+        if (-not $updated) {
+            Write-Log "Subaccount '$SubaccountId' not found in CSV" -Level "ERROR"
+            return $false
+        }
+        
+        # Write back to CSV
+        $csvData | Export-Csv -Path $CsvPath -Delimiter ';' -NoTypeInformation
+        Write-Log "Successfully exported credentials to CSV" -Level "SUCCESS"
+        Write-Log "WARNING: CSV contains sensitive credentials in plaintext. Secure this file appropriately." -Level "WARNING"
+        
+        return $true
+    }
+    catch {
+        Write-Log "Error exporting service key to CSV: $_" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to import service key credentials from CSV (for split persona scenarios)
+function Get-ServiceKeyFromCsv {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CsvPath,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId
+    )
+    
+    try {
+        if (-not (Test-Path $CsvPath)) {
+            Write-Log "CSV file not found at path: $CsvPath" -Level "ERROR"
+            return $null
+        }
+        
+        Write-Log "Loading service key credentials for subaccount '$SubaccountId' from CSV..."
+        
+        # Load CSV
+        $csvData = Import-Csv -Path $CsvPath -Delimiter ';'
+        
+        # Find the row matching this subaccount
+        $row = $csvData | Where-Object { $_.SubaccountId -eq $SubaccountId } | Select-Object -First 1
+        
+        if ($null -eq $row) {
+            Write-Log "Subaccount '$SubaccountId' not found in CSV" -Level "ERROR"
+            return $null
+        }
+        
+        # Check if credential columns exist and are populated
+        $requiredFields = @('ClientId', 'ClientSecret', 'TokenEndpoint', 'ApiUrl', 'Subdomain')
+        $missingFields = @()
+        
+        foreach ($field in $requiredFields) {
+            if (-not $row.PSObject.Properties.Name.Contains($field) -or 
+                [string]::IsNullOrWhiteSpace($row.$field)) {
+                $missingFields += $field
+            }
+        }
+        
+        if ($missingFields.Count -gt 0) {
+            Write-Log "CSV row for subaccount '$SubaccountId' missing required credential fields: $($missingFields -join ', ')" -Level "ERROR"
+            return $null
+        }
+        
+        # Return credentials object matching the format from Get-BtpServiceKeyCredentials
+        $credentials = @{
+            ClientId = $row.ClientId
+            ClientSecret = $row.ClientSecret
+            TokenEndpoint = $row.TokenEndpoint
+            ApiUrl = $row.ApiUrl
+            SubaccountId = $SubaccountId
+            Subdomain = $row.Subdomain
+        }
+        
+        Write-Log "Successfully loaded credentials from CSV" -Level "SUCCESS"
+        return $credentials
+    }
+    catch {
+        Write-Log "Error reading service key from CSV: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to export service key credentials to Azure Key Vault (for split persona scenarios)
+function Export-ServiceKeyToKeyVault {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$KeyVaultName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId,
+        
+        [Parameter(Mandatory=$true)]
+        [hashtable]$Credentials
+    )
+    
+    try {
+        Write-Log "Exporting service key credentials for subaccount '$SubaccountId' to Key Vault '$KeyVaultName'..."
+        
+        # Normalize subaccount ID for secret name (replace invalid characters)
+        $normalizedId = $SubaccountId -replace '[^a-zA-Z0-9-]', '-'
+        
+        # Secret name: btp-{subaccount-id}
+        $secretName = "btp-$normalizedId"
+        
+        # Create JSON object with all credentials
+        $credentialsJson = @{
+            ClientId = $Credentials.ClientId
+            ClientSecret = $Credentials.ClientSecret
+            TokenEndpoint = $Credentials.TokenEndpoint
+            ApiUrl = $Credentials.ApiUrl
+            Subdomain = $Credentials.Subdomain
+        } | ConvertTo-Json -Compress
+        
+        # Store as single secret - use PowerShell's call operator with proper escaping
+        Write-Log "Storing credentials as secret: $secretName"
+        
+        # Escape JSON for Azure CLI - need to escape double quotes
+        $escapedJson = $credentialsJson.Replace('"', '\"')
+        
+        # Use az CLI with properly escaped JSON
+        $result = az keyvault secret set --vault-name $KeyVaultName --name $secretName --value $escapedJson 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Log "Successfully stored credentials to Key Vault" -Level "SUCCESS"
+            return $true
+        } else {
+            # Check for common permission errors
+            $errorMessage = $result -join " "
+            
+            if ($errorMessage -match "Forbidden|ForbiddenByRbac|not authorized") {
+                Write-Log "Access denied to Key Vault '$KeyVaultName'" -Level "ERROR"
+                Write-Log "Please ensure your account has the 'Key Vault Secrets Officer' role assignment" -Level "ERROR"
+                Write-Log "Run: az role assignment create --role 'Key Vault Secrets Officer' --assignee <your-email> --scope /subscriptions/$SubscriptionId/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/$KeyVaultName" -Level "ERROR"
+            } elseif ($errorMessage -match "ObjectIsDeletedButRecoverable|deleted but recoverable") {
+                Write-Log "Secret '$secretName' is in deleted state (soft-delete enabled)" -Level "WARNING"
+                Write-Log "Purging and recreating..." -Level "INFO"
+                
+                # Purge the deleted secret
+                $purgeResult = & az keyvault secret purge --vault-name $KeyVaultName --name $secretName 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Log "Successfully purged deleted secret" -Level "SUCCESS"
+                    Start-Sleep -Seconds 2
+                    
+                    # Retry creation
+                    $result = & az @azArgs 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Log "Successfully stored credentials to Key Vault" -Level "SUCCESS"
+                        return $true
+                    } else {
+                        Write-Log "Failed to store secret after purge: $result" -Level "ERROR"
+                        return $false
+                    }
+                } else {
+                    Write-Log "Failed to purge secret: $purgeResult" -Level "ERROR"
+                    Write-Log "Run: az keyvault secret purge --vault-name $KeyVaultName --name $secretName" -Level "ERROR"
+                    return $false
+                }
+            } elseif ($errorMessage -match "not found|does not exist") {
+                Write-Log "Key Vault '$KeyVaultName' not found" -Level "ERROR"
+                Write-Log "Please verify the Key Vault name and ensure it exists" -Level "ERROR"
+            } else {
+                Write-Log "Failed to store secret: $result" -Level "ERROR"
+            }
+            
+            return $false
+        }
+    }
+    catch {
+        Write-Log "Error exporting service key to Key Vault: $_" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to import service key credentials from Azure Key Vault (for split persona scenarios)
+function Get-ServiceKeyFromKeyVault {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$KeyVaultName,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$SubaccountId
+    )
+    
+    try {
+        Write-Log "Loading service key credentials for subaccount '$SubaccountId' from Key Vault '$KeyVaultName'..."
+        
+        # Normalize subaccount ID for secret name (replace invalid characters)
+        $normalizedId = $SubaccountId -replace '[^a-zA-Z0-9-]', '-'
+        
+        # Secret name: btp-{subaccount-id}
+        $secretName = "btp-$normalizedId"
+        
+        # Retrieve the secret
+        Write-Log "Retrieving secret: $secretName"
+        $result = az keyvault secret show --vault-name $KeyVaultName --name $secretName --query "value" -o tsv 2>&1
+        
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($result)) {
+            # Check for common errors
+            $errorMessage = $result -join " "
+            
+            if ($errorMessage -match "Forbidden|ForbiddenByRbac|not authorized") {
+                Write-Log "Access denied to Key Vault '$KeyVaultName'" -Level "ERROR"
+                Write-Log "Please ensure your account has the 'Key Vault Secrets User' role assignment" -Level "ERROR"
+            } elseif ($errorMessage -match "SecretNotFound|not found") {
+                Write-Log "Secret '$secretName' not found in Key Vault '$KeyVaultName'" -Level "ERROR"
+                Write-Log "Please ensure credentials were exported using -ExportCredentialsToKeyVault" -Level "ERROR"
+            } elseif ($errorMessage -match "VaultNotFound|does not exist") {
+                Write-Log "Key Vault '$KeyVaultName' not found" -Level "ERROR"
+            } else {
+                Write-Log "Failed to retrieve secret '$secretName': $result" -Level "ERROR"
+            }
+            
+            return $null
+        }
+        
+        Write-Log "Successfully retrieved secret '$secretName'" -Level "SUCCESS"
+        
+        # Debug: Show what we retrieved
+        Write-Log "Retrieved value: $result" -Level "INFO"
+        
+        # Parse JSON
+        $credentialsObj = $result | ConvertFrom-Json
+        
+        # Return credentials object matching the format from Get-BtpServiceKeyCredentials
+        $credentials = @{
+            ClientId = $credentialsObj.ClientId
+            ClientSecret = $credentialsObj.ClientSecret
+            TokenEndpoint = $credentialsObj.TokenEndpoint
+            ApiUrl = $credentialsObj.ApiUrl
+            SubaccountId = $SubaccountId
+            Subdomain = $credentialsObj.Subdomain
+        }
+        
+        Write-Log "Successfully loaded credentials from Key Vault" -Level "SUCCESS"
+        return $credentials
+    }
+    catch {
+        Write-Log "Error reading service key from Key Vault: $_" -Level "ERROR"
+        return $null
     }
 }
 

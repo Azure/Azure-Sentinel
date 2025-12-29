@@ -38,13 +38,22 @@ param(
     [string]$CsvPath = ".\subaccounts.csv",
     
     [Parameter(Mandatory=$false)]
-    [string]$InstanceNamePrefix = "sentinel-audit-srv",
+    [string]$InstanceName = "sentinel-audit-srv",
     
     [Parameter(Mandatory=$false)]
     [string]$CfUsername = $env:CF_USERNAME,
     
     [Parameter(Mandatory=$false)]
     [SecureString]$CfPassword,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseCredentialsFromCsv,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseKeyVault,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$KeyVaultName,
     
     [Parameter(Mandatory=$false)]
     [string]$ApiVersion = "2025-09-01"
@@ -54,17 +63,47 @@ param(
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 Import-Module "$scriptPath\BtpHelpers.ps1" -Force
 
-# Validate and get CF credentials using helper function
-$credentials = Get-CfCredentials -Username $CfUsername -Password $CfPassword
-if ($null -eq $credentials) {
-    exit 1
+# Validate Key Vault parameters if using Key Vault
+if ($UseKeyVault) {
+    if ([string]::IsNullOrWhiteSpace($KeyVaultName)) {
+        Write-Log "KeyVaultName parameter is required when UseKeyVault is specified" -Level "ERROR"
+        exit 1
+    }
 }
-$CfUsername = $credentials.Username
-$CfPassword = $credentials.Password
+
+# Determine credential source
+if ($UseCredentialsFromCsv) {
+    Write-Log "Credential source: CSV file (split persona mode)" -Level "INFO"
+    $credentialSource = "CSV"
+    # CF credentials not required in CSV mode
+    $CfUsername = $null
+    $CfPassword = $null
+} elseif ($UseKeyVault) {
+    Write-Log "Credential source: Azure Key Vault (split persona mode)" -Level "INFO"
+    $credentialSource = "KeyVault"
+    # CF credentials not required in Key Vault mode
+    $CfUsername = $null
+    $CfPassword = $null
+} else {
+    Write-Log "Credential source: CloudFoundry (single persona mode)" -Level "INFO"
+    $credentialSource = "CloudFoundry"
+    
+    # Validate and get CF credentials using helper function
+    $credentials = Get-CfCredentials -Username $CfUsername -Password $CfPassword
+    if ($null -eq $credentials) {
+        exit 1
+    }
+    $CfUsername = $credentials.Username
+    $CfPassword = $credentials.Password
+}
 
 # Main script execution
 Write-Log "======================================================================="
 Write-Log "Starting Sentinel Solution for SAP BTP Connection Creation Process"
+Write-Log "Credential Source: $credentialSource"
+if ($credentialSource -eq "KeyVault") {
+    Write-Log "Key Vault Name: $KeyVaultName"
+}
 Write-Log "IMPORTANT: This adds connections to the existing SAP BTP data connector"
 Write-Log "Make sure the SAP BTP solution is installed from Content Hub first!"
 Write-Log "======================================================================="
@@ -76,9 +115,13 @@ if (-not (Test-AzCli)) {
 }
 
 # Check if CF CLI is installed
-if (-not (Test-CfCli)) {
-    Write-Log "Exiting script due to missing CF CLI." -Level "ERROR"
-    exit 1
+if ($credentialSource -eq "CloudFoundry") {
+    if (-not (Test-CfCli)) {
+        Write-Log "Exiting script due to missing CF CLI." -Level "ERROR"
+        exit 1
+    }
+} else {
+    Write-Log "Skipping CF CLI check (using $credentialSource credentials)" -Level "INFO"
 }
 
 # Check Azure login
@@ -139,43 +182,104 @@ foreach ($subaccount in $subaccounts) {
     Write-Log "Org: $orgName | Space: $spaceName"
     Write-Log "======================================================================="
     
-    # Switch API endpoint if needed
-    if ($currentApiEndpoint -ne $apiEndpoint) {
-        if (-not (Set-CfApiEndpoint -ApiEndpoint $apiEndpoint -Username $CfUsername -Password $CfPassword -OrgName $orgName -SpaceName $spaceName)) {
-            Write-Log "Failed to switch API endpoint. Skipping subaccount." -Level "ERROR"
+    # Get BTP credentials based on source
+    $btpCredentials = $null
+    
+    if ($credentialSource -eq "CSV") {
+        # Read credentials directly from CSV
+        Write-Log "Reading credentials from CSV..."
+        $btpCredentials = Get-ServiceKeyFromCsv -CsvPath $CsvPath -SubaccountId $subaccountId
+        
+        if ($null -eq $btpCredentials) {
+            Write-Log "Failed to read credentials from CSV for subaccount $subaccountId. Skipping." -Level "ERROR"
             $failureCount++
             continue
         }
-        $currentApiEndpoint = $apiEndpoint
-    }
-    
-    # Target the org and space
-    if (-not (Set-CfTarget -OrgName $orgName -SpaceName $spaceName)) {
-        Write-Log "Failed to target org/space. Skipping subaccount." -Level "ERROR"
-        $failureCount++
-        continue
-    }
-    
-    # Define instance and key names
-    $instanceName = $InstanceNamePrefix
-    $keyName = "$InstanceNamePrefix-key"
-    
-    # Get service key
-    $serviceKey = Get-CfServiceKey -InstanceName $instanceName -KeyName $keyName
-    
-    if ($null -eq $serviceKey) {
-        Write-Log "Failed to retrieve service key for subaccount $subaccountId. Skipping." -Level "ERROR"
-        $failureCount++
-        continue
-    }
-    
-    # Extract and validate credentials from service key
-    $btpCredentials = Get-BtpServiceKeyCredentials -ServiceKey $serviceKey
-    
-    if ($null -eq $btpCredentials) {
-        Write-Log "Failed to extract valid credentials from service key for subaccount $subaccountId. Skipping." -Level "ERROR"
-        $failureCount++
-        continue
+    } elseif ($credentialSource -eq "KeyVault") {
+        # Read credentials from Azure Key Vault
+        Write-Log "Reading credentials from Key Vault..."
+        $btpCredentials = Get-ServiceKeyFromKeyVault -KeyVaultName $KeyVaultName -SubaccountId $subaccountId
+        
+        if ($null -eq $btpCredentials) {
+            Write-Log "Failed to read credentials from Key Vault for subaccount $subaccountId. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+    } else {
+        # CloudFoundry mode: authenticate and retrieve service key
+        
+        # Switch API endpoint if needed
+        if ($currentApiEndpoint -ne $apiEndpoint) {
+            if (-not (Set-CfApiEndpoint -ApiEndpoint $apiEndpoint -Username $CfUsername -Password $CfPassword -OrgName $orgName -SpaceName $spaceName)) {
+                Write-Log "Failed to switch API endpoint. Skipping subaccount." -Level "ERROR"
+                $failureCount++
+                continue
+            }
+            $currentApiEndpoint = $apiEndpoint
+        }
+        
+        # Target the org and space
+        if (-not (Set-CfTarget -OrgName $orgName -SpaceName $spaceName)) {
+            Write-Log "Failed to target org/space. Skipping subaccount." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # Discover existing auditlog-management instances
+        $existingInstances = Get-CfServiceInstancesByOffering -ServiceOffering "auditlog-management"
+        
+        if ($existingInstances.Count -eq 0) {
+            Write-Log "No auditlog-management service instances found in org '$orgName' space '$spaceName'. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # Look for instance matching the specified name (default or custom)
+        $matchingInstance = $existingInstances | Where-Object { $_ -eq $InstanceName }
+        
+        if ($matchingInstance) {
+            $instanceName = $matchingInstance
+            Write-Log "Using instance: $instanceName" -Level "INFO"
+        } else {
+            Write-Log "Instance '$InstanceName' not found. Available: $($existingInstances -join ', ')" -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # Get service keys for this instance and use the newest one (last in list)
+        $existingKeys = Get-CfServiceKeys -InstanceName $instanceName
+        
+        if ($existingKeys.Count -eq 0) {
+            Write-Log "No service keys found for instance '$instanceName'. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # CF returns keys in creation order - use the last one (newest)
+        $keyName = $existingKeys[-1]
+        Write-Log "Using newest service key: $keyName" -Level "INFO"
+        
+        if ($existingKeys.Count -gt 1) {
+            Write-Log "Found $($existingKeys.Count) service keys. Using most recent: $keyName" -Level "INFO"
+        }
+        
+        # Get service key
+        $serviceKey = Get-CfServiceKey -InstanceName $instanceName -KeyName $keyName
+        
+        if ($null -eq $serviceKey) {
+            Write-Log "Failed to retrieve service key for subaccount $subaccountId. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # Extract and validate credentials from service key
+        $btpCredentials = Get-BtpServiceKeyCredentials -ServiceKey $serviceKey
+        
+        if ($null -eq $btpCredentials) {
+            Write-Log "Failed to extract valid credentials from service key for subaccount $subaccountId. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
     }
     
     Write-Log "Successfully extracted credentials from service key:" -Level "SUCCESS"
