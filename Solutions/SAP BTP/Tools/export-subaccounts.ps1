@@ -103,6 +103,7 @@ try {
         # Create subaccount entry with default space placeholder
         $subaccountEntry = [PSCustomObject]@{
             SubaccountId = $subaccountId
+            DisplayName = $subaccountName
             "cf-api-endpoint" = $cfDetails.ApiEndpoint
             "cf-org-name" = $cfDetails.OrgName
             "cf-space-name" = "dev"  # Common default - user should verify/update

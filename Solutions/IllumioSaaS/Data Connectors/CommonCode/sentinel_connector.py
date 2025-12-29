@@ -17,7 +17,7 @@ class AzureSentinelConnectorAsync:
         self.failed_sent_events_number = 0
         self.lock = asyncio.Lock()
         self.session = session
-        self.credential = DefaultAzureCredential()
+        self.credential = DefaultAzureCredential()          # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
         self.AZURE_CLIENT_ID = azure_client_id
         self.AZURE_CLIENT_SECRET = azure_client_secret
         self.AZURE_TENANT_ID = azure_tenant

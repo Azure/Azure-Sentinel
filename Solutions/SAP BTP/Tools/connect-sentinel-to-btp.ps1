@@ -124,6 +124,7 @@ $currentApiEndpoint = $null
 
 foreach ($subaccount in $subaccounts) {
     $subaccountId = $subaccount.SubaccountId
+    $subaccountName = $subaccount.DisplayName
     $apiEndpoint = $subaccount.'cf-api-endpoint'
     $orgName = $subaccount.'cf-org-name'
     $spaceName = $subaccount.'cf-space-name'
@@ -195,6 +196,7 @@ foreach ($subaccount in $subaccounts) {
         -ConnectionName $connectionName `
         -BtpCredentials $btpCredentials `
         -SubaccountId $subaccountId `
+        -SubaccountName $subaccountName `
         -ApiVersion $ApiVersion
     
     if ($connectionCreated) {

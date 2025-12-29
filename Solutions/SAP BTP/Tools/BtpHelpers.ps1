@@ -499,7 +499,9 @@ function Get-BtpServiceKeyCredentials {
 function New-BtpConnectionRequestBody {
     param(
         [Parameter(Mandatory=$true)]
-        [object]$BtpCredentials
+        [object]$BtpCredentials,
+        [Parameter(Mandatory=$false)]
+        [string]$SubaccountName
     )
     
     try {
@@ -512,6 +514,9 @@ function New-BtpConnectionRequestBody {
             properties = @{
                 connectorDefinitionName = "SAPBTPAuditEvents"
                 dataType = "SAPBTPAuditLog_CL"
+                addOnAttributes = @{
+                    SubaccountName = if ([string]::IsNullOrWhiteSpace($SubaccountName)) { "Unknown" } else { $SubaccountName }
+                }
                 auth = @{
                     type = "OAuth2"
                     ClientId = $BtpCredentials.ClientId
@@ -525,10 +530,11 @@ function New-BtpConnectionRequestBody {
                 request = @{
                     apiEndpoint = $apiEndpoint
                     httpMethod = "Get"
-                    queryWindowInMin = 5
+                    queryWindowInMin = 1
                     queryTimeFormat = "yyyy-MM-ddTHH:mm:ss.fff"
                     retryCount = 3
-                    timeoutInSeconds = 120
+                    timeoutInSeconds = 60
+                    queryWindowDelayInMin = 20
                     startTimeAttributeName = "time_from"
                     endTimeAttributeName = "time_to"
                     headers = @{
@@ -729,19 +735,11 @@ function Get-BtpConnectionName {
         [string]$SubaccountId
     )
     
-    # Use subdomain from UAA URL for connection name with subaccount ID suffix
-    # Pattern: subdomain_subaccountid (e.g., msdemo_12345678-90ab-cdef-1234-567890abcdef)
-    # Falls back to subaccount ID only if subdomain cannot be extracted
-    $cleanSubaccountId = $SubaccountId.Replace('-', '')
+    # Use subaccount ID as connection name
+    # Pattern: subaccount-id (e.g., 59408ac3-f5b3-4fba-9ee1-ded934352397)
+    $connectionName = $SubaccountId
     
-    if ([string]::IsNullOrWhiteSpace($BtpCredentials.Subdomain)) {
-        Write-Log "Subdomain not found in UAA URL, using subaccount ID only for connection name" -Level "WARNING"
-        $connectionName = "$cleanSubaccountId"
-    } else {
-        # Remove any special characters and ensure valid Azure resource name
-        $cleanSubdomain = $BtpCredentials.Subdomain -replace '[^a-zA-Z0-9]', ''
-        $connectionName = "${cleanSubdomain}_${cleanSubaccountId}"
-    }
+    Write-Log "Using subaccount ID as connection name: $connectionName"
     
     return $connectionName
 }
@@ -761,6 +759,8 @@ function New-SentinelBtpConnection {
         [object]$BtpCredentials,
         [Parameter(Mandatory=$true)]
         [string]$SubaccountId,
+        [Parameter(Mandatory=$false)]
+        [string]$SubaccountName,
         [Parameter(Mandatory=$false)]
         [string]$ApiVersion = "2025-09-01"
     )
@@ -790,7 +790,7 @@ function New-SentinelBtpConnection {
         }
         
         # Build request body
-        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials
+        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -SubaccountName $SubaccountName
         if ($null -eq $bodyObject) {
             return $false
         }
