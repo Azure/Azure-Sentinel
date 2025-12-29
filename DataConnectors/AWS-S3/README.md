@@ -1,5 +1,7 @@
 # AWS S3 Microsoft Sentinel Connector
 
+<!-- Sanity Check: Bundle updated on 2025-12-16 19:45 UTC - Commit f39379c0 -->
+
 ## Introduction
 
 AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Watch, Cloud Trail (management and data events). 
@@ -63,4 +65,8 @@ The `awsScriptBash.zip` file contains a bash script for setting up AWS attack di
 The `ConfigAwsConnector.ps1` script has two parameters:
 - `-LogPath` specifies a custom path to create the script activity log file.
 - `-AwsLogType` specifies the AWS log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty". If this parameter is specified, the user will not be prompted for this information.
+
+## Script Bundle Automation
+
+The configuration scripts are automatically bundled into zip files (`ConfigAwsS3DataConnectorScripts.zip` and `ConfigAwsS3DataConnectorScriptsGov.zip`) whenever changes are made to the source files. This automation ensures that the distributed bundles are always up-to-date with the latest script versions. For more information about the bundling process, see [BUNDLE_AUTOMATION.md](BUNDLE_AUTOMATION.md).
 
