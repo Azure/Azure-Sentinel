@@ -499,7 +499,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 exit 1;
             }
 
-            function GetDataConnectorPollerResourceName ($dataConnectorName) {
+            function GetDataConnectorPollerResourceName ($dataConnectorName, $useRandomGuid = $true) {
                 $splitNamesBySlash = $dataConnectorName -split '/'
                 $concatenateParts = @()
                 $outputString = ''
@@ -515,6 +515,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                                 $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $true
                             }
                             else {
+                                # Add '/' separator if there are already parts (handles pure placeholder after static segments)
+                                if ($concatenateParts.Count -gt 0) {
+                                    $concatenateParts += "'/'"
+                                }
                                 $concatenateParts += "parameters('$($placeHolderFieldName)')"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $($placeHolderFieldName) -isSecret $true
                             }
@@ -546,22 +550,42 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
 
                 if ($concatenateParts.Count -gt 1 -and $concatenateParts -notmatch 'concat') {
-                    $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
+                    if ($useRandomGuid) {
+                        $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
+                    } else {
+                        $outputString = "[[concat($($concatenateParts -join ', ')"
+                    }
                 }
                 elseif ($concatenateParts.Count -eq 1 -and $concatenateParts[0] -match 'parameters') {
                     # if we just have parameters('abcwork')
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
+                    if ($useRandomGuid) {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
+                    } else {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0])"
+                    }
                 }
                 else {
                     # if we just have 'abcwork'
-                    $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
+                    if ($useRandomGuid) {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
+                    } else {
+                        $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])'"
+                    }
                 }
             
                 if ($global:commaSeparatedTextFieldName -eq "") {
-                    $outputString += ")]"
+                    if ($useRandomGuid) {
+                        $outputString += ")]"
+                    } else {
+                        $outputString += ")]"
+                    }
                 }
                 else {
-                    $outputString += ", copyIndex())]"
+                    if ($useRandomGuid) {
+                        $outputString += ", copyIndex())]"
+                    } else {
+                        $outputString += ", copyIndex())]"
+                    }
                 }
 
                 return $outputString
@@ -569,6 +593,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                    # Check for UseRandomGuid property, default to true for backward compatibility
+                    $useRandomGuid = if ($null -ne $fileContent.UseRandomGuid) { $fileContent.UseRandomGuid } else { $true }
+                    Write-Host "UseRandomGuid setting: $useRandomGuid"
+
                     if ($global:commaSeparatedTextFieldName -ne "") {
                         # add variable for comma separated text field
                         $commaSeparatedVariable = @{
@@ -578,14 +606,16 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $templateContentConnections.properties.mainTemplate.variables = $commaSeparatedVariable
                     }
 
-                    # add parameter of guidValue if not present
-                    $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
+                    # add parameter of guidValue if not present (only when UseRandomGuid is true)
+                    if ($useRandomGuid) {
+                        $templateContentConnections.properties.mainTemplate = addGuidValueParameter -templateResourceObj $templateContentConnections.properties.mainTemplate
+                    }
 
                     # add parameter of innerWorkspace if not present
                     $templateContentConnections.properties.mainTemplate = addWorkspaceParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'innerWorkspace' -isSecret $true
 
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
-                    $resourceName = GetDataConnectorPollerResourceName -dataConnectorName $fileContent.name
+                    $resourceName = GetDataConnectorPollerResourceName -dataConnectorName $fileContent.name -useRandomGuid $useRandomGuid
 
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
