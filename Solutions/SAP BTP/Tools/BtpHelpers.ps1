@@ -406,34 +406,39 @@ function Get-CfServiceInstancesByOffering {
         # Format: name    offering    plan    bound apps    last operation    broker    upgrade available
         $matchingInstances = @()
         $lines = $rawOutput -split "`n"
-        $headerPassed = $false
+        $headerLine = $null
+        $nameColumnEnd = -1
+        $offeringColumnEnd = -1
         
         foreach ($line in $lines) {
-            $trimmedLine = $line.Trim()
-            
             # Skip empty lines and informational text
-            if ([string]::IsNullOrWhiteSpace($trimmedLine) -or 
-                $trimmedLine -match '^Getting service' -or 
-                $trimmedLine -match '^OK$' -or
-                $trimmedLine -match '^No services found' -or
-                $trimmedLine -match '^upgrade available') {
+            if ([string]::IsNullOrWhiteSpace($line) -or 
+                $line -match '^Getting service' -or 
+                $line -match '^OK$' -or
+                $line -match '^No services found' -or
+                $line -match '^upgrade available') {
                 continue
             }
             
-            # Identify header line
-            if ($trimmedLine -match '^name\s+offering\s+plan') {
-                $headerPassed = $true
+            # Capture header line to determine column positions
+            if ($line -match '^name\s+offering\s+plan' -and $null -eq $headerLine) {
+                $headerLine = $line
+                # Find where "offering" and "plan" columns start
+                if ($line -match 'name\s+offering') {
+                    $nameColumnEnd = $line.IndexOf('offering')
+                    $planIndex = $line.IndexOf('plan')
+                    if ($planIndex -gt $nameColumnEnd) {
+                        $offeringColumnEnd = $planIndex
+                    }
+                }
                 continue
             }
             
-            # Parse data rows
-            if ($headerPassed) {
-                # Split by multiple spaces to separate columns
-                $parts = $trimmedLine -split '\s{2,}'
-                
-                if ($parts.Count -ge 2) {
-                    $instanceName = $parts[0].Trim()
-                    $offering = $parts[1].Trim()
+            # Parse data rows using fixed column positions
+            if ($null -ne $headerLine -and $nameColumnEnd -gt 0 -and $offeringColumnEnd -gt 0) {
+                if ($line.Length -ge $offeringColumnEnd) {
+                    $instanceName = $line.Substring(0, $nameColumnEnd).Trim()
+                    $offering = $line.Substring($nameColumnEnd, $offeringColumnEnd - $nameColumnEnd).Trim()
                     
                     if (-not [string]::IsNullOrWhiteSpace($instanceName) -and $offering -eq $ServiceOffering) {
                         Write-Log "Found matching instance: $instanceName" -Level "SUCCESS"
@@ -483,30 +488,39 @@ function Get-CfServiceKeys {
         # key-name-1              create succeeded
         # key-name-2              create succeeded
         $keyNames = @()
-        $headerPassed = $false
+        $headerLine = $null
+        $nameColumnEnd = -1
         
         foreach ($line in $rawOutput) {
-            $trimmedLine = $line.Trim()
-            
             # Skip empty lines and informational text
-            if ([string]::IsNullOrWhiteSpace($trimmedLine) -or 
-                $trimmedLine -match '^Getting keys' -or 
-                $trimmedLine -match '^OK$') {
+            if ([string]::IsNullOrWhiteSpace($line) -or 
+                $line -match '^Getting keys' -or 
+                $line -match '^OK$') {
                 continue
             }
             
-            # Skip the header line (starts with "name")
-            if ($trimmedLine -match '^name\s+') {
-                $headerPassed = $true
+            # Capture the header line to determine column positions
+            if ($line -match '^name\s+' -and $null -eq $headerLine) {
+                $headerLine = $line
+                # Find where "last operation" starts (end of name column)
+                # Look for the pattern "name" followed by spaces, then "last"
+                if ($line -match 'name\s+last') {
+                    $nameColumnEnd = $line.IndexOf('last')
+                }
                 continue
             }
             
-            # Collect key names after header (first column before whitespace)
-            if ($headerPassed) {
-                # Split by multiple spaces and take first column
-                $parts = $trimmedLine -split '\s{2,}'
-                if ($parts.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($parts[0])) {
-                    $keyNames += $parts[0].Trim()
+            # Extract key names using fixed column width from header
+            if ($null -ne $headerLine -and $nameColumnEnd -gt 0) {
+                # Extract the name column (everything before the "last operation" column)
+                if ($line.Length -ge $nameColumnEnd) {
+                    $keyName = $line.Substring(0, $nameColumnEnd).Trim()
+                } else {
+                    $keyName = $line.Trim()
+                }
+                
+                if (-not [string]::IsNullOrWhiteSpace($keyName)) {
+                    $keyNames += $keyName
                 }
             }
         }
@@ -1304,11 +1318,28 @@ function Get-BtpSubaccounts {
         
         # Parse table output
         $subaccounts = @()
-        $headerPassed = $false
+        $headerLine = $null
+        $guidColumnEnd = -1
+        $displayNameColumnEnd = -1
         
         foreach ($line in $subaccountsOutput) {
             if ($line -match 'guid|subaccount id') {
-                $headerPassed = $true
+                $headerLine = $line
+                # Find column positions - look for the next column header after guid/displayName
+                # Typical format: "guid" or "subaccount id"  "display name"  "subdomain"  "region"
+                $guidMatch = [regex]::Match($line, '(guid|subaccount id)\s+')
+                if ($guidMatch.Success) {
+                    $guidColumnEnd = $guidMatch.Index + $guidMatch.Length
+                    # Find where display name column ends (look for next column)
+                    $remainingLine = $line.Substring($guidColumnEnd)
+                    if ($remainingLine -match 'display name\s+') {
+                        $displayNameStart = $line.IndexOf('display name', $guidColumnEnd)
+                        $afterDisplayName = $line.Substring($displayNameStart + 'display name'.Length)
+                        if ($afterDisplayName -match '^\s+(\S+)') {
+                            $displayNameColumnEnd = $line.IndexOf($matches[1], $displayNameStart)
+                        }
+                    }
+                }
                 continue
             }
             
@@ -1316,14 +1347,29 @@ function Get-BtpSubaccounts {
                 continue
             }
             
-            if ($headerPassed) {
-                $columns = $line -split '\s{2,}' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            if ($null -ne $headerLine -and $guidColumnEnd -gt 0) {
+                # Extract columns using positions or fallback to split if positions not found
+                if ($displayNameColumnEnd -gt $guidColumnEnd) {
+                    $guid = $line.Substring(0, $guidColumnEnd).Trim()
+                    $displayName = $line.Substring($guidColumnEnd, $displayNameColumnEnd - $guidColumnEnd).Trim()
+                    $region = if ($line.Length -gt $displayNameColumnEnd) { 
+                        $remaining = $line.Substring($displayNameColumnEnd).Trim()
+                        # Skip subdomain, get region (may need to parse further)
+                        ($remaining -split '\s{2,}')[1].Trim()
+                    } else { "" }
+                } else {
+                    # Fallback to split method
+                    $columns = $line -split '\s{2,}' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+                    $guid = if ($columns.Count -ge 1) { $columns[0].Trim() } else { "" }
+                    $displayName = if ($columns.Count -ge 2) { $columns[1].Trim() } else { "" }
+                    $region = if ($columns.Count -ge 4) { $columns[3].Trim() } else { "" }
+                }
                 
-                if ($columns.Count -ge 2) {
+                if (-not [string]::IsNullOrWhiteSpace($guid)) {
                     $subaccounts += [PSCustomObject]@{
-                        guid = $columns[0].Trim()
-                        displayName = $columns[1].Trim()
-                        region = if ($columns.Count -ge 4) { $columns[3].Trim() } else { "" }
+                        guid = $guid
+                        displayName = $displayName
+                        region = $region
                     }
                 }
             }
