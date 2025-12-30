@@ -574,18 +574,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
             
                 if ($global:commaSeparatedTextFieldName -eq "") {
-                    if ($useRandomGuid) {
-                        $outputString += ")]"
-                    } else {
-                        $outputString += ")]"
-                    }
+                    $outputString += ")]"
                 }
                 else {
-                    if ($useRandomGuid) {
-                        $outputString += ", copyIndex())]"
-                    } else {
-                        $outputString += ", copyIndex())]"
-                    }
+                    $outputString += ", copyIndex())]"
                 }
 
                 return $outputString
