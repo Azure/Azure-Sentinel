@@ -12,7 +12,7 @@ Browse all data connectors available in Microsoft Sentinel Solutions.
 
 ## Overview
 
-This page lists **462 unique connectors** across all solutions.
+This page lists **470 unique connectors** across all solutions.
 
 **Jump to:** [#](##) | [A](#a) | [B](#b) | [C](#c) | [D](#d) | [E](#e) | [F](#f) | [G](#g) | [H](#h) | [I](#i) | [J](#j) | [K](#k) | [L](#l) | [M](#m) | [N](#n) | [O](#o) | [P](#p) | [Q](#q) | [R](#r) | [S](#s) | [T](#t) | [V](#v) | [W](#w) | [Z](#z)
 
@@ -1289,6 +1289,20 @@ Actionable alerts provide customized alerts based on configured assets
 
 ---
 
+### [Cyble Vision Alerts](connectors/cyblevisionalerts.md)
+
+**Publisher:** Cyble
+
+**Solution:** [Cyble Vision](solutions/cyble-vision.md)
+
+**Tables (1):** `CybleVisionAlerts_CL`
+
+The **Cyble Vision Alerts** CCF Data Connector enables Ingestion of Threat Alerts from Cyble Vision into Microsoft Sentinel using the Codeless Connector Framework Connector. It collects alert data via API, normalizes it, and stores it in a custom table for advanced detection, correlation, and response.
+
+[→ View full connector details](connectors/cyblevisionalerts.md)
+
+---
+
 ### [Cyborg Security HUNTER Hunt Packages](connectors/cyborgsecurity-hunter.md)
 
 **Publisher:** Cyborg Security
@@ -1388,6 +1402,20 @@ This solution installs the Datalake2Sentinel connector which is built using the 
 Dataminr Pulse Alerts Data Connector brings our AI-powered real-time intelligence into Microsoft Sentinel for faster threat detection and response.
 
 [→ View full connector details](connectors/dataminrpulsealerts.md)
+
+---
+
+### [Datawiza DAP](connectors/datawizadapsolution.md)
+
+**Publisher:** Datawiza
+
+**Solution:** [Datawiza](solutions/datawiza.md)
+
+**Tables (1):** `datawizaserveraccess_CL`
+
+Connects the Datawiza DAP logs to Azure Log Analytics via the REST API interface
+
+[→ View full connector details](connectors/datawizadapsolution.md)
 
 ---
 
@@ -2160,6 +2188,20 @@ HYAS Protect provide logs based on reputation values - Blocked, Malicious, Permi
 Through the API integration, you have the capability to retrieve all the issues related to your HackerView organizations via a RESTful interface.
 
 [→ View full connector details](connectors/hvpollingidazurefunctions.md)
+
+---
+
+### [Halcyon Connector](connectors/halcyonpush.md)
+
+**Publisher:** Halcyon
+
+**Solution:** [Halcyon](solutions/halcyon.md)
+
+**Tables (5):** `HalcyonAuthenticationEvents_CL`, `HalcyonDnsActivity_CL`, `HalcyonFileActivity_CL`, `HalcyonNetworkSession_CL`, `HalcyonProcessEvent_CL`
+
+The [Halcyon](https://www.halcyon.ai) connector provides the capability to send data from Halcyon to Microsoft Sentinel.
+
+[→ View full connector details](connectors/halcyonpush.md)
 
 ---
 
@@ -3051,6 +3093,71 @@ The Mimecast products included within the connector are:
 
 ---
 
+### [Miro Audit Logs (Enterprise Plan)](connectors/miroauditlogsdataconnector.md)
+
+**Publisher:** Miro
+
+**Solution:** [Miro](solutions/miro.md)
+
+**Tables (1):** `MiroAuditLogs_CL`
+
+The [Miro Audit Logs](https://help.miro.com/hc/en-us/articles/360017571434-Audit-logs) data connector enables you to ingest organization-wide audit events from Miro into Microsoft Sentinel. Monitor user activities, security events, content access, team changes, and administrative actions to enhance your security operations and compliance capabilities.
+
+**Key features:**
+- Track user authentication and access patterns.
+- Monitor content creation, sharing, and deletion.
+- Audit team and organization configuration changes.
+- Detect suspicious activities and policy violations.
+- Meet compliance and regulatory requirements.
+
+**Requirements:**
+- **Miro Plan**: [Enterprise Plan](https://miro.com/pricing/).
+- **OAuth scope**: `auditlogs:read`.
+- **Role**: Company Admin in your Miro organization.
+
+💡 **Not on Enterprise Plan yet?** Upgrade to [Miro Enterprise](https://miro.com/enterprise/) to unlock audit logs and gain comprehensive visibility into your team's activities in Microsoft Sentinel.
+
+For detailed instructions, refer to the [documentation](https://help.miro.com/hc/en-us/articles/31325908249362).
+
+[→ View full connector details](connectors/miroauditlogsdataconnector.md)
+
+---
+
+### [Miro Content Logs (Enterprise Plan + Enterprise Guard)](connectors/mirocontentlogsdataconnector.md)
+
+**Publisher:** Miro
+
+**Solution:** [Miro](solutions/miro.md)
+
+**Tables (1):** `MiroContentLogs_CL`
+
+The [Miro Content Logs](https://help.miro.com/hc/en-us/articles/17774729839378-Content-Logs-overview) data connector enables you to ingest content activity logs from Miro into Microsoft Sentinel. Part of Miro's Enterprise Guard eDiscovery capabilities, this connector provides content-level visibility for compliance, legal hold, and advanced threat detection.
+
+**Key features:**
+- Track all content item changes.
+- Monitor content modifications by user and timestamp.
+- Support compliance and eDiscovery requirements.
+- Detect data exfiltration and insider threats.
+- Meet regulatory and legal hold obligations.
+
+**Requirements:**
+- **Miro Plan**: [Enterprise Plan](https://miro.com/pricing/) + **Enterprise Guard** add-on.
+- **OAuth scope**: `contentlogs:export`.
+- **Role**: Company Admin in your Miro organization.
+- **Organization ID**: Your Miro organization identifier.
+
+💡 **Not on Enterprise Plan yet?** Upgrade to [Miro Enterprise](https://miro.com/enterprise/) to unlock advanced security and compliance features for your team's collaboration activities in Microsoft Sentinel.
+
+💡 **Need Content Logs?** Content activity logging is part of [Miro Enterprise Guard](https://miro.com/enterprise-guard/), which provides advanced security, compliance, and eDiscovery features. Contact your Miro account manager to add Enterprise Guard to your Enterprise Plan and unlock content-level monitoring in Microsoft Sentinel.
+
+**Note:** If you only have the base Enterprise Plan (without Enterprise Guard), please use the **Miro Audit Logs** connector instead for organization-level event monitoring.
+
+For detailed instructions, refer to the [documentation](https://help.miro.com/hc/en-us/articles/31325908249362).
+
+[→ View full connector details](connectors/mirocontentlogsdataconnector.md)
+
+---
+
 ### [MongoDB Atlas Logs](connectors/mongodbatlaslogsazurefunctions.md)
 
 **Publisher:** MongoDB
@@ -3833,7 +3940,7 @@ The SINEC Security Guard solution for Microsoft Sentinel allows you to ingest se
 
 **Tables (1):** `SOCPrimeAuditLogs_CL`
 
-The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
+The [SOC Prime Audit Logs](https://tdm.socprime.com/login) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
 
 [→ View full connector details](connectors/socprimeauditlogsdataconnector.md)
 
@@ -4438,6 +4545,48 @@ The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detect
 The Trend Vision One connector is supported in Microsoft Sentinel in the following regions: Australia East, Australia Southeast, Brazil South, Canada Central, Canada East, Central India, Central US, East Asia, East US, East US 2, France Central, Japan East, Korea Central, North Central US, North Europe, Norway East, South Africa North, South Central US, Southeast Asia, Sweden Central, Switzerland North, UAE North, UK South, UK West, West Europe, West US, West US 2, West US 3.
 
 [→ View full connector details](connectors/trendmicroxdr.md)
+
+---
+
+### [Tropico Security - Alerts](connectors/tropicoalertsdefinition.md)
+
+**Publisher:** Tropico Security
+
+**Solution:** [Tropico](solutions/tropico.md)
+
+**Tables (1):** `{{graphQueriesTableName}}`
+
+Ingest security alerts from Tropico Security Platform in OCSF Security Finding format.
+
+[→ View full connector details](connectors/tropicoalertsdefinition.md)
+
+---
+
+### [Tropico Security - Events](connectors/tropicoeventsdefinition.md)
+
+**Publisher:** Tropico Security
+
+**Solution:** [Tropico](solutions/tropico.md)
+
+**Tables (1):** `{{graphQueriesTableName}}`
+
+Ingest security events from Tropico Security Platform in OCSF Security Finding format.
+
+[→ View full connector details](connectors/tropicoeventsdefinition.md)
+
+---
+
+### [Tropico Security - Incidents](connectors/tropicoincidentsdefinition.md)
+
+**Publisher:** Tropico Security
+
+**Solution:** [Tropico](solutions/tropico.md)
+
+**Tables (1):** `{{graphQueriesTableName}}`
+
+Ingest attacker session incidents from Tropico Security Platform.
+
+[→ View full connector details](connectors/tropicoincidentsdefinition.md)
 
 ---
 

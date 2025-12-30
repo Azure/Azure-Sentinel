@@ -87,7 +87,16 @@ The [Armis](https://www.armis.com/) Device connector gives the capability to ing
 
 > **Reference link:** [https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret](https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret)
 
-**STEP 4 - Assign role of Contributor to application in Microsoft Entra ID**
+**STEP 4 - Get Object ID of your application in Microsoft Entra ID**
+
+ After creating your app registration, follow the steps in this section to get Object ID:
+ 1. Go to **Microsoft Entra ID**.
+ 2. Select **Enterprise applications** from the left menu.
+ 3. Find your newly created application in the list (you can search by the name you provided).
+ 4. Click on the application.
+ 5. On the overview page, copy the **Object ID**. This is the **AzureEntraObjectId** needed for your ARM template role assignment.
+
+**STEP 5 - Assign role of Contributor to application in Microsoft Entra ID**
 
  Follow the steps in this section to assign the role:
  1. In the Azure portal, Go to **Resource Group** and select your resource group.
@@ -100,7 +109,7 @@ The [Armis](https://www.armis.com/) Device connector gives the capability to ing
 
 > **Reference link:** [https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal)
 
-**STEP 5 - Create a Keyvault**
+**STEP 6 - Create a Keyvault**
 
  Follow these instructions to create a new Keyvault.
  1. In the Azure portal, Go to **Key vaults**. Click create.
@@ -108,7 +117,7 @@ The [Armis](https://www.armis.com/) Device connector gives the capability to ing
 
 > **NOTE:** Create a separate key vault for each **API key** within one workspace.
 
-**STEP 6 - Create Access Policy in Keyvault**
+**STEP 7 - Create Access Policy in Keyvault**
 
  Follow these instructions to create access policy in Keyvault.
  1. Go to keyvaults, select your keyvault, go to Access policies on left side panel. Click create.
@@ -117,15 +126,11 @@ The [Armis](https://www.armis.com/) Device connector gives the capability to ing
 
 > **NOTE:** Ensure the Permission model in the Access Configuration of Key Vault is set to **'Vault access policy'**
 
-**STEP 7 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**
+**STEP 8 - Choose ONE from the following two deployment options to deploy the connector and the associated Azure Function**
 
->**IMPORTANT:** Before deploying the Armis Device data connector, have the Workspace ID and Workspace Primary Key (can be copied from the following) readily available.., as well as the Armis API Authorization Key(s)
-- **Workspace ID**: `WorkspaceId`
-  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
-- **Primary Key**: `PrimaryKey`
-  > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
+>**IMPORTANT:** Before deploying the Armis Device data connector, have the Armis API Authorization Key(s) readily available..
 
-**8. Option 1 - Azure Resource Manager (ARM) Template**
+**9. Option 1 - Azure Resource Manager (ARM) Template**
 
 Use this method for automated deployment of the Armis connector.
 
@@ -135,8 +140,8 @@ Use this method for automated deployment of the Armis connector.
 2. Select the preferred **Subscription**, **Resource Group** and **Location**. 
 3. Enter the below information : 
 		Function Name 
-		Workspace ID 
-		Workspace Key 
+		Location 
+		Workspace Name 
 		Armis Secret Key 
 		Armis URL (https://<armis-instance>.armis.com/api/v1/) 
 		Armis Device Table Name 
@@ -144,11 +149,12 @@ Use this method for automated deployment of the Armis connector.
 		KeyVault Name 
 		Azure Client Id 
 		Azure Client Secret 
+		Azure Entra ObjectID 
 		Tenant Id 
 4. Mark the checkbox labeled **I agree to the terms and conditions stated above**. 
 5. Click **Purchase** to deploy.
 
-**9. Option 2 - Manual Deployment of Azure Functions**
+**10. Option 2 - Manual Deployment of Azure Functions**
 
 Use the following step-by-step instructions to deploy the Armis Device data connector manually with Azure Functions (Deployment via Visual Studio Code).
 
@@ -156,7 +162,7 @@ Use the following step-by-step instructions to deploy the Armis Device data conn
 
 > **NOTE:** You will need to [prepare VS code](https://docs.microsoft.com/azure/azure-functions/functions-create-first-function-python#prerequisites) for Azure function development.
 
-1. Download the [Azure Function App](https://aka.ms/sentinel-ArmisDevice311-functionapp) file. Extract archive to your local development computer.
+1. Download the [Azure Function App](https://aka.ms/sentinel-ArmisDevice320-functionapp) file. Extract archive to your local development computer.
 2. Start VS Code. Choose File in the main menu and select Open Folder.
 3. Select the top level folder from extracted files.
 4. Choose the Azure icon in the Activity bar, then in the **Azure: Functions** area, choose the **Deploy to function app** button.
@@ -172,7 +178,7 @@ If you're already signed in, go to the next step.
 
 	d. **Enter a globally unique name for the function app:** Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. ARMISXXXXX).
 
-	e. **Select a runtime:** Choose Python 3.11
+	e. **Select a runtime:** Choose Python 3.12
 
 	f. Select a location for new resources. For better performance and lower costs choose the same [region](https://azure.microsoft.com/regions/) where Microsoft Sentinel is located.
 
@@ -184,8 +190,8 @@ If you're already signed in, go to the next step.
 1. In the Function App, select the Function App Name and select **Configuration**.
 2. In the **Application settings** tab, select **+ New application setting**.
 3. Add each of the following application settings individually, with their respective values (case-sensitive): 
-		Workspace ID 
-		Workspace Key 
+		Location 
+		Workspace Name 
 		Armis Secret Key 
 		Armis URL (https://<armis-instance>.armis.com/api/v1/) 
 		Armis Device Table Name 
@@ -193,6 +199,7 @@ If you're already signed in, go to the next step.
 		KeyVault Name 
 		Azure Client Id 
 		Azure Client Secret 
+		Azure Entra ObjectID 
 		Tenant Id 
 		logAnalyticsUri (optional) 
  - Use logAnalyticsUri to override the log analytics API endpoint for dedicated cloud. For example, for public cloud, leave the value empty; for Azure GovUS cloud environment, specify the value in the following format: `https://<CustomerId>.ods.opinsights.azure.us`.
