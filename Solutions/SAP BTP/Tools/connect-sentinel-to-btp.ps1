@@ -73,19 +73,19 @@ if ($UseKeyVault) {
 
 # Determine credential source
 if ($UseCredentialsFromCsv) {
-    Write-Log "Credential source: CSV file (split persona mode)" -Level "INFO"
+    Write-Log "Credential source: CSV file (split permissions)" -Level "INFO"
     $credentialSource = "CSV"
     # CF credentials not required in CSV mode
     $CfUsername = $null
     $CfPassword = $null
 } elseif ($UseKeyVault) {
-    Write-Log "Credential source: Azure Key Vault (split persona mode)" -Level "INFO"
+    Write-Log "Credential source: Azure Key Vault (split permissions)" -Level "INFO"
     $credentialSource = "KeyVault"
     # CF credentials not required in Key Vault mode
     $CfUsername = $null
     $CfPassword = $null
 } else {
-    Write-Log "Credential source: CloudFoundry (single persona mode)" -Level "INFO"
+    Write-Log "Credential source: CloudFoundry (full permissions)" -Level "INFO"
     $credentialSource = "CloudFoundry"
     
     # Validate and get CF credentials using helper function

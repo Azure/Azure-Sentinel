@@ -894,7 +894,7 @@ function Export-BtpSubaccountsCsv {
     }
 }
 
-# Function to export service key credentials to CSV (for split persona scenarios)
+# Function to export service key credentials to CSV (for split permissions scenarios)
 # WARNING: This stores sensitive credentials in plaintext. Use only for testing or with secure file transfer.
 function Export-ServiceKeyToCsv {
     param(
@@ -953,7 +953,7 @@ function Export-ServiceKeyToCsv {
     }
 }
 
-# Function to import service key credentials from CSV (for split persona scenarios)
+# Function to import service key credentials from CSV (for split permissions scenarios)
 function Get-ServiceKeyFromCsv {
     param(
         [Parameter(Mandatory=$true)]
@@ -1017,7 +1017,7 @@ function Get-ServiceKeyFromCsv {
     }
 }
 
-# Function to export service key credentials to Azure Key Vault (for split persona scenarios)
+# Function to export service key credentials to Azure Key Vault (for split permissions scenarios)
 function Export-ServiceKeyToKeyVault {
     param(
         [Parameter(Mandatory=$true)]
@@ -1110,7 +1110,7 @@ function Export-ServiceKeyToKeyVault {
     }
 }
 
-# Function to import service key credentials from Azure Key Vault (for split persona scenarios)
+# Function to import service key credentials from Azure Key Vault (for split permissions scenarios)
 function Get-ServiceKeyFromKeyVault {
     param(
         [Parameter(Mandatory=$true)]

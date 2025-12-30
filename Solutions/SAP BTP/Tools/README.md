@@ -4,15 +4,12 @@ This directory contains PowerShell script blue prints to handle Microsoft Sentin
 
 ## Table of Contents
 
+- [Scripts](#scripts)
 - [Prerequisites](#prerequisites)
-- [Choose Your Deployment Model](#choose-your-deployment-model)
-- [Split Persona](#split-persona)
-  - [Initial Deployment](#split-persona-initial-deployment)
-  - [Key Rotation](#split-persona-key-rotation)
-- [Single Persona](#single-persona)
-  - [Initial Deployment](#single-persona-initial-deployment)
-  - [Key Rotation](#single-persona-key-rotation)
-- [Key Rotation Modes](#key-rotation-modes)
+- [Usage](#usage)
+- [Examples](#examples)
+  - [Split Permissions](#split-permissions)
+  - [Full Permissions](#full-permissions)
 
 ## Scripts
 
@@ -28,16 +25,57 @@ Ensure you have the following:
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed and authenticated
 - [CloudFoundry CLI](https://docs.cloudfoundry.org/cf-cli/install-go-cli.html) installed and authenticated
 - Appropriate permissions in both Azure and SAP BTP. Learn more [here](https://learn.microsoft.com/azure/sentinel/sap/deploy-sap-btp-solution#prerequisites)
+- Azure Key Vault (optional, required for split permissions workflow)
 
-## Choose Your Deployment Model
+## Usage
 
-**Split Persona:** Separate SAP BTP and Microsoft Sentinel administrators without cross-access. BTP admins provision services and export credentials to Azure Key Vault. Sentinel admins retrieve credentials from Key Vault to create connections. This approach maintains security boundaries and enables zero-downtime key rotation.
+### export-subaccounts.ps1
 
-**Single Persona:** One administrator with access to both SAP BTP and Microsoft Sentinel. Simpler workflow but requires broader permissions.
+Generates a CSV file with all subaccounts from your BTP global account.
 
----
+**Parameters:**
+- `-BtpSubdomain`: Your BTP global account subdomain
 
-## Split Persona
+### provision-audit-to-subaccounts.ps1
+
+Provisions auditlog management services and creates service keys.
+
+**Parameters:**
+- `-CsvPath`: Path to subaccounts CSV file (default: `.\subaccounts.csv`)
+- `-InstanceName`: Service instance name (default: `sentinel-audit-srv`)
+- `-KeyRotationMode`: Key rotation mode
+  - `CreateNewKey` (default): Creates new key, keeps old keys → zero downtime
+  - `Cleanup`: Keeps newest key, deletes old keys → run after rotation confirmed
+- `-ExportCredentialsToKeyVault`: Export credentials to Azure Key Vault (recommended for split permissions)
+- `-KeyVaultName`: Key Vault name (required with `-ExportCredentialsToKeyVault`)
+- `-ExportCredentialsToCsv`: Export credentials to CSV (not recommended)
+
+### connect-sentinel-to-btp.ps1
+
+Creates or updates Sentinel connections to BTP subaccounts.
+
+**Parameters:**
+- `-SubscriptionId`: Azure subscription ID
+- `-ResourceGroupName`: Resource group containing Sentinel workspace
+- `-WorkspaceName`: Sentinel workspace name
+- `-CsvPath`: Path to subaccounts CSV file (default: `.\subaccounts.csv`)
+- `-UseKeyVault`: Retrieve credentials from Key Vault (for split permissions)
+- `-KeyVaultName`: Key Vault name (required with `-UseKeyVault`)
+- `-UseCredentialsFromCsv`: Retrieve credentials from CSV (not recommended)
+
+## Examples
+
+## Split Permissions
+
+**Use this if your permissions are separated:** You have separate SAP BTP and Microsoft Sentinel administrators without cross-access. BTP admins cannot access Sentinel, and Sentinel admins cannot access BTP.
+
+**How it works:** BTP admins provision services and export credentials to a central Azure Key Vault. Sentinel admins retrieve credentials from Key Vault to create connections. This approach maintains security boundaries and enables zero-downtime key rotation.
+
+**Required permissions:**
+- BTP Admins: `Key Vault Secrets Officer` role to upload service keys
+- Sentinel Admins: `Key Vault Secrets User` role to read secrets
+
+**Security Note:** CSV export is supported for testing but not recommended for production. CSV files store credentials in plaintext without encryption, access controls, or audit trails. Use Azure Key Vault for production deployments to maintain proper security boundaries.
 
 ### Initial Deployment
 
@@ -101,7 +139,11 @@ It is recommend to rotate service keys for security best practices. Zero-downtim
 
 ---
 
-## Single Persona
+## Full Permissions
+
+**Use this if you have access to both:** You have a single administrator (or team) with access to both SAP BTP and Microsoft Sentinel.
+
+**How it works:** Simpler workflow where the same person runs both provisioning and connection scripts directly without credential handoff via Key Vault.
 
 ### Initial Deployment
 
@@ -143,11 +185,6 @@ It is recommend to rotate service keys for security best practices. See "[Rotate
 ```
 
 ---
-
-## Key Rotation Modes
-
-- **CreateNewKey** (default): Creates new key, keeps old keys → zero downtime
-- **Cleanup**: Keeps newest key, deletes old keys → run after rotation confirmed
 
 ## Contributing
 

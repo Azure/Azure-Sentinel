@@ -70,6 +70,29 @@ if ($ExportCredentialsToKeyVault) {
     }
 }
 
+# Warn users about CSV security implications
+if ($ExportCredentialsToCsv) {
+    Write-Host ""
+    Write-Host "WARNING: CSV Export Security Notice" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "CSV files store credentials in plaintext without encryption, access controls,"
+    Write-Host "or audit trails. This method should ONLY be used for testing purposes."
+    Write-Host ""
+    Write-Host "For production environments, use Azure Key Vault instead:" -ForegroundColor Cyan
+    Write-Host "  -ExportCredentialsToKeyVault -KeyVaultName '<your-key-vault>'"
+    Write-Host ""
+    
+    $confirmation = Read-Host "Do you want to continue with CSV export? (yes/no)"
+    
+    if ($confirmation -notmatch '^(y|yes)$') {
+        Write-Log "CSV export cancelled by user" -Level "INFO"
+        exit 0
+    }
+    
+    Write-Log "User confirmed CSV export. Proceeding with caution..." -Level "WARNING"
+}
+
 # Validate and get CF credentials using helper function
 $credentials = Get-CfCredentials -Username $CfUsername -Password $CfPassword
 if ($null -eq $credentials) {
