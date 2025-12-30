@@ -73,10 +73,100 @@ AZURE_MONITOR_TABLE_REF_RAW_BASE = 'https://raw.githubusercontent.com/MicrosoftD
 DEFAULT_CACHE_DIR = Path('.cache')
 DEFAULT_CACHE_TTL = 604800  # 1 week in seconds
 
+# Default overrides file
+DEFAULT_OVERRIDES_FILE = Path(__file__).parent / 'solution_analyzer_overrides.csv'
+
 # Global cache settings
 _cache_enabled = True
 _cache_dir = DEFAULT_CACHE_DIR
 _cache_ttl = DEFAULT_CACHE_TTL
+
+
+class Override:
+    """Represents a single override rule from the overrides CSV."""
+    def __init__(self, entity: str, pattern: str, field: str, value: str):
+        self.entity = entity.lower().strip()
+        self.pattern = pattern.strip()
+        self.field = field.strip()
+        self.value = value
+        # Compile regex with anchors for full match, case insensitive
+        try:
+            self.regex = re.compile(f"^{self.pattern}$", re.IGNORECASE)
+        except re.error:
+            self.regex = None
+    
+    def matches(self, key: str) -> bool:
+        """Check if the key matches this override's pattern."""
+        if self.regex is None:
+            return False
+        return bool(self.regex.match(key))
+
+
+def load_overrides(overrides_path: Path) -> List[Override]:
+    """Load overrides from CSV file.
+    
+    CSV format: Entity,Pattern,Field,Value
+    - Entity: table, connector, or solution (case insensitive)
+    - Pattern: regex pattern to match against key (full match, case insensitive)
+    - Field: the field to override
+    - Value: the new value
+    """
+    overrides: List[Override] = []
+    if not overrides_path.exists():
+        return overrides
+    
+    try:
+        # Use utf-8-sig to handle BOM (Byte Order Mark) from Excel
+        with overrides_path.open("r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                entity = row.get("Entity", "").strip()
+                pattern = row.get("Pattern", "").strip()
+                field = row.get("Field", "").strip()
+                value = row.get("Value", "")
+                
+                # Skip empty rows
+                if not entity or not pattern or not field:
+                    continue
+                
+                overrides.append(Override(entity, pattern, field, value))
+    except Exception as e:
+        print(f"Warning: Could not load overrides from {overrides_path}: {e}")
+    
+    return overrides
+
+
+def apply_overrides_to_tableinfo(
+    tables: Dict[str, 'TableInfo'],
+    overrides: List[Override],
+    verbose: bool = False
+) -> int:
+    """Apply matching overrides to TableInfo objects.
+    
+    Args:
+        tables: Dictionary of table_name -> TableInfo
+        overrides: List of Override objects
+        verbose: Print info about applied overrides
+    
+    Returns:
+        Number of tables modified
+    """
+    modified_count = 0
+    
+    for table_name, info in tables.items():
+        was_modified = False
+        for override in overrides:
+            if override.entity != 'table':
+                continue
+            if override.matches(table_name):
+                # Apply the override to the TableInfo attribute
+                if hasattr(info, override.field):
+                    setattr(info, override.field, override.value)
+                    was_modified = True
+        if was_modified:
+            modified_count += 1
+    
+    return modified_count
 
 
 @dataclass
@@ -101,18 +191,14 @@ class TableInfo:
     
     # Feature support attributes
     basic_logs_eligible: str = ""
-    auxiliary_table_eligible: str = ""
     supports_transformations: str = ""
-    search_job_support: str = ""
     
     # Ingestion API support
     ingestion_api_supported: bool = False
     
-    # Table attributes from Azure Monitor reference
-    table_type: str = ""  # Microsoft, Custom, etc.
-    retention_default: str = ""
-    retention_max: str = ""
-    plan: str = ""  # Analytics, Basic, etc.
+    # Override target fields
+    collection_method: str = ""
+    support_tier: str = ""
 
 
 def get_cache_path(url: str) -> Path:
@@ -433,17 +519,19 @@ def parse_defender_xdr_schema(content: str, verbose: bool = False) -> Dict[str, 
 
 
 def parse_tables_feature_support(content: str, verbose: bool = False) -> Dict[str, Dict]:
-    """Parse the tables-feature-support page."""
-    feature_info = {}
+    """Parse the tables-feature-support page.
     
-    # Find the main feature support table
-    # Headers typically: Table | Basic logs | Auxiliary | Transformations | Search Jobs
+    This page lists tables that support ingestion-time transformations.
+    All tables listed on this page support transformations (Yes).
+    The page format is: | Table | Limitations |
+    """
+    feature_info = {}
     
     lines = content.split('\n')
     in_table = False
-    headers = []
     
     for line in lines:
+        # Detect table separator row
         if re.match(r'^\s*\|[-:\s|]+\|', line):
             in_table = True
             continue
@@ -455,53 +543,33 @@ def parse_tables_feature_support(content: str, verbose: bool = False) -> Dict[st
             if not parts:
                 continue
             
-            # First row after separator might be headers
-            if not headers and any(h.lower() in ['table', 'name'] for h in parts):
-                headers = [h.lower() for h in parts]
-                continue
-            
-            # Extract table name from first column
+            # Extract table name from first column (may be a link like [TableName](path))
             table_name_match = re.search(r'\[([A-Za-z0-9_]+)\]', parts[0])
             if table_name_match:
                 table_name = table_name_match.group(1)
             else:
                 table_name = parts[0].strip()
             
+            # Skip header row
             if not table_name or table_name.lower() == 'table':
                 continue
             
-            # Build feature dict
-            features = {
+            # All tables on this page support transformations
+            # The second column contains limitations (if any)
+            limitations = parts[1].strip() if len(parts) > 1 else ''
+            
+            feature_info[table_name] = {
                 'basic_logs': '',
                 'auxiliary': '',
-                'transformations': '',
-                'search_jobs': ''
+                'transformations': 'Yes',  # All tables on this page support transformations
+                'search_jobs': '',
+                'limitations': limitations
             }
-            
-            # Map columns to features based on position or headers
-            for i, part in enumerate(parts[1:], 1):
-                # Clean checkmarks and other markers
-                value = part.strip()
-                if '✓' in value or '✔' in value or 'Yes' in value:
-                    value = 'Yes'
-                elif '✗' in value or '✖' in value or 'No' in value:
-                    value = 'No'
-                
-                if i == 1:
-                    features['basic_logs'] = value
-                elif i == 2:
-                    features['auxiliary'] = value
-                elif i == 3:
-                    features['transformations'] = value
-                elif i == 4:
-                    features['search_jobs'] = value
-            
-            feature_info[table_name] = features
-        elif in_table and not '|' in line:
+        elif in_table and '|' not in line:
             in_table = False
     
     if verbose:
-        print(f"  Found feature support info for {len(feature_info)} tables")
+        print(f"  Found {len(feature_info)} tables that support transformations")
     
     return feature_info
 
@@ -689,6 +757,12 @@ def merge_table_info(tables: Dict[str, TableInfo],
                 ingestion_api_supported=True
             )
     
+    # Set collection_method based on resource_types
+    # Tables with virtualmachines resource type are typically collected via AMA
+    for table_name, info in merged.items():
+        if info.resource_types and 'virtualmachines' in info.resource_types.lower():
+            info.collection_method = 'AMA'
+    
     return merged
 
 
@@ -698,6 +772,8 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
         'table_name',
         'description',
         'category',
+        'support_tier',
+        'collection_method',
         'solutions',
         'resource_types',
         'table_type',
@@ -709,13 +785,8 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
         'azure_monitor_doc_link',
         'defender_xdr_doc_link',
         'basic_logs_eligible',
-        'auxiliary_table_eligible',
         'supports_transformations',
-        'search_job_support',
         'ingestion_api_supported',
-        'retention_default',
-        'retention_max',
-        'plan'
     ]
     
     with open(output_path, 'w', encoding='utf-8', newline='') as f:
@@ -728,6 +799,8 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
                 'table_name': info.table_name,
                 'description': info.description,
                 'category': info.category,
+                'support_tier': info.support_tier,
+                'collection_method': info.collection_method,
                 'solutions': info.solutions,
                 'resource_types': info.resource_types,
                 'table_type': info.table_type,
@@ -739,80 +812,11 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
                 'azure_monitor_doc_link': info.azure_monitor_doc_link,
                 'defender_xdr_doc_link': info.defender_xdr_doc_link,
                 'basic_logs_eligible': info.basic_logs_eligible,
-                'auxiliary_table_eligible': info.auxiliary_table_eligible,
                 'supports_transformations': info.supports_transformations,
-                'search_job_support': info.search_job_support,
                 'ingestion_api_supported': 'Yes' if info.ingestion_api_supported else 'No',
-                'retention_default': info.retention_default,
-                'retention_max': info.retention_max,
-                'plan': info.plan
             })
     
     print(f"Wrote {len(tables)} tables to {output_path}")
-
-
-def generate_report_md(tables: Dict[str, TableInfo], output_path: Path) -> None:
-    """Generate a markdown report summarizing the table information."""
-    
-    # Calculate statistics
-    total_tables = len(tables)
-    azure_monitor_count = sum(1 for t in tables.values() if t.source_azure_monitor)
-    defender_xdr_count = sum(1 for t in tables.values() if t.source_defender_xdr)
-    xdr_only_count = sum(1 for t in tables.values() if t.xdr_only)
-    feature_support_count = sum(1 for t in tables.values() if t.source_feature_support)
-    ingestion_api_count = sum(1 for t in tables.values() if t.ingestion_api_supported)
-    
-    # Count by category
-    categories = {}
-    for t in tables.values():
-        cat = t.category or 'Uncategorized'
-        categories[cat] = categories.get(cat, 0) + 1
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write("# Azure Monitor and Sentinel Tables Reference\n\n")
-        f.write(f"*Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}*\n\n")
-        
-        f.write("## Table of Contents\n\n")
-        f.write("- [Summary Statistics](#summary-statistics)\n")
-        f.write("- [Tables by Category](#tables-by-category)\n")
-        f.write("- [Data Sources](#data-sources)\n")
-        f.write("\n---\n\n")
-        
-        f.write("## Summary Statistics\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|--------|-------|\n")
-        f.write(f"| Total Tables | {total_tables} |\n")
-        f.write(f"| In Azure Monitor Reference | {azure_monitor_count} |\n")
-        f.write(f"| In Defender XDR Schema | {defender_xdr_count} |\n")
-        f.write(f"| XDR Only (not in Azure Monitor) | {xdr_only_count} |\n")
-        f.write(f"| With Feature Support Info | {feature_support_count} |\n")
-        f.write(f"| Supported by Ingestion API | {ingestion_api_count} |\n")
-        f.write("\n")
-        
-        f.write("## Tables by Category\n\n")
-        f.write("| Category | Table Count |\n")
-        f.write("|----------|-------------|\n")
-        for cat in sorted(categories.keys()):
-            f.write(f"| {cat} | {categories[cat]} |\n")
-        f.write("\n")
-        
-        f.write("## Data Sources\n\n")
-        f.write("This reference combines information from the following Microsoft documentation:\n\n")
-        f.write(f"1. **Azure Monitor Reference Tables** - [{AZURE_MONITOR_TABLES_CATEGORY}]({AZURE_MONITOR_TABLES_CATEGORY})\n")
-        f.write(f"2. **Defender XDR Advanced Hunting Schema** - [{DEFENDER_XDR_SCHEMA}]({DEFENDER_XDR_SCHEMA})\n")
-        f.write(f"3. **Tables Feature Support** - [{TABLES_FEATURE_SUPPORT}]({TABLES_FEATURE_SUPPORT})\n")
-        f.write(f"4. **Logs Ingestion API Overview** - [{INGESTION_API_OVERVIEW}]({INGESTION_API_OVERVIEW})\n")
-        f.write("\n")
-        
-        f.write("### Additional Sources for Future Enhancement\n\n")
-        f.write("- Azure Resource Graph tables\n")
-        f.write("- Microsoft Sentinel data connectors documentation\n")
-        f.write("- Log Analytics workspace table schemas via API\n")
-        f.write("- Azure Monitor Metrics reference\n")
-        f.write("- Microsoft 365 Defender tables\n")
-        f.write("- Microsoft Purview audit logs tables\n")
-    
-    print(f"Wrote report to {output_path}")
 
 
 def main():
@@ -843,9 +847,9 @@ Examples:
     )
     
     parser.add_argument(
-        '--fetch-details',
+        '--skip-details',
         action='store_true',
-        help='Fetch detailed info for each table from reference pages (slower)'
+        help='Skip fetching detailed info from individual table pages (faster but less data)'
     )
     
     parser.add_argument(
@@ -881,6 +885,13 @@ Examples:
         type=Path,
         default=DEFAULT_CACHE_DIR,
         help=f'Directory for cache files (default: {DEFAULT_CACHE_DIR})'
+    )
+    
+    parser.add_argument(
+        '--overrides-csv',
+        type=Path,
+        default=DEFAULT_OVERRIDES_FILE,
+        help='Path to overrides CSV file for field value overrides (default: %(default)s)'
     )
     
     parser.add_argument(
@@ -964,8 +975,8 @@ Examples:
     if verbose:
         print(f"   Total unique tables: {len(tables)}")
     
-    # Optionally fetch detailed info for each table
-    if args.fetch_details:
+    # Fetch detailed info for each table (unless --skip-details)
+    if not args.skip_details:
         # Filter to only Azure Monitor tables
         azure_tables = [(name, info) for name, info in tables.items() if info.source_azure_monitor]
         total = len(azure_tables)
@@ -1030,6 +1041,15 @@ Examples:
         if verbose:
             print(f"   Successfully fetched details for {fetched_count} tables")
     
+    # Apply overrides
+    overrides = load_overrides(args.overrides_csv)
+    if overrides:
+        if verbose:
+            print(f"\nApplying {len(overrides)} override(s) from {args.overrides_csv}...")
+        modified_count = apply_overrides_to_tableinfo(tables, overrides, verbose)
+        if verbose:
+            print(f"   Modified {modified_count} tables")
+    
     # Write outputs
     if verbose:
         print("\nWriting outputs...")
@@ -1038,9 +1058,6 @@ Examples:
     
     csv_path = args.output / 'tables_reference.csv'
     write_tables_csv(tables, csv_path)
-    
-    report_path = args.output / 'tables_reference_report.md'
-    generate_report_md(tables, report_path)
     
     if verbose:
         print("\nDone!")

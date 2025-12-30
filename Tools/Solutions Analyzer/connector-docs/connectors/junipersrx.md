@@ -5,7 +5,7 @@
 | **Connector ID** | `JuniperSRX` |
 | **Publisher** | Juniper |
 | **Used in Solutions** | [Juniper SRX](../solutions/juniper-srx.md) |
-| **Collection Method** | AMA |
+| **Collection Method** | Unknown |
 | **Connector Definition Files** | [Connector_Syslog_JuniperSRX.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Juniper%20SRX/Data%20Connectors/Connector_Syslog_JuniperSRX.json) |
 
 The [Juniper SRX](https://www.juniper.net/us/en/products-services/security/srx-series/) connector allows you to easily connect your Juniper SRX logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.

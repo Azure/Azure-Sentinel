@@ -2,10 +2,37 @@
 
 This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
 
-1. **`map_solutions_connectors_tables.py`** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
-2. **`collect_table_info.py`** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
-3. **`generate_connector_docs.py`** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
-4. **`solution_analyzer_upload_to_kusto.py`** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
+1. **[`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md)** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
+2. **[`collect_table_info.py`](script-docs/collect_table_info.md)** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
+3. **[`generate_connector_docs.py`](script-docs/generate_connector_docs.md)** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
+4. **[`solution_analyzer_upload_to_kusto.py`](script-docs/upload_to_kusto.md)** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
+
+## Prerequisites
+
+### Clone the Azure-Sentinel Repository
+
+The main analysis script (`map_solutions_connectors_tables.py`) and documentation generator require the [Azure-Sentinel GitHub repository](https://github.com/Azure/Azure-Sentinel) to be cloned locally:
+
+```bash
+# Clone the repository
+git clone https://github.com/Azure/Azure-Sentinel.git
+
+# Navigate to the Tools directory
+cd Azure-Sentinel/Tools/Solutions\ Analyzer
+
+# Keep the repository updated
+git pull origin master
+```
+
+### Python Environment
+
+- Python 3.7 or higher
+- Required packages vary by script (see individual documentation)
+
+**Quick install for all scripts:**
+```bash
+pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
+```
 
 ## Quick Start
 
@@ -31,761 +58,101 @@ You can use these files directly without running the scripts. They are kept up-t
 
 The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
 
----
+## Running the Scripts
 
-# 1. Solution Connector Tables Analyzer
+### Recommended Order
 
-**Script:** `map_solutions_connectors_tables.py`
-
-## Overview
-
-Scans the Solutions directory to:
-- Extract table references from connector JSON files (queries, sample queries, data types)
-- Resolve parser function references to actual tables
-- Flatten solution metadata from SolutionMetadata.json files
-- Generate a comprehensive mapping of connectors to tables with full metadata
-- **Include ALL solutions in the output**, even those without data connectors (e.g., solutions containing only analytics rules, workbooks, hunting queries, or playbooks)
-- Report issues and exceptions for solutions with missing or incomplete definitions
-
-**Note:** Solutions without data connectors are included in the CSV output with empty `connector_id`, `connector_title`, `connector_description`, `connector_publisher`, `connector_files`, and `Table` fields. This ensures complete solution coverage in the documentation while clearly indicating which solutions do not include data ingestion components.
-
-**Important:** This analysis covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. A small number of connectors (such as Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) are not managed via Solutions and are therefore not included in this output.
-
-## Prerequisites
-
-- Python 3.7 or higher
-- No external dependencies required (optional: json5 for enhanced JSON parsing)
-
-### Optional Dependencies
-```bash
-pip install json5  # For improved JSON parsing with comments and trailing commas
-```
-
-## Running the Script
-
-From the `Tools/Solutions Analyzer` directory:
-```bash
-python map_solutions_connectors_tables.py
-```
-
-Or from anywhere in the repository:
-```bash
-python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions-dir Solutions
-```
-
-## Command Line Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--solutions-dir` | `../../Solutions` | Path to the Solutions directory |
-| `--output` | `solutions_connectors_tables_mapping.csv` | Path for the main output CSV file |
-| `--report` | `solutions_connectors_tables_issues_and_exceptions_report.csv` | Path for the issues report CSV file |
-| `--connectors-csv` | `connectors.csv` | Path for the connectors output CSV file (with collection method) |
-| `--solutions-csv` | `solutions.csv` | Path for the solutions output CSV file |
-| `--tables-csv` | `tables.csv` | Path for the tables output CSV file (with metadata) |
-| `--tables-reference-csv` | `tables_reference.csv` | Path to tables_reference.csv for table metadata |
-| `--mapping-csv` | `solutions_connectors_tables_mapping_simplified.csv` | Path for the simplified mapping CSV file |
-| `--show-detection-methods` | `False` | Include table_detection_methods column showing how each table was detected |
-
-### Example Usage
-```bash
-# Run with default settings
-python map_solutions_connectors_tables.py
-
-# Show detection methods in output
-python map_solutions_connectors_tables.py --show-detection-methods
-
-# Custom output location
-python map_solutions_connectors_tables.py --output custom_output.csv --report custom_report.csv
-```
-
-## Output Files
-
-### 1. solutions_connectors_tables_mapping.csv (Primary Output)
-
-The main CSV file containing one row per unique combination of solution, connector, and table.
-
-**Note:** Newlines in the `connector_description` and `connector_permissions` fields are replaced with `<br>` tags to ensure proper rendering in GitHub's CSV viewer. The `connector_instruction_steps` field uses standard JSON encoding with `\n` for newlines as it contains JSON-formatted data.
-
-#### Column Descriptions
-
-| Column | Description |
-|--------|-------------|
-| `Table` | The table name (e.g., Syslog, CommonSecurityLog, CustomLog_CL). Empty for solutions without data connectors. |
-| `solution_name` | Solution folder name |
-| `solution_folder` | GitHub URL to the solution's folder |
-| `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
-| `solution_offer_id` | Offer ID from SolutionMetadata.json |
-| `solution_first_publish_date` | First publication date |
-| `solution_last_publish_date` | Last update date |
-| `solution_version` | Solution version number |
-| `solution_support_name` | Support provider name (e.g., Microsoft, Community) |
-| `solution_support_tier` | Support tier (e.g., Microsoft, Partner, Community) |
-| `solution_support_link` | Support link URL |
-| `solution_author_name` | Author name from metadata |
-| `solution_categories` | Comma-separated list of solution categories |
-| `connector_id` | Unique connector identifier. Empty for solutions without data connectors. |
-| `connector_publisher` | Connector publisher name. Empty for solutions without data connectors. |
-| `connector_title` | Connector display title. Empty for solutions without data connectors. |
-| `connector_description` | Connector description (newlines replaced with `<br>` for GitHub CSV rendering). Empty for solutions without data connectors. |
-| `connector_instruction_steps` | Setup and configuration instructions from connector UI definitions, stored as JSON-encoded string. Rendered in documentation using Microsoft Sentinel UI definitions. Empty for solutions without data connectors. |
-| `connector_permissions` | Required permissions and prerequisites from connector UI definitions, stored as JSON-encoded string. Rendered in documentation according to Microsoft Sentinel permissions schema (resourceProvider, customs, licenses, tenant). Empty for solutions without data connectors. |
-| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files. Empty for solutions without data connectors. |
-| `is_unique` | `true` if table appears in only one connector file, `false` otherwise |
-| `table_detection_methods` | (Optional, with --show-detection-methods) Semicolon-separated list of methods used to detect this table |
-
-#### GitHub Links
-All file references are converted to direct GitHub URLs pointing to the master branch:
-
-**solution_folder:**
-```
-https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}
-```
-
-**connector_files:**
-```
-https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}/Data Connectors/{file_path}
-```
-
-### 2. connectors.csv (Connector Details with Collection Method)
-
-Contains one row per unique connector with all connector-specific fields and collection method analysis.
-
-| Column | Description |
-|--------|-------------|
-| `connector_id` | Unique connector identifier |
-| `connector_publisher` | Connector publisher name |
-| `connector_title` | Connector display title |
-| `connector_description` | Connector description |
-| `connector_instruction_steps` | Setup and configuration instructions (JSON) |
-| `connector_permissions` | Required permissions (JSON) |
-| `connector_id_generated` | `true` if connector ID was auto-generated from title |
-| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files |
-| `collection_method` | Data collection method (see Collection Method Detection below) |
-| `collection_method_reason` | Explanation of how collection method was determined |
-
-### 3. solutions.csv (Solution Details)
-
-Contains one row per solution with all solution-specific metadata.
-
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Solution folder name |
-| `solution_folder` | GitHub URL to the solution's folder |
-| `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
-| `solution_offer_id` | Offer ID from SolutionMetadata.json |
-| `solution_first_publish_date` | First publication date |
-| `solution_last_publish_date` | Last update date |
-| `solution_version` | Solution version number |
-| `solution_support_name` | Support provider name |
-| `solution_support_tier` | Support tier |
-| `solution_support_link` | Support link URL |
-| `solution_author_name` | Author name from metadata |
-| `solution_categories` | Comma-separated list of solution categories |
-| `has_connectors` | `true` if solution has data connectors, `false` otherwise |
-
-### 4. tables.csv (Table Metadata)
-
-Contains one row per unique table referenced by connectors, with metadata from Azure Monitor documentation.
-
-| Column | Description |
-|--------|-------------|
-| `table_name` | Table name |
-| `description` | Table description from Azure Monitor documentation |
-| `category` | Table category (e.g., Security, Audit, Azure Resources) |
-| `resource_types` | Azure resource types that emit to this table |
-| `table_type` | Type classification |
-| `source_azure_monitor` | Whether table is in Azure Monitor reference |
-| `source_defender_xdr` | Whether table is in Defender XDR schema |
-| `azure_monitor_doc_link` | Link to Azure Monitor documentation |
-| `defender_xdr_doc_link` | Link to Defender XDR documentation |
-| `basic_logs_eligible` | Whether table supports Basic Logs plan |
-| `auxiliary_table_eligible` | Whether table can be auxiliary |
-| `supports_transformations` | Whether ingestion-time transformations are supported |
-| `search_job_support` | Whether search jobs are supported |
-| `ingestion_api_supported` | Whether Data Collector API ingestion is supported |
-| `retention_default` | Default retention period |
-| `retention_max` | Maximum retention period |
-| `plan` | Log Analytics plan (Analytics, Basic, etc.) |
-
-> **Note:** Metadata is sourced from `tables_reference.csv`. Tables not found in the reference file will have empty metadata fields.
-
-### 5. solutions_connectors_tables_mapping_simplified.csv (Simplified Mapping)
-
-A simplified mapping file containing only key fields for linking connectors, tables, and solutions.
-
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Solution folder name |
-| `connector_id` | Connector identifier |
-| `table_name` | Table name |
-
-### 6. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
-
-Contains exceptions and issues encountered during analysis.
-
-#### Column Descriptions
-
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Solution name |
-| `solution_folder` | GitHub URL to the solution's folder |
-| `connector_id` | Connector ID (if applicable) |
-| `connector_title` | Connector title (if applicable) |
-| `connector_publisher` | Connector publisher (if applicable) |
-| `connector_file` | GitHub URL to the connector file |
-| `reason` | Issue category (see Issue Types below) |
-| `details` | Detailed description of the issue |
-
-#### Issue Types and Handling
-
-| Reason | Description | Primary CSV Impact |
-|--------|-------------|-------------------|
-| `json_parse_error` | JSON file could not be parsed | Connector excluded entirely |
-| `no_table_definitions` | No table tokens detected in connector | Connector excluded from output |
-| `parser_tables_only` | All detected tables are parser functions only | Connector excluded (no actual tables found) |
-| `partial_parser_tables` | Some tables filtered because they're parser functions | Filtered tables excluded, remaining tables included |
-| `table_detection_failed` | Tables detected but validation failed | Connector excluded |
-| `missing_connector_json` | Data Connectors folder exists but contains no valid JSON | Solution has no connector entries |
-| `missing_solution_metadata` | Solution has connectors but no SolutionMetadata.json | Solution appears with empty metadata fields |
-
-## Detection Logic
-
-### Collection Method Detection
-
-The analyzer determines the data collection method used by each connector through comprehensive content analysis. Collection methods are classified as:
-
-| Method | Description | Detection Criteria |
-|--------|-------------|-------------------|
-| **Azure Monitor Agent (AMA)** | Modern log collection agent | Title contains "AMA" or "via AMA", ID ends with "ama", Azure Monitor Agent deployment references, `sent_by_ama` field |
-| **Log Analytics Agent (MMA)** | Legacy Microsoft Monitoring Agent (deprecated) | Title mentions "Legacy Agent", "omsagent" references, "cef_installer.py" scripts, workspace ID/key patterns |
-| **Azure Diagnostics** | Azure resource diagnostic settings | "AzureDiagnostics" references in content, "diagnostic settings" in description, `Microsoft.Insights/diagnosticSettings` resource, Azure Policy diagnostics, table category "Azure Resources" |
-| **Native** | Built-in Sentinel integrations | `SentinelKinds` property present, Microsoft 365/Defender/Entra ID native integrations, known native connector IDs (only when CCF patterns not present) |
-| **Codeless Connector Framework (CCF)** | Microsoft's codeless connector platform (CCP/CCF) | `pollingConfig` present, `dcrConfig` with `RestApiPoller`, `GCPAuthConfig`, `dataConnectorDefinitions` (except AMA title connectors), ID contains "CCP"/"CCF"/"Codeless", **CCF Push variant**: `DeployPushConnectorButton` with `HasDataConnectors` (DCR/DCE-based push ingestion) |
-| **Azure Function** | Azure Functions-based data collection | Filename contains "FunctionApp"/"function_app"/"_api_function", description mentions "Azure Functions", ID contains "AzureFunction"/"FunctionApp", function app deployment patterns |
-| **REST API** | Direct API push/webhook collection | "REST API" in title/description, webhook/HTTP endpoint patterns, "Push" in connector title |
-| **Unknown (Custom Log)** | Method could not be determined | Only custom log table (`_CL`) references found, no other patterns matched |
-
-#### Detection Priority
-
-The detection algorithm uses a tiered priority system to ensure accurate classification. When a connector explicitly declares its type in the title (e.g., "via AMA"), that takes precedence. Otherwise, the most specific detection patterns are prioritized over generic ones:
-
-1. **Explicit AMA/MMA in title** (highest priority) - Title/ID explicitly states the agent type (e.g., "via AMA", "via Legacy Agent", ID ends with "ama"). Special case: `WindowsFirewall` (without Ama suffix) is treated as MMA.
-2. **Azure Function filename patterns** - Filename contains "FunctionApp"/"function_app"/"_api_function", ID contains "AzureFunction"/"FunctionApp"
-3. **CCF content patterns** - `pollingConfig`, `dcrConfig` with RestApiPoller, `GCPAuthConfig`, `dataConnectorDefinitions` (unless AMA title), CCF Push variant (`DeployPushConnectorButton` + `HasDataConnectors`)
-4. **Azure Diagnostics patterns** - References to "AzureDiagnostics" table, "diagnostic settings" in description, `Microsoft.Insights/diagnosticSettings` resource, Azure Policy diagnostics (skipped if Azure Function filename detected)
-5. **CCF name-based patterns** (lower than Azure Diagnostics) - ID contains "CCP"/"CCF"/"Codeless", ID contains "Polling" (skipped if Azure Diagnostics patterns found)
-6. **Azure Function content patterns** (lower than CCF content) - "Azure Functions" in description, "Deploy to Azure" with "Function App", Azure Functions pricing references (skipped if CCF content detected)
-7. **Native Microsoft integrations** - `SentinelKinds` property, Microsoft Defender/365/Entra ID connectors (skipped if CCF content detected)
-8. **Additional AMA/MMA patterns** - Secondary indicators like `sent_by_ama`, `omsagent`, workspace keys
-9. **REST API patterns** - Push/webhook/HTTP endpoint references
-10. **Table metadata fallback** - Uses table category from Azure Monitor reference (e.g., "Azure Resources" → Azure Diagnostics, "virtualmachines" in resource_types → AMA) - only applied when no Azure Function, CCF, Native, or Azure Diagnostics patterns detected
-11. **Custom log fallback** (lowest priority) - `_CL` table suffix indicates custom log
-
-> **Key Design Decisions:**
-> - **Azure Diagnostics > CCF name**: Connectors with `_CCP` suffix that reference "AzureDiagnostics" are Azure Diagnostics (the CCP suffix indicates the connector was built using the CCF framework, but it still collects via Azure Diagnostics)
-> - **CCF content > Azure Function content**: Connectors with `dcrConfig`/`dataConnectorDefinitions` that also have "Deploy Azure Function" patterns are CCF (e.g., OktaSSOv2)
-> - **Azure Function filename is strong**: Connectors with "FunctionApp" in the filename are Azure Functions regardless of content patterns
-> - **Title-based AMA/MMA is strongest**: When a connector title explicitly includes "AMA" or "Legacy Agent", it overrides all other patterns
-
-> **Note:** When multiple patterns match, the system selects based on priority order. A connector may match multiple methods; the `multi_method_connectors_report.csv` file lists connectors where multiple distinct methods were detected.
-
-### 7. multi_method_connectors_report.csv (Multi-Method Detection Report)
-
-Lists connectors where multiple distinct collection methods were detected, showing which method was selected and why.
-
-| Column | Description |
-|--------|-------------|
-| `connector_id` | Connector identifier |
-| `connector_title` | Connector display title |
-| `selected_method` | The collection method that was selected based on priority |
-| `selected_reason` | The reason/pattern that triggered the selected method |
-| `other_methods_detected` | Other methods that were also detected (pipe-separated) |
-| `all_reasons` | All detection reasons grouped by method |
-
-### Parser Resolution
-
-When a connector references a parser function (e.g., `ASimDns`):
-1. Script locates the parser YAML file in the solution's Parsers directory
-2. Extracts the FunctionQuery from the parser
-3. Analyzes the query to find actual table references (e.g., `Syslog`, `DnsEvents`)
-4. Maps the parser name to the discovered tables
-5. Replaces parser reference with actual tables in the output
-
-### Table Detection Methods
-
-The analyzer uses multiple strategies to identify tables, tracked in the `table_detection_methods` column (when enabled):
-
-1. **graphQueries.{index}.baseQuery** - From connector graphQueries
-2. **sampleQueries.{index}.query** - From connector sampleQueries  
-3. **dataTypes.{index}.lastDataReceivedQuery** - From dataTypes definitions
-4. **connectivityCriterias.{index}.value.{sub_index}** - From connectivity criteria queries
-5. **logAnalyticsTableId** - Extracted from ARM template variables
-6. **parser:{parser_name}** - Resolved from parser function to actual table
-
-### Context-Aware Table Detection
-
-The analyzer uses intelligent query parsing to distinguish actual table names from field names:
-
-- **Pipeline Head Detection**: Identifies tables that appear before pipe operators (e.g., `Syslog | where...`)
-- **Field Context Filtering**: Excludes identifiers that appear in field-generating contexts (after `| project`, `| extend`, `| parse`)
-- **Multi-line Statement Tracking**: Handles complex multi-line queries with proper context awareness
-- **Comment Stripping**: Removes KQL comments before analysis to avoid false detections
-
-### JSON Parsing Tolerance
-
-The analyzer includes enhanced JSON parsing to handle common issues in ARM templates:
-
-- Strips `// comments` from JSON (common in ARM templates)
-- Removes trailing commas before `}` or `]`
-- Falls back to json5 parser if available for even more tolerance
-
-## Examples
-
-### Example 1: Simple Connector
-A connector directly references `Syslog` table in its queries:
-```
-Table: Syslog
-solution_name: ISC Bind
-connector_id: ISCBind
-table_detection_methods: sampleQueries.0.query;sampleQueries.1.query
-```
-
-### Example 2: Parser-Based Connector
-A connector references a parser that resolves to actual tables:
-```
-Table: Syslog
-solution_name: Watchguard Firebox
-connector_id: WatchguardFirebox
-table_detection_methods: parser:WatchGuardFirebox
-```
-
-### Example 3: Multiple Tables
-A connector ingests to multiple custom log tables:
-```
-Table: CyfirmaASCertificatesAlerts_CL
-solution_name: Cyfirma Cyber Intelligence
-connector_id: CyfirmaCyberIntelligence
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue**: Script reports "Permission denied" when writing CSV
-- **Solution**: Close the CSV file if open in Excel or another application
-
-**Issue**: Some connectors missing from output
-- **Solution**: Check the report CSV for the reason (likely no_table_definitions or parser_tables_only)
-
-**Issue**: Parser tables not resolving
-- **Solution**: Ensure parser YAML files exist in the solution's Parsers directory with valid FunctionQuery
-
-**Issue**: JSON parse errors for specific connectors
-- **Solution**: Install json5 (`pip install json5`) for better tolerance, or fix JSON syntax in the connector file
-
-### Debug Mode
-
-To see which files are being processed:
-```bash
-python map_solutions_connectors_tables.py --show-detection-methods
-```
-
-This will include the `table_detection_methods` column showing exactly how each table was detected.
-
----
-
-# 2. Table Reference Collector
-
-**Script:** `collect_table_info.py`
-
-## Overview
-
-Collects comprehensive table metadata from Microsoft Azure Monitor documentation sources:
-
-- Azure Monitor Logs table reference
-- Microsoft Defender XDR schema reference
-- Table feature support information
-- Ingestion API compatibility
-
-The collected data enriches the connector documentation with detailed table information including transformation support, basic logs eligibility, and documentation links.
-
-## Prerequisites
-
-- Python 3.7 or higher
-- `requests` library for HTTP fetching
+For a complete refresh of all data:
 
 ```bash
-pip install requests
-```
-
-## Running the Script
-
-From the `Tools/Solutions Analyzer` directory:
-
-```bash
-# Basic run (main pages only)
+# 1. Collect table metadata from Azure Monitor docs
 python collect_table_info.py
 
-# Full run with individual table details
-python collect_table_info.py --fetch-details
-```
+# 2. Generate connector/solution/table mappings (uses tables_reference.csv)
+python map_solutions_connectors_tables.py
 
-## Command Line Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--output` | `tables_reference.csv` | Path for the output CSV file |
-| `--report` | `tables_reference_report.md` | Path for the summary report |
-| `--fetch-details` | `False` | Fetch additional details from individual table pages |
-| `--max-details` | None | Maximum number of table detail pages to fetch (for testing) |
-| `--cache-ttl` | `604800` | Cache time-to-live in seconds (default: 1 week) |
-| `--clear-cache` | `False` | Clear all cached files before running |
-
-## Output Files
-
-### tables_reference.csv
-
-Comprehensive CSV with table metadata:
-
-| Column | Description |
-|--------|-------------|
-| `table_name` | Table name |
-| `description` | Table description from documentation |
-| `category` | Table category (e.g., Security, Audit, Azure Resources) |
-| `solutions` | Associated Log Analytics solutions |
-| `resource_types` | Azure resource types that emit to this table |
-| `table_type` | Type classification |
-| `source_azure_monitor` | Whether table is in Azure Monitor reference |
-| `source_defender_xdr` | Whether table is in Defender XDR schema |
-| `source_feature_support` | Whether table has feature support info |
-| `source_ingestion_api` | Whether table supports ingestion API |
-| `azure_monitor_doc_link` | Link to Azure Monitor documentation |
-| `defender_xdr_doc_link` | Link to Defender XDR documentation |
-| `basic_logs_eligible` | Whether table supports Basic Logs plan |
-| `auxiliary_table_eligible` | Whether table can be auxiliary |
-| `supports_transformations` | Whether ingestion-time transformations are supported |
-| `search_job_support` | Whether search jobs are supported |
-| `ingestion_api_supported` | Whether Data Collector API ingestion is supported |
-| `retention_default` | Default retention period |
-| `retention_max` | Maximum retention period |
-| `plan` | Log Analytics plan (Analytics, Basic, etc.) |
-
-### Caching
-
-The script uses file-based caching to minimize network requests:
-
-- Cache files stored in `.cache/` directory
-- Default TTL of 1 week (604800 seconds)
-- MD5 hash of URL used as cache key
-- Use `--clear-cache` to force fresh fetches
-
-### Data Sources
-
-The script collects table information from the following Microsoft documentation pages:
-
-| Source | URL | Information Collected |
-|--------|-----|----------------------|
-| Azure Monitor Tables (by category) | [tables-category](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables-category) | Table names, categories, documentation links |
-| Individual Table Reference Pages | [tables/{tablename}](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/) | Description, categories, solutions, resource types, retention info |
-| Defender XDR Schema | [advanced-hunting-schema-tables](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables) | Table names, descriptions, Defender documentation links |
-| Tables Feature Support | [tables-feature-support](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tables-feature-support) | Basic logs eligibility, auxiliary table support, transformation support, search job support |
-| Logs Ingestion API | [logs-ingestion-api-overview](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview) | Tables that support ingestion via Data Collector API |
-
----
-
-# 3. Connector Documentation Generator
-
-**Script:** `generate_connector_docs.py`
-
-## Overview
-
-Generates browsable markdown documentation from the CSV data produced by `map_solutions_connectors_tables.py` and `collect_table_info.py`. The documentation includes:
-
-- Three index pages (solutions, connectors, tables)
-- Individual pages for each solution with connector details
-- Individual pages for each connector with table transformation and ingestion API support information
-- Individual pages for ALL tables with enriched metadata from Azure Monitor documentation
-- **AI-rendered setup instructions** extracted from connector UI definitions
-
-## Output
-
-The script generates the **Microsoft Sentinel Data Connector Reference** documentation in the `connector-docs/` directory:
-
-- **[Solutions Index](connector-docs/solutions-index.md)** - All solutions organized alphabetically (with and without connectors)
-- **[Connectors Index](connector-docs/connectors-index.md)** - All unique connectors with metadata
-- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references
-- **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](connector-docs/solutions/) directory)
-- **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](connector-docs/connectors/) directory)
-
-See the [connector-docs README](connector-docs/README.md) for full documentation.
-
-## Prerequisites
-
-- Python 3.7 or higher
-- Input CSV files (automatically generated if not present):
-  - `solutions_connectors_tables_mapping.csv` from `map_solutions_connectors_tables.py`
-  - `tables_reference.csv` from `collect_table_info.py`
-
-## Running the Script
-
-From the `Tools/Solutions Analyzer` directory:
-
-```bash
-# Full run (automatically generates input CSVs first)
-python generate_connector_docs.py
-
-# Skip input generation (use existing CSV files)
+# 3. Generate documentation (uses both CSVs)
 python generate_connector_docs.py --skip-input-generation
 ```
 
-The script automatically calls `compare_connector_catalogs.py` and `collect_table_info.py --fetch-details` before generating documentation, unless `--skip-input-generation` is specified.
-
-## Command Line Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--input` | `solutions_connectors_tables_mapping.csv` | Path to connector mapping CSV |
-| `--tables-csv` | `tables_reference.csv` | Path to tables reference CSV |
-| `--output-dir` | `connector-docs/` | Output directory for documentation |
-| `--solutions-dir` | `../../Solutions` | Path to Solutions directory for reading ReleaseNotes.md and connector documentation files |
-| `--solutions` | All | Generate docs only for specific solutions |
-| `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
-
-## Output Structure
-
-The generated documentation is organized as:
-
-```
-connector-docs/
-├── README.md                    # Documentation guide
-├── solutions-index.md           # Alphabetical list of all solutions
-├── connectors-index.md          # Alphabetical list of all connectors
-├── tables-index.md              # Alphabetical list of all tables with transformation/API support
-├── solutions/                   # Individual solution pages (~480 files)
-│   ├── 1password.md
-│   ├── aws-cloudfront.md
-│   └── ...
-├── connectors/                  # Individual connector pages (~520 files)
-│   ├── 1passwordeventreporter.md
-│   ├── awscloudfront.md
-│   └── ...
-└── tables/                      # Individual table pages (~825 files)
-    ├── securityevent.md
-    ├── syslog.md
-    └── ...
-```
-
-### Generated Content
-
-**Solution Pages** include:
-- Solution metadata (publisher, support, categories)
-- List of connectors in the solution
-- Setup instructions for each connector (AI-rendered)
-- Required permissions and prerequisites
-- Tables ingested by each connector
-- Links to connector definition files
-- **Release Notes** from `ReleaseNotes.md` (if present in solution directory)
-
-**Connector Pages** include:
-- Connector description and metadata
-- **AI-rendered setup instructions and permissions** from connector UI definitions with step-by-step guidance
-- Required permissions and prerequisites (rendered from Microsoft Sentinel permissions schema)
-- List of solutions using this connector
-- Tables ingested with transformation and ingestion API support indicators
-- Links to GitHub connector definition files
-- **Additional Documentation** from README.md files associated with the connector (see below)
-
-**Table Pages** include:
-- Table description from Azure Monitor documentation
-- Category and resource types
-- Basic Logs eligibility
-- Transformation support status
-- Ingestion API compatibility
-- Search job support
-- Retention information
-- Links to Azure Monitor and Defender XDR documentation
-- List of solutions and connectors using the table
-
-**Index Pages** provide:
-- Alphabetical navigation
-- Quick statistics
-- Cross-references between solutions, connectors, and tables
-
-## AI-Rendered Setup Instructions and Permissions
-
-The "Setup Instructions" and "Permissions" sections in the generated connector documentation are **automatically rendered from connector UI definition files**. These sections interpret the UI-centric JSON structures that define the Azure Portal configuration interface and convert them into readable documentation.
-
-### ⚠️ Important Disclaimer
-
-**These AI-rendered instructions and permissions may not be fully accurate.** They are generated by interpreting UI definition metadata and should always be verified against the actual Microsoft Sentinel portal before implementation. The content provides a helpful starting point but is not a substitute for official documentation or hands-on portal verification.
-
-### How It Works
-
-The rendering process involves several steps:
-
-1. **JSON Parsing**: The script extracts `instructionSteps` and `permissions` objects from connector definition files in the Solutions directory
-2. **UI Type Detection**: Each instruction step has a `type` property (e.g., `DataConnectorsGrid`, `ContextPane`, `GCPGrid`) that determines how it should be interpreted
-3. **Permissions Schema Parsing**: Permission objects are rendered according to the Microsoft Sentinel permissions schema, including:
-   - **resourceProvider**: Azure resource provider permissions with scope, required actions (read/write/delete/action)
-   - **customs**: Custom prerequisites with names and descriptions
-   - **licenses**: Required Microsoft 365 licenses with friendly names
-   - **tenant**: Azure AD tenant permissions with required roles
-4. **AI-Powered Rendering**: Specialized handlers for each UI type convert the JSON structure into descriptive markdown:
-   - Form fields (textboxes, dropdowns) are described with their purposes and validation requirements
-   - Management grids and data selectors are explained with their configuration options
-   - Portal-only interfaces are identified and marked with clear indicators
-   - Permission requirements are formatted with clear scope and action descriptions
-5. **Markdown Formatting**: The rendered content is formatted with emoji indicators, step numbers, and disclaimers
-
-### UI Types Supported
-
-The script includes specialized handlers for connector UI configuration types based on the [official Microsoft Sentinel data connector UI definitions reference](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-ui-definitions-reference#instructionsteps):
-
-**Standard Instruction Types:**
-
-- **OAuthForm**: OAuth authentication forms with client credentials
-- **Textbox**: Input fields for text, passwords, numbers, and email addresses
-- **Dropdown**: Selection lists with single or multi-select options
-- **Markdown**: Formatted text content with links and formatting
-- **CopyableLabel**: Text fields with copy-to-clipboard functionality
-- **InfoMessage**: Inline information messages with contextual help
-- **ConnectionToggleButton**: Connect/disconnect toggle controls
-- **InstructionStepsGroup**: Collapsible groups of nested instructions
-- **InstallAgent**: Links to Azure portal sections for agent installation (18 link types supported)
-
-**UI-Centric Configuration Types:**
-
-- **DataConnectorsGrid**: Interactive data connector management interface with enable/disable controls
-- **ContextPane**: Sidebar configuration panels with detailed settings
-- **GCPGrid** / **GCPContextPane**: Google Cloud Platform specific configuration interfaces
-- **AADDataTypes**: Azure Active Directory data type selectors
-- **MCasDataTypes**: Microsoft Defender for Cloud Apps data type selectors  
-- **OfficeDataTypes**: Microsoft 365 data type selectors
-
-Instructions for 74 connectors using these UI-centric configuration interfaces have been enhanced with AI-rendered setup guidance.
-
-### Example Output
-
-Instructions are formatted with:
-
-- 📋 Portal-only interfaces clearly marked
-- 📝 Form fields with descriptions and placeholders
-- ⚠️ Disclaimers about AI generation and accuracy
-- 🔗 Links to GitHub connector definition files
-
----
-
-## Additional Documentation Sources
-
-The documentation generator enriches pages with content from markdown files in the Solutions directory:
-
-### Release Notes (Solution Pages)
-
-The script looks for `ReleaseNotes.md` in each solution's root directory (e.g., `Solutions/{SolutionName}/ReleaseNotes.md`). If found, the release notes are included in the solution documentation page under a "Release Notes" section. This typically includes a version history table with dates and change descriptions.
-
-### Connector Documentation Files (Connector Pages)
-
-The script attempts to find and include markdown documentation associated with each connector. The association rules are:
-
-1. **Dedicated subfolder**: If the connector has a dedicated subfolder in the Data Connectors directory with `.md` files (e.g., `Data Connectors/ConnectorName/*.md`), the README.md is preferred, otherwise the first `.md` file found is used.
-
-2. **Filename-based association**: Any `.md` file with a name matching the connector ID (e.g., `ConnectorName.md` or `ConnectorName_README.md`).
-
-3. **Single connector fallback**: If a solution has only one connector and there are `.md` files directly in the Data Connectors folder, README.md is preferred, otherwise the first `.md` file is used.
-
-The documentation content is included in an "Additional Documentation" section with a link to the source file in GitHub.
-
-> **Note**: The generator searches for all markdown files (`.md`) in the `Data Connectors` folder and its subfolders, following various naming conventions used across solutions.
-
----
-
-# 4. Kusto Upload Script
-
-**Script:** `solution_analyzer_upload_to_kusto.py`
-
-## Overview
-
-Uploads the generated CSV files to an Azure Data Explorer (Kusto) cluster for querying and analysis. Uses managed streaming ingestion for fast uploads (the same method used by the ADX "Get Data" UI).
-
-## Prerequisites
-
-- Python 3.7 or higher
-- Azure CLI installed and authenticated (`az login`)
-- Required Python packages:
+Or let the documentation generator handle everything:
 
 ```bash
-pip install azure-kusto-data azure-kusto-ingest azure-identity
+# This automatically runs steps 1-2 before generating docs
+python generate_connector_docs.py
 ```
 
-## Running the Script
+### Quick Reference
 
-```bash
-python solution_analyzer_upload_to_kusto.py --cluster <cluster_url> --database <database_name>
+| Script | Purpose | Key Output |
+|--------|---------|------------|
+| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors to tables | `connectors.csv`, `tables.csv`, `solutions.csv` |
+| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory |
+| [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSVs to Kusto | Kusto tables |
+
+## Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Azure Monitor Documentation                      │
+│   (tables-category, tables-feature-support, Defender XDR schema)    │
+└─────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────┐
+                    │   collect_table_info.py  │
+                    └──────────────────────────┘
+                                   │
+                                   ▼
+                      ┌────────────────────────┐
+                      │  tables_reference.csv  │
+                      └────────────────────────┘
+                                   │
+┌─────────────────────────────┐    │
+│   Azure-Sentinel Solutions  │    │
+│   (Solutions/ directory)    │    │
+└─────────────────────────────┘    │
+              │                    │
+              ▼                    ▼
+   ┌───────────────────────────────────────┐
+   │   map_solutions_connectors_tables.py  │
+   └───────────────────────────────────────┘
+              │
+              ▼
+   ┌─────────────────────────────────────┐
+   │  connectors.csv, tables.csv,        │
+   │  solutions.csv, mapping CSVs        │
+   └─────────────────────────────────────┘
+              │
+              ▼
+   ┌───────────────────────────────────────┐
+   │      generate_connector_docs.py       │
+   └───────────────────────────────────────┘
+              │
+              ▼
+   ┌───────────────────────────────────────┐
+   │   connector-docs/ (Markdown docs)     │
+   └───────────────────────────────────────┘
 ```
 
-### Example
+## Override System
 
-```bash
-python solution_analyzer_upload_to_kusto.py \
-    --cluster "https://mycluster.eastus.kusto.windows.net" \
-    --database "MyDatabase"
-```
+Both `map_solutions_connectors_tables.py` and `collect_table_info.py` support an override system that allows you to modify field values in the output based on pattern matching. The override file (`solution_analyzer_overrides.csv`) uses regex patterns to match entities and set field values.
 
-## Command Line Options
+Example use cases:
+- Set `collection_method` to AMA for specific tables (e.g., Syslog, CommonSecurityLog)
+- Assign `category` to tables based on naming patterns (e.g., all AWS* tables → AWS)
+- Set `support_tier` for tables based on their associated solutions
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--cluster`, `-c` | (required) | Kusto cluster URL (e.g., `https://mycluster.region.kusto.windows.net`) |
-| `--database`, `-d` | (required) | Kusto database name |
-| `--csv-dir` | `.` (current directory) | Directory containing the CSV files |
-| `--dry-run` | `False` | Show what would be done without making changes |
+See [Override System documentation](script-docs/map_solutions_connectors_tables.md#override-system) for details.
 
-## Tables Created
+## Documentation
 
-The script creates the following tables in the Kusto database:
-
-| CSV File | Kusto Table Name |
-|----------|------------------|
-| `tables_reference.csv` | `solution_analyzer_table_reference_lookup` |
-| `connectors.csv` | `solution_analyzer_connectors_lookup` |
-| `tables.csv` | `solution_analyzer_tables_lookup` |
-| `solutions.csv` | `solution_analyzer_solutions_lookup` |
-| `solutions_connectors_tables_mapping_simplified.csv` | `solution_analyzer_mapping` |
-| `solutions_connectors_tables_mapping.csv` | `solutions_connectors_tables_mapping` |
-
-## Authentication
-
-The script uses `DefaultAzureCredential` from the Azure Identity library, which supports:
-
-- Azure CLI authentication (`az login`)
-- Managed Identity (when running in Azure)
-- Environment variables
-- Visual Studio Code authentication
-
-### Authenticating with Azure CLI
-
-```bash
-# Login to Azure
-az login
-
-# If using a specific tenant
-az login --tenant <tenant-id>
-
-# Verify authentication
-az account show
-```
-
-## Dry Run Mode
-
-To preview what tables would be created without making changes:
-
-```bash
-python solution_analyzer_upload_to_kusto.py \
-    --cluster "https://mycluster.eastus.kusto.windows.net" \
-    --database "MyDatabase" \
-    --dry-run
-```
+- **[Solution Connector Tables Analyzer](script-docs/map_solutions_connectors_tables.md)** - Full documentation for the main mapping script
+- **[Table Reference Collector](script-docs/collect_table_info.md)** - Documentation for the Azure Monitor metadata collector
+- **[Connector Documentation Generator](script-docs/generate_connector_docs.md)** - Documentation for the markdown generator
+- **[Kusto Upload Script](script-docs/upload_to_kusto.md)** - Documentation for uploading to Azure Data Explorer
 
 ---
 
@@ -798,6 +165,19 @@ python solution_analyzer_upload_to_kusto.py \
   - Creates 6 lookup tables: table reference, connectors, tables, solutions, mapping, and full mapping
   - Supports Azure CLI authentication via DefaultAzureCredential
   - Includes dry-run mode for previewing changes
+- Added **override system** for customizing output field values
+  - Override file uses CSV format with Entity, Pattern, Field, Value columns
+  - Supports regex pattern matching (case insensitive, full match) including negative lookbehind
+  - Can override fields in tables, connectors, or solutions data
+  - Example use cases: set collection_method to AMA for specific tables, categorize tables by naming pattern
+  - Added `--overrides-csv` command line argument to both `map_solutions_connectors_tables.py` and `collect_table_info.py`
+  - Both scripts share the same override file (`solution_analyzer_overrides.csv`) for consistent categorization
+- Added `support_tier` and `collection_method` columns to `tables.csv` and `tables_reference.csv`
+  - `support_tier` derived from associated solutions
+  - `collection_method` determined from resource_types (virtualmachines → AMA) and overrides
+- Changed `--fetch-details` to `--skip-details` in `collect_table_info.py` (details fetched by default)
+- Split documentation into separate files per script in `script-docs/` directory
+- Added detailed prerequisites section with repository cloning instructions
 
 ### v4.1
 

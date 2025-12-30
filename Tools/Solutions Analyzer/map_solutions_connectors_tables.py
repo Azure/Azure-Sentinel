@@ -99,6 +99,113 @@ PLURAL_TABLE_CORRECTIONS = {
 }
 
 
+# Override system types
+class Override:
+    """Represents a single override rule from the overrides CSV."""
+    def __init__(self, entity: str, pattern: str, field: str, value: str):
+        self.entity = entity.lower().strip()
+        self.pattern = pattern.strip()
+        self.field = field.strip()
+        self.value = value
+        # Compile regex with anchors for full match, case insensitive
+        try:
+            self.regex = re.compile(f"^{self.pattern}$", re.IGNORECASE)
+        except re.error:
+            self.regex = None
+    
+    def matches(self, key: str) -> bool:
+        """Check if the key matches this override's pattern."""
+        if self.regex is None:
+            return False
+        return bool(self.regex.match(key))
+
+
+def load_overrides(overrides_path: Path) -> List[Override]:
+    """Load overrides from CSV file.
+    
+    CSV format: Entity,Pattern,Field,Value
+    - Entity: table, connector, or solution (case insensitive)
+    - Pattern: regex pattern to match against key (full match, case insensitive)
+    - Field: the field to override
+    - Value: the new value
+    """
+    overrides: List[Override] = []
+    if not overrides_path.exists():
+        return overrides
+    
+    try:
+        # Use utf-8-sig to handle BOM (Byte Order Mark) from Excel
+        with overrides_path.open("r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                entity = row.get("Entity", "").strip()
+                pattern = row.get("Pattern", "").strip()
+                field = row.get("Field", "").strip()
+                value = row.get("Value", "")
+                
+                # Skip empty rows
+                if not entity or not pattern or not field:
+                    continue
+                
+                overrides.append(Override(entity, pattern, field, value))
+    except Exception as e:
+        print(f"Warning: Could not load overrides from {overrides_path}: {e}")
+    
+    return overrides
+
+
+def apply_overrides_to_row(
+    row: Dict[str, str],
+    overrides: List[Override],
+    entity_type: str,
+    key_field: str
+) -> Dict[str, str]:
+    """Apply matching overrides to a row.
+    
+    Args:
+        row: The data row to modify
+        overrides: List of Override objects
+        entity_type: 'table', 'connector', or 'solution'
+        key_field: The field name to use for pattern matching (e.g., 'table_name', 'connector_id')
+    
+    Returns:
+        Modified row with overrides applied
+    """
+    key_value = row.get(key_field, "")
+    if not key_value:
+        return row
+    
+    for override in overrides:
+        if override.entity != entity_type.lower():
+            continue
+        if override.matches(key_value):
+            # Apply the override
+            if override.field in row:
+                row[override.field] = override.value
+    
+    return row
+
+
+def apply_overrides_to_data(
+    data: List[Dict[str, str]],
+    overrides: List[Override],
+    entity_type: str,
+    key_field: str
+) -> List[Dict[str, str]]:
+    """Apply overrides to all rows in a dataset.
+    
+    Args:
+        data: List of data rows
+        overrides: List of Override objects
+        entity_type: 'table', 'connector', or 'solution'
+        key_field: The field name to use for pattern matching
+    
+    Returns:
+        Modified data with overrides applied
+    """
+    return [apply_overrides_to_row(row, overrides, entity_type, key_field) for row in data]
+
+
 def apply_plural_table_fix(name: str) -> Tuple[str, Optional[str]]:
     lowered = name.lower()
     corrected = PLURAL_TABLE_CORRECTIONS.get(lowered)
@@ -1111,6 +1218,12 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         default=False,
         help="Include table_detection_methods column in output CSV (default: False)",
     )
+    parser.add_argument(
+        "--overrides-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solution_analyzer_overrides.csv",
+        help="Path to overrides CSV file for field value overrides (default: %(default)s)",
+    )
     return parser.parse_args()
 
 
@@ -1141,6 +1254,11 @@ def main() -> None:
                 table_name = row.get('table_name', '')
                 if table_name:
                     tables_reference[table_name] = row
+
+    # Load overrides from CSV file
+    overrides: List[Override] = load_overrides(args.overrides_csv.resolve())
+    if overrides:
+        print(f"Loaded {len(overrides)} override(s) from {args.overrides_csv}")
 
     grouped_rows: Dict[Tuple[str, ...], Dict[str, bool]] = defaultdict(dict)
     row_key_metadata: Dict[Tuple[str, ...], Dict[str, str]] = {}
@@ -1594,7 +1712,6 @@ def main() -> None:
     
     # Build connectors with collection method info
     connectors_data: List[Dict[str, str]] = []
-    multi_method_connectors: List[Dict[str, Any]] = []  # Track connectors with multiple matches
     
     for connector_id, info in sorted(connector_info_map.items()):
         json_content, filename = connector_json_content.get(connector_id, ("", ""))
@@ -1613,19 +1730,6 @@ def main() -> None:
             filename=filename,
             table_metadata=table_metadata_list if table_metadata_list else None,
         )
-        
-        # Track connectors with multiple DISTINCT methods for reporting
-        # Get unique methods from all_matches
-        unique_methods = set(m[0] for m in all_matches)
-        if len(unique_methods) > 1:
-            multi_method_connectors.append({
-                'connector_id': info['connector_id'],
-                'connector_title': info['connector_title'],
-                'selected_method': collection_method,
-                'selected_reason': detection_reason,
-                'all_matches': all_matches,
-                'unique_methods': unique_methods,
-            })
         
         connectors_data.append({
             'connector_id': info['connector_id'],
@@ -1667,28 +1771,53 @@ def main() -> None:
         if table:
             all_tables.add(table)
     
+    # Apply solution overrides to rows early, before building table_support_tiers
+    # This ensures solution-level overrides (like support_tier fixes) affect derived table data
+    if overrides:
+        rows = apply_overrides_to_data(rows, overrides, 'solution', 'solution_name')
+    
+    # Build table -> support_tier mapping from solution data
+    # For each table, collect all unique support tiers from associated solutions
+    table_support_tiers: Dict[str, Set[str]] = {}
+    for row in rows:
+        table = row.get('Table', '')
+        support_tier = row.get('solution_support_tier', '')
+        if table and support_tier:
+            if table not in table_support_tiers:
+                table_support_tiers[table] = set()
+            table_support_tiers[table].add(support_tier)
+    
     # Build tables data with metadata from tables_reference.csv
     tables_data: List[Dict[str, str]] = []
     for table_name in sorted(all_tables):
         ref = tables_reference.get(table_name, {})
+        
+        # Determine support_tier based on associated solutions
+        tiers = table_support_tiers.get(table_name, set())
+        if len(tiers) == 0:
+            support_tier = ''
+        elif len(tiers) == 1:
+            support_tier = next(iter(tiers))
+        else:
+            support_tier = 'Various'
+        
+        # Use collection_method from tables_reference.csv if available
+        collection_method = ref.get('collection_method', '')
+        
         tables_data.append({
             'table_name': table_name,
             'description': ref.get('description', ''),
             'category': ref.get('category', ''),
+            'support_tier': support_tier,
+            'collection_method': collection_method,
             'resource_types': ref.get('resource_types', ''),
-            'table_type': ref.get('table_type', ''),
             'source_azure_monitor': ref.get('source_azure_monitor', ''),
             'source_defender_xdr': ref.get('source_defender_xdr', ''),
             'azure_monitor_doc_link': ref.get('azure_monitor_doc_link', ''),
             'defender_xdr_doc_link': ref.get('defender_xdr_doc_link', ''),
             'basic_logs_eligible': ref.get('basic_logs_eligible', ''),
-            'auxiliary_table_eligible': ref.get('auxiliary_table_eligible', ''),
             'supports_transformations': ref.get('supports_transformations', ''),
-            'search_job_support': ref.get('search_job_support', ''),
             'ingestion_api_supported': ref.get('ingestion_api_supported', ''),
-            'retention_default': ref.get('retention_default', ''),
-            'retention_max': ref.get('retention_max', ''),
-            'plan': ref.get('plan', ''),
         })
     
     # Build simplified mapping (key fields only)
@@ -1703,6 +1832,22 @@ def main() -> None:
                 'connector_id': row.get('connector_id', ''),
                 'table_name': row.get('Table', ''),
             })
+
+    # Apply overrides to all data sets
+    if overrides:
+        # Apply table overrides (key field is 'Table' in rows, 'table_name' in tables_data)
+        rows = apply_overrides_to_data(rows, overrides, 'table', 'Table')
+        tables_data = apply_overrides_to_data(tables_data, overrides, 'table', 'table_name')
+        mapping_data = apply_overrides_to_data(mapping_data, overrides, 'table', 'table_name')
+        
+        # Apply connector overrides
+        connectors_data = apply_overrides_to_data(connectors_data, overrides, 'connector', 'connector_id')
+        rows = apply_overrides_to_data(rows, overrides, 'connector', 'connector_id')
+        
+        # Apply solution overrides (rows already had solution overrides applied earlier for table_support_tiers)
+        solutions_data = apply_overrides_to_data(solutions_data, overrides, 'solution', 'solution_name')
+        
+        print(f"Applied overrides to data")
 
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
@@ -1784,20 +1929,16 @@ def main() -> None:
         'table_name',
         'description',
         'category',
+        'support_tier',
+        'collection_method',
         'resource_types',
-        'table_type',
         'source_azure_monitor',
         'source_defender_xdr',
         'azure_monitor_doc_link',
         'defender_xdr_doc_link',
         'basic_logs_eligible',
-        'auxiliary_table_eligible',
         'supports_transformations',
-        'search_job_support',
         'ingestion_api_supported',
-        'retention_default',
-        'retention_max',
-        'plan',
     ]
     tables_path = args.tables_csv.resolve()
     with tables_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -1882,44 +2023,6 @@ def main() -> None:
     for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
         pct = (count / len(connectors_data) * 100) if connectors_data else 0
         print(f"  {method:30} {count:4} ({pct:.1f}%)")
-
-    # Generate multi-method detection report (only for connectors with DISTINCT methods)
-    if multi_method_connectors:
-        multi_method_report_path = args.output.parent / "multi_method_connectors_report.csv"
-        multi_method_fieldnames = [
-            'connector_id',
-            'connector_title',
-            'selected_method',
-            'selected_reason',
-            'other_methods_detected',
-            'all_reasons',
-        ]
-        with multi_method_report_path.open("w", encoding="utf-8", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=multi_method_fieldnames, quoting=csv.QUOTE_ALL)
-            writer.writeheader()
-            for conn in multi_method_connectors:
-                # Get other methods (excluding selected)
-                other_methods = sorted(conn['unique_methods'] - {conn['selected_method']})
-                # Group reasons by method for cleaner output
-                method_reasons: Dict[str, List[str]] = {}
-                for method, reason in conn['all_matches']:
-                    if method not in method_reasons:
-                        method_reasons[method] = []
-                    method_reasons[method].append(reason)
-                # Format all reasons grouped by method
-                all_reasons_formatted = '; '.join([
-                    f"{method}: {', '.join(reasons)}" 
-                    for method, reasons in sorted(method_reasons.items())
-                ])
-                writer.writerow({
-                    'connector_id': conn['connector_id'],
-                    'connector_title': conn['connector_title'],
-                    'selected_method': conn['selected_method'],
-                    'selected_reason': conn['selected_reason'],
-                    'other_methods_detected': ' | '.join(other_methods),
-                    'all_reasons': all_reasons_formatted,
-                })
-        print(f"\nWrote {len(multi_method_connectors)} connectors with multiple distinct methods to {safe_relative(multi_method_report_path, repo_root)}")
 
     print(f"\nWrote {len(rows)} rows to {safe_relative(output_path, repo_root)}")
     print(f"Wrote {len(connectors_data)} connectors to {safe_relative(connectors_path, repo_root)}")

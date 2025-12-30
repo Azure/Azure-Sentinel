@@ -31,13 +31,13 @@ This documentation covers **485 solutions**, of which **385** include data conne
 |:-----------------|:----------------:|:-----------------:|:---------------:|:----------------:|
 | Azure Function | 129 | 111 | 102 | 102 |
 | CCF | 126 | 125 | 110 | 110 |
-| AMA | 105 | 34 | 99 | 30 |
-| Unknown (Custom Log) | 56 | 47 | 54 | 45 |
-| MMA | 52 | 8 | 53 | 15 |
+| MMA | 74 | 15 | 75 | 22 |
+| Unknown (Custom Log) | 58 | 48 | 55 | 46 |
+| AMA | 49 | 15 | 50 | 17 |
+| Unknown | 35 | 14 | 32 | 11 |
 | Native | 25 | 25 | 20 | 20 |
 | Azure Diagnostics | 17 | 17 | 17 | 17 |
 | REST API | 14 | 14 | 15 | 15 |
-| Unknown | 3 | 3 | 4 | 4 |
 | **Total** | **527** | **384** | **385** | **301** |
 
 *\*Active excludes connectors and solutions marked as deprecated.*

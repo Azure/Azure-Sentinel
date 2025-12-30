@@ -5,7 +5,7 @@
 | **Connector ID** | `NasuniEdgeAppliance` |
 | **Publisher** | Nasuni |
 | **Used in Solutions** | [Nasuni](../solutions/nasuni.md) |
-| **Collection Method** | AMA |
+| **Collection Method** | Unknown |
 | **Connector Definition Files** | [Nasuni%20Data%20Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Nasuni/Data%20Connectors/Nasuni%20Data%20Connector.json) |
 
 The [Nasuni](https://www.nasuni.com/) connector allows you to easily connect your Nasuni Edge Appliance Notifications and file system audit logs with Microsoft Sentinel. This gives you more insight into activity within your Nasuni infrastructure and improves your security operation capabilities.

@@ -5,7 +5,7 @@
 | **Connector ID** | `CTERA` |
 | **Publisher** | CTERA Networks Ltd |
 | **Used in Solutions** | [CTERA](../solutions/ctera.md) |
-| **Collection Method** | AMA |
+| **Collection Method** | Unknown |
 | **Connector Definition Files** | [CTERA_Data_Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA/Data%20Connectors/CTERA_Data_Connector.json) |
 
 The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat detection capabilities for your CTERA solution.
