@@ -31,21 +31,23 @@ This directory contains PowerShell script blue prints to handle Microsoft Sentin
 
      ```powershell
      $securePassword = Read-Host "Enter BTP Password" -AsSecureString
-     .\export-subaccounts.ps1 -BtpUsername "<btp-username>" -BtpPassword $securePassword -BtpSubdomain "<btp-global-account>-<id>"
+     .\export-subaccounts.ps1 -BtpUsername "<btp-username or S-User>" -BtpPassword $securePassword -BtpSubdomain "<btp-global-account>-<id>"
      ```
 
    - Next, run `provision-audit-to-subaccount.ps1` to provision the auditlog service if not yet available. Sample command:
 
      ```powershell
      $securePassword = Read-Host "Enter CF Password" -AsSecureString
-     .\provision-audit-to-subaccount.ps1 -CfUsername "<cf-username>" -CfPassword $securePassword
+     .\provision-audit-to-subaccount.ps1 -CfUsername "<cf-username or S-User>" -CfPassword $securePassword
      ```
 
    - Then, run `connect-sentinel-to-btp.ps1` to create connections in the Sentinel SAP BTP data connector. Sample command:
 
      ```powershell
+     az login --tenant "<microsoft-entra-tenant-id>"
+     az account set --subscription "<azure-sentinel-sub-id>"
      $securePassword = Read-Host "Enter CF Password" -AsSecureString
-     .\connect-sentinel-to-btp.ps1 -SubscriptionId "<azure-sentinel-sub-id>" -ResourceGroupName "<rg-name-sentinel-workspace>" -WorkspaceName "<sentinel-workspace-name>" -CfUsername "<cf-username>" -CfPassword $securePassword
+     .\connect-sentinel-to-btp.ps1 -SubscriptionId "<azure-sentinel-sub-id>" -ResourceGroupName "<rg-name-sentinel-workspace>" -WorkspaceName "<sentinel-workspace-name>" -CfUsername "<cf-username or S-User>" -CfPassword $securePassword
      ```
 
 ## Lifecycle Management

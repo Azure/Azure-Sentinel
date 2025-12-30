@@ -763,7 +763,7 @@ function New-SentinelBtpConnection {
         [Parameter(Mandatory=$true)]
         [string]$SubaccountId,
         [Parameter(Mandatory=$false)]
-        [string]$ApiVersion = "2025-09-01"
+        [string]$ApiVersion = "2025-07-01-preview"
     )
     
     try {
@@ -799,7 +799,7 @@ function New-SentinelBtpConnection {
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
         # Construct ARM API URI
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($ConnectionName)?api-version=$ApiVersion"
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($SubaccountId)?api-version=$ApiVersion"
         
         # Create headers
         $headers = @{

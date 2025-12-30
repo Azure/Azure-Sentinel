@@ -97,20 +97,6 @@ catch {
     exit 1
 }
 
-# Set Azure subscription context
-try {
-    $setSubResult = az account set --subscription $SubscriptionId 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "Failed to set Azure subscription: $setSubResult" -Level "ERROR"
-        exit 1
-    }
-    Write-Log "Set Azure subscription context to: $SubscriptionId" -Level "SUCCESS"
-}
-catch {
-    Write-Log "Failed to set Azure subscription context: $_" -Level "ERROR"
-    exit 1
-}
-
 # Load subaccounts from CSV using helper function
 $subaccounts = Import-BtpSubaccountsCsv -CsvPath $CsvPath
 if ($null -eq $subaccounts) {
@@ -123,6 +109,7 @@ $failureCount = 0
 $currentApiEndpoint = $null
 
 foreach ($subaccount in $subaccounts) {
+    $subaccountName = $subaccount.SubaccountName
     $subaccountId = $subaccount.SubaccountId
     $apiEndpoint = $subaccount.'cf-api-endpoint'
     $orgName = $subaccount.'cf-org-name'
@@ -186,7 +173,7 @@ foreach ($subaccount in $subaccounts) {
     
     # Generate connection name from subdomain or subaccount ID
     #$connectionName = Get-BtpConnectionName -BtpCredentials $btpCredentials -SubaccountId $subaccountId
-    $connectionName = $subaccountId
+    $connectionName = $subaccountName
     
     # Create Sentinel SAP BTP connection
     $connectionCreated = New-SentinelBtpConnection `
