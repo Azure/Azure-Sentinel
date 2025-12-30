@@ -185,7 +185,8 @@ foreach ($subaccount in $subaccounts) {
     Write-Log "  Subdomain: $($btpCredentials.Subdomain)" -Level "SUCCESS"
     
     # Generate connection name from subdomain or subaccount ID
-    $connectionName = Get-BtpConnectionName -BtpCredentials $btpCredentials -SubaccountId $subaccountId
+    #$connectionName = Get-BtpConnectionName -BtpCredentials $btpCredentials -SubaccountId $subaccountId
+    $connectionName = $subaccountId
     
     # Create Sentinel SAP BTP connection
     $connectionCreated = New-SentinelBtpConnection `
