@@ -1,8 +1,7 @@
 import logging
 import time
-import json
 import datetime
-from ..utility.utils import load_environment_configs
+from ..utility.utils import load_environment_configs, get_azure_batch_size
 from ..utility.bloodhound_manager import BloodhoundManager
 
 
@@ -111,14 +110,37 @@ def update_timestamps(domain_entries, current_tenant_domain, domain_name, last_t
             logging.info(f"Updated last_attack_path_timeline_timestamps for {current_tenant_domain}/{domain_name} to {latest_timestamp}")
 
 
-def submit_attack_path_data(bloodhound_manager, attack_data, token, unique_finding_types_data, final_domains):
-    """Submit a single attack path data entry to Azure Monitor."""
-    logging.info(f"Sending attack data: ID {attack_data.get('id')}")
-    result = bloodhound_manager.send_attack_path_timeline_data(
-        attack_data, token, unique_finding_types_data, final_domains
-    )
-    logging.info(f"Result of sending attack data ID {attack_data.get('id')} is {result}")
-    return {"id": attack_data.get("id"), "status": "success", "response": result}
+def _prepare_attack_path_timeline_log_entry(attack_data: dict, unique_finding_types_data: dict, 
+                                             tenant_domain: str, domains_data: list) -> dict:
+    """Helper function to prepare a single attack path timeline log entry."""
+    domain_name = ""
+    # Find the domain name from the domains_data based on DomainSID
+    for domain in domains_data:
+        if domain.get("id") == attack_data.get("DomainSID"):
+            domain_name = domain.get("name", "")
+            break
+
+    finding_type = attack_data.get("Finding", "")
+    path_title = unique_finding_types_data.get(finding_type, "")
+
+    return {
+        "CompositeRisk": str(round(float(attack_data.get("CompositeRisk")), 2)),
+        "FindingCount": attack_data.get("FindingCount"),
+        "ExposureCount": attack_data.get("ExposureCount"),
+        "ImpactCount": attack_data.get("ImpactCount"),
+        "ImpactedAssetCount": attack_data.get("ImpactedAssetCount"),
+        "DomainSID": attack_data.get("DomainSID"),
+        "Finding": attack_data.get("Finding"),
+        "id": attack_data.get("id"),
+        "created_at": attack_data.get("created_at"),
+        "updated_at": attack_data.get("updated_at"),
+        "deleted_at": attack_data.get("deleted_at"),
+        "tenant_url": tenant_domain,
+        "domain_name": domain_name,
+        "path_title": path_title,
+        "finding_type": finding_type,
+        "TimeGenerated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds") + "Z",
+    }
 
 
 def process_environment(bloodhound_manager, env_config, tenant_domain, last_timestamps):
@@ -161,17 +183,59 @@ def process_environment(bloodhound_manager, env_config, tenant_domain, last_time
         logging.info("No attack path timeline data to send to Azure Monitor.")
         return last_timestamps
     
-    # Submit data to Azure Monitor
+    # Submit data to Azure Monitor in batches
     token = bloodhound_manager.get_bearer_token()
     if not token:
         logging.error("Failed to obtain Bearer token for Azure Monitor.")
         return last_timestamps
     
-    for i, attack in enumerate(consolidated_timeline, 1):
-        logging.info(f"Processing attack path log entry {i}/{len(consolidated_timeline)}: {attack.get('id')}")
-        submit_attack_path_data(bloodhound_manager, attack, token, unique_finding_types_data, final_domains)
-        time.sleep(0.1)
+    batch_size = get_azure_batch_size()
+    logging.info(f"Sending {len(consolidated_timeline)} attack path timeline records to Azure Monitor in batches of {batch_size}.")
     
+    successful_submissions = 0
+    failed_submissions = 0
+    
+    # Process in batches
+    for batch_start in range(0, len(consolidated_timeline), batch_size):
+        batch_end = min(batch_start + batch_size, len(consolidated_timeline))
+        batch = consolidated_timeline[batch_start:batch_end]
+        
+        # Prepare log entries for this batch
+        log_entries = []
+        for attack_data in batch:
+            try:
+                log_entry = _prepare_attack_path_timeline_log_entry(
+                    attack_data, unique_finding_types_data, tenant_domain, final_domains
+                )
+                log_entries.append(log_entry)
+            except Exception as e:
+                failed_submissions += 1
+                logging.error(f"Failed to prepare attack path timeline log entry for ID {attack_data.get('id')}: {str(e)}")
+        
+        if not log_entries:
+            continue
+        
+        # Send batch to Azure Monitor
+        logging.info(f"Sending batch {batch_start//batch_size + 1} ({len(log_entries)} entries): IDs {[entry.get('id') for entry in log_entries[:5]]}...")
+        result = bloodhound_manager._send_to_azure_monitor(
+            log_entries,
+            token,
+            bloodhound_manager.dce_uri,
+            bloodhound_manager.dcr_immutable_id,
+            bloodhound_manager.table_name
+        )
+        
+        if result and result.get("status") == "success":
+            entries_sent = result.get("entries_sent", len(log_entries))
+            successful_submissions += entries_sent
+            logging.info(f"Successfully sent batch of {entries_sent} attack path timeline records")
+        else:
+            failed_submissions += len(log_entries)
+            logging.error(f"Failed to send batch: {result.get('message', 'Unknown error')}")
+        
+        # Rate limiting is handled automatically by azure_monitor_rate_limiter in _send_to_azure_monitor()
+    
+    logging.info(f"Attack path timeline sending complete. Successful: {successful_submissions}, Failed: {failed_submissions}")
     return last_timestamps
 
 
