@@ -1,0 +1,599 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "snapSEC GmbH",
+    "comments": "blacklens Insights Solution"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The Resource ID from the log workspace, where Sentinel is connected to. Go to Overview > JSON View (right-top) and copy the Resource ID."
+      }
+    },
+    "dceName": {
+      "type": "string",
+      "defaultValue": "dce-blacklens"
+    },
+    "dcrName": {
+      "type": "string",
+      "defaultValue": "dcr-blacklens"
+    },
+    "tableName": {
+      "type": "string",
+      "defaultValue": "blacklens_CL"
+    },
+    "streamName": {
+      "type": "string",
+      "defaultValue": "Custom-blacklens_CL"
+    }
+  },
+  "variables": {
+    "ridParts": "[split(parameters('workspaceResourceId'), '/')]",
+    "subId": "[variables('ridParts')[2]]",
+    "rgName": "[variables('ridParts')[4]]",
+    "wsName": "[variables('ridParts')[8]]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dcrName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+        "streamDeclarations": {
+          "[format('{0}', parameters('streamName'))]": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "id",
+                "type": "string"
+              },
+              {
+                "name": "ws_id",
+                "type": "string"
+              },
+              {
+                "name": "alert_title",
+                "type": "string"
+              },
+              {
+                "name": "message",
+                "type": "string"
+              },
+              {
+                "name": "severity",
+                "type": "string"
+              },
+              {
+                "name": "link",
+                "type": "string"
+              },
+              {
+                "name": "payload",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "name": "sentinelWorkspace",
+              "workspaceResourceId": "[parameters('workspaceResourceId')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[parameters('streamName')]"
+            ],
+            "destinations": [
+              "sentinelWorkspace"
+            ],
+            "outputStream": "[parameters('streamName')]"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('subId'), variables('rgName')), 'Microsoft.Resources/deployments', 'blacklens-table')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "blacklens-table",
+      "subscriptionId": "[variables('subId')]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[variables('wsName')]"
+          },
+          "tableName": {
+            "value": "[parameters('tableName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "16589392648025521741"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string"
+            },
+            "tableName": {
+              "type": "string",
+              "defaultValue": "blacklens_CL"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "apiVersion": "2022-10-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('tableName'))]",
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "[parameters('tableName')]",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ws_id",
+                      "type": "string"
+                    },
+                    {
+                      "name": "alert_title",
+                      "type": "string"
+                    },
+                    {
+                      "name": "message",
+                      "type": "string"
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string"
+                    },
+                    {
+                      "name": "link",
+                      "type": "string"
+                    },
+                    {
+                      "name": "payload",
+                      "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "tableNameOut": {
+              "type": "string",
+              "value": "[parameters('tableName')]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "la-blacklens-alert-log-ingestion",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logicAppName": {
+            "value": "la-blacklens-alert-log-ingestion"
+          },
+          "dceLogsIngestionEndpoint": {
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName')), '2023-03-11').logsIngestion.endpoint]"
+          },
+          "dcrImmutableId": {
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), '2023-03-11').immutableId]"
+          },
+          "streamName": {
+            "value": "[parameters('streamName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "1245268422438739651"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "logicAppName": {
+              "type": "string",
+              "defaultValue": "la-blacklens-alert-log-ingestion"
+            },
+            "dceLogsIngestionEndpoint": {
+              "type": "string"
+            },
+            "dcrImmutableId": {
+              "type": "string"
+            },
+            "streamName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[parameters('logicAppName')]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "dceLogsIngestionEndpoint": {
+                      "type": "String"
+                    },
+                    "dcrImmutableId": {
+                      "type": "String"
+                    },
+                    "streamName": {
+                      "type": "String"
+                    },
+                    "$connections": {
+                      "type": "Object",
+                      "defaultValue": {}
+                    }
+                  },
+                  "triggers": {
+                    "When_an_alert_is_received_from_blacklens_io": {
+                      "type": "Request",
+                      "kind": "Http",
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "inputs",
+                            "outputs"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "actions": {
+                    "AutoDecode": {
+                      "runAfter": {},
+                      "type": "Compose",
+                      "inputs": "@{if(contains(toLower(string(triggerOutputs()?['headers']?['Content-Type'])), 'application/octet-stream'), base64ToString(string(triggerBody())), string(triggerBody()))}"
+                    },
+                    "Validate_JSON": {
+                      "runAfter": {
+                        "AutoDecode": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@outputs('AutoDecode')",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "id": {},
+                            "ws_id": {},
+                            "created_date": {},
+                            "title": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "severity": {
+                              "type": "string"
+                            },
+                            "link": {},
+                            "payload": {}
+                          }
+                        },
+                        "runtimeConfiguration": {
+                          "secureData": {
+                            "properties": [
+                              "inputs",
+                              "outputs"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "HTTP": {
+                      "runAfter": {
+                        "Validate_JSON": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "@{concat(parameters('dceLogsIngestionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/', parameters('streamName'), '?api-version=2023-01-01')}",
+                        "method": "POST",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": [
+                          {
+                            "TimeGenerated": "@{body('Validate_JSON')?['created_date']}",
+                            "id": "@{string(body('Validate_JSON')?['id'])}",
+                            "ws_id": "@{string(body('Validate_JSON')?['ws_id'])}",
+                            "alert_title": "@{body('Validate_JSON')?['title']}",
+                            "message": "@{body('Validate_JSON')?['message']}",
+                            "severity": "@{body('Validate_JSON')?['severity']}",
+                            "link": "@{string(body('Validate_JSON')?['link'])}",
+                            "payload": "@{body('Validate_JSON')?['payload']}"
+                          }
+                        ],
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://monitor.azure.com"
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "properties": [
+                            "inputs",
+                            "outputs"
+                          ]
+                        },
+                        "contentTransfer": {
+                          "transferMode": "Chunked"
+                        }
+                      }
+                    }
+                  },
+                  "outputs": {}
+                },
+                "parameters": {
+                  "dceLogsIngestionEndpoint": {
+                    "value": "[parameters('dceLogsIngestionEndpoint')]"
+                  },
+                  "dcrImmutableId": {
+                    "value": "[parameters('dcrImmutableId')]"
+                  },
+                  "streamName": {
+                    "value": "[parameters('streamName')]"
+                  },
+                  "$connections": {
+                    "value": {}
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "logicAppResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+            },
+            "webhookUrl": {
+              "type": "string",
+              "value": "[listCallbackUrl(resourceId('Microsoft.Logic/workflows/triggers', parameters('logicAppName'), 'When_an_alert_is_received_from_blacklens_io'), '2016-06-01').value]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "blacklens-dcr-roleassign",
+      "subscriptionId": "[variables('subId')]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dcrName": {
+            "value": "[parameters('dcrName')]"
+          },
+          "logicAppResourceId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'la-blacklens-alert-log-ingestion'), '2025-04-01').outputs.logicAppResourceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "2433944844148284348"
+            }
+          },
+          "parameters": {
+            "dcrName": {
+              "type": "string"
+            },
+            "logicAppResourceId": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "roleDefId": "3913510d-42f4-4e42-8a64-420c390055eb"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', parameters('dcrName'))]",
+              "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName')), parameters('logicAppResourceId'), variables('roleDefId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('roleDefId'))]",
+                "principalId": "[reference(parameters('logicAppResourceId'), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'la-blacklens-alert-log-ingestion')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "blacklens-analytic-rule",
+      "subscriptionId": "[variables('subId')]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceName": {
+            "value": "[variables('wsName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "13108905814963156612"
+            }
+          },
+          "parameters": {
+            "workspaceName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/alertRules",
+              "apiVersion": "2023-12-01-preview",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', parameters('workspaceName'))]",
+              "name": "e261b70a-3005-4a1b-a7a2-2c8147fafed7",
+              "kind": "NRT",
+              "properties": {
+                "displayName": "blacklens Insights",
+                "description": "",
+                "severity": "High",
+                "enabled": true,
+                "query": "blacklens_CL\n| summarize arg_max(TimeGenerated, *) by id\n| extend AlertSeverity = case(\n    tolower(severity) == \"high\", \"High\",\n    tolower(severity) == \"medium\", \"Medium\",\n    tolower(severity) == \"low\", \"Low\",\n    \"Informational\"\n)\n",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "incidentConfiguration": {
+                  "createIncident": true,
+                  "groupingConfiguration": {
+                    "enabled": false,
+                    "reopenClosedIncident": false,
+                    "lookbackDuration": "PT5H",
+                    "matchingMethod": "AllEntities",
+                    "groupByEntities": [],
+                    "groupByAlertDetails": [],
+                    "groupByCustomDetails": []
+                  }
+                },
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "{{alert_title}}",
+                  "alertDescriptionFormat": "{{message}}",
+                  "alertSeverityColumnName": "AlertSeverity",
+                  "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                  {
+                    "entityType": "URL",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "link"
+                      }
+                    ]
+                  }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('subId'), variables('rgName')), 'Microsoft.Resources/deployments', 'blacklens-table')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "blacklensWebhookUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'la-blacklens-alert-log-ingestion'), '2025-04-01').outputs.webhookUrl.value]"
+    }
+  }
+}
