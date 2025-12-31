@@ -1908,7 +1908,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write("- [Solutions](solutions-index.md)\n")
         f.write("- [Connectors](connectors-index.md) (this page)\n")
         f.write("- [Tables](tables-index.md)\n")
-        f.write("- [Content](content-index.md)\n\n")
+        f.write("- [Content](content/content-index.md)\n\n")
         f.write("---\n\n")
         
         f.write(f"## Overview\n\n")
@@ -2075,7 +2075,7 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         f.write("- [Solutions](solutions-index.md)\n")
         f.write("- [Connectors](connectors-index.md)\n")
         f.write("- [Tables](tables-index.md) (this page)\n")
-        f.write("- [Content](content-index.md)\n\n")
+        f.write("- [Content](content/content-index.md)\n\n")
         f.write("---\n\n")
         
         f.write(f"## Overview\n\n")
@@ -2353,7 +2353,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             f.write("- [← Back to Tables Index](../tables-index.md)\n")
             f.write("- [Solutions Index](../solutions-index.md)\n")
             f.write("- [Connectors Index](../connectors-index.md)\n")
-            f.write("- [Content Index](../content-index.md)\n")
+            f.write("- [Content Index](../content/content-index.md)\n")
         
         pages_created += 1
     
@@ -2420,6 +2420,14 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             collection_method = first_entry.get('collection_method', '')
             if collection_method:
                 f.write(f"| **Collection Method** | {collection_method} |\n")
+            
+            # Device Vendor/Product (for CEF/Syslog and ASIM connectors)
+            device_vendor = first_entry.get('device_vendor', '')
+            device_product = first_entry.get('device_product', '')
+            if device_vendor:
+                f.write(f"| **Device Vendor** | {device_vendor.replace(';', ', ')} |\n")
+            if device_product:
+                f.write(f"| **Device Product** | {device_product.replace(';', ', ')} |\n")
             
             # Connector files
             connector_files = first_entry.get('connector_files', '')
@@ -2518,7 +2526,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             f.write("- [← Back to Connectors Index](../connectors-index.md)\n")
             f.write("- [Solutions Index](../solutions-index.md)\n")
             f.write("- [Tables Index](../tables-index.md)\n")
-            f.write("- [Content Index](../content-index.md)\n")
+            f.write("- [Content Index](../content/content-index.md)\n")
         
         print(f"Generated connector page: {connector_path}")
 
@@ -2918,7 +2926,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         f.write("- [← Back to Solutions Index](../solutions-index.md)\n")
         f.write("- [Connectors Index](../connectors-index.md)\n")
         f.write("- [Tables Index](../tables-index.md)\n")
-        f.write("- [Content Index](../content-index.md)\n")
+        f.write("- [Content Index](../content/content-index.md)\n")
     
     print(f"Generated solution page: {solution_path}")
 
@@ -3144,12 +3152,14 @@ def main() -> None:
         reader = csv.DictReader(csvfile)
         rows = list(reader)
     
-    # Enrich rows with collection method from connectors CSV
+    # Enrich rows with collection method and vendor/product from connectors CSV
     for row in rows:
         connector_id = row.get('connector_id', '')
         if connector_id and connector_id in connectors_reference:
             row['collection_method'] = connectors_reference[connector_id].get('collection_method', '')
             row['collection_method_reason'] = connectors_reference[connector_id].get('collection_method_reason', '')
+            row['device_vendor'] = connectors_reference[connector_id].get('device_vendor', '')
+            row['device_product'] = connectors_reference[connector_id].get('device_product', '')
     
     print(f"Loaded {len(rows)} rows")
     
@@ -3213,7 +3223,7 @@ def main() -> None:
     print(f"  - Solutions index: {args.output_dir / 'solutions-index.md'}")
     print(f"  - Connectors index: {args.output_dir / 'connectors-index.md'}")
     print(f"  - Tables index: {args.output_dir / 'tables-index.md'}")
-    print(f"  - Content index: {args.output_dir / 'content-index.md'}")
+    print(f"  - Content index: {args.output_dir / 'content' / 'content-index.md'}")
     print(f"  - Solutions: {args.output_dir / 'solutions'}/ ({len(by_solution)} files)")
     print(f"  - Connectors: {args.output_dir / 'connectors'}/ ({len(all_connector_ids)} files)")
     print(f"  - Tables: {args.output_dir / 'tables'}/ ({table_pages_count} files)")

@@ -31,6 +31,125 @@ FIELD_GENERATING_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+# Patterns for extracting vendor/product from queries
+# Matches patterns like: DeviceVendor == "value" or DeviceVendor =~ "value"
+VENDOR_PRODUCT_PATTERN = re.compile(
+    r'\b(DeviceVendor|DeviceProduct|EventVendor|EventProduct)\s*=~?\s*["\']([^"\']+)["\']',
+    re.IGNORECASE
+)
+
+# Tables that use vendor/product fields for source identification
+VENDOR_PRODUCT_TABLES = {
+    'commonsecuritylog': ('DeviceVendor', 'DeviceProduct'),
+}
+
+# ASim tables use EventVendor/EventProduct
+ASIM_TABLE_PREFIXES = ('asim', '_asim', '_im_')
+
+def extract_vendor_product_from_query(query: str, table_name: Optional[str] = None) -> Dict[str, Set[str]]:
+    """
+    Extract DeviceVendor/DeviceProduct or EventVendor/EventProduct values from a KQL query.
+    
+    Args:
+        query: The KQL query string to parse
+        table_name: Optional table name to help determine which fields to look for
+    
+    Returns:
+        Dictionary with keys 'vendor' and 'product', each containing a set of found values
+    """
+    if not query:
+        return {'vendor': set(), 'product': set()}
+    
+    result = {'vendor': set(), 'product': set()}
+    
+    # Find all matches
+    for match in VENDOR_PRODUCT_PATTERN.finditer(query):
+        field_name = match.group(1).lower()
+        value = match.group(2).strip()
+        
+        if not value:
+            continue
+        
+        if field_name in ('devicevendor', 'eventvendor'):
+            result['vendor'].add(value)
+        elif field_name in ('deviceproduct', 'eventproduct'):
+            result['product'].add(value)
+    
+    return result
+
+
+def extract_all_queries_from_connector(data: Any) -> List[str]:
+    """
+    Extract all query strings from a connector JSON structure.
+    Looks in graphQueries, sampleQueries, dataTypes, and connectivityCriterias.
+    
+    Args:
+        data: The parsed connector JSON data
+    
+    Returns:
+        List of query strings found in the connector definition
+    """
+    queries: List[str] = []
+    
+    if not isinstance(data, dict):
+        return queries
+    
+    # graphQueries - contains baseQuery
+    for gq in data.get('graphQueries', []):
+        if isinstance(gq, dict):
+            base_query = gq.get('baseQuery', '')
+            if base_query:
+                queries.append(base_query)
+    
+    # sampleQueries - contains query
+    for sq in data.get('sampleQueries', []):
+        if isinstance(sq, dict):
+            query = sq.get('query', '')
+            if query:
+                queries.append(query)
+    
+    # dataTypes - contains lastDataReceivedQuery or query
+    for dt in data.get('dataTypes', []):
+        if isinstance(dt, dict):
+            query = dt.get('lastDataReceivedQuery', '') or dt.get('query', '')
+            if query:
+                queries.append(query)
+    
+    # connectivityCriterias - contains value which can be a list of queries
+    for cc in data.get('connectivityCriterias', []):
+        if isinstance(cc, dict):
+            value = cc.get('value', [])
+            if isinstance(value, list):
+                for v in value:
+                    if isinstance(v, str) and v.strip():
+                        queries.append(v)
+            elif isinstance(value, str) and value.strip():
+                queries.append(value)
+    
+    return queries
+
+
+def get_connector_vendor_product(data: Any) -> Dict[str, Set[str]]:
+    """
+    Extract all vendor/product values from a connector's queries.
+    
+    Args:
+        data: The parsed connector JSON data
+    
+    Returns:
+        Dictionary with 'vendor' and 'product' sets containing all found values
+    """
+    result = {'vendor': set(), 'product': set()}
+    
+    queries = extract_all_queries_from_connector(data)
+    for query in queries:
+        vp = extract_vendor_product_from_query(query)
+        result['vendor'].update(vp['vendor'])
+        result['product'].update(vp['product'])
+    
+    return result
+
+
 # Token validation sets
 PARSER_NAME_KEYS = {"functionname", "functionalias"}
 NON_TABLE_TOKENS = {
@@ -2024,6 +2143,9 @@ def extract_content_item_from_yaml(
     # Get kind (for analytics rules)
     kind = data.get("kind", "")
     
+    # Extract vendor/product from query
+    vp = extract_vendor_product_from_query(query) if query else {'vendor': set(), 'product': set()}
+    
     return {
         "content_id": item_id,
         "content_name": name,
@@ -2038,6 +2160,8 @@ def extract_content_item_from_yaml(
         "content_required_connectors": ",".join(required_connectors),
         "content_query": query,
         "content_query_status": query_status,
+        "content_device_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
+        "content_device_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
         "solution_name": solution_name,
         "solution_folder": solution_folder,
     }
@@ -2064,6 +2188,13 @@ def extract_content_item_from_workbook(
     queries = extract_queries_from_workbook(data) if isinstance(data, dict) else []
     combined_query = "\n---\n".join(queries) if queries else ""
     
+    # Extract vendor/product from combined queries
+    vp = {'vendor': set(), 'product': set()}
+    for q in queries:
+        qvp = extract_vendor_product_from_query(q)
+        vp['vendor'].update(qvp['vendor'])
+        vp['product'].update(qvp['product'])
+    
     return {
         "content_id": "",  # Workbooks typically don't have an ID in the JSON
         "content_name": name,
@@ -2078,6 +2209,8 @@ def extract_content_item_from_workbook(
         "content_required_connectors": "",
         "content_query": combined_query,
         "content_query_status": "has_query" if combined_query else "no_query",
+        "content_device_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
+        "content_device_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
         "solution_name": solution_name,
         "solution_folder": solution_folder,
     }
@@ -2203,6 +2336,13 @@ def extract_content_item_from_playbook(
     combined_query = "\n---\n".join(queries) if queries else ""
     write_tables_str = ",".join(write_tables) if write_tables else ""
     
+    # Extract vendor/product from combined queries
+    vp = {'vendor': set(), 'product': set()}
+    for q in queries:
+        qvp = extract_vendor_product_from_query(q)
+        vp['vendor'].update(qvp['vendor'])
+        vp['product'].update(qvp['product'])
+    
     return {
         "content_id": "",
         "content_name": name,
@@ -2217,6 +2357,8 @@ def extract_content_item_from_playbook(
         "content_required_connectors": "",
         "content_query": combined_query,
         "content_query_status": "has_query" if combined_query else "no_query",
+        "content_device_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
+        "content_device_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
         "content_write_tables": write_tables_str,
         "solution_name": solution_name,
         "solution_folder": solution_folder,
@@ -2291,6 +2433,8 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             "content_required_connectors": "",
                             "content_query": "",
                             "content_query_status": "no_query",  # Watchlists don't have queries
+                            "content_device_vendor": "",
+                            "content_device_product": "",
                             "solution_name": solution_name,
                             "solution_folder": solution_folder,
                         })
@@ -2933,6 +3077,9 @@ def main() -> None:
 
     # Now analyze collection methods for all connectors
     # We need to read JSON files again to get content for analysis
+    # Also extract vendor/product information from connector queries
+    connector_vendor_product: Dict[str, Dict[str, Set[str]]] = {}  # connector_id -> {'vendor': set, 'product': set}
+    
     for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
         for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
             data_connectors_dir = solution_dir / dc_folder_name
@@ -2951,8 +3098,16 @@ def main() -> None:
                     connector_entries = find_connector_objects(data)
                     for entry in connector_entries:
                         conn_id = entry.get('id', '')
-                        if conn_id and conn_id not in connector_json_content:
-                            connector_json_content[conn_id] = (content, json_path.name)
+                        if conn_id:
+                            if conn_id not in connector_json_content:
+                                connector_json_content[conn_id] = (content, json_path.name)
+                            # Extract vendor/product from connector queries
+                            vp = get_connector_vendor_product(data)
+                            if vp['vendor'] or vp['product']:
+                                if conn_id not in connector_vendor_product:
+                                    connector_vendor_product[conn_id] = {'vendor': set(), 'product': set()}
+                                connector_vendor_product[conn_id]['vendor'].update(vp['vendor'])
+                                connector_vendor_product[conn_id]['product'].update(vp['product'])
                 except Exception:
                     continue
     
@@ -2985,6 +3140,9 @@ def main() -> None:
             table_metadata=table_metadata_list if table_metadata_list else None,
         )
         
+        # Get vendor/product info for this connector
+        vp_info = connector_vendor_product.get(connector_id, {'vendor': set(), 'product': set()})
+        
         connectors_data.append({
             'connector_id': info['connector_id'],
             'connector_publisher': info['connector_publisher'],
@@ -2996,6 +3154,8 @@ def main() -> None:
             'connector_files': info['connector_files'],
             'collection_method': collection_method,
             'collection_method_reason': detection_reason,
+            'device_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
+            'device_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
         })
     
     # Build solutions data
@@ -3191,6 +3351,8 @@ def main() -> None:
         'connector_files',
         'collection_method',
         'collection_method_reason',
+        'device_vendor',
+        'device_product',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -3264,6 +3426,8 @@ def main() -> None:
         'content_techniques',
         'content_required_connectors',
         'content_query_status',
+        'content_device_vendor',
+        'content_device_product',
         'solution_name',
         'solution_folder',
     ]
