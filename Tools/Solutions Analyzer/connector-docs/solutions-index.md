@@ -2,33 +2,76 @@
 
 This reference documentation provides detailed information about data connectors available in Microsoft Sentinel Solutions.
 
+> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. A small number of connectors (such as Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) are not managed via Solutions and are therefore not included here.
+
 **Browse by:**
 
 - [Solutions](solutions-index.md) (this page)
 - [Connectors](connectors-index.md)
 - [Tables](tables-index.md)
+- [Content](content-index.md)
 
 ---
 
 ## Overview
 
-This documentation covers **480 solutions**, of which **335** include data connectors, providing access to **462 unique connectors** and **740 unique tables**.
+This documentation covers **485 solutions**, of which **384** include data connectors, providing access to **524 unique connectors** and **828 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 480 |
-| Solutions with Connectors | 335 (69%) |
-| Unique Connectors | 462 |
-| Unique Tables | 740 |
+| Total Solutions | 485 |
+| Solutions with Connectors | 384 (79%) |
+| Unique Connectors | 524 |
+| Unique Tables | 828 |
 
-## How This Documentation is Organized\n\nEach solution has its own page containing:
+### Content Items Statistics
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2165 |
+| Hunting Queries | 1158 |
+| Playbooks | 709 |
+| Parsers | 508 |
+| Workbooks | 349 |
+| Watchlists | 41 |
+| **Total** | **4930** |
+
+*Content items found in 383 of 485 solutions (78%)*
+
+### Collection Methods
+
+| Collection Method | Total Connectors | Active Connectors* | Total Solutions | Active Solutions* |
+|:-----------------|:----------------:|:-----------------:|:---------------:|:----------------:|
+| Azure Function | 129 | 111 | 102 | 102 |
+| CCF | 123 | 122 | 109 | 109 |
+| AMA | 105 | 34 | 99 | 30 |
+| Unknown (Custom Log) | 56 | 47 | 54 | 45 |
+| MMA | 52 | 8 | 53 | 15 |
+| Native | 25 | 25 | 20 | 20 |
+| Azure Diagnostics | 17 | 17 | 17 | 17 |
+| REST API | 14 | 14 | 15 | 15 |
+| Unknown | 3 | 3 | 4 | 4 |
+| **Total** | **524** | **381** | **384** | **300** |
+
+*\*Active excludes connectors and solutions marked as deprecated.*
+
+## How This Documentation is Organized
+
+Each solution has its own page containing:
 
 - **Solution Overview**: Publisher, support information, and categories
-- **Connectors**: List of all connectors in the solution
+- **Connectors**: List of all connectors in the solution with collection methods
 - **Tables**: Data tables ingested by the connectors
-- **GitHub Links**: Direct links to connector definition files
+- **Content Items**: Analytic rules, hunting queries, playbooks, workbooks, parsers, and watchlists
+- **GitHub Links**: Direct links to source files in the Azure-Sentinel repository
+
+Additional documentation:
+
+- **[Connectors Index](connectors-index.md)**: All connectors with collection methods and table mappings
+- **[Tables Index](tables-index.md)**: All tables with schema and connector usage
+- **[Content Index](content/content-index.md)**: All content items organized by type
 
 ## Solutions Index
 
@@ -94,11 +137,12 @@ Browse solutions alphabetically:
 | [Azure Key Vault](solutions/azure-key-vault.md) | 2022-05-02 | Microsoft Corporation |
 | [Azure Logic Apps](solutions/azure-logic-apps.md) | 2022-06-24 | Microsoft Corporation |
 | [Azure Network Security Groups](solutions/azure-network-security-groups.md) | 2022-05-23 | Microsoft Corporation |
+| [Azure Resource Graph](solutions/azure-resource-graph.md) | 2025-06-20 | Microsoft Corporation |
 | [Azure SQL Database solution for sentinel](solutions/azure-sql-database-solution-for-sentinel.md) | 2022-08-19 | Microsoft Corporation |
 | [Azure Service Bus](solutions/azure-service-bus.md) | 2022-06-29 | Microsoft Corporation |
 | [Azure Storage](solutions/azure-storage.md) | 2022-05-12 | Microsoft Corporation |
 | [Azure Stream Analytics](solutions/azure-stream-analytics.md) | 2022-06-24 | Microsoft Corporation |
-| [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-(waf).md) | 2022-05-18 | Microsoft Corporation |
+| [Azure Web Application Firewall (WAF)](solutions/azure-web-application-firewall-%28waf%29.md) | 2022-05-18 | Microsoft Corporation |
 | [Azure kubernetes Service](solutions/azure-kubernetes-service.md) | 2022-06-01 | Microsoft Corporation |
 | [AzureDevOpsAuditing](solutions/azuredevopsauditing.md) | 2022-09-20 | Microsoft Corporation |
 | [AzureSecurityBenchmark](solutions/azuresecuritybenchmark.md) | 2022-06-17 | Microsoft Corporation |
@@ -108,7 +152,7 @@ Browse solutions alphabetically:
 
 | Solution | First Published | Publisher |
 |----------|----------------|----------|
-| [BETTER Mobile Threat Defense (MTD)](solutions/better-mobile-threat-defense-(mtd).md) | 2022-05-02 | Better Mobile Security Inc. |
+| [BETTER Mobile Threat Defense (MTD)](solutions/better-mobile-threat-defense-%28mtd%29.md) | 2022-05-02 | Better Mobile Security Inc. |
 | [Barracuda CloudGen Firewall](solutions/barracuda-cloudgen-firewall.md) | 2021-05-02 | Community |
 | [Barracuda WAF](solutions/barracuda-waf.md) | 2022-05-13 | Barracuda |
 | [Beyond Security beSECURE](solutions/beyond-security-besecure.md) | 2022-05-02 | Beyond Security |
@@ -173,10 +217,10 @@ Browse solutions alphabetically:
 | [Cribl](solutions/cribl.md) | 2024-08-01 | Cribl |
 | [CrowdStrike Falcon Endpoint Protection](solutions/crowdstrike-falcon-endpoint-protection.md) | 2022-06-01 | Microsoft Corporation |
 | [CustomLogsAma](solutions/customlogsama.md) | 2024-07-21 | Microsoft Corporation |
-| [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-(epv)-events.md) | 2022-05-02 | Cyberark |
+| [CyberArk Enterprise Password Vault (EPV) Events](solutions/cyberark-enterprise-password-vault-%28epv%29-events.md) | 2022-05-02 | Cyberark |
 | [CyberArkAudit](solutions/cyberarkaudit.md) | 2024-03-01 | CyberArk Support |
 | [CyberArkEPM](solutions/cyberarkepm.md) | 2022-04-10 | CyberArk Support |
-| [CybersecurityMaturityModelCertification(CMMC)2.0](solutions/cybersecuritymaturitymodelcertification(cmmc)2.0.md) | 2022-01-06 | Microsoft Corporation |
+| [CybersecurityMaturityModelCertification(CMMC)2.0](solutions/cybersecuritymaturitymodelcertification%28cmmc%292.0.md) | 2022-01-06 | Microsoft Corporation |
 | [Cybersixgill-Actionable-Alerts](solutions/cybersixgill-actionable-alerts.md) | 2023-02-27 | Cybersixgill |
 | [Cyble Vision](solutions/cyble-vision.md) | 2025-05-05 | Cyble Support |
 | [Cyborg Security HUNTER](solutions/cyborg-security-hunter.md) | 2023-07-03 | Cyborg Security |
@@ -231,7 +275,7 @@ Browse solutions alphabetically:
 | [Eset Security Management Center](solutions/eset-security-management-center.md) | 2022-05-11 | Eset |
 | [Exabeam Advanced Analytics](solutions/exabeam-advanced-analytics.md) | 2022-05-20 | Microsoft Corporation |
 | [ExtraHop](solutions/extrahop.md) | 2025-02-11 | ExtraHop Support |
-| [ExtraHop Reveal(x)](solutions/extrahop-reveal(x).md) | 2022-05-19 | ExtraHop |
+| [ExtraHop Reveal(x)](solutions/extrahop-reveal%28x%29.md) | 2022-05-19 | ExtraHop |
 
 ### F
 
@@ -248,7 +292,7 @@ Browse solutions alphabetically:
 | [Forcepoint CSG](solutions/forcepoint-csg.md) | 2022-05-10 | Community |
 | [Forcepoint DLP](solutions/forcepoint-dlp.md) | 2022-05-09 | Community |
 | [Forcepoint NGFW](solutions/forcepoint-ngfw.md) | 2022-05-25 | Community |
-| [Forescout (Legacy)](solutions/forescout-(legacy).md) | 2022-06-01 | Microsoft Corporation |
+| [Forescout (Legacy)](solutions/forescout-%28legacy%29.md) | 2022-06-01 | Microsoft Corporation |
 | [Forescout eyeInspect for OT Security](solutions/forescout-eyeinspect-for-ot-security.md) | 2025-07-10 | Forescout Technologies |
 | [ForescoutHostPropertyMonitor](solutions/forescouthostpropertymonitor.md) | 2022-06-28 | Forescout Technologies |
 | [ForgeRock Common Audit for CEF](solutions/forgerock-common-audit-for-cef.md) | 2022-05-04 | Forgerock |
@@ -272,7 +316,7 @@ Browse solutions alphabetically:
 | [Google Cloud Platform Cloud Monitoring](solutions/google-cloud-platform-cloud-monitoring.md) | 2022-07-01 | Microsoft Corporation |
 | [Google Cloud Platform Cloud Run](solutions/google-cloud-platform-cloud-run.md) | 2021-07-30 | Microsoft Corporation |
 | [Google Cloud Platform Compute Engine](solutions/google-cloud-platform-compute-engine.md) | 2022-07-07 | Microsoft Corporation |
-| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) |  |  |
+| [Google Cloud Platform Firewall Logs](solutions/google-cloud-platform-firewall-logs.md) | 2024-11-03 | Microsoft Corporation |
 | [Google Cloud Platform Load Balancer Logs](solutions/google-cloud-platform-load-balancer-logs.md) | 2025-02-12 | Microsoft Corporation |
 | [Google Cloud Platform Security Command Center](solutions/google-cloud-platform-security-command-center.md) | 2023-09-11 | Microsoft Corporation |
 | [Google Cloud Platform VPC Flow Logs](solutions/google-cloud-platform-vpc-flow-logs.md) | 2025-02-12 | Microsoft Corporation |
@@ -369,6 +413,7 @@ Browse solutions alphabetically:
 | [McAfee Network Security Platform](solutions/mcafee-network-security-platform.md) | 2021-06-29 | Microsoft Corporation |
 | [McAfee ePolicy Orchestrator](solutions/mcafee-epolicy-orchestrator.md) | 2021-03-25 | Microsoft Corporation |
 | [Microsoft 365](solutions/microsoft-365.md) | 2022-05-23 | Microsoft Corporation |
+| [Microsoft 365 Assets](solutions/microsoft-365-assets.md) | 2025-06-20 | Microsoft Corporation |
 | [Microsoft Business Applications](solutions/microsoft-business-applications.md) | 2023-04-19 | Microsoft Corporation |
 | [Microsoft Copilot](solutions/microsoft-copilot.md) | 2025-10-01 | Microsoft |
 | [Microsoft Defender For Identity](solutions/microsoft-defender-for-identity.md) | 2022-04-20 | Microsoft Corporation |
@@ -378,6 +423,7 @@ Browse solutions alphabetically:
 | [Microsoft Defender for Cloud Apps](solutions/microsoft-defender-for-cloud-apps.md) | 2022-05-02 | Microsoft Corporation |
 | [Microsoft Defender for Office 365](solutions/microsoft-defender-for-office-365.md) | 2022-05-17 | Microsoft Corporation |
 | [Microsoft Entra ID](solutions/microsoft-entra-id.md) | 2022-05-16 | Microsoft Corporation |
+| [Microsoft Entra ID Assets](solutions/microsoft-entra-id-assets.md) | 2025-06-20 | Microsoft Corporation |
 | [Microsoft Entra ID Protection](solutions/microsoft-entra-id-protection.md) | 2022-05-18 | Microsoft Corporation |
 | [Microsoft Exchange Security - Exchange On-Premises](solutions/microsoft-exchange-security---exchange-on-premises.md) | 2022-12-21 | Community |
 | [Microsoft Exchange Security - Exchange Online](solutions/microsoft-exchange-security---exchange-online.md) | 2022-12-21 | Community |
@@ -395,6 +441,7 @@ Browse solutions alphabetically:
 | [MimecastTIRegional](solutions/mimecasttiregional.md) | 2023-08-23 | Mimecast |
 | [MimecastTTP](solutions/mimecastttp.md) | 2022-02-24 | Mimecast |
 | [Minemeld](solutions/minemeld.md) | 2022-10-11 | Microsoft Corporation |
+| [Miro](solutions/miro.md) |  | Miro |
 | [MongoDBAtlas](solutions/mongodbatlas.md) | 2025-08-22 | MongoDB |
 | [MongoDBAudit](solutions/mongodbaudit.md) | 2022-06-01 | Microsoft Corporation |
 | [Morphisec](solutions/morphisec.md) | 2022-05-05 | Morphisec |
@@ -451,7 +498,7 @@ Browse solutions alphabetically:
 |----------|----------------|----------|
 | [PCI DSS Compliance](solutions/pci-dss-compliance.md) | 2022-06-29 | Microsoft Corporation |
 | [PDNS Block Data Connector](solutions/pdns-block-data-connector.md) | 2023-03-31 | Nominet PDNS Support |
-| [Palo Alto - XDR (Cortex)](solutions/palo-alto---xdr-(cortex).md) |  |  |
+| [Palo Alto - XDR (Cortex)](solutions/palo-alto---xdr-%28cortex%29.md) |  |  |
 | [Palo Alto Cortex XDR CCP](solutions/palo-alto-cortex-xdr-ccp.md) | 2024-12-07 | Microsoft Corporation |
 | [Palo Alto Cortex Xpanse CCF](solutions/palo-alto-cortex-xpanse-ccf.md) | 2024-12-07 | Microsoft Corporation |
 | [Palo Alto Prisma Cloud CWPP](solutions/palo-alto-prisma-cloud-cwpp.md) | 2022-06-24 | Microsoft Corporation |
@@ -467,7 +514,7 @@ Browse solutions alphabetically:
 | [Power Platform](solutions/power-platform.md) |  |  |
 | [Prancer PenSuiteAI Integration](solutions/prancer-pensuiteai-integration.md) | 2023-08-02 | Prancer PenSuiteAI Integration |
 | [ProofPointTap](solutions/proofpointtap.md) | 2022-05-23 | Proofpoint, Inc. |
-| [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand(pod)-email-security.md) | 2021-03-31 | Proofpoint, Inc. |
+| [Proofpoint On demand(POD) Email Security](solutions/proofpoint-on-demand%28pod%29-email-security.md) | 2021-03-31 | Proofpoint, Inc. |
 | [Pulse Connect Secure](solutions/pulse-connect-secure.md) | 2022-05-02 | Microsoft Corporation |
 | [Pure Storage](solutions/pure-storage.md) | 2024-02-05 | purestoragemarketplaceadmin |
 
@@ -564,7 +611,7 @@ Browse solutions alphabetically:
 | [TheHive](solutions/thehive.md) | 2021-10-23 | Microsoft Corporation |
 | [Theom](solutions/theom.md) | 2022-11-04 | Theom |
 | [Threat Intelligence](solutions/threat-intelligence.md) | 2022-05-18 | Microsoft Corporation |
-| [Threat Intelligence (NEW)](solutions/threat-intelligence-(new).md) | 2025-04-02 | Microsoft Corporation |
+| [Threat Intelligence (NEW)](solutions/threat-intelligence-%28new%29.md) | 2025-04-02 | Microsoft Corporation |
 | [Threat Intelligence Solution for Azure Government](solutions/threat-intelligence-solution-for-azure-government.md) | 2023-03-06 | Microsoft Corporation |
 | [ThreatAnalysis&Response](solutions/threatanalysis&response.md) | 2021-10-20 | Microsoft Corporation |
 | [ThreatConnect](solutions/threatconnect.md) | 2023-09-11 | ThreatConnect, Inc. |
@@ -578,6 +625,7 @@ Browse solutions alphabetically:
 | [Trend Micro Deep Security](solutions/trend-micro-deep-security.md) | 2022-05-10 | Trend Micro |
 | [Trend Micro TippingPoint](solutions/trend-micro-tippingpoint.md) | 2022-05-02 | Trend Micro |
 | [Trend Micro Vision One](solutions/trend-micro-vision-one.md) | 2022-05-11 | Trend Micro |
+| [Tropico](solutions/tropico.md) | 2025-12-02 | TROPICO Security |
 
 ### U
 
@@ -634,10 +682,10 @@ Browse solutions alphabetically:
 |----------|----------------|----------|
 | [ZeroFox](solutions/zerofox.md) | 2023-07-28 | ZeroFox |
 | [ZeroNetworks](solutions/zeronetworks.md) | 2022-06-06 | Zero Networks |
-| [ZeroTrust(TIC3.0)](solutions/zerotrust(tic3.0).md) | 2021-10-20 | Microsoft Corporation |
+| [ZeroTrust(TIC3.0)](solutions/zerotrust%28tic3.0%29.md) | 2021-10-20 | Microsoft Corporation |
 | [Zimperium Mobile Threat Defense](solutions/zimperium-mobile-threat-defense.md) | 2022-05-02 | Zimperium |
 | [Zinc Open Source](solutions/zinc-open-source.md) | 2022-10-03 | Microsoft Corporation |
 | [ZoomReports](solutions/zoomreports.md) | 2022-05-23 | Microsoft Corporation |
 | [Zscaler Internet Access](solutions/zscaler-internet-access.md) | 2022-05-25 | Zscaler |
-| [Zscaler Private Access (ZPA)](solutions/zscaler-private-access-(zpa).md) | 2022-01-31 | Microsoft Corporation |
+| [Zscaler Private Access (ZPA)](solutions/zscaler-private-access-%28zpa%29.md) | 2022-01-31 | Microsoft Corporation |
 
