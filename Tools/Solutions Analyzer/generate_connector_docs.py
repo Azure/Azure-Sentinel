@@ -71,12 +71,13 @@ CONTENT_TYPE_FOLDER_MAP = {
 }
 
 
-def get_content_item_github_url(item: Dict[str, str]) -> Optional[str]:
+def get_content_item_github_url(item: Dict[str, str], solutions_dir: Path = None) -> Optional[str]:
     """
     Build GitHub URL for a content item file.
     
     Args:
         item: Content item dictionary with solution_folder, content_type, content_file
+        solutions_dir: Path to Solutions directory for checking which folder variant exists
     
     Returns:
         GitHub URL string or None if not enough information
@@ -88,13 +89,20 @@ def get_content_item_github_url(item: Dict[str, str]) -> Optional[str]:
     if not solution_folder or not content_file:
         return None
     
-    # Get the folder name for this content type (use first variant as default)
+    # Get the folder name variants for this content type
     folder_variants = CONTENT_TYPE_FOLDER_MAP.get(content_type, [])
     if not folder_variants:
         return None
     
-    # Use the first folder variant - it's the most common
-    folder_name = folder_variants[0]
+    # Determine which folder variant actually exists
+    folder_name = folder_variants[0]  # Default to first variant
+    
+    if solutions_dir:
+        for variant in folder_variants:
+            variant_path = solutions_dir / solution_folder / variant
+            if variant_path.exists():
+                folder_name = variant
+                break
     
     # Build the GitHub URL - URL encode the path components
     # Keep slashes in content_file since it may include subdirectory paths
@@ -1050,6 +1058,536 @@ def format_permissions(permissions_json: str) -> str:
     return "".join(lines).strip()
 
 
+# Display friendly names for content types
+CONTENT_TYPE_DISPLAY_NAMES = {
+    'analytic_rule': 'Analytic Rule',
+    'hunting_query': 'Hunting Query',
+    'workbook': 'Workbook',
+    'playbook': 'Playbook',
+    'parser': 'Parser',
+    'watchlist': 'Watchlist',
+}
+
+# Plural display names for content types
+CONTENT_TYPE_PLURAL_NAMES = {
+    'analytic_rule': 'Analytic Rules',
+    'hunting_query': 'Hunting Queries',
+    'workbook': 'Workbooks',
+    'playbook': 'Playbooks',
+    'parser': 'Parsers',
+    'watchlist': 'Watchlists',
+}
+
+# URL-safe slugs for content type index files
+CONTENT_TYPE_SLUGS = {
+    'analytic_rule': 'analytic-rules',
+    'hunting_query': 'hunting-queries',
+    'workbook': 'workbooks',
+    'playbook': 'playbooks',
+    'parser': 'parsers',
+    'watchlist': 'watchlists',
+}
+
+
+def get_content_type_slug(content_type: str) -> str:
+    """Get the URL-safe slug for a content type."""
+    return CONTENT_TYPE_SLUGS.get(content_type, content_type.replace('_', '-') + 's')
+
+
+def get_content_item_filename(content_id: str, content_name: str, solution_name: str) -> str:
+    """
+    Generate a unique filename for a content item page.
+    Uses content_id if available (sanitized), otherwise uses name + solution hash.
+    """
+    if content_id:
+        # Use content_id as the primary identifier
+        return sanitize_filename(content_id)
+    else:
+        # For items without ID (workbooks, some playbooks), use name + solution hash
+        composite = f"{content_name}-{solution_name}"
+        return sanitize_filename(composite)
+
+
+def get_content_item_link(item: Dict[str, str], relative_path: str = "../content/") -> str:
+    """
+    Generate a markdown link to a content item's documentation page.
+    
+    Args:
+        item: Content item dictionary with content_id, content_name, solution_name
+        relative_path: Relative path to content directory
+    
+    Returns:
+        Markdown formatted link like [Content Name](../content/filename.md)
+    """
+    content_id = item.get('content_id', '')
+    content_name = item.get('content_name', 'Unknown')
+    solution_name = item.get('solution_name', '')
+    
+    filename = get_content_item_filename(content_id, content_name, solution_name)
+    return f"[{content_name}]({relative_path}{filename}.md)"
+
+
+def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[str, str]]],
+                                 content_tables_mapping: Dict[str, List[Tuple[str, str]]],
+                                 output_dir: Path,
+                                 solutions_dir: Path = None) -> int:
+    """
+    Generate individual documentation pages for each content item.
+    
+    Args:
+        content_items_by_solution: Dict mapping solution name to list of content items
+        content_tables_mapping: Dict mapping content_key to list of (table, usage) tuples
+        output_dir: Output directory for documentation
+        solutions_dir: Path to Solutions directory for checking folder variants
+    
+    Returns:
+        Number of pages generated
+    """
+    content_dir = output_dir / "content"
+    content_dir.mkdir(parents=True, exist_ok=True)
+    
+    pages_created = 0
+    
+    for solution_name, items in content_items_by_solution.items():
+        for item in items:
+            content_id = item.get('content_id', '')
+            content_name = item.get('content_name', 'Unknown')
+            content_type = item.get('content_type', 'unknown')
+            content_description = item.get('content_description', '')
+            content_file = item.get('content_file', '')
+            content_severity = item.get('content_severity', '')
+            content_status = item.get('content_status', '')
+            content_kind = item.get('content_kind', '')
+            content_tactics = item.get('content_tactics', '')
+            content_techniques = item.get('content_techniques', '')
+            content_required_connectors = item.get('content_required_connectors', '')
+            content_query_status = item.get('content_query_status', '')
+            solution_folder = item.get('solution_folder', '')
+            
+            # Generate filename
+            filename = get_content_item_filename(content_id, content_name, solution_name)
+            page_path = content_dir / f"{filename}.md"
+            
+            # Get content type display name
+            type_display = CONTENT_TYPE_DISPLAY_NAMES.get(content_type, content_type.replace('_', ' ').title())
+            
+            # Get tables used by this content item
+            content_key = get_content_key(content_id, content_name, solution_name)
+            tables_with_usage = content_tables_mapping.get(content_key, [])
+            
+            # Get GitHub URL (pass solutions_dir to check which folder variant exists)
+            github_url = get_content_item_github_url(item, solutions_dir)
+            
+            with page_path.open("w", encoding="utf-8") as f:
+                f.write(f"# {content_name}\n\n")
+                
+                # Status banner if retired/deprecated
+                if content_query_status in ('retired', 'deprecated', 'moved_or_replaced'):
+                    status_display = content_query_status.replace('_', ' ').title()
+                    f.write(f"> ⚠️ **{status_display}:** This content item has been {status_display.lower()}.\n\n")
+                
+                # Description
+                if content_description:
+                    # Clean up description - remove outer quotes if present
+                    desc = content_description.strip()
+                    if desc.startswith("'") and desc.endswith("'"):
+                        desc = desc[1:-1]
+                    if desc.startswith('"') and desc.endswith('"'):
+                        desc = desc[1:-1]
+                    f.write(f"{desc}\n\n")
+                
+                # Metadata table
+                f.write("| Attribute | Value |\n")
+                f.write("|:----------|:------|\n")
+                f.write(f"| **Type** | {type_display} |\n")
+                f.write(f"| **Solution** | [{solution_name}](../solutions/{sanitize_filename(solution_name)}.md) |\n")
+                
+                if content_id:
+                    f.write(f"| **ID** | `{content_id}` |\n")
+                
+                if content_severity:
+                    f.write(f"| **Severity** | {content_severity} |\n")
+                
+                if content_status:
+                    f.write(f"| **Status** | {content_status} |\n")
+                
+                if content_kind:
+                    f.write(f"| **Kind** | {content_kind} |\n")
+                
+                if content_tactics:
+                    tactics_formatted = format_tactics(content_tactics)
+                    f.write(f"| **Tactics** | {tactics_formatted} |\n")
+                
+                if content_techniques:
+                    techniques_formatted = ', '.join(t.strip() for t in content_techniques.split(',') if t.strip())
+                    f.write(f"| **Techniques** | {techniques_formatted} |\n")
+                
+                if content_required_connectors:
+                    # Format connectors as links to connector pages
+                    connector_ids = [c.strip() for c in content_required_connectors.split(',') if c.strip()]
+                    connector_links = []
+                    for conn_id in connector_ids:
+                        conn_filename = sanitize_filename(conn_id)
+                        connector_links.append(f"[{conn_id}](../connectors/{conn_filename}.md)")
+                    connectors_formatted = ', '.join(connector_links)
+                    f.write(f"| **Required Connectors** | {connectors_formatted} |\n")
+                
+                if github_url:
+                    f.write(f"| **Source** | [View on GitHub]({github_url}) |\n")
+                
+                f.write("\n")
+                
+                # Tables section
+                if tables_with_usage:
+                    f.write("## Tables Used\n\n")
+                    
+                    # For playbooks, show read/write usage
+                    if content_type == 'playbook':
+                        read_tables = [(t, u) for t, u in tables_with_usage if u == 'read']
+                        write_tables = [(t, u) for t, u in tables_with_usage if u == 'write']
+                        readwrite_tables = [(t, u) for t, u in tables_with_usage if u == 'read/write']
+                        
+                        if read_tables or write_tables or readwrite_tables:
+                            f.write("| Table | Usage |\n")
+                            f.write("|:------|:------|\n")
+                            for table, usage in sorted(tables_with_usage, key=lambda x: x[0]):
+                                table_link = format_table_link(table, "../tables/")
+                                usage_display = usage if usage else 'read'
+                                f.write(f"| {table_link} | {usage_display} |\n")
+                            f.write("\n")
+                    else:
+                        # For other content types, just list the tables
+                        f.write("This content item queries data from the following tables:\n\n")
+                        for table, _ in sorted(set(tables_with_usage), key=lambda x: x[0]):
+                            table_link = format_table_link(table, "../tables/")
+                            f.write(f"- {table_link}\n")
+                        f.write("\n")
+                
+                # Navigation footer - link to type-specific index
+                type_plural = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
+                type_slug = get_content_type_slug(content_type)
+                
+                f.write("---\n\n")
+                f.write("**Browse:**\n\n")
+                f.write(f"- [← Back to {type_plural}]({type_slug}.md)\n")
+                f.write(f"- [← Back to {solution_name}](../solutions/{sanitize_filename(solution_name)}.md)\n")
+                f.write("- [Content Index](content-index.md)\n")
+                f.write("- [Solutions Index](../solutions-index.md)\n")
+                f.write("- [Connectors Index](../connectors-index.md)\n")
+                f.write("- [Tables Index](../tables-index.md)\n")
+            
+            pages_created += 1
+    
+    return pages_created
+
+
+def generate_content_type_letter_page(content_type: str, letter: str, items: List[Dict[str, str]], 
+                                      output_dir: Path, all_letters: List[str]) -> None:
+    """
+    Generate a letter-specific page for a content type (e.g., analytic-rules-a.md).
+    
+    Args:
+        content_type: The content type (e.g., 'analytic_rule')
+        letter: The letter for this page (e.g., 'A')
+        items: List of content items starting with this letter
+        output_dir: Output directory
+        all_letters: All available letters for navigation
+    """
+    type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
+    type_slug = get_content_type_slug(content_type)
+    
+    # Content index files go in the content/ folder
+    content_dir = output_dir / "content"
+    page_path = content_dir / f"{type_slug}-{letter.lower()}.md"
+    
+    with page_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {type_name} - {letter}\n\n")
+        f.write(f"**{len(items)} {type_name.lower()}** starting with '{letter}'.\n\n")
+        
+        # Navigation
+        f.write("**Browse by:**\n\n")
+        f.write("- [Solutions](../solutions-index.md)\n")
+        f.write("- [Connectors](../connectors-index.md)\n")
+        f.write("- [Tables](../tables-index.md)\n")
+        f.write("- [Content](content-index.md)\n")
+        f.write(f"- [All {type_name}]({type_slug}.md)\n\n")
+        f.write("---\n\n")
+        
+        # Letter navigation
+        f.write("**Jump to letter:** ")
+        letter_links = []
+        for l in all_letters:
+            if l == letter:
+                letter_links.append(f"**{l}**")
+            else:
+                letter_links.append(f"[{l}]({type_slug}-{l.lower()}.md)")
+        f.write(" | ".join(letter_links))
+        f.write("\n\n")
+        
+        # Table header varies by content type
+        if content_type == 'analytic_rule':
+            f.write("| Name | Severity | Solution |\n")
+            f.write("|:-----|:---------|:---------|\n")
+        elif content_type == 'hunting_query':
+            f.write("| Name | Tactics | Solution |\n")
+            f.write("|:-----|:--------|:---------|\n")
+        else:
+            f.write("| Name | Solution |\n")
+            f.write("|:-----|:---------|\n")
+        
+        for item in sorted(items, key=lambda x: x.get('content_name', '').lower()):
+            content_name = item.get('content_name', 'Unknown')
+            solution_name = item.get('solution_name', 'Unknown')
+            
+            # Generate link to content page (content pages are in the same folder)
+            content_link = get_content_item_link(item, "")
+            solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+            
+            if content_type == 'analytic_rule':
+                severity = item.get('content_severity', '-') or '-'
+                f.write(f"| {content_link} | {severity} | {solution_link} |\n")
+            elif content_type == 'hunting_query':
+                tactics = format_tactics(item.get('content_tactics', '-')) or '-'
+                f.write(f"| {content_link} | {tactics} | {solution_link} |\n")
+            else:
+                f.write(f"| {content_link} | {solution_link} |\n")
+        
+        f.write("\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        f.write("**Browse:**\n\n")
+        f.write("- [← Back to Content Index](content-index.md)\n")
+        f.write(f"- [← Back to {type_name}]({type_slug}.md)\n")
+        f.write("- [Solutions Index](../solutions-index.md)\n")
+        f.write("- [Connectors Index](../connectors-index.md)\n")
+        f.write("- [Tables Index](../tables-index.md)\n")
+
+
+def generate_content_type_index(content_type: str, items: List[Dict[str, str]], 
+                                output_dir: Path, use_letter_pages: bool = False) -> None:
+    """
+    Generate an index page for a specific content type.
+    
+    Args:
+        content_type: The content type (e.g., 'analytic_rule')
+        items: List of all content items of this type
+        output_dir: Output directory
+        use_letter_pages: If True, create separate pages per letter (for large types)
+    """
+    type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
+    type_slug = get_content_type_slug(content_type)
+    
+    # Content index files go in the content/ folder
+    content_dir = output_dir / "content"
+    page_path = content_dir / f"{type_slug}.md"
+    
+    # Group by first letter
+    by_letter: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    for item in items:
+        name = item.get('content_name', 'Unknown')
+        first_letter = name[0].upper() if name else '#'
+        if first_letter.isalpha():
+            by_letter[first_letter].append(item)
+        else:
+            by_letter['#'].append(item)
+    
+    letters = sorted(by_letter.keys())
+    
+    # Generate letter pages if needed
+    if use_letter_pages:
+        for letter in letters:
+            generate_content_type_letter_page(content_type, letter, by_letter[letter], output_dir, letters)
+    
+    with page_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {type_name}\n\n")
+        f.write(f"**{len(items)} {type_name.lower()}** across all Microsoft Sentinel solutions.\n\n")
+        
+        # Navigation
+        f.write("**Browse by:**\n\n")
+        f.write("- [Solutions](../solutions-index.md)\n")
+        f.write("- [Connectors](../connectors-index.md)\n")
+        f.write("- [Tables](../tables-index.md)\n")
+        f.write("- [Content](content-index.md)\n\n")
+        f.write("---\n\n")
+        
+        # Letter navigation
+        f.write("**Jump to:** ")
+        if use_letter_pages:
+            f.write(" | ".join(f"[{letter}]({type_slug}-{letter.lower()}.md)" for letter in letters))
+        else:
+            f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
+        f.write("\n\n")
+        
+        if use_letter_pages:
+            # Summary table showing letter counts and links
+            f.write("| Letter | Count |\n")
+            f.write("|:-------|------:|\n")
+            for letter in letters:
+                count = len(by_letter[letter])
+                f.write(f"| [{letter}]({type_slug}-{letter.lower()}.md) | {count} |\n")
+            f.write("\n")
+        else:
+            # Full listing with separate tables per letter
+            for letter in letters:
+                f.write(f"## {letter}\n\n")
+                
+                # Table header varies by content type
+                if content_type == 'analytic_rule':
+                    f.write("| Name | Severity | Solution |\n")
+                    f.write("|:-----|:---------|:---------|\n")
+                elif content_type == 'hunting_query':
+                    f.write("| Name | Tactics | Solution |\n")
+                    f.write("|:-----|:--------|:---------|\n")
+                else:
+                    f.write("| Name | Solution |\n")
+                    f.write("|:-----|:---------|\n")
+                
+                for item in sorted(by_letter[letter], key=lambda x: x.get('content_name', '').lower()):
+                    content_name = item.get('content_name', 'Unknown')
+                    solution_name = item.get('solution_name', 'Unknown')
+                    
+                    # Generate link to content page (content pages are in the same folder)
+                    content_link = get_content_item_link(item, "")
+                    solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+                    
+                    if content_type == 'analytic_rule':
+                        severity = item.get('content_severity', '-') or '-'
+                        f.write(f"| {content_link} | {severity} | {solution_link} |\n")
+                    elif content_type == 'hunting_query':
+                        tactics = format_tactics(item.get('content_tactics', '-')) or '-'
+                        f.write(f"| {content_link} | {tactics} | {solution_link} |\n")
+                    else:
+                        f.write(f"| {content_link} | {solution_link} |\n")
+                
+                f.write("\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        f.write("**Browse:**\n\n")
+        f.write("- [← Back to Content Index](content-index.md)\n")
+        f.write("- [Solutions Index](../solutions-index.md)\n")
+        f.write("- [Connectors Index](../connectors-index.md)\n")
+        f.write("- [Tables Index](../tables-index.md)\n")
+    
+    print(f"Generated {type_name.lower()} index: {page_path}")
+
+
+def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, str]]],
+                           output_dir: Path) -> None:
+    """
+    Generate the main content index page and type-specific sub-indexes.
+    
+    Creates:
+    - content-index.md: Main index with overview and links to type indexes
+    - analytic-rules.md + analytic-rules-a.md, etc.: Analytic rules with letter pages
+    - hunting-queries.md: Hunting queries index
+    - playbooks.md: Playbooks index
+    - workbooks.md: Workbooks index
+    - parsers.md: Parsers index
+    - watchlists.md: Watchlists index
+    
+    Args:
+        content_items_by_solution: Dict mapping solution name to list of content items
+        output_dir: Output directory for documentation
+    """
+    # Content index goes in the content/ folder
+    content_dir = output_dir / "content"
+    index_path = content_dir / "content-index.md"
+    
+    # Flatten and group all content items by type
+    content_by_type: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    for solution_name, items in content_items_by_solution.items():
+        for item in items:
+            content_type = item.get('content_type', 'unknown')
+            content_by_type[content_type].append(item)
+    
+    # Count totals
+    total_items = sum(len(items) for items in content_by_type.values())
+    
+    # Generate type-specific index pages
+    type_order = ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist']
+    
+    for content_type in type_order:
+        items = content_by_type.get(content_type, [])
+        if not items:
+            continue
+        
+        # Use letter pages for large types (analytic rules, hunting queries)
+        use_letter_pages = content_type in ('analytic_rule',) and len(items) > 500
+        generate_content_type_index(content_type, items, output_dir, use_letter_pages)
+    
+    # Generate main content index
+    with index_path.open("w", encoding="utf-8") as f:
+        f.write("# Microsoft Sentinel Content Index\n\n")
+        f.write("Browse all content items (analytic rules, hunting queries, playbooks, workbooks, etc.) ")
+        f.write("across Microsoft Sentinel solutions.\n\n")
+        
+        # Navigation
+        f.write("**Browse by:**\n\n")
+        f.write("- [Solutions](../solutions-index.md)\n")
+        f.write("- [Connectors](../connectors-index.md)\n")
+        f.write("- [Tables](../tables-index.md)\n")
+        f.write("- [Content](content-index.md) (this page)\n\n")
+        f.write("---\n\n")
+        
+        # Overview
+        f.write("## Overview\n\n")
+        f.write(f"This index provides access to **{total_items} content items** across all Microsoft Sentinel solutions.\n\n")
+        f.write("Content is organized by type. Click on a content type below to browse all items of that type.\n\n")
+        
+        # Summary by type with links to sub-indexes
+        f.write("| Content Type | Count | Description |\n")
+        f.write("|:-------------|------:|:------------|\n")
+        
+        type_descriptions = {
+            'analytic_rule': 'Detection rules for identifying security threats',
+            'hunting_query': 'Proactive threat hunting queries',
+            'playbook': 'Automated response and remediation workflows',
+            'workbook': 'Interactive dashboards and reports',
+            'parser': 'Data normalization and transformation functions',
+            'watchlist': 'Reference data lists for enrichment and filtering',
+        }
+        
+        for content_type in type_order:
+            if content_type in content_by_type:
+                type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
+                type_slug = get_content_type_slug(content_type)
+                count = len(content_by_type[content_type])
+                description = type_descriptions.get(content_type, '')
+                f.write(f"| [{type_name}]({type_slug}.md) | {count} | {description} |\n")
+        
+        # Add any other types not in the order list
+        for content_type in sorted(content_by_type.keys()):
+            if content_type not in type_order:
+                type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
+                count = len(content_by_type[content_type])
+                f.write(f"| {type_name} | {count} | |\n")
+        
+        f.write("\n")
+        
+        # Quick stats section
+        f.write("## Statistics\n\n")
+        f.write("| Metric | Value |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| Total Content Items | {total_items} |\n")
+        f.write(f"| Content Types | {len(content_by_type)} |\n")
+        
+        # Count solutions with content
+        solutions_with_content = len([s for s in content_items_by_solution if content_items_by_solution[s]])
+        f.write(f"| Solutions with Content | {solutions_with_content} |\n")
+        f.write("\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        f.write("**Browse:**\n\n")
+        f.write("- [Solutions Index](../solutions-index.md)\n")
+        f.write("- [Connectors Index](../connectors-index.md)\n")
+        f.write("- [Tables Index](../tables-index.md)\n")
+    
+    print(f"Generated content index: {index_path}")
+
+
 def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path,
                        content_items_by_solution: Dict[str, List[Dict[str, str]]] = None) -> None:
     """Generate the main index page with table of all solutions.
@@ -1079,7 +1617,8 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write("**Browse by:**\n\n")
         f.write("- [Solutions](solutions-index.md) (this page)\n")
         f.write("- [Connectors](connectors-index.md)\n")
-        f.write("- [Tables](tables-index.md)\n\n")
+        f.write("- [Tables](tables-index.md)\n")
+        f.write("- [Content](content/content-index.md)\n\n")
         f.write("---\n\n")
         
         f.write("## Overview\n\n")
@@ -1368,7 +1907,8 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write("**Browse by:**\n\n")
         f.write("- [Solutions](solutions-index.md)\n")
         f.write("- [Connectors](connectors-index.md) (this page)\n")
-        f.write("- [Tables](tables-index.md)\n\n")
+        f.write("- [Tables](tables-index.md)\n")
+        f.write("- [Content](content-index.md)\n\n")
         f.write("---\n\n")
         
         f.write(f"## Overview\n\n")
@@ -1534,7 +2074,8 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         f.write("**Browse by:**\n\n")
         f.write("- [Solutions](solutions-index.md)\n")
         f.write("- [Connectors](connectors-index.md)\n")
-        f.write("- [Tables](tables-index.md) (this page)\n\n")
+        f.write("- [Tables](tables-index.md) (this page)\n")
+        f.write("- [Content](content-index.md)\n\n")
         f.write("---\n\n")
         
         f.write(f"## Overview\n\n")
@@ -1779,11 +2320,9 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                         solution_filename = sanitize_filename(solution_name) + ".md"
                         f.write(f"**In solution [{solution_name}](../solutions/{solution_filename}):**\n")
                         for item in sorted(sol_items, key=lambda x: x.get('content_name', '')):
-                            name = item.get('content_name', 'N/A')
-                            # Add link to GitHub file
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
-                            f.write(f"- {name_display}\n")
+                            # Link to content item page
+                            content_link = get_content_item_link(item, "../content/")
+                            f.write(f"- {content_link}\n")
                         f.write("\n")
             
             # Additional reference information
@@ -1814,6 +2353,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             f.write("- [← Back to Tables Index](../tables-index.md)\n")
             f.write("- [Solutions Index](../solutions-index.md)\n")
             f.write("- [Connectors Index](../connectors-index.md)\n")
+            f.write("- [Content Index](../content-index.md)\n")
         
         pages_created += 1
     
@@ -1973,7 +2513,12 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     f.write("\n\n")
             
             # Back navigation
-            f.write("[← Back to Connectors Index](../connectors-index.md)\n")
+            f.write("---\n\n")
+            f.write("**Browse:**\n\n")
+            f.write("- [← Back to Connectors Index](../connectors-index.md)\n")
+            f.write("- [Solutions Index](../solutions-index.md)\n")
+            f.write("- [Tables Index](../tables-index.md)\n")
+            f.write("- [Content Index](../content-index.md)\n")
         
         print(f"Generated connector page: {connector_path}")
 
@@ -2264,9 +2809,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
-                            # Add link to GitHub file
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
+                            # Link to content item page
+                            name_display = get_content_item_link(item, "../content/")
                             f.write(f"| {name_display} | {severity} | {tactics} | {tables_str} |\n")
                         f.write("\n")
                     
@@ -2279,8 +2823,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             name = item.get('content_name', 'N/A')
                             status_display = status.replace('_', ' ').title()
                             desc = item.get('content_description', '')[:150] + '...' if len(item.get('content_description', '')) > 150 else item.get('content_description', '') or '-'
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
+                            # Link to content item page
+                            name_display = get_content_item_link(item, "../content/")
                             f.write(f"| {name_display} | {status_display} | {desc} |\n")
                         f.write("\n")
                         
@@ -2294,9 +2838,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
-                            # Add link to GitHub file
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
+                            # Link to content item page
+                            name_display = get_content_item_link(item, "../content/")
                             f.write(f"| {name_display} | {tactics} | {tables_str} |\n")
                         f.write("\n")
                     
@@ -2309,8 +2852,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             name = item.get('content_name', 'N/A')
                             status_display = status.replace('_', ' ').title()
                             desc = item.get('content_description', '')[:150] + '...' if len(item.get('content_description', '')) > 150 else item.get('content_description', '') or '-'
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
+                            # Link to content item page
+                            name_display = get_content_item_link(item, "../content/")
                             f.write(f"| {name_display} | {status_display} | {desc} |\n")
                         f.write("\n")
                 else:
@@ -2324,8 +2867,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
+                            # Link to content item page
+                            name_display = get_content_item_link(item, "../content/")
                             f.write(f"| {name_display} | {tables_str} |\n")
                         f.write("\n")
                     else:
@@ -2337,8 +2880,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_with_usage(tables_with_usage)
-                            github_url = get_content_item_github_url(item)
-                            name_display = f"[{name}]({github_url})" if github_url else name
+                            # Link to content item page
+                            name_display = get_content_item_link(item, "../content/")
                             f.write(f"| {name_display} | {desc} | {tables_str} |\n")
                         f.write("\n")
         
@@ -2375,6 +2918,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         f.write("- [← Back to Solutions Index](../solutions-index.md)\n")
         f.write("- [Connectors Index](../connectors-index.md)\n")
         f.write("- [Tables Index](../tables-index.md)\n")
+        f.write("- [Content Index](../content-index.md)\n")
     
     print(f"Generated solution page: {solution_path}")
 
@@ -2637,6 +3181,7 @@ def main() -> None:
     generate_index_page(by_solution, args.output_dir, content_items_by_solution)
     generate_connectors_index(by_solution, args.output_dir)
     tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference, solution_table_content_types)
+    generate_content_index(content_items_by_solution, args.output_dir)
     
     # Generate individual connector pages
     generate_connector_pages(by_solution, args.output_dir, tables_reference, solutions_dir)
@@ -2649,6 +3194,9 @@ def main() -> None:
     
     # Generate individual table pages with content item references
     generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table)
+    
+    # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
+    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir)
     
     # Count unique connectors and tables
     all_connector_ids = set()
@@ -2665,9 +3213,11 @@ def main() -> None:
     print(f"  - Solutions index: {args.output_dir / 'solutions-index.md'}")
     print(f"  - Connectors index: {args.output_dir / 'connectors-index.md'}")
     print(f"  - Tables index: {args.output_dir / 'tables-index.md'}")
+    print(f"  - Content index: {args.output_dir / 'content-index.md'}")
     print(f"  - Solutions: {args.output_dir / 'solutions'}/ ({len(by_solution)} files)")
     print(f"  - Connectors: {args.output_dir / 'connectors'}/ ({len(all_connector_ids)} files)")
     print(f"  - Tables: {args.output_dir / 'tables'}/ ({table_pages_count} files)")
+    print(f"  - Content: {args.output_dir / 'content'}/ ({content_pages_count} files)")
 
 
 if __name__ == "__main__":

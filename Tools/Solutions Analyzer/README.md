@@ -46,16 +46,26 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
 - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor documentation
 
-**Connector Reference documentation in the connector-docs/ directory:**
+**📍 Connector Reference Documentation (External Repository):**
 
-- **[Solutions Index](connector-docs/solutions-index.md)** - All solutions organized alphabetically (with and without connectors)
-- **[Connectors Index](connector-docs/connectors-index.md)** - All unique connectors with metadata
-- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references, transformation support, and ingestion API compatibility (includes 1900+ tables from Azure Monitor reference)
-- **Individual Solution Pages** - Detailed pages for each solution with connector and **content item** tables (in [`solutions/`](connector-docs/solutions/) directory)
-- **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](connector-docs/connectors/) directory)
-- **Individual Table Pages** - Detailed pages for each table with metadata from Azure Monitor documentation (in [`tables/`](connector-docs/tables/) directory)
+> **Note:** The generated documentation has been moved to a separate repository to reduce the size of the Azure-Sentinel repo.
+> 
+> 🔗 **Full documentation:** [https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs](https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs)
 
-You can use these files directly without running the scripts. They are kept up-to-date with the Solutions directory.
+| Documentation | Direct Link |
+|:--------------|:------------|
+| **Solutions Index** | [View Solutions](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/solutions-index.md) |
+| **Connectors Index** | [View Connectors](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
+| **Tables Index** | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
+| **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content-index.md) |
+
+The documentation includes:
+- **485 Solutions** with connector and content item details
+- **524 Connectors** with collection methods and table mappings
+- **1,927 Tables** with schema from Azure Monitor documentation
+- **4,930+ Content Items** (analytic rules, hunting queries, playbooks, workbooks, parsers, watchlists)
+
+You can also generate documentation locally using the `--output-dir` parameter (see below).
 
 The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
 
@@ -72,16 +82,25 @@ python collect_table_info.py
 # 2. Generate connector/solution/table mappings (uses tables_reference.csv)
 python map_solutions_connectors_tables.py
 
-# 3. Generate documentation (uses both CSVs)
-python generate_connector_docs.py --skip-input-generation
+# 3. Generate documentation to a specific location
+python generate_connector_docs.py --skip-input-generation --output-dir "path/to/output"
 ```
 
 Or let the documentation generator handle everything:
 
 ```bash
 # This automatically runs steps 1-2 before generating docs
-python generate_connector_docs.py
+python generate_connector_docs.py --output-dir "path/to/output"
 ```
+
+### Command Line Options for generate_connector_docs.py
+
+| Option | Description |
+|:-------|:------------|
+| `--output-dir <path>` | Output directory for generated documentation (default: connector-docs/) |
+| `--skip-input-generation` | Skip running input CSV generation scripts |
+| `--solutions <name1> <name2>` | Generate docs only for specific solutions |
+| `--solutions-dir <path>` | Path to Solutions directory for reading additional markdown |
 
 ### Quick Reference
 
@@ -161,13 +180,22 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 
 ### v5.0
 
+**Content Item Documentation:**
+- Added individual documentation pages for each content item (analytics rules, hunting queries, playbooks, workbooks, etc.)
+- Each content item page includes: description, type, solution link, severity, tactics, techniques, tables used, and source file link
+- New Content Index page (`content-index.md`) provides overview with links to type-specific indexes
+- Type-specific index pages: `analytic-rules.md`, `hunting-queries.md`, `playbooks.md`, `workbooks.md`, `parsers.md`, `watchlists.md`
+- Analytic rules (2000+ items) have letter-based sub-pages (`analytic-rules-a.md`, etc.) for better navigation
+- Other content types use per-letter sections within a single page with proper anchor links
+- All content item references across solution and table pages now link to their dedicated documentation pages
+
 **Content Item Table Extraction:**
 - Added table extraction from solution content items (analytics rules, hunting queries, playbooks, workbooks, watchlists, summary rules)
 - Extracts tables from KQL queries in YAML files (Detections, Hunting Queries) and JSON files (Playbooks, Workbooks)
 - Solution pages now show tables used by each content item type
 - Playbook tables show read/write usage indicators: `(read)`, `(write)`, `(read/write)`
 - Solution README.md files are now included in solution documentation pages
-- **Internal tables**: Tables that are both written to AND read by the same solution (e.g., summarization tables) are now classified as "Internal" category and displayed separately in documentation
+- **Internal Use Tables**: Custom tables (_CL suffix) that are written by playbooks AND read by non-playbook content (analytics, hunting, workbooks) are marked as "Internal Use Tables"
 
 **Table Index Improvements:**
 - Tables index now includes ALL tables from Azure Monitor reference (`tables_reference.csv`), even if not used by any solution or connector
@@ -178,6 +206,7 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 - Content item table lists now use line breaks (`<br>`) instead of commas for better readability
 - Solutions/connectors lists in table documentation pages now use bullet points
 - Playbook tables display usage indicators showing if tables are read from, written to, or both
+- Navigation on all pages now includes Content Index link
 
 ### v4.2
 
