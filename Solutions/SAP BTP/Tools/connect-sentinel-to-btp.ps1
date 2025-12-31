@@ -117,6 +117,7 @@ $currentApiEndpoint = $null
 foreach ($subaccount in $subaccounts) {
     $subaccountName = $subaccount.SubaccountName
     $subaccountId = $subaccount.SubaccountId
+    $subaccountName = $subaccount.DisplayName
     $apiEndpoint = $subaccount.'cf-api-endpoint'
     $orgName = $subaccount.'cf-org-name'
     $spaceName = $subaccount.'cf-space-name'
