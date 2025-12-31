@@ -1,0 +1,78 @@
+id: 8e5f3a2c-9d1b-4c6e-a7f8-3b2d1e0c9a5f
+kind: Scheduled
+name: BTP - Build Work Zone unauthorized access and role tampering
+description: |
+  Identifies unauthorized OData access attempts and mass role/user deletions in SAP Build Work Zone 
+  Standard Edition. These events may indicate an attacker accessing restricted resources or 
+  removing access controls to cover their tracks.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078
+  - T1531
+  - T1070
+query: |
+  SAPBTPAuditLog_CL
+  | extend LogMessage = coalesce(tostring(Message.message), tostring(Message.data), tostring(Message))
+  | where LogMessage has_any ("Unauthorized access to the oData service", 
+                              "All roles for providerId", 
+                              "All users for providerId",
+                              "were deleted successfully",
+                              "were removed successfully")
+  | extend EventCategory = case(
+      LogMessage contains "Unauthorized access", "Unauthorized Access",
+      LogMessage contains "All roles" or LogMessage contains "All users", "Mass Deletion",
+      "Role Tampering"
+  )
+  | extend MessageText = case(
+      LogMessage contains "Unauthorized access to the oData service", "Unauthorized OData service access attempt",
+      LogMessage contains "All roles for providerId" and LogMessage contains "deleted", "Mass role deletion detected",
+      LogMessage contains "All users for providerId" and LogMessage contains "deleted", "Mass user deletion detected",
+      LogMessage contains "assignments were removed", "User/role assignments removed",
+      "Suspicious access control modification"
+  )
+  | extend ProviderId = extract(@"providerId\s+(\S+)", 1, LogMessage)
+  | project
+      TimeGenerated,
+      UserName,
+      MessageText,
+      EventCategory,
+      ProviderId,
+      Tenant,
+      CloudApp = "SAP Build Work Zone Standard Edition"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP Build Work Zone: {{MessageText}}'
+  alertDescriptionFormat: |
+    {{MessageText}} by {{UserName}} in tenant {{Tenant}}.
+    
+    This could indicate unauthorized access attempts or malicious removal of access controls.
+customDetails:
+  EventCategory: EventCategory
+  ProviderId: ProviderId
+version: 1.0.0
