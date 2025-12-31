@@ -13,27 +13,22 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [PDNS Block Data Connector](../connectors/pdnsblockdataconnector.md)
-
-**Publisher:** Nominet
-
-This application enables you to ingest your PDNS block data into your SIEM tool
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `PDNSBlockData_CL` |
-| **Connector Definition Files** | [PDNSBlockDataConnector_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PDNS%20Block%20Data%20Connector/Data%20Connectors/PDNSBlockDataConnector_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/pdnsblockdataconnector.md)
+- [PDNS Block Data Connector](../connectors/pdnsblockdataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `PDNSBlockData_CL` | [PDNS Block Data Connector](../connectors/pdnsblockdataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`PDNSBlockData_CL`](../tables/pdnsblockdata-cl.md) | [PDNS Block Data Connector](../connectors/pdnsblockdataconnector.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

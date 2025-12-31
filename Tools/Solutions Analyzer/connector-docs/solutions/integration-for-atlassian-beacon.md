@@ -13,28 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Atlassian Beacon Alerts](../connectors/atlassianbeaconalerts.md)
-
-**Publisher:** DEFEND Ltd.
-
-Atlassian Beacon is a cloud product that is built for Intelligent threat detection across the Atlassian platforms (Jira, Confluence, and Atlassian Admin). This can help users detect, investigate and respond to risky user activity for the Atlassian suite of products. The solution is  a custom data connector from DEFEND Ltd. that is used to visualize the alerts ingested from Atlassian Beacon to Microsoft Sentinel via a Logic App.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `atlassian_beacon_alerts_CL` |
-| **Connector Definition Files** | [AtlassianBeacon_DataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Integration%20for%20Atlassian%20Beacon/Data%20Connectors/AtlassianBeacon_DataConnector.json) |
-
-[→ View full connector details](../connectors/atlassianbeaconalerts.md)
+- [Atlassian Beacon Alerts](../connectors/atlassianbeaconalerts.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+### Internal Tables
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `atlassian_beacon_alerts_CL` | [Atlassian Beacon Alerts](../connectors/atlassianbeaconalerts.md) |
+The following **1 table(s)** are used internally by this solution's playbooks:
+
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`atlassian_beacon_alerts_CL`](../tables/atlassian-beacon-alerts-cl.md) | [Atlassian Beacon Alerts](../connectors/atlassianbeaconalerts.md) | Analytics, Playbooks (writes) |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Playbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Atlassian Beacon Alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Integration%20for%20Atlassian%20Beacon/Analytic%20Rules/AtlassianBeacon_High.yaml) | High | - | *Internal use:*<br>[`atlassian_beacon_alerts_CL`](../tables/atlassian-beacon-alerts-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Atlassian Beacon Integration](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Integration%20for%20Atlassian%20Beacon/Playbooks/Sync%20Alerts/azuredeploy.json) | This Logic App recieves a webhook from Atlassian Beacon and ingest the payload into Microsoft Sentin... | *Internal use:*<br>[`atlassian_beacon_alerts_CL`](../tables/atlassian-beacon-alerts-cl.md) *(write)* |
 
 ## Release Notes
 
@@ -45,4 +57,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 04-12-2023                     | Atlassian Beacon Payload update in Integration                           |
 | 3.0.0       | 24-10-2023                     | Initial Solution Release                                                 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

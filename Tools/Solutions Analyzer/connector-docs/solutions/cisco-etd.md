@@ -12,28 +12,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Cisco ETD](../connectors/ciscoetd.md)
-
-**Publisher:** Cisco
-
-The connector fetches data from ETD api for threat analysis
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CiscoETD_CL` |
-| **Connector Definition Files** | [CiscoETD_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ETD/Data%20Connectors/CiscoETD_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/ciscoetd.md)
+- [Cisco ETD](../connectors/ciscoetd.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CiscoETD_CL` | [Cisco ETD](../connectors/ciscoetd.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CiscoETD_CL`](../tables/ciscoetd-cl.md) | [Cisco ETD](../connectors/ciscoetd.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [CiscoETD](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ETD/Workbooks/CiscoETD.json) | [`CiscoETD_CL`](../tables/ciscoetd-cl.md) |
 
 ## Release Notes
 
@@ -41,4 +44,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 11-02-2024                 | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

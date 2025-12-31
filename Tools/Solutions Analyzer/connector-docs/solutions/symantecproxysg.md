@@ -13,28 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Symantec ProxySG](../connectors/symantecproxysg.md)
-
-**Publisher:** Symantec
-
-The [Symantec ProxySG](https://www.broadcom.com/products/cyber-security/network/gateway/proxy-sg-and-advanced-secure-gateway) allows you to easily connect your Symantec ProxySG logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigations. Integrating Symantec ProxySG with Microsoft Sentinel provides more visibility into your organization's network proxy traffic and will enhance security monitoring capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_Syslog_SymantecProxySG.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SymantecProxySG/Data%20Connectors/Connector_Syslog_SymantecProxySG.json) |
-
-[→ View full connector details](../connectors/symantecproxysg.md)
+- [[Deprecated] Symantec ProxySG](../connectors/symantecproxysg.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Symantec ProxySG](../connectors/symantecproxysg.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Symantec ProxySG](../connectors/symantecproxysg.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Excessive Denied Proxy Traffic](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SymantecProxySG/Analytic%20Rules/ExcessiveDeniedProxyTraffic.yaml) | Low | DefenseEvasion, CommandAndControl | [`Syslog`](../tables/syslog.md) |
+| [User Accessed Suspicious URL Categories](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SymantecProxySG/Analytic%20Rules/UserAccessedSuspiciousURLCategories.yaml) | Medium | InitialAccess, CommandAndControl | [`Syslog`](../tables/syslog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SymantecProxySG](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SymantecProxySG/Workbooks/SymantecProxySG.json) | [`Syslog`](../tables/syslog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SymantecProxySG](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SymantecProxySG/Parsers/SymantecProxySG.yaml) | - | - |
 
 ## Release Notes
 
@@ -46,4 +64,10 @@ This solution ingests data into **1 table(s)**:
 |             |                                |Deprecating data connectors                                           |
 | 3.0.0       | 06-11-2023                     | Modified the **Data Connector** with improved onboarding instructions and Optimized the **Parser** to process the logs with improved performance |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](../connectors/awscloudfrontccpdefinition.md)
-
-**Publisher:** Microsoft
-
-This data connector enables the integration of AWS CloudFront logs with Microsoft Sentinel to support advanced threat detection, investigation, and security monitoring. By utilizing Amazon S3 for log storage and Amazon SQS for message queuing, the connector reliably ingests CloudFront access logs into Microsoft Sentinel
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AWSCloudFront_AccessLog_CL` |
-| **Connector Definition Files** | [AWSCloudFrontLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AWS%20CloudFront/Data%20Connectors/AWSCloudFrontLog_CCF/AWSCloudFrontLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/awscloudfrontccpdefinition.md)
+- [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](../connectors/awscloudfrontccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AWSCloudFront_AccessLog_CL` | [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](../connectors/awscloudfrontccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AWSCloudFront_AccessLog_CL`](../tables/awscloudfront-accesslog-cl.md) | [Amazon Web Services CloudFront (via Codeless Connector Framework) (Preview)](../connectors/awscloudfrontccpdefinition.md) | - |
 
 ## Release Notes
 
@@ -42,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |------------|-------------------------------|----------------------------------------------------------------------------------------------|
 | 3.0.0      | 24-06-2025                    | Initial Solution Release. <br/>Added new CCF **Data Connector** 'AWSCloudFrontLog_CCF'       |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

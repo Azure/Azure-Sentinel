@@ -17,6 +17,21 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 2 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Retrieve Alert from Microsoft Sentinel and Trigger a Blink Workflow via Webhook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BlinkOps/Playbooks/Sentinel-Alert-Handler/azuredeploy.json) | Send a webhook request to a Blink workflow trigger whenever a new alert is created in Microsoft Sent... | - |
+| [Retrieve Incident from Microsoft Sentinel and Trigger a Blink Workflow via Webhook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BlinkOps/Playbooks/Sentinel-Incident-Handler/azuredeploy.json) | Send a webhook request to a Blink workflow trigger whenever a new Incident is created in Microsoft S... | - |
+
 ## Release Notes
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
@@ -25,4 +40,10 @@ This solution may contain other components such as analytics rules, workbooks, h
 | 3.0.1       | 10-07-2025                     | Addition of a new **playbook**      		                        |    
 | 3.0.0       | 20-05-2025                     | Initial Solution Release.            		                        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

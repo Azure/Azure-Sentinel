@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Cisco Application Centric Infrastructure](../connectors/ciscoaci.md)
-
-**Publisher:** Cisco
-
-[Cisco Application Centric Infrastructure (ACI)](https://www.cisco.com/c/en/us/solutions/collateral/data-center-virtualization/application-centric-infrastructure/solution-overview-c22-741487.html) data connector provides the capability to ingest [Cisco ACI logs](https://www.cisco.com/c/en/us/td/docs/switches/datacenter/aci/apic/sw/all/syslog/guide/b_ACI_System_Messages_Guide/m-aci-system-messages-reference.html) into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [CiscoACI_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ACI/Data%20Connectors/CiscoACI_Syslog.json) |
-
-[→ View full connector details](../connectors/ciscoaci.md)
+- [[Deprecated] Cisco Application Centric Infrastructure](../connectors/ciscoaci.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Cisco Application Centric Infrastructure](../connectors/ciscoaci.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Cisco Application Centric Infrastructure](../connectors/ciscoaci.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [CiscoACIEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ACI/Parsers/CiscoACIEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 24-12-2024                     | Removed Deprecated **Data connector**       |
 | 3.0.0       | 23-07-2024                     | Deprecating data connectors                 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

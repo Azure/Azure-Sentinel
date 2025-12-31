@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Juniper IDP](../connectors/juniperidp.md)
-
-**Publisher:** Juniper
-
-The [Juniper](https://www.juniper.net/) IDP data connector provides the capability to ingest [Juniper IDP](https://www.juniper.net/documentation/us/en/software/junos/idp-policy/topics/topic-map/security-idp-overview.html) events into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `JuniperIDP_CL` |
-| **Connector Definition Files** | [Connector_LogAnalytics_agent_JuniperIDP.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/JuniperIDP/Data%20Connectors/Connector_LogAnalytics_agent_JuniperIDP.json) |
-
-[→ View full connector details](../connectors/juniperidp.md)
+- [[Deprecated] Juniper IDP](../connectors/juniperidp.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `JuniperIDP_CL` | [[Deprecated] Juniper IDP](../connectors/juniperidp.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`JuniperIDP_CL`](../tables/juniperidp-cl.md) | [[Deprecated] Juniper IDP](../connectors/juniperidp.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [JuniperIDP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/JuniperIDP/Parsers/JuniperIDP.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 31-12-2024                     | Removed Deprecated **Data connector**                       |
 | 3.0.0       | 13-08-2024                     | Deprecating data connector                                  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

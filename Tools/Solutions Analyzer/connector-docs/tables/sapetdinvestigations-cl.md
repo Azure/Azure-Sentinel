@@ -1,15 +1,5 @@
 # SAPETDInvestigations_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `SAPETDInvestigations_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Analytic Rules (1)
+
+**In solution [SAP ETD Cloud](../solutions/sap-etd-cloud.md):**
+- [SAP ETD - Synch investigations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-SynchInvestigations.yaml)
 
 ---
 

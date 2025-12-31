@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPResourceManager`](../tables/gcpresourcemanager.md) | — | ✗ |
+| [`GCPResourceManager`](../tables/gcpresourcemanager.md) | ✓ | ✗ |
 
 ## Permissions
 

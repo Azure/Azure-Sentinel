@@ -13,41 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] iboss via Legacy Agent](../connectors/iboss.md)
-
-**Publisher:** iboss
-
-The [iboss](https://www.iboss.com) data connector enables you to seamlessly connect your Threat Console to Microsoft Sentinel and enrich your instance with iboss URL event logs. Our logs are forwarded in Common Event Format (CEF) over Syslog and the configuration required can be completed on the iboss platform without the use of a proxy. Take advantage of our connector to garner critical data points and gain insight into security threats.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [iboss_cef.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/iboss_cef.json) |
-
-[→ View full connector details](../connectors/iboss.md)
-
-### [iboss via AMA](../connectors/ibossama.md)
-
-**Publisher:** iboss
-
-The [iboss](https://www.iboss.com) data connector enables you to seamlessly connect your Threat Console to Microsoft Sentinel and enrich your instance with iboss URL event logs. Our logs are forwarded in Common Event Format (CEF) over Syslog and the configuration required can be completed on the iboss platform without the use of a proxy. Take advantage of our connector to garner critical data points and gain insight into security threats.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_ibossAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Data%20Connectors/template_ibossAMA.json) |
-
-[→ View full connector details](../connectors/ibossama.md)
+- [[Deprecated] iboss via Legacy Agent](../connectors/iboss.md)
+- [iboss via AMA](../connectors/ibossama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] iboss via Legacy Agent](../connectors/iboss.md), [iboss via AMA](../connectors/ibossama.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] iboss via Legacy Agent](../connectors/iboss.md), [iboss via AMA](../connectors/ibossama.md) | Workbooks |
+
+## Content Items
+
+This solution includes **3 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 2 |
+| Parsers | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ibossMalwareAndC2](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Workbooks/ibossMalwareAndC2.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [ibossWebUsage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Workbooks/ibossWebUsage.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ibossUrlEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/iboss/Parsers/ibossUrlEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -59,4 +58,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 12-07-2024                     |    Deprecating data connectors                                     |
 | 3.0.0       | 20-09-2023                     |	Addition of new Iboss AMA **Data Connector**                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

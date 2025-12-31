@@ -1,15 +1,5 @@
 # CynerioEvent_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `CynerioEvent_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,24 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Cynerio Security Events](../connectors/cyneriosecurityevents.md)
+
+---
+
+## Content Items Using This Table (6)
+
+### Analytic Rules (5)
+
+**In solution [Cynerio](../solutions/cynerio.md):**
+- [Cynerio - Exploitation Attempt of IoT device](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Analytic%20Rules/IoTExploitationAttempts.yaml)
+- [Cynerio - IoT - Default password](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Analytic%20Rules/IoTDefaultPasswords.yaml)
+- [Cynerio - IoT - Weak password](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Analytic%20Rules/IoTWeakPasswords.yaml)
+- [Cynerio - Medical device scanning](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Analytic%20Rules/MedicalDeviceScanning.yaml)
+- [Cynerio - Suspicious Connection to External Address](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Analytic%20Rules/SuspiciousConnections.yaml)
+
+### Workbooks (1)
+
+**In solution [Cynerio](../solutions/cynerio.md):**
+- [CynerioOverviewWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cynerio/Workbooks/CynerioOverviewWorkbook.json)
 
 ---
 

@@ -13,27 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Talon Insights](../connectors/talonlogs.md)
-
-**Publisher:** Talon Security
-
-The Talon Security Logs connector allows you to easily connect your Talon events and audit logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Talon_CL` |
-| **Connector Definition Files** | [TalonLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Talon/Data%20Connectors/TalonLogs.json) |
-
-[→ View full connector details](../connectors/talonlogs.md)
+- [Talon Insights](../connectors/talonlogs.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Talon_CL` | [Talon Insights](../connectors/talonlogs.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Talon_CL`](../tables/talon-cl.md) | [Talon Insights](../connectors/talonlogs.md) | Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [TalonInsights](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Talon/Workbooks/TalonInsights.json) | [`Talon_CL`](../tables/talon-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

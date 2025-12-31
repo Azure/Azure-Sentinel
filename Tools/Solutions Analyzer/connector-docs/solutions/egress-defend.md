@@ -13,28 +13,53 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Egress Defend](../connectors/egressdefendpolling.md)
-
-**Publisher:** Egress Software Technologies
-
-The Egress Defend audit connector provides the capability to ingest Egress Defend Data into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `EgressDefend_CL` |
-| **Connector Definition Files** | [DefendAPIConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Data%20Connectors/DefendAPIConnector.json) |
-
-[→ View full connector details](../connectors/egressdefendpolling.md)
+- [Egress Defend](../connectors/egressdefendpolling.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `EgressDefend_CL` | [Egress Defend](../connectors/egressdefendpolling.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`EgressDefend_CL`](../tables/egressdefend-cl.md) | [Egress Defend](../connectors/egressdefendpolling.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Hunting Queries | 1 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Egress Defend - Dangerous Attachment Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Analytic%20Rules/DangerousAttachmentReceived.yaml) | Medium | Execution, InitialAccess, Persistence, PrivilegeEscalation | [`EgressDefend_CL`](../tables/egressdefend-cl.md) |
+| [Egress Defend - Dangerous Link Click](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Analytic%20Rules/DangerousLinksClicked.yaml) | Medium | Execution | [`EgressDefend_CL`](../tables/egressdefend-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Dangerous emails with links clicked](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Hunting%20Queries/DangerousLinksClicked.yaml) | Collection | [`EgressDefend_CL`](../tables/egressdefend-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [DefendMetrics](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Workbooks/DefendMetrics.json) | [`EgressDefend_CL`](../tables/egressdefend-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [DefendAuditData](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Parsers/DefendAuditData.yaml) | - | - |
 
 ## Release Notes
 
@@ -42,4 +67,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 02-08-2023                     | Initial Solution Release.                   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

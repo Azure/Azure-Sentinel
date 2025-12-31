@@ -14,32 +14,64 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Jamf Protect Push Connector](../connectors/jamfprotectpush.md)
-
-**Publisher:** Jamf
-
-The [Jamf Protect](https://www.jamf.com/products/jamf-protect/) connector provides the capability to read raw event data from Jamf Protect in Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `jamfprotectalerts_CL` |
-| | `jamfprotecttelemetryv2_CL` |
-| | `jamfprotectunifiedlogs_CL` |
-| **Connector Definition Files** | [connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Data%20Connectors/JamfProtect_ccp/connectorDefinition.json) |
-
-[→ View full connector details](../connectors/jamfprotectpush.md)
+- [Jamf Protect Push Connector](../connectors/jamfprotectpush.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **5 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `jamfprotectalerts_CL` | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) |
-| `jamfprotecttelemetryv2_CL` | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) |
-| `jamfprotectunifiedlogs_CL` | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`JamfProtect`](../tables/jamfprotect.md) | - | Workbooks |
+| [`jamfprotect_CL`](../tables/jamfprotect-cl.md) | - | Analytics |
+| [`jamfprotectalerts_CL`](../tables/jamfprotectalerts-cl.md) | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) | Analytics, Workbooks |
+| [`jamfprotecttelemetryv2_CL`](../tables/jamfprotecttelemetryv2-cl.md) | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) | Workbooks |
+| [`jamfprotectunifiedlogs_CL`](../tables/jamfprotectunifiedlogs-cl.md) | [Jamf Protect Push Connector](../connectors/jamfprotectpush.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **12 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 5 |
+| Analytic Rules | 3 |
+| Playbooks | 3 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Jamf Protect - Alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Analytic%20Rules/JamfProtectAlerts.yaml) | High | - | [`jamfprotectalerts_CL`](../tables/jamfprotectalerts-cl.md) |
+| [Jamf Protect - Network Threats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Analytic%20Rules/JamfProtectNetworkThreats.yaml) | Informational | InitialAccess | [`jamfprotect_CL`](../tables/jamfprotect-cl.md) |
+| [Jamf Protect - Unified Logs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Analytic%20Rules/JamfProtectUnifiedLogs.yaml) | Informational | - | [`jamfprotectunifiedlogs_CL`](../tables/jamfprotectunifiedlogs-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [JamfProtectDashboard](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Workbooks/JamfProtectDashboard.json) | [`JamfProtect`](../tables/jamfprotect.md)<br>[`jamfprotectalerts_CL`](../tables/jamfprotectalerts-cl.md)<br>[`jamfprotecttelemetryv2_CL`](../tables/jamfprotecttelemetryv2-cl.md)<br>[`jamfprotectunifiedlogs_CL`](../tables/jamfprotectunifiedlogs-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Jamf Protect - Remote lock computer with Jamf Pro](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Playbooks/JamfProtect_LockComputer_with_JamfPro/azuredeploy.json) | This Playbook can be used manually or in a Automation Rule to send an remote MDM command with Jamf P... | - |
+| [Jamf Protect - Set Alert to In Progress](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Playbooks/JamfProtect_Alert_Status_InProgress/azuredeploy.json) | This Jamf Protect Playbook can be used manually or in a Automation Rule to change the state of the A... | - |
+| [Jamf Protect - Set Alert to Resolved](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Playbooks/JamfProtect_Alert_Status_Resolved/azuredeploy.json) | This Jamf Protect Playbook can be used manually or in a Automation Rule to change the state of the A... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [JamfProtectAlerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Parsers/JamfProtectAlerts.yaml) | - | - |
+| [JamfProtectNetworkTraffic](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Parsers/JamfProtectNetworkTraffic.yaml) | - | - |
+| [JamfProtectTelemetry](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Parsers/JamfProtectTelemetry.yaml) | - | - |
+| [JamfProtectThreatEvents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Parsers/JamfProtectThreatEvents.yaml) | - | - |
+| [JamfProtectUnifiedLogs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Jamf%20Protect/Parsers/JamfProtectUnifiedLogs.yaml) | - | - |
 
 ## Release Notes
 
@@ -62,4 +94,10 @@ This solution ingests data into **3 table(s)**:
 |             |                                | Improved **Workbook** and added Endpoint Telemetry
 | 2.0.0       | 12-10-2022                     | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

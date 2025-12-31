@@ -14,28 +14,47 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Cybersixgill Actionable Alerts](../connectors/cybersixgillactionablealerts.md)
-
-**Publisher:** Cybersixgill
-
-Actionable alerts provide customized alerts based on configured assets
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CyberSixgill_Alerts_CL` |
-| **Connector Definition Files** | [Cybersixgill_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cybersixgill-Actionable-Alerts/Data%20Connectors/Cybersixgill_FunctionApp.json) |
-
-[→ View full connector details](../connectors/cybersixgillactionablealerts.md)
+- [Cybersixgill Actionable Alerts](../connectors/cybersixgillactionablealerts.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CyberSixgill_Alerts_CL` | [Cybersixgill Actionable Alerts](../connectors/cybersixgillactionablealerts.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CyberSixgill_Alerts_CL`](../tables/cybersixgill-alerts-cl.md) | [Cybersixgill Actionable Alerts](../connectors/cybersixgillactionablealerts.md) | Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 2 |
+| Playbooks | 2 |
+| Hunting Queries | 1 |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Cybersixgill Actionable alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cybersixgill-Actionable-Alerts/Hunting%20Queries/ActionableAlerts.yaml) | - | [`CyberSixgill_Alerts_CL`](../tables/cybersixgill-alerts-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ActionableAlertsDashboard](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cybersixgill-Actionable-Alerts/Workbooks/ActionableAlertsDashboard.json) | [`CyberSixgill_Alerts_CL`](../tables/cybersixgill-alerts-cl.md) |
+| [ActionableAlertsList](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cybersixgill-Actionable-Alerts/Workbooks/ActionableAlertsList.json) | [`CyberSixgill_Alerts_CL`](../tables/cybersixgill-alerts-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Cybersixgill-Alert-Status-Update](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cybersixgill-Actionable-Alerts/Playbooks/CybersixgillAlertStatusUpdate/azuredeploy.json) | This playbook will update status of Cybersixgill Alerts when respective incident status is updated i... | - |
+| [Delete-Cybersixgill-Alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cybersixgill-Actionable-Alerts/Playbooks/DeleteCybersixgillAlert/azuredeploy.json) | This playbook will delete Alert on Cybersixgill portal when resective Incident is deleted in Microso... | - |
 
 ## Release Notes
 
@@ -44,4 +63,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 02-09-2024                     | Updated the python runtime version to 3.11  |
 | 3.0.0       | 20-02-2024                     | Replaced Hyperlinks with Shortlinks (aka.ms) in Data Connector |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,54 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Windows Firewall](../connectors/windowsfirewall.md)
-
-**Publisher:** Microsoft
-
-Windows Firewall is a Microsoft Windows application that filters information coming to your system from the Internet and blocking potentially harmful programs. The software blocks most programs from communicating through the firewall. Users simply add a program to the list of allowed programs to allow it to communicate through the firewall. When using a public network, Windows Firewall can also secure the system by blocking all unsolicited attempts to connect to your computer. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219791&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `WindowsFirewall` |
-| **Connector Definition Files** | [Windows%20Firewall.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/Windows%20Firewall.JSON) |
-
-[→ View full connector details](../connectors/windowsfirewall.md)
-
-### [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md)
-
-**Publisher:** Microsoft
-
-Windows Firewall is a Microsoft Windows application that filters information coming to your system from the internet and blocking potentially harmful programs. The firewall software blocks most programs from communicating through the firewall. To stream your Windows Firewall application logs collected from your machines, use the Azure Monitor agent (AMA) to stream those logs to the Microsoft Sentinel workspace.
-
-
-
-A configured data collection endpoint (DCE) is required to be linked with the data collection rule (DCR) created for the AMA to collect logs. For this connector, a DCE is automatically created in the same region as the workspace. If you already use a DCE stored in the same region, it's possible to change the default created DCE and use your existing one through the API. DCEs can be located in your resources with **SentinelDCE** prefix in the resource name.
-
-
-
-For more information, see the following articles:
-
-- [Data collection endpoints in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-endpoint-overview?tabs=portal)
-
-- [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2228623&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci)
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ASimNetworkSessionLogs` |
-| **Connector Definition Files** | [template_WindowsFirewallAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Data%20Connectors/template_WindowsFirewallAma.JSON) |
-
-[→ View full connector details](../connectors/windowsfirewallama.md)
+- [Windows Firewall](../connectors/windowsfirewall.md)
+- [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **5 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ASimNetworkSessionLogs` | [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md) |
-| `WindowsFirewall` | [Windows Firewall](../connectors/windowsfirewall.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ASimNetworkSessionLogs`](../tables/asimnetworksessionlogs.md) | [Windows Firewall Events via AMA](../connectors/windowsfirewallama.md) | - |
+| [`Heartbeat`](../tables/heartbeat.md) | - | Workbooks |
+| [`SecurityEvent`](../tables/securityevent.md) | - | Workbooks |
+| [`SigninLogs`](../tables/signinlogs.md) | - | Workbooks |
+| [`WindowsFirewall`](../tables/windowsfirewall.md) | [Windows Firewall](../connectors/windowsfirewall.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [WindowsFirewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Firewall/Workbooks/WindowsFirewall.json) | [`Heartbeat`](../tables/heartbeat.md)<br>[`SecurityEvent`](../tables/securityevent.md)<br>[`SigninLogs`](../tables/signinlogs.md)<br>[`WindowsFirewall`](../tables/windowsfirewall.md) |
 
 ## Release Notes
 
@@ -71,4 +53,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       | 27-10-2023                     | New **Data Connector** added WindowsFirewallAma    |
 | 3.0.0       | 19-07-2023                     | Initial Solution Release                           |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -1,15 +1,5 @@
 # Pathlock_TDnR_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Pathlock_TDnR_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Pathlock Threat Detection and Response Integration](../connectors/pathlock-tdnr.md)
+
+---
 
 ---
 

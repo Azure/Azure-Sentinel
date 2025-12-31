@@ -1,15 +1,5 @@
 # PaloAltoCortexXDR_Endpoints_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `PaloAltoCortexXDR_Endpoints_CL` |
-| **Solutions Using Table** | 2 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (2)
 
 This table is used by the following solutions:
@@ -22,6 +12,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Palo Alto Cortex XDR](../connectors/cortexxdrdataconnector.md)
+
+---
 
 ---
 

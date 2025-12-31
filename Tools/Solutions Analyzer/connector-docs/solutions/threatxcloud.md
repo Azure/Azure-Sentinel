@@ -18,4 +18,25 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 2 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Block IP & URL on ThreatX-WAF cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ThreatXCloud/Playbooks/ThreatXPlaybooks/ThreatX-BlockIP-URL/azuredeploy.json) | This Playbook Provides the automation on blocking the suspicious/malicious IP and URL on ThreatX clo... | - |
+| [Fetch Threat Intel from ThreatX](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ThreatXCloud/Playbooks/ThreatXPlaybooks/ThreatX-Enrichment/azuredeploy.json) | This playbook provides/updates the threat intel and essential details in comments section of trigger... | - |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

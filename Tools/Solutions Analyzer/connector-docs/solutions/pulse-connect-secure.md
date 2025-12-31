@@ -13,28 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Pulse Connect Secure](../connectors/pulseconnectsecure.md)
-
-**Publisher:** Pulse Secure
-
-The [Pulse Connect Secure](https://www.pulsesecure.net/products/pulse-connect-secure/) connector allows you to easily connect your Pulse Connect Secure logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigations. Integrating Pulse Connect Secure with Microsoft Sentinel provides more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_Syslog_PulseConnectSecure.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pulse%20Connect%20Secure/Data%20Connectors/Connector_Syslog_PulseConnectSecure.json) |
-
-[→ View full connector details](../connectors/pulseconnectsecure.md)
+- [[Deprecated] Pulse Connect Secure](../connectors/pulseconnectsecure.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Pulse Connect Secure](../connectors/pulseconnectsecure.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Pulse Connect Secure](../connectors/pulseconnectsecure.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [PulseConnectSecure - Large Number of Distinct Failed User Logins](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pulse%20Connect%20Secure/Analytic%20Rules/PulseConnectSecureVPN-DistinctFailedUserLogin.yaml) | Medium | CredentialAccess | [`Syslog`](../tables/syslog.md) |
+| [PulseConnectSecure - Potential Brute Force Attempts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pulse%20Connect%20Secure/Analytic%20Rules/PulseConnectSecureVPN-BruteForce.yaml) | Low | CredentialAccess | [`Syslog`](../tables/syslog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [PulseConnectSecure](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pulse%20Connect%20Secure/Workbooks/PulseConnectSecure.json) | [`Syslog`](../tables/syslog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [PulseConnectSecure](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Pulse%20Connect%20Secure/Parsers/PulseConnectSecure.yaml) | - | - |
 
 ## Release Notes
 
@@ -47,4 +65,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 13-12-2023                     | Updated  broken link in **Data Connector**          |
 | 3.0.0       | 20-07-2023                     | Corrected the links in the solution.                |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

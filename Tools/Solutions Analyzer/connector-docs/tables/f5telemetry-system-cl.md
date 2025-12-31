@@ -1,15 +1,5 @@
 # F5Telemetry_system_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `F5Telemetry_system_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [F5 BIG-IP](../connectors/f5bigip.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Workbooks (2)
+
+**In solution [F5 BIG-IP](../solutions/f5-big-ip.md):**
+- [F5BIGIPSystemMetrics](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20BIG-IP/Workbooks/F5BIGIPSystemMetrics.json)
+- [F5Networks](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20BIG-IP/Workbooks/F5Networks.json)
 
 ---
 

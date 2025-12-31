@@ -13,28 +13,43 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SAP BTP](../connectors/sapbtpauditevents.md)
-
-**Publisher:** Microsoft
-
-SAP Business Technology Platform (SAP BTP) brings together data management, analytics, artificial intelligence, application development, automation, and integration in one, unified environment.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SAPBTPAuditLog_CL` |
-| **Connector Definition Files** | [SAPBTP_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Data%20Connectors/SAPBTPPollerConnector/SAPBTP_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/sapbtpauditevents.md)
+- [SAP BTP](../connectors/sapbtpauditevents.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SAPBTPAuditLog_CL` | [SAP BTP](../connectors/sapbtpauditevents.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md) | [SAP BTP](../connectors/sapbtpauditevents.md) | Analytics, Workbooks |
+| [`user_account_changes`](../tables/user-account-changes.md) | - | Workbooks |
+
+## Content Items
+
+This solution includes **6 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 5 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [BTP - Failed access attempts across multiple BAS subaccounts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Failed%20access%20attempts%20across%20multiple%20BAS%20subaccounts.yaml) | Medium | Reconnaissance, Discovery | [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md) |
+| [BTP - Malware detected in BAS dev space](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Malware%20detected%20in%20BAS%20dev%20space.yaml) | Medium | ResourceDevelopment, Execution, Persistence | [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md) |
+| [BTP - Mass user deletion in a sub account](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Mass%20user%20deletion%20in%20a%20sub%20account.yaml) | Medium | Impact | [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md) |
+| [BTP - Trust and authorization Identity Provider monitor](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20Trust%20and%20authorization%20Identity%20Provider%20monitor.yaml) | Medium | CredentialAccess, PrivilegeEscalation | [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md) |
+| [BTP - User added to sensitive privileged role collection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Analytic%20Rules/BTP%20-%20User%20added%20to%20sensitive%20privileged%20role%20collection.yaml) | Low | LateralMovement, PrivilegeEscalation | [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SAPBTPActivity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20BTP/Workbooks/SAPBTPActivity.json) | [`SAPBTPAuditLog_CL`](../tables/sapbtpauditlog-cl.md)<br>[`user_account_changes`](../tables/user-account-changes.md) |
 
 ## Release Notes
 
@@ -51,4 +66,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.2       | 21-03-2024                     |Fix data connector version mismatch|
 | 3.0.1       | 19-03-2024                     |Add data connector based on CCP with support for multiple subaccounts|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPCDN`](../tables/gcpcdn.md) | — | ✗ |
+| [`GCPCDN`](../tables/gcpcdn.md) | ✓ | ✗ |
 
 ## Permissions
 

@@ -13,28 +13,70 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Cisco Duo Security](../connectors/ciscoduosecurity.md)
-
-**Publisher:** Cisco
-
-The Cisco Duo Security data connector provides the capability to ingest [authentication logs](https://duo.com/docs/adminapi#authentication-logs), [administrator logs](https://duo.com/docs/adminapi#administrator-logs), [telephony logs](https://duo.com/docs/adminapi#telephony-logs), [offline enrollment logs](https://duo.com/docs/adminapi#offline-enrollment-logs) and [Trust Monitor events](https://duo.com/docs/adminapi#trust-monitor) into Microsoft Sentinel using the Cisco Duo Admin API. Refer to [API documentation](https://duo.com/docs/adminapi) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CiscoDuo_CL` |
-| **Connector Definition Files** | [CiscoDuo_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Data%20Connectors/CiscoDuo_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/ciscoduosecurity.md)
+- [Cisco Duo Security](../connectors/ciscoduosecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CiscoDuo_CL` | [Cisco Duo Security](../connectors/ciscoduosecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) | [Cisco Duo Security](../connectors/ciscoduosecurity.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **22 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Cisco Duo - AD sync failed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoADSyncFailed.yaml) | Medium | Impact | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Admin password reset](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoAdminPasswordReset.yaml) | High | Persistence | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Admin user created](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoNewAdmin.yaml) | Medium | Persistence, PrivilegeEscalation | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Admin user deleted](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoAdminDeleted.yaml) | Medium | Impact | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Authentication device new location](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoNewAuthDeviceLocation.yaml) | Medium | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Multiple admin 2FA failures](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoAdminMFAFailures.yaml) | High | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Multiple user login failures](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoMultipleUserLoginFailures.yaml) | High | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Multiple users deleted](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoMultipleUsersDeleted.yaml) | Medium | Impact | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - New access device](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoNewAccessDevice.yaml) | Medium | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Unexpected authentication factor](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Analytic%20Rules/CiscoDuoUnexpectedAuthFactor.yaml) | Medium | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Cisco Duo - Admin failure authentications](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoAdmin2FAFailure.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Admin failure authentications](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoAdminFailure.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Authentication error reasons](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoAuthenticationErrorReasons.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Authentication errors](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoAuthenticationErrorEvents.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Delete actions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoAdminDeleteActions.yaml) | Impact | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Deleted users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoDeletedUsers.yaml) | Impact | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Devices with unsecure settings](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoUnsecuredDevices.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Devices with vulnerable OS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoUnpachedAccessDevices.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - Fraud authentications](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoFraudAuthentication.yaml) | InitialAccess | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+| [Cisco Duo - New users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Hunting%20Queries/CiscoDuoNewUsers.yaml) | InitialAccess, Persistence | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [CiscoDuo](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Workbooks/CiscoDuo.json) | [`CiscoDuo_CL`](../tables/ciscoduo-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [CiscoDuo](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoDuoSecurity/Parsers/CiscoDuo.yaml) | - | - |
 
 ## Release Notes
 
@@ -46,4 +88,10 @@ This solution ingests data into **1 table(s)**:
 |  3.0.1      |  30-01-2024                    | Updated solution to fix **parser** query                   |
 |  3.0.0      |  08-01-2024                    | Updated solution to fix Api version of saved searches  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

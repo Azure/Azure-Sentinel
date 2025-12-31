@@ -13,28 +13,38 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [QscoutAppEventsConnector](../connectors/qscoutappeventsccfdefinition.md)
-
-**Publisher:** Quokka
-
-Ingest Qscout application events into Microsoft Sentinel
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `QscoutAppEvents_CL` |
-| **Connector Definition Files** | [QuokkaQscoutAppEventsLogs_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Quokka/Data%20Connectors/QuokkaQscoutAppEventsLogs_ccf/QuokkaQscoutAppEventsLogs_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/qscoutappeventsccfdefinition.md)
+- [QscoutAppEventsConnector](../connectors/qscoutappeventsccfdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `QscoutAppEvents_CL` | [QscoutAppEventsConnector](../connectors/qscoutappeventsccfdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`QscoutAppEvents_CL`](../tables/qscoutappevents-cl.md) | [QscoutAppEventsConnector](../connectors/qscoutappeventsccfdefinition.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Quokka - Malicious Results Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Quokka/Analytic%20Rules/MaliciousResultsDetection.yaml) | Medium | InitialAccess, Execution, Persistence, PrivilegeEscalation, DefenseEvasion, CredentialAccess, Discovery, Collection, CommandAndControl, Impact | [`QscoutAppEvents_CL`](../tables/qscoutappevents-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [QscoutDashboards](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Quokka/Workbooks/QscoutDashboards.json) | [`QscoutAppEvents_CL`](../tables/qscoutappevents-cl.md) |
 
 ## Release Notes
 
@@ -42,4 +52,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------------------|
 | 3.0.0       | 07-11-2025                     | Initial Solution Release for Quokka **CCF Data Connector** with an Analytic Rule and a Workbook        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

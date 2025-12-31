@@ -13,27 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Noname Security for Microsoft Sentinel](../connectors/nonamesecuritymicrosoftsentinel.md)
-
-**Publisher:** Noname Security
-
-Noname Security solution to POST data into a Microsoft Sentinel SIEM workspace via the Azure Monitor REST API
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `NonameAPISecurityAlert_CL` |
-| **Connector Definition Files** | [Connector_RESTAPI_NonameSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NonameSecurity/Data%20Connectors/Connector_RESTAPI_NonameSecurity.json) |
-
-[→ View full connector details](../connectors/nonamesecuritymicrosoftsentinel.md)
+- [Noname Security for Microsoft Sentinel](../connectors/nonamesecuritymicrosoftsentinel.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `NonameAPISecurityAlert_CL` | [Noname Security for Microsoft Sentinel](../connectors/nonamesecuritymicrosoftsentinel.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`NonameAPISecurityAlert_CL`](../tables/nonameapisecurityalert-cl.md) | [Noname Security for Microsoft Sentinel](../connectors/nonamesecuritymicrosoftsentinel.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Additional Documentation
+
+> 📄 *Source: [NonameSecurity/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NonameSecurity/README.md)*
+
+Noname API Security Solution for Microsoft Sentinel
+
+Noname Security Workflow integration to Microsoft Sentinel
+to send alerts via Azure Monitor API POST or Azure Monitor Private Link Services
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

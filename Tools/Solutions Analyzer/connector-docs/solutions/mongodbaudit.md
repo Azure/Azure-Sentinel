@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] MongoDB Audit](../connectors/mongodb.md)
-
-**Publisher:** MongoDB
-
-MongoDB data connector provides the capability to ingest [MongoDBAudit](https://www.mongodb.com/) into Microsoft Sentinel. Refer to [MongoDB documentation](https://www.mongodb.com/docs/manual/tutorial/getting-started/) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `MongoDBAudit_CL` |
-| **Connector Definition Files** | [Connector_MongoDBAudit.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MongoDBAudit/Data%20Connectors/Connector_MongoDBAudit.json) |
-
-[→ View full connector details](../connectors/mongodb.md)
+- [[Deprecated] MongoDB Audit](../connectors/mongodb.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `MongoDBAudit_CL` | [[Deprecated] MongoDB Audit](../connectors/mongodb.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`MongoDBAudit_CL`](../tables/mongodbaudit-cl.md) | [[Deprecated] MongoDB Audit](../connectors/mongodb.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [MongoDBAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MongoDBAudit/Parsers/MongoDBAudit.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 23-12-2024                     | Removed Deprecated **Data connector**       |
 | 3.0.0       |  08-08-2024                    | Deprecating data connectors                 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

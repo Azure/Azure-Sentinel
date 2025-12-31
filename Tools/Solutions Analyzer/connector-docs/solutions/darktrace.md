@@ -13,27 +13,45 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Darktrace Connector for Microsoft Sentinel REST API](../connectors/darktracerestconnector.md)
-
-**Publisher:** Darktrace
-
-The Darktrace REST API connector pushes real-time events from Darktrace to Microsoft Sentinel and is designed to be used with the Darktrace Solution for Sentinel. The connector writes logs to a custom log table titled "darktrace_model_alerts_CL"; Model Breaches, AI Analyst Incidents, System Alerts and Email Alerts can be ingested - additional filters can be set up on the Darktrace System Configuration page. Data is pushed to Sentinel from Darktrace masters.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `darktrace_model_alerts_CL` |
-| **Connector Definition Files** | [DarktraceConnectorRESTAPI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Darktrace/Data%20Connectors/DarktraceConnectorRESTAPI.json) |
-
-[→ View full connector details](../connectors/darktracerestconnector.md)
+- [Darktrace Connector for Microsoft Sentinel REST API](../connectors/darktracerestconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `darktrace_model_alerts_CL` | [Darktrace Connector for Microsoft Sentinel REST API](../connectors/darktracerestconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`darktrace_model_alerts_CL`](../tables/darktrace-model-alerts-cl.md) | [Darktrace Connector for Microsoft Sentinel REST API](../connectors/darktracerestconnector.md) | Analytics, Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 3 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Darktrace AI Analyst](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Darktrace/Analytic%20Rules/CreateIncidentFromAIAnalystIncident.yaml) | High | - | [`darktrace_model_alerts_CL`](../tables/darktrace-model-alerts-cl.md) |
+| [Darktrace Model Breach](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Darktrace/Analytic%20Rules/CreateAlertFromModelBreach.yaml) | Medium | - | [`darktrace_model_alerts_CL`](../tables/darktrace-model-alerts-cl.md) |
+| [Darktrace System Status](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Darktrace/Analytic%20Rules/CreateAlertFromSystemStatus.yaml) | Informational | - | [`darktrace_model_alerts_CL`](../tables/darktrace-model-alerts-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [DarktraceWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Darktrace/Workbooks/DarktraceWorkbook.json) | [`darktrace_model_alerts_CL`](../tables/darktrace-model-alerts-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

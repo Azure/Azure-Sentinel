@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Squid Proxy](../connectors/squidproxy.md)
-
-**Publisher:** Squid
-
-The [Squid Proxy](http://www.squid-cache.org/) connector allows you to easily connect your Squid Proxy logs with Microsoft Sentinel. This gives you more insight into your organization's network proxy traffic and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SquidProxy_CL` |
-| **Connector Definition Files** | [Connector_CustomLog_SquidProxy.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SquidProxy/Data%20Connectors/Connector_CustomLog_SquidProxy.json) |
-
-[→ View full connector details](../connectors/squidproxy.md)
+- [[Deprecated] Squid Proxy](../connectors/squidproxy.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SquidProxy_CL` | [[Deprecated] Squid Proxy](../connectors/squidproxy.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SquidProxy_CL`](../tables/squidproxy-cl.md) | [[Deprecated] Squid Proxy](../connectors/squidproxy.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SquidProxy](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SquidProxy/Parsers/SquidProxy.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +47,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 16-12-2024                     | Removed Deprecated **Data Connector**                       |
 | 3.0.0       | 12-08-2024                     | Deprecating **Data Connector**                              |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

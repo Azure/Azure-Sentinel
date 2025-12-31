@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AzureActivity`](../tables/azureactivity.md) | — | ✗ |
+| [`AzureActivity`](../tables/azureactivity.md) | ✗ | ✗ |
 
 ## Permissions
 

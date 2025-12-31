@@ -13,28 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Awake Security via Legacy Agent](../connectors/aristaawakesecurity.md)
-
-**Publisher:** Arista Networks
-
-The Awake Security CEF connector allows users to send detection model matches from the Awake Security Platform to Microsoft Sentinel. Remediate threats quickly with the power of network detection and response and speed up investigations with deep visibility especially into unmanaged entities including users, devices and applications on your network. The connector also enables the creation of network security-focused custom alerts, incidents, workbooks and notebooks that align with your existing security operations workflows. 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_AristaAwakeSecurity_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AristaAwakeSecurity/Data%20Connectors/Connector_AristaAwakeSecurity_CEF.json) |
-
-[→ View full connector details](../connectors/aristaawakesecurity.md)
+- [[Deprecated] Awake Security via Legacy Agent](../connectors/aristaawakesecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Awake Security via Legacy Agent](../connectors/aristaawakesecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Awake Security via Legacy Agent](../connectors/aristaawakesecurity.md) | Analytics |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 3 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Awake Security - High Match Counts By Device](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AristaAwakeSecurity/Analytic%20Rules/HighMatchCountsByDevice.yaml) | Medium | - | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Awake Security - High Severity Matches By Device](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AristaAwakeSecurity/Analytic%20Rules/HighSeverityMatchesByDevice.yaml) | Medium | - | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Awake Security - Model With Multiple Destinations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AristaAwakeSecurity/Analytic%20Rules/ModelMatchesWithMultipleDestinationsByDevice.yaml) | Medium | - | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [AristaAwakeSecurityWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AristaAwakeSecurity/Workbooks/AristaAwakeSecurityWorkbook.json) | - |
 
 ## Release Notes
 
@@ -43,4 +55,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 03-01-2025                     | Removed Deprecated **Data connector**          |
 | 3.0.0       | 09-07-2024                     | Deprecating data connectors.                   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

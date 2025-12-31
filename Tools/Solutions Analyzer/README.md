@@ -41,6 +41,7 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 - [`connectors.csv`](connectors.csv) - All connectors with collection method analysis
 - [`solutions.csv`](solutions.csv) - All solutions with metadata
 - [`tables.csv`](tables.csv) - All tables with solution/connector references
+- [`content_tables_mapping.csv`](content_tables_mapping.csv) - **NEW:** Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
 - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
 - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor documentation
@@ -49,8 +50,8 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 
 - **[Solutions Index](connector-docs/solutions-index.md)** - All solutions organized alphabetically (with and without connectors)
 - **[Connectors Index](connector-docs/connectors-index.md)** - All unique connectors with metadata
-- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references, transformation support, and ingestion API compatibility
-- **Individual Solution Pages** - Detailed pages for each solution with connector and table information (in [`solutions/`](connector-docs/solutions/) directory)
+- **[Tables Index](connector-docs/tables-index.md)** - All unique tables with solution references, transformation support, and ingestion API compatibility (includes 1900+ tables from Azure Monitor reference)
+- **Individual Solution Pages** - Detailed pages for each solution with connector and **content item** tables (in [`solutions/`](connector-docs/solutions/) directory)
 - **Individual Connector Pages** - Detailed pages for each connector with usage information (in [`connectors/`](connector-docs/connectors/) directory)
 - **Individual Table Pages** - Detailed pages for each table with metadata from Azure Monitor documentation (in [`tables/`](connector-docs/tables/) directory)
 
@@ -87,7 +88,7 @@ python generate_connector_docs.py
 | Script | Purpose | Key Output |
 |--------|---------|------------|
 | [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors to tables | `connectors.csv`, `tables.csv`, `solutions.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_tables_mapping.csv` |
 | [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory |
 | [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSVs to Kusto | Kusto tables |
 
@@ -157,6 +158,26 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 ---
 
 ## Version History
+
+### v5.0
+
+**Content Item Table Extraction:**
+- Added table extraction from solution content items (analytics rules, hunting queries, playbooks, workbooks, watchlists, summary rules)
+- Extracts tables from KQL queries in YAML files (Detections, Hunting Queries) and JSON files (Playbooks, Workbooks)
+- Solution pages now show tables used by each content item type
+- Playbook tables show read/write usage indicators: `(read)`, `(write)`, `(read/write)`
+- Solution README.md files are now included in solution documentation pages
+- **Internal tables**: Tables that are both written to AND read by the same solution (e.g., summarization tables) are now classified as "Internal" category and displayed separately in documentation
+
+**Table Index Improvements:**
+- Tables index now includes ALL tables from Azure Monitor reference (`tables_reference.csv`), even if not used by any solution or connector
+- Index shows 1900+ tables (800+ ingested by connectors, 1000+ referenced by content only)
+- Tables can have empty solutions/connectors columns if they exist in Azure Monitor but aren't used by any Sentinel solution
+
+**Documentation Formatting:**
+- Content item table lists now use line breaks (`<br>`) instead of commas for better readability
+- Solutions/connectors lists in table documentation pages now use bullet points
+- Playbook tables display usage indicators showing if tables are read from, written to, or both
 
 ### v4.2
 

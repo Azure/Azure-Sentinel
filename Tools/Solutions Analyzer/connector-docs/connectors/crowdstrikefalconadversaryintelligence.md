@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | — | ✗ |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
 
 ## Permissions
 

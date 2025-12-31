@@ -5,7 +5,7 @@
 | **Connector ID** | `OpenVPN` |
 | **Publisher** | OpenVPN |
 | **Used in Solutions** | [OpenVPN](../solutions/openvpn.md) |
-| **Collection Method** | MMA |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [OpenVPN_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/OpenVPN/Data%20Connectors/OpenVPN_Syslog.json) |
 
 The [OpenVPN](https://github.com/OpenVPN) data connector provides the capability to ingest OpenVPN Server logs into Microsoft Sentinel.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | — | ✓ |
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

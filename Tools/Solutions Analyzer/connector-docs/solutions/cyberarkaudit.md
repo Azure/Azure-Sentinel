@@ -13,30 +13,34 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [CyberArkAudit](../connectors/cyberarkaudit.md)
-
-**Publisher:** CyberArk
-
-The [CyberArk Audit](https://docs.cyberark.com/Audit/Latest/en/Content/Resources/_TopNav/cc_Home.htm) data connector provides the capability to retrieve security event logs of the CyberArk Audit service and more events into Microsoft Sentinel through the REST API. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CyberArkAudit` |
-| | `CyberArk_AuditEvents_CL` |
-| **Connector Definition Files** | [CyberArkAudit_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkAudit/Data%20Connectors/CyberArkAudit_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/cyberarkaudit.md)
+- [CyberArkAudit](../connectors/cyberarkaudit.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CyberArkAudit` | [CyberArkAudit](../connectors/cyberarkaudit.md) |
-| `CyberArk_AuditEvents_CL` | [CyberArkAudit](../connectors/cyberarkaudit.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CyberArkAudit`](../tables/cyberarkaudit.md) | [CyberArkAudit](../connectors/cyberarkaudit.md) | - |
+| [`CyberArk_AuditEvents_CL`](../tables/cyberark-auditevents-cl.md) | [CyberArkAudit](../connectors/cyberarkaudit.md) | Analytics |
+
+## Content Items
+
+This solution includes **3 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 3 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [CyberArk - High-Risk Actions Outside Business Hours](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkAudit/Analytic%20Rules/CyberArkAuditHighRiskActions.yaml) | High | DefenseEvasion | [`CyberArk_AuditEvents_CL`](../tables/cyberark-auditevents-cl.md) |
+| [CyberArk - Multiple Failed Actions Followed by Success (15m)](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkAudit/Analytic%20Rules/CyberArkAuditMultiFailedAndSuccess.yaml) | Medium | CredentialAccess | [`CyberArk_AuditEvents_CL`](../tables/cyberark-auditevents-cl.md) |
+| [CyberArk - Sensitive Safe/Permission/Entitlement Changes (with customData)](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CyberArkAudit/Analytic%20Rules/CyberArkAuditSensitiveChanges.yaml) | Low | PrivilegeEscalation | [`CyberArk_AuditEvents_CL`](../tables/cyberark-auditevents-cl.md) |
 
 ## Release Notes
 
@@ -46,4 +50,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       | 29-04-2024                     | Configuration procedure update.      	              	 |  
 | 3.0.0       | 03-04-2024                     | Initial Solution Release.        	              	     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

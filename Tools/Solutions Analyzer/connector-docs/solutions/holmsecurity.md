@@ -13,30 +13,18 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Holm Security Asset Data](../connectors/holmsecurityassets.md)
-
-**Publisher:** Holm Security
-
-The connector provides the capability to poll data from Holm Security Center into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `net_assets_CL` |
-| | `web_assets_CL` |
-| **Connector Definition Files** | [HolmSecurityAssets_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HolmSecurity/Data%20Connectors/HolmSecurityAssets_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/holmsecurityassets.md)
+- [Holm Security Asset Data](../connectors/holmsecurityassets.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `net_assets_CL` | [Holm Security Asset Data](../connectors/holmsecurityassets.md) |
-| `web_assets_CL` | [Holm Security Asset Data](../connectors/holmsecurityassets.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`net_assets_CL`](../tables/net-assets-cl.md) | [Holm Security Asset Data](../connectors/holmsecurityassets.md) | - |
+| [`web_assets_CL`](../tables/web-assets-cl.md) | [Holm Security Asset Data](../connectors/holmsecurityassets.md) | - |
 
 ## Release Notes
 
@@ -46,4 +34,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.0       | 28-09-2023                     | Repackaged with V3 |
 | 2.0.0       | 17-02-2022                     | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

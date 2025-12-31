@@ -13,41 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Nozomi Networks N2OS via Legacy Agent](../connectors/nozominetworksn2os.md)
-
-**Publisher:** Nozomi Networks
-
-The [Nozomi Networks](https://www.nozominetworks.com/) data connector provides the capability to ingest Nozomi Networks Events into Microsoft Sentinel. Refer to the Nozomi Networks [PDF documentation](https://www.nozominetworks.com/resources/data-sheets-brochures-learning-guides/) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [NozomiNetworksN2OS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NozomiNetworks/Data%20Connectors/NozomiNetworksN2OS.json) |
-
-[→ View full connector details](../connectors/nozominetworksn2os.md)
-
-### [[Deprecated] Nozomi Networks N2OS via AMA](../connectors/nozominetworksn2osama.md)
-
-**Publisher:** Nozomi Networks
-
-The [Nozomi Networks](https://www.nozominetworks.com/) data connector provides the capability to ingest Nozomi Networks Events into Microsoft Sentinel. Refer to the Nozomi Networks [PDF documentation](https://www.nozominetworks.com/resources/data-sheets-brochures-learning-guides/) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_NozomiNetworksN2OSAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NozomiNetworks/Data%20Connectors/template_NozomiNetworksN2OSAMA.json) |
-
-[→ View full connector details](../connectors/nozominetworksn2osama.md)
+- [[Deprecated] Nozomi Networks N2OS via Legacy Agent](../connectors/nozominetworksn2os.md)
+- [[Deprecated] Nozomi Networks N2OS via AMA](../connectors/nozominetworksn2osama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Nozomi Networks N2OS via AMA](../connectors/nozominetworksn2osama.md), [[Deprecated] Nozomi Networks N2OS via Legacy Agent](../connectors/nozominetworksn2os.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Nozomi Networks N2OS via AMA](../connectors/nozominetworksn2osama.md), [[Deprecated] Nozomi Networks N2OS via Legacy Agent](../connectors/nozominetworksn2os.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [NozomiNetworksEvents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NozomiNetworks/Parsers/NozomiNetworksEvents.yaml) | - | - |
 
 ## Release Notes
 
@@ -58,4 +49,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 22-12-2023                     | Query issue fixed in AMA **Data Connector**                     	|
 | 3.0.0       | 13-09-2023                     | Addition of new NozomiNetworks AMA **Data Connector**           	|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

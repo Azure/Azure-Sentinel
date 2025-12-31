@@ -14,48 +14,59 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Qualys Vulnerability Management (via Codeless Connector Framework)](../connectors/qualysvmlogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerability-management/) data connector provides the capability to ingest vulnerability host detection data into Microsoft Sentinel through the Qualys API. The connector provides visibility into host detection data from vulerability scans.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `QualysHostDetectionV3_CL` |
-| **Connector Definition Files** | [QualysVMHostLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Data%20Connectors/QualysVMHostLogs_ccp/QualysVMHostLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/qualysvmlogsccpdefinition.md)
-
-### [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md)
-
-**Publisher:** Qualys
-
-The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerability-management/) data connector provides the capability to ingest vulnerability host detection data into Microsoft Sentinel through the Qualys API. The connector provides visibility into host detection data from vulerability scans. This connector provides Microsoft Sentinel the capability to view dashboards, create custom alerts, and improve investigation 
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `QualysHostDetectionV2_CL` |
-| | `QualysHostDetection_CL` |
-| **Connector Definition Files** | [QualysVM_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Data%20Connectors/QualysVM_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/qualysvulnerabilitymanagement.md)
+- [Qualys Vulnerability Management (via Codeless Connector Framework)](../connectors/qualysvmlogsccpdefinition.md)
+- [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `QualysHostDetectionV2_CL` | [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md) |
-| `QualysHostDetectionV3_CL` | [Qualys Vulnerability Management (via Codeless Connector Framework)](../connectors/qualysvmlogsccpdefinition.md) |
-| `QualysHostDetection_CL` | [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`QualysHostDetectionV2_CL`](../tables/qualyshostdetectionv2-cl.md) | [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md) | Analytics, Workbooks |
+| [`QualysHostDetectionV3_CL`](../tables/qualyshostdetectionv3-cl.md) | [Qualys Vulnerability Management (via Codeless Connector Framework)](../connectors/qualysvmlogsccpdefinition.md) | Analytics, Workbooks |
+| [`QualysHostDetection_CL`](../tables/qualyshostdetection-cl.md) | [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **8 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 4 |
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [High Number of Urgent Vulnerabilities Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Analytic%20Rules/HighNumberofVulnDetectedV2.yaml) | Medium | InitialAccess | [`QualysHostDetectionV2_CL`](../tables/qualyshostdetectionv2-cl.md)<br>[`QualysHostDetectionV3_CL`](../tables/qualyshostdetectionv3-cl.md)<br>[`QualysHostDetection_CL`](../tables/qualyshostdetection-cl.md) |
+| [New High Severity Vulnerability Detected Across Multiple Hosts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Analytic%20Rules/NewHighSeverityVulnDetectedAcrossMulitpleHostsV2.yaml) | Medium | InitialAccess | [`QualysHostDetectionV2_CL`](../tables/qualyshostdetectionv2-cl.md)<br>[`QualysHostDetectionV3_CL`](../tables/qualyshostdetectionv3-cl.md)<br>[`QualysHostDetection_CL`](../tables/qualyshostdetection-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [QualysVMv2](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Workbooks/QualysVMv2.json) | [`QualysHostDetectionV2_CL`](../tables/qualyshostdetectionv2-cl.md)<br>[`QualysHostDetectionV3_CL`](../tables/qualyshostdetectionv3-cl.md)<br>[`QualysHostDetection_CL`](../tables/qualyshostdetection-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [QualysVM-GetAssetDetails](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Playbooks/QualysVMPlaybooks/QualysVM-GetAssetDetails/azuredeploy.json) | When a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+| [QualysVM-GetAssets-ByCVEID](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Playbooks/QualysVMPlaybooks/QualysVM-GetAssets-ByCVEID/azuredeploy.json) | When a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+| [QualysVM-GetAssets-ByOpenPort](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Playbooks/QualysVMPlaybooks/QualysVM-GetAssets-ByOpenPort/azuredeploy.json) | When a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+| [QualysVM-LaunchVMScan-GenerateReport](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Playbooks/QualysVMPlaybooks/QualysVM-LaunchVMScan-GenerateReport/azuredeploy.json) | When a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [QualysHostDetection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Parsers/QualysHostDetection.yaml) | - | - |
 
 ## Release Notes
 
@@ -70,4 +81,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 07-01-2025                     | Removed Custom Entity mappings from **Analytic Rule**.         |
 | 3.0.0       | 16-04-2024                     | Added Deploy to Azure Goverment button for Government portal in **Dataconnector**.   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

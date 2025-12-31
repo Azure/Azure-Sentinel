@@ -13,27 +13,43 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [ARGOS Cloud Security](../connectors/argoscloudsecurity.md)
-
-**Publisher:** ARGOS Cloud Security
-
-The ARGOS Cloud Security integration for Microsoft Sentinel allows you to have all your important cloud security events in one place. This enables you to easily create dashboards, alerts, and correlate events across multiple systems. Overall this will improve your organization's security posture and security incident response.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ARGOS_CL` |
-| **Connector Definition Files** | [Connector_ARGOS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ARGOSCloudSecurity/Data%20Connectors/Connector_ARGOS.json) |
-
-[→ View full connector details](../connectors/argoscloudsecurity.md)
+- [ARGOS Cloud Security](../connectors/argoscloudsecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ARGOS_CL` | [ARGOS Cloud Security](../connectors/argoscloudsecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ARGOS_CL`](../tables/argos-cl.md) | [ARGOS Cloud Security](../connectors/argoscloudsecurity.md) | Analytics, Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [ARGOS Cloud Security - Exploitable Cloud Resources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ARGOSCloudSecurity/Analytic%20Rules/ExploitableSecurityIssues.yaml) | High | InitialAccess | [`ARGOS_CL`](../tables/argos-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ARGOSCloudSecurityWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ARGOSCloudSecurity/Workbooks/ARGOSCloudSecurityWorkbook.json) | [`ARGOS_CL`](../tables/argos-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

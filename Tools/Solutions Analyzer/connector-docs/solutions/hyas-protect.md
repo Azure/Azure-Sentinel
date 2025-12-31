@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [HYAS Protect](../connectors/hyasprotect.md)
-
-**Publisher:** HYAS
-
-HYAS Protect provide logs based on reputation values - Blocked, Malicious, Permitted, Suspicious.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `HYASProtectDnsSecurityLogs_CL` |
-| **Connector Definition Files** | [HYASProtect_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HYAS%20Protect/Data%20Connectors/HYASProtect_FunctionApp.json) |
-
-[→ View full connector details](../connectors/hyasprotect.md)
+- [HYAS Protect](../connectors/hyasprotect.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `HYASProtectDnsSecurityLogs_CL` | [HYAS Protect](../connectors/hyasprotect.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`HYASProtectDnsSecurityLogs_CL`](../tables/hyasprotectdnssecuritylogs-cl.md) | [HYAS Protect](../connectors/hyasprotect.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [HYASProtectDNS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/HYAS%20Protect/Parsers/HYASProtectDNS.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +47,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 23-04-2024                     | Updated Solution version for Partner Center policy regulations|
 | 3.0.0       | 22-09-2023                     | Initial Solution Release                   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

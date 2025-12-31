@@ -2,13 +2,7 @@
 
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `GCP_MONITORING_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
+| **Category** | GCP |
 
 ## Solutions (1)
 
@@ -21,6 +15,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [[DEPRECATED] Google Cloud Platform Cloud Monitoring](../connectors/gcpmonitordataconnector.md)
+
+---
 
 ---
 

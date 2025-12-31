@@ -13,78 +13,92 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md)
-
-**Publisher:** Cisco
-
-The Cisco Cloud Security solution for Microsoft Sentinel enables you to ingest [Cisco Secure Access](https://docs.sse.cisco.com/sse-user-guide/docs/welcome-cisco-secure-access) and [Cisco Umbrella](https://docs.umbrella.com/umbrella-user-guide/docs/getting-started) [logs](https://docs.sse.cisco.com/sse-user-guide/docs/manage-your-logs) stored in Amazon S3 into Microsoft Sentinel using the Amazon S3 REST API. Refer to [Cisco Cloud Security log management documentation](https://docs.umbrella.com/deployment-umbrella/docs/log-management) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Cisco_Umbrella_audit_CL` |
-| | `Cisco_Umbrella_cloudfirewall_CL` |
-| | `Cisco_Umbrella_dlp_CL` |
-| | `Cisco_Umbrella_dns_CL` |
-| | `Cisco_Umbrella_fileevent_CL` |
-| | `Cisco_Umbrella_firewall_CL` |
-| | `Cisco_Umbrella_intrusion_CL` |
-| | `Cisco_Umbrella_ip_CL` |
-| | `Cisco_Umbrella_proxy_CL` |
-| | `Cisco_Umbrella_ravpnlogs_CL` |
-| | `Cisco_Umbrella_ztaflow_CL` |
-| | `Cisco_Umbrella_ztna_CL` |
-| **Connector Definition Files** | [CiscoUmbrella_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Data%20Connectors/CiscoUmbrella_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/ciscoumbrelladataconnector.md)
-
-### [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md)
-
-**Publisher:** Cisco
-
-The Cisco Umbrella data connector provides the capability to ingest [Cisco Umbrella](https://docs.umbrella.com/) events stored in Amazon S3 into Microsoft Sentinel using the Amazon S3 REST API. Refer to [Cisco Umbrella log management documentation](https://docs.umbrella.com/deployment-umbrella/docs/log-management) for more information.
-
-
-
-**NOTE:** This data connector uses the [Azure Functions Premium Plan](https://learn.microsoft.com/azure/azure-functions/functions-premium-plan?tabs=portal) to enable secure ingestion capabilities and will incur additional costs. More pricing details are [here](https://azure.microsoft.com/pricing/details/functions/?msockid=2f4366822d836a7c2ac673462cfc6ba8#pricing).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Cisco_Umbrella_audit_CL` |
-| | `Cisco_Umbrella_cloudfirewall_CL` |
-| | `Cisco_Umbrella_dlp_CL` |
-| | `Cisco_Umbrella_dns_CL` |
-| | `Cisco_Umbrella_fileevent_CL` |
-| | `Cisco_Umbrella_firewall_CL` |
-| | `Cisco_Umbrella_intrusion_CL` |
-| | `Cisco_Umbrella_ip_CL` |
-| | `Cisco_Umbrella_proxy_CL` |
-| | `Cisco_Umbrella_ravpnlogs_CL` |
-| | `Cisco_Umbrella_ztaflow_CL` |
-| | `Cisco_Umbrella_ztna_CL` |
-| **Connector Definition Files** | [CiscoUmbrella_API_FunctionApp_elasticpremium.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Data%20Connectors/CiscoUmbrella_API_FunctionApp_elasticpremium.json) |
-
-[→ View full connector details](../connectors/ciscoumbrelladataconnectorelasticpremium.md)
+- [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md)
+- [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md)
 
 ## Tables Reference
 
-This solution ingests data into **12 table(s)**:
+This solution uses **12 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Cisco_Umbrella_audit_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_cloudfirewall_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_dlp_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_dns_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_fileevent_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_firewall_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_intrusion_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_ip_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_proxy_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_ravpnlogs_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_ztaflow_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
-| `Cisco_Umbrella_ztna_CL` | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_firewall_CL`](../tables/cisco-umbrella-firewall-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | - |
+| [`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+| [`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) | [Cisco Cloud Security](../connectors/ciscoumbrelladataconnector.md), [Cisco Cloud Security (using elastic premium plan)](../connectors/ciscoumbrelladataconnectorelasticpremium.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **26 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Playbooks | 4 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Cisco Cloud Security - Connection to Unpopular Website Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaConnectionToUnpopularWebsiteDetected.yaml) | Medium | CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Connection to non-corporate private network](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaConnectionNon-CorporatePrivateNetwork.yaml) | Medium | CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Crypto Miner User-Agent Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaCryptoMinerUserAgentDetected.yaml) | Medium | Impact, CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Empty User Agent Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaEmptyUserAgentDetected.yaml) | Medium | CommandAndControl | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Hack Tool User-Agent Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaHackToolUserAgentDetected.yaml) | Medium | Execution, Discovery, LateralMovement, Collection, CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Rare User Agent Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaRareUserAgentDetected.yaml) | Medium | CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Request Allowed to harmful/malicious URI category](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaRequestAllowedHarmfulMaliciousURICategory.yaml) | Medium | CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Request to blocklisted file type](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaRequestBlocklistedFileType.yaml) | Medium | InitialAccess, CommandAndControl | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - URI contains IP address](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaURIContainsIPAddress.yaml) | Medium | CommandAndControl, Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Windows PowerShell User-Agent Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Analytic%20Rules/CiscoUmbrellaPowershellUserAgentDetected.yaml) | Medium | CommandAndControl, DefenseEvasion, Execution | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Cisco Cloud Security - 'Blocked' User-Agents.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaBlockedUserAgents.yaml) | Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Anomalous FQDNs for domain](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaAnomalousFQDNsforDomain.yaml) | CommandAndControl | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - DNS Errors.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaDNSErrors.yaml) | InitialAccess | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - DNS requests to unreliable categories.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaDNSRequestsUunreliableCategory.yaml) | InitialAccess | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - High values of Uploaded Data](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaHighValuesOfUploadedData.yaml) | Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Higher values of count of the Same BytesIn size](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaHighCountsOfTheSameBytesInSize.yaml) | CommandAndControl | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Possible connection to C2.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaPossibleConnectionC2.yaml) | CommandAndControl | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Possible data exfiltration](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaPossibleDataExfiltration.yaml) | Exfiltration | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Proxy 'Allowed' to unreliable categories.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaProxyAllowedUnreliableCategory.yaml) | InitialAccess | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+| [Cisco Cloud Security - Requests to uncategorized resources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Hunting%20Queries/CiscoUmbrellaRequestsUncategorizedURI.yaml) | InitialAccess | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [CiscoUmbrella](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Workbooks/CiscoUmbrella.json) | [`Cisco_Umbrella_audit_CL`](../tables/cisco-umbrella-audit-cl.md)<br>[`Cisco_Umbrella_cloudfirewall_CL`](../tables/cisco-umbrella-cloudfirewall-cl.md)<br>[`Cisco_Umbrella_dlp_CL`](../tables/cisco-umbrella-dlp-cl.md)<br>[`Cisco_Umbrella_dns_CL`](../tables/cisco-umbrella-dns-cl.md)<br>[`Cisco_Umbrella_fileevent_CL`](../tables/cisco-umbrella-fileevent-cl.md)<br>[`Cisco_Umbrella_intrusion_CL`](../tables/cisco-umbrella-intrusion-cl.md)<br>[`Cisco_Umbrella_ip_CL`](../tables/cisco-umbrella-ip-cl.md)<br>[`Cisco_Umbrella_proxy_CL`](../tables/cisco-umbrella-proxy-cl.md)<br>[`Cisco_Umbrella_ravpnlogs_CL`](../tables/cisco-umbrella-ravpnlogs-cl.md)<br>[`Cisco_Umbrella_ztaflow_CL`](../tables/cisco-umbrella-ztaflow-cl.md)<br>[`Cisco_Umbrella_ztna_CL`](../tables/cisco-umbrella-ztna-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [CiscoUmbrella-AddIpToDestinationList](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Playbooks/CiscoUmbrellaPlaybooks/CiscoUmbrella-AddIpToDestinationList/azuredeploy.json) | This playbook creates a team notification and once acted on team notification it adds the IP to Cisc... | - |
+| [CiscoUmbrella-AssignPolicyToIdentity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Playbooks/CiscoUmbrellaPlaybooks/CiscoUmbrella-AssignPolicyToIdentity/azuredeploy.json) | This playbook provides an automated way to associate an identity to an existing policy in Cisco Clou... | - |
+| [CiscoUmbrella-BlockDomain](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Playbooks/CiscoUmbrellaPlaybooks/CiscoUmbrella-BlockDomain/azuredeploy.json) | This playbook showcases an example of triggering an incident within a targeted Teams channel and ope... | - |
+| [CiscoUmbrella-GetDomainInfo](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Playbooks/CiscoUmbrellaPlaybooks/CiscoUmbrella-GetDomainInfo/azuredeploy.json) | This playbook is used to get Security Information about a particular domain. It provides details suc... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Cisco_Umbrella](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoUmbrella/Parsers/Cisco_Umbrella.yaml) | - | - |
 
 ## Release Notes
 
@@ -99,4 +113,10 @@ This solution ingests data into **12 table(s)**:
 | 3.0.1       | 03-05-2024                     | Added Deploy to Azure Government button in **Data connector** <br/> Fixed **Parser** issue for Parser name and ParentID mismatch|
 | 3.0.0       | 28-09-2023                     | Updated **Data Connector** with step by step guidelines |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

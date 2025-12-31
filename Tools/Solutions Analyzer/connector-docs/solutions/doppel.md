@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Doppel Data Connector](../connectors/doppel-dataconnector.md)
-
-**Publisher:** Doppel
-
-The data connector is built on Microsoft Sentinel for Doppel events and alerts and supports DCR-based [ingestion time transformations](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/ingestion-time-transformations) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DoppelTable_CL` |
-| **Connector Definition Files** | [Template_Doppel.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Doppel/Data%20Connectors/Template_Doppel.json) |
-
-[→ View full connector details](../connectors/doppel-dataconnector.md)
+- [Doppel Data Connector](../connectors/doppel-dataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `DoppelTable_CL` | [Doppel Data Connector](../connectors/doppel-dataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`DoppelTable_CL`](../tables/doppeltable-cl.md) | [Doppel Data Connector](../connectors/doppel-dataconnector.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Doppel](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Doppel/Workbooks/Doppel.json) | [`DoppelTable_CL`](../tables/doppeltable-cl.md) |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 05-03-2025                     | Fixed typo error in **Data Connector**.             | 
 | 3.0.0       | 03-12-2024                     | Initial Solution Release.                            |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,31 +13,24 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Agari Phishing Defense and Brand Protection](../connectors/agari.md)
-
-**Publisher:** Agari
-
-This connector uses a Agari REST API connection to push data into Azure Sentinel Log Analytics.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `agari_apdpolicy_log_CL` |
-| | `agari_apdtc_log_CL` |
-| | `agari_bpalerts_log_CL` |
-| **Connector Definition Files** | [Agari_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Agari/Data%20Connectors/Agari_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/agari.md)
+- [Agari Phishing Defense and Brand Protection](../connectors/agari.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `agari_apdpolicy_log_CL` | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) |
-| `agari_apdtc_log_CL` | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) |
-| `agari_bpalerts_log_CL` | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`agari_apdpolicy_log_CL`](../tables/agari-apdpolicy-log-cl.md) | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) | - |
+| [`agari_apdtc_log_CL`](../tables/agari-apdtc-log-cl.md) | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) | - |
+| [`agari_bpalerts_log_CL`](../tables/agari-bpalerts-log-cl.md) | [Agari Phishing Defense and Brand Protection](../connectors/agari.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

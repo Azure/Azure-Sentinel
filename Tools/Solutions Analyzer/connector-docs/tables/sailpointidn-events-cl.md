@@ -1,15 +1,5 @@
 # SailPointIDN_Events_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `SailPointIDN_Events_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,19 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [SailPoint IdentityNow](../connectors/sailpointidentitynow.md)
+
+---
+
+## Content Items Using This Table (5)
+
+### Analytic Rules (5)
+
+**In solution [SailPointIdentityNow](../solutions/sailpointidentitynow.md):**
+- [SailPointIdentityNowEventType](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowEventType.yaml)
+- [SailPointIdentityNowEventTypeTechnicalName](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowEventTypeTechnicalName.yaml)
+- [SailPointIdentityNowFailedEvents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowFailedEvents.yaml)
+- [SailPointIdentityNowFailedEventsBasedOnTime](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowFailedEventsBasedOnTime.yaml)
+- [SailPointIdentityNowUserWithFailedEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowUserWithFailedEvents.yaml)
 
 ---
 

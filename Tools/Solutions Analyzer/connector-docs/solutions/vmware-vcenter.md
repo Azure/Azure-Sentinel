@@ -13,28 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] VMware vCenter](../connectors/vmwarevcenter.md)
-
-**Publisher:** VMware
-
-The [vCenter](https://www.vmware.com/in/products/vcenter-server.html) connector allows you to easily connect your vCenter server logs with Microsoft Sentinel. This gives you more insight into your organization's data centers and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `vcenter_CL` |
-| **Connector Definition Files** | [Connector_Syslog_vcenter.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20vCenter/Data%20Connectors/Connector_Syslog_vcenter.json) |
-
-[→ View full connector details](../connectors/vmwarevcenter.md)
+- [[Deprecated] VMware vCenter](../connectors/vmwarevcenter.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `vcenter_CL` | [[Deprecated] VMware vCenter](../connectors/vmwarevcenter.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`vcenter_CL`](../tables/vcenter-cl.md) | [[Deprecated] VMware vCenter](../connectors/vmwarevcenter.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [VMware vCenter - Root login](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20vCenter/Analytic%20Rules/vCenterRootLogin.yaml) | High | InitialAccess, PrivilegeEscalation | [`vcenter_CL`](../tables/vcenter-cl.md) |
+| [vCenter - Root impersonation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20vCenter/Analytic%20Rules/vCenter-Root%20impersonation.yaml) | Medium | PrivilegeEscalation | [`vcenter_CL`](../tables/vcenter-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [vCenter](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20vCenter/Workbooks/vCenter.json) | [`vcenter_CL`](../tables/vcenter-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [vCenter](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20vCenter/Parsers/vCenter.yaml) | - | - |
 
 ## Release Notes
 
@@ -47,4 +65,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 27-05-2024                     | Updated the **Data Connector** instructions. | 
 | 3.0.0       | 27-07-2023                     | Corrected the links in the solution.         |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

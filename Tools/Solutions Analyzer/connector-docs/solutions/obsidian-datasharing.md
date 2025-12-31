@@ -13,30 +13,18 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md)
-
-**Publisher:** Obsidian Security
-
-The Obsidian Datasharing connector provides the capability to read raw event data from Obsidian Datasharing in Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ObsidianActivity_CL` |
-| | `ObsidianThreat_CL` |
-| **Connector Definition Files** | [ObsidianDatasharing_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Obsidian%20Datasharing/Data%20Connectors/ObsidianDatasharing_CCP/ObsidianDatasharing_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/obsidiandatasharing.md)
+- [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ObsidianActivity_CL` | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) |
-| `ObsidianThreat_CL` | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ObsidianActivity_CL`](../tables/obsidianactivity-cl.md) | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) | - |
+| [`ObsidianThreat_CL`](../tables/obsidianthreat-cl.md) | [Obsidian Datasharing Connector](../connectors/obsidiandatasharing.md) | - |
 
 ## Release Notes
 
@@ -44,4 +32,10 @@ This solution ingests data into **2 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 25-09-2025                     | Initial Solution Release.                   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

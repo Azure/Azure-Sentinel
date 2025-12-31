@@ -21,7 +21,7 @@ This connector ingests data into the following tables:
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
 | [`SIGNL4_CL`](../tables/signl4-cl.md) | — | — |
-| [`SecurityIncident`](../tables/securityincident.md) | — | ✗ |
+| [`SecurityIncident`](../tables/securityincident.md) | ✓ | ✗ |
 
 ## Permissions
 

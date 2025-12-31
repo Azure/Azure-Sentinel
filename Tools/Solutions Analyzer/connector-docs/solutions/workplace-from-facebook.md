@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Workplace from Facebook](../connectors/workplacefacebook.md)
-
-**Publisher:** Facebook
-
-The [Workplace](https://www.workplace.com/) data connector provides the capability to ingest common Workplace events into Microsoft Sentinel through Webhooks. Webhooks enable custom integration apps to subscribe to events in Workplace and receive updates in real time. When a change occurs in Workplace, an HTTPS POST request with event information is sent to a callback data connector URL.  Refer to [Webhooks documentation](https://developers.facebook.com/docs/workplace/reference/webhooks) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Workplace_Facebook_CL` |
-| **Connector Definition Files** | [WorkplaceFacebook_Webhooks_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Workplace%20from%20Facebook/Data%20Connectors/WorkplaceFacebook/WorkplaceFacebook_Webhooks_FunctionApp.json) |
-
-[→ View full connector details](../connectors/workplacefacebook.md)
+- [Workplace from Facebook](../connectors/workplacefacebook.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Workplace_Facebook_CL` | [Workplace from Facebook](../connectors/workplacefacebook.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Workplace_Facebook_CL`](../tables/workplace-facebook-cl.md) | [Workplace from Facebook](../connectors/workplacefacebook.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Workplace_Facebook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Workplace%20from%20Facebook/Parsers/Workplace_Facebook.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 03-05-2024                     | Repackaged for parser issue fix on reinstall |
 | 3.0.0       | 18-04-2024                     | Updated **Dataconnector** with step by step guidelines and </br> Added Deploy to Azure Goverment button for Government portal|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

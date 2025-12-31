@@ -1,15 +1,5 @@
 # SecurityScorecardFactor_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `SecurityScorecardFactor_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [SecurityScorecard Factor](../connectors/securityscorecardfactorazurefunctions.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [SecurityScorecard Cybersecurity Ratings](../solutions/securityscorecard-cybersecurity-ratings.md):**
+- [SecurityScorecardWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityScorecard%20Cybersecurity%20Ratings/Workbooks/SecurityScorecardWorkbook.json)
 
 ---
 

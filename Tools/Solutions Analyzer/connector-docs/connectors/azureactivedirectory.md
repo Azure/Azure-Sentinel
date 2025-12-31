@@ -16,18 +16,18 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AADManagedIdentitySignInLogs`](../tables/aadmanagedidentitysigninlogs.md) | — | ✗ |
-| [`AADNonInteractiveUserSignInLogs`](../tables/aadnoninteractiveusersigninlogs.md) | — | ✗ |
-| [`AADProvisioningLogs`](../tables/aadprovisioninglogs.md) | — | ✗ |
-| [`AADRiskyServicePrincipals`](../tables/aadriskyserviceprincipals.md) | — | ✗ |
-| [`AADRiskyUsers`](../tables/aadriskyusers.md) | — | ✗ |
-| [`AADServicePrincipalRiskEvents`](../tables/aadserviceprincipalriskevents.md) | — | ✗ |
-| [`AADServicePrincipalSignInLogs`](../tables/aadserviceprincipalsigninlogs.md) | — | ✗ |
-| [`AADUserRiskEvents`](../tables/aaduserriskevents.md) | — | ✗ |
-| [`ADFSSignInLogs`](../tables/adfssigninlogs.md) | — | ✗ |
-| [`AuditLogs`](../tables/auditlogs.md) | — | ✗ |
+| [`AADManagedIdentitySignInLogs`](../tables/aadmanagedidentitysigninlogs.md) | ✓ | ✗ |
+| [`AADNonInteractiveUserSignInLogs`](../tables/aadnoninteractiveusersigninlogs.md) | ✓ | ✗ |
+| [`AADProvisioningLogs`](../tables/aadprovisioninglogs.md) | ✓ | ✗ |
+| [`AADRiskyServicePrincipals`](../tables/aadriskyserviceprincipals.md) | ✓ | ✗ |
+| [`AADRiskyUsers`](../tables/aadriskyusers.md) | ✓ | ✗ |
+| [`AADServicePrincipalRiskEvents`](../tables/aadserviceprincipalriskevents.md) | ✓ | ✗ |
+| [`AADServicePrincipalSignInLogs`](../tables/aadserviceprincipalsigninlogs.md) | ✓ | ✗ |
+| [`AADUserRiskEvents`](../tables/aaduserriskevents.md) | ✓ | ✗ |
+| [`ADFSSignInLogs`](../tables/adfssigninlogs.md) | ✓ | ✗ |
+| [`AuditLogs`](../tables/auditlogs.md) | ✓ | ✗ |
 | [`ManagedIdentitySignInLogs`](../tables/managedidentitysigninlogs.md) | — | — |
-| [`NetworkAccessTraffic`](../tables/networkaccesstraffic.md) | — | ✗ |
+| [`NetworkAccessTraffic`](../tables/networkaccesstraffic.md) | ✓ | ✗ |
 | [`NetworkAccessTrafficLogs`](../tables/networkaccesstrafficlogs.md) | — | — |
 | [`NonInteractiveUserSignInLogs`](../tables/noninteractiveusersigninlogs.md) | — | — |
 | [`ProvisioningLogs`](../tables/provisioninglogs.md) | — | — |
@@ -36,7 +36,7 @@ This connector ingests data into the following tables:
 | [`ServicePrincipalRiskEvents`](../tables/serviceprincipalriskevents.md) | — | — |
 | [`ServicePrincipalSignInLogs`](../tables/serviceprincipalsigninlogs.md) | — | — |
 | [`SignInLogs`](../tables/signinlogs.md) | — | — |
-| [`SigninLogs`](../tables/signinlogs.md) | — | ✗ |
+| [`SigninLogs`](../tables/signinlogs.md) | ✓ | ✗ |
 | [`UserRiskEvents`](../tables/userriskevents.md) | — | — |
 
 ## Permissions

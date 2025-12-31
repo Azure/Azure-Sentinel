@@ -5,7 +5,7 @@
 | **Connector ID** | `CTERA` |
 | **Publisher** | CTERA Networks Ltd |
 | **Used in Solutions** | [CTERA](../solutions/ctera.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [CTERA_Data_Connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CTERA/Data%20Connectors/CTERA_Data_Connector.json) |
 
 The CTERA Data Connector for Microsoft Sentinel offers monitoring and threat detection capabilities for your CTERA solution.
@@ -22,7 +22,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | — | ✓ |
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

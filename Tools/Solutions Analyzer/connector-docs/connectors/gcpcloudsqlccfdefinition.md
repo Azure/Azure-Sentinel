@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPCloudSQL`](../tables/gcpcloudsql.md) | — | ✗ |
+| [`GCPCloudSQL`](../tables/gcpcloudsql.md) | ✓ | ✗ |
 
 ## Permissions
 

@@ -13,27 +13,22 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [NXLog BSM macOS](../connectors/nxlogbsmmacos.md)
-
-**Publisher:** NXLog
-
-The [NXLog BSM](https://docs.nxlog.co/refman/current/im/bsm.html) macOS data connector uses Sun's Basic Security Module (BSM) Auditing API to read events directly from the kernel for capturing audit events on the macOS platform. This REST API connector can efficiently export macOS audit events to Microsoft Sentinel in real-time.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `BSMmacOS_CL` |
-| **Connector Definition Files** | [NXLogBSMmacOS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NXLog%20BSM%20macOS/Data%20Connectors/NXLogBSMmacOS.json) |
-
-[→ View full connector details](../connectors/nxlogbsmmacos.md)
+- [NXLog BSM macOS](../connectors/nxlogbsmmacos.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `BSMmacOS_CL` | [NXLog BSM macOS](../connectors/nxlogbsmmacos.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`BSMmacOS_CL`](../tables/bsmmacos-cl.md) | [NXLog BSM macOS](../connectors/nxlogbsmmacos.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

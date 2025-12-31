@@ -14,28 +14,27 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [MISP2Sentinel](../connectors/misp2sentinelconnector.md)
-
-**Publisher:** MISP project & cudeso.be
-
-This solution installs the MISP2Sentinel connector that allows you to automatically push threat indicators from MISP to Microsoft Sentinel via the Upload Indicators REST API. After installing the solution, configure and enable this data connector by following guidance in Manage solution view.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ThreatIntelligenceIndicator` |
-| **Connector Definition Files** | [MISP2SentinelConnector_UploadIndicatorsAPI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MISP2Sentinel/Data%20Connectors/MISP2SentinelConnector_UploadIndicatorsAPI.json) |
-
-[→ View full connector details](../connectors/misp2sentinelconnector.md)
+- [MISP2Sentinel](../connectors/misp2sentinelconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ThreatIntelligenceIndicator` | [MISP2Sentinel](../connectors/misp2sentinelconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | [MISP2Sentinel](../connectors/misp2sentinelconnector.md) | - |
+
+## Additional Documentation
+
+> 📄 *Source: [MISP2Sentinel/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MISP2Sentinel/README.md)*
+
+The [MISP](https://www.misp-project.org/) to Microsoft Sentinel integration allows you to upload indicators from MISP to Microsoft Sentinel.
+
+Code and documentation is at [https://github.com/cudeso/misp2sentinel](https://github.com/cudeso/misp2sentinel).
+
+Release notes and versions are at [https://github.com/cudeso/misp2sentinel](https://github.com/cudeso/misp2sentinel).
 
 ## Release Notes
 
@@ -43,4 +42,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 29-07-2023                     | **Data Connector** Initial version of MISP2Sentinel with support for Upload Indicators API
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

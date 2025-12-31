@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] JBoss Enterprise Application Platform](../connectors/jbosseap.md)
-
-**Publisher:** Red Hat
-
-The JBoss Enterprise Application Platform data connector provides the capability to ingest [JBoss](https://www.redhat.com/en/technologies/jboss-middleware/application-platform) events into Microsoft Sentinel. Refer to [Red Hat documentation](https://access.redhat.com/documentation/en-us/red_hat_jboss_enterprise_application_platform/7.0/html/configuration_guide/logging_with_jboss_eap) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `JBossLogs_CL` |
-| **Connector Definition Files** | [Connector_JBoss.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/JBoss/Data%20Connectors/Connector_JBoss.json) |
-
-[→ View full connector details](../connectors/jbosseap.md)
+- [[Deprecated] JBoss Enterprise Application Platform](../connectors/jbosseap.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `JBossLogs_CL` | [[Deprecated] JBoss Enterprise Application Platform](../connectors/jbosseap.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`JBossLogs_CL`](../tables/jbosslogs-cl.md) | [[Deprecated] JBoss Enterprise Application Platform](../connectors/jbosseap.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [JBossEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/JBoss/Parsers/JBossEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 31-12-2024                     | Removed Deprecated **Data connector**                       |
 | 3.0.0       | 13-08-2024                     | Deprecating data connector                                  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

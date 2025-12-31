@@ -14,28 +14,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [MailRisk by Secure Practice](../connectors/securepracticemailriskconnector.md)
-
-**Publisher:** Secure Practice
-
-The MailRisk by Secure Practice connector allows you to ingest email threat intelligence data from the MailRisk API into Microsoft Sentinel. This connector provides visibility into reported emails, risk assessments, and security events related to email threats.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `MailRiskEventEmails_CL` |
-| **Connector Definition Files** | [MailRisk_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MailRisk/Data%20Connectors/MailRisk_CCP/MailRisk_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/securepracticemailriskconnector.md)
+- [MailRisk by Secure Practice](../connectors/securepracticemailriskconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `MailRiskEventEmails_CL` | [MailRisk by Secure Practice](../connectors/securepracticemailriskconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`MailRiskEventEmails_CL`](../tables/mailriskeventemails-cl.md) | [MailRisk by Secure Practice](../connectors/securepracticemailriskconnector.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 |--------------|---------------------------------|----------------------------------------------|
 | 3.0.0        | 29-10-2025                      | Migrate connector to CCF                   	|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

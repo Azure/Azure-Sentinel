@@ -14,28 +14,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Phosphorus Devices](../connectors/phosphorus-polling.md)
-
-**Publisher:** Phosphorus Inc.
-
-The Phosphorus Device Connector provides the capability to Phosphorus to ingest device data logs into Microsoft Sentinel through the Phosphorus REST API. The Connector provides visibility into the devices enrolled in Phosphorus. This Data Connector pulls devices information along with its corresponding alerts.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Phosphorus_CL` |
-| **Connector Definition Files** | [PhosphorusDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Phosphorus/Data%20Connectors/PhosphorusDataConnector.json) |
-
-[→ View full connector details](../connectors/phosphorus-polling.md)
+- [Phosphorus Devices](../connectors/phosphorus-polling.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Phosphorus_CL` | [Phosphorus Devices](../connectors/phosphorus-polling.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Phosphorus_CL`](../tables/phosphorus-cl.md) | [Phosphorus Devices](../connectors/phosphorus-polling.md) | - |
+
+## Additional Documentation
+
+> 📄 *Source: [Phosphorus/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Phosphorus/README.md)*
+
+This repository contains all resources for the Phosphorus Azure Sentinel Solution.
+The Phosphorus Solution is built in order to easily integrate Phosphorus with Azure Sentinel.
+
+By deploying this solution, you'll be able to ingest device data from Phosphorus into Microsoft Sentinel
+
+The solution consists out of the following resources:
+- A codeless API connector to ingest data into Sentinel.
+
+## Data Connector Deployment
+The data connector will retrieve the Phosphorus device data through the Phosphorus REST API.
+
+This is a codeless API connector. After the deployment of the ARM template, the connector will be available in the Data Connectors list to connect.
+
+Input the Phosphorus Instance Domain name, Integration Name, API key , click Connect button and Microsoft Sentinel will start to pull in device data.
 
 ## Release Notes
 
@@ -43,4 +51,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 15-08-2024                     | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

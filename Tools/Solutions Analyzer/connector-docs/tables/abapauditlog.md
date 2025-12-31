@@ -1,17 +1,14 @@
 # ABAPAuditLog
 
+Reference for ABAPAuditLog table in Azure Monitor Logs.
+
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `ABAPAuditLog` |
 | **Category** | Security |
-| **Solutions Using Table** | 3 |
-| **Connectors Ingesting** | 3 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/abapauditlog) |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
 
 ## Solutions (3)
 
@@ -28,6 +25,8 @@ This table is ingested by the following connectors:
 - [Pathlock Inc.: Threat Detection and Response for SAP](../connectors/pathlock-tdnr.md)
 - [SAP S/4HANA Cloud Public Edition](../connectors/saps4publicalerts.md)
 - [SecurityBridge Solution for SAP](../connectors/securitybridge.md)
+
+---
 
 ---
 

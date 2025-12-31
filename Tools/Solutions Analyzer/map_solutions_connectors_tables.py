@@ -34,19 +34,516 @@ FIELD_GENERATING_PATTERN = re.compile(
 # Token validation sets
 PARSER_NAME_KEYS = {"functionname", "functionalias"}
 NON_TABLE_TOKENS = {
+    # KQL keywords and statements
     "let",
-    "ago",
-    "alerts",
-    "datatable",
-    "pack_array",
-    "array_concat",
-    "datetime_part",
-    "dynamic",
-    "time",
-    "toscalar",
     "union",
     "view",
-    "_im_dns",
+    "database",
+    "cluster",
+    "external_table",
+    "materialize",
+    "datatable",
+    "externaldata",
+    "range",
+    "print",
+    "evaluate",
+    
+    # KQL operators
+    "where",
+    "summarize",
+    "extend",
+    "project",
+    "sort",
+    "order",
+    "take",
+    "limit",
+    "top",
+    "count",
+    "distinct",
+    "sample",
+    "join",
+    "lookup",
+    "as",
+    "on",
+    "kind",
+    "mv-expand",
+    "mv-apply",
+    "make-series",
+    "parse",
+    "serialize",
+    "invoke",
+    "render",
+    "search",
+    "find",
+    "facet",
+    "partition",
+    "scan",
+    "fork",
+    "reduce",
+    "consume",
+    "getschema",
+    
+    # KQL scalar functions - Binary
+    "binary_and",
+    "binary_not",
+    "binary_or",
+    "binary_shift_left",
+    "binary_shift_right",
+    "binary_xor",
+    "bitset_count_ones",
+    
+    # KQL scalar functions - Conversion
+    "tobool",
+    "todatetime",
+    "todecimal",
+    "todouble",
+    "toguid",
+    "toint",
+    "tolong",
+    "tostring",
+    "totimespan",
+    "toreal",
+    "tohex",
+    
+    # KQL scalar functions - DateTime/timespan
+    "ago",
+    "datetime_add",
+    "datetime_diff",
+    "datetime_local_to_utc",
+    "datetime_part",
+    "datetime_utc_to_local",
+    "dayofmonth",
+    "dayofweek",
+    "dayofyear",
+    "endofday",
+    "endofmonth",
+    "endofweek",
+    "endofyear",
+    "format_datetime",
+    "format_timespan",
+    "getyear",
+    "hourofday",
+    "make_datetime",
+    "make_timespan",
+    "monthofyear",
+    "now",
+    "startofday",
+    "startofmonth",
+    "startofweek",
+    "startofyear",
+    "unixtime_microseconds_todatetime",
+    "unixtime_milliseconds_todatetime",
+    "unixtime_nanoseconds_todatetime",
+    "unixtime_seconds_todatetime",
+    "weekofyear",
+    
+    # KQL scalar functions - Dynamic/array
+    "array_concat",
+    "array_iff",
+    "array_iif",
+    "array_index_of",
+    "array_length",
+    "array_reverse",
+    "array_rotate_left",
+    "array_rotate_right",
+    "array_shift_left",
+    "array_shift_right",
+    "array_slice",
+    "array_sort_asc",
+    "array_sort_desc",
+    "array_split",
+    "array_sum",
+    "bag_has_key",
+    "bag_keys",
+    "bag_merge",
+    "bag_pack",
+    "bag_pack_columns",
+    "bag_remove_keys",
+    "bag_set_key",
+    "jaccard_index",
+    "pack",
+    "pack_all",
+    "pack_array",
+    "repeat",
+    "set_difference",
+    "set_has_element",
+    "set_intersect",
+    "set_union",
+    "treepath",
+    "zip",
+    "dynamic",
+    
+    # KQL scalar functions - Window
+    "next",
+    "prev",
+    "row_cumsum",
+    "row_number",
+    "row_rank_dense",
+    "row_rank_min",
+    
+    # KQL scalar functions - Flow control
+    "toscalar",
+    
+    # KQL scalar functions - Mathematical
+    "abs",
+    "acos",
+    "asin",
+    "atan",
+    "atan2",
+    "beta_cdf",
+    "beta_inv",
+    "beta_pdf",
+    "cos",
+    "cot",
+    "degrees",
+    "erf",
+    "erfc",
+    "exp",
+    "exp10",
+    "exp2",
+    "gamma",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "log",
+    "log10",
+    "log2",
+    "loggamma",
+    "not",
+    "pi",
+    "pow",
+    "radians",
+    "rand",
+    "round",
+    "sign",
+    "sin",
+    "sqrt",
+    "tan",
+    "welch_test",
+    
+    # KQL scalar functions - Metadata
+    "column_ifexists",
+    "columnifexists",
+    "current_cluster_endpoint",
+    "current_database",
+    "current_principal",
+    "current_principal_details",
+    "current_principal_is_member_of",
+    "cursor_after",
+    "estimate_data_size",
+    "extent_id",
+    "extent_tags",
+    "ingestion_time",
+    
+    # KQL scalar functions - Rounding
+    "bin",
+    "bin_at",
+    "ceiling",
+    "floor",
+    
+    # KQL scalar functions - Conditional
+    "case",
+    "coalesce",
+    "iff",
+    "iif",
+    "max_of",
+    "min_of",
+    
+    # KQL scalar functions - String
+    "base64_encode_tostring",
+    "base64_encode_fromguid",
+    "base64_decode_tostring",
+    "base64_decode_toarray",
+    "base64_decode_toguid",
+    "countof",
+    "extract",
+    "extract_all",
+    "extract_json",
+    "has_any_index",
+    "indexof",
+    "isempty",
+    "isnotempty",
+    "isnotnull",
+    "isnull",
+    "parse_command_line",
+    "parse_csv",
+    "parse_ipv4",
+    "parse_ipv4_mask",
+    "parse_ipv6",
+    "parse_ipv6_mask",
+    "parse_json",
+    "parse_url",
+    "parse_urlquery",
+    "parse_version",
+    "replace_regex",
+    "replace_string",
+    "replace_strings",
+    "punycode_from_string",
+    "punycode_to_string",
+    "reverse",
+    "split",
+    "strcat",
+    "strcat_delim",
+    "strcmp",
+    "strlen",
+    "strrep",
+    "substring",
+    "tolower",
+    "toupper",
+    "translate",
+    "trim",
+    "trim_end",
+    "trim_start",
+    "url_decode",
+    "url_encode",
+    
+    # KQL scalar functions - IPv4/IPv6
+    "ipv4_compare",
+    "ipv4_is_in_range",
+    "ipv4_is_in_any_range",
+    "ipv4_is_match",
+    "ipv4_is_private",
+    "ipv4_netmask_suffix",
+    "ipv4_range_to_cidr_list",
+    "ipv6_compare",
+    "ipv6_is_match",
+    "format_ipv4",
+    "format_ipv4_mask",
+    "ipv6_is_in_range",
+    "ipv6_is_in_any_range",
+    "geo_info_from_ip_address",
+    "has_ipv4",
+    "has_ipv4_prefix",
+    "has_any_ipv4",
+    "has_any_ipv4_prefix",
+    
+    # KQL scalar functions - Type
+    "gettype",
+    
+    # KQL scalar functions - Aggregation (scalar versions)
+    "dcount_hll",
+    "hll_merge",
+    "percentile_tdigest",
+    "percentile_array_tdigest",
+    "percentrank_tdigest",
+    "rank_tdigest",
+    "merge_tdigest",
+    
+    # KQL scalar functions - Hash
+    "hash",
+    "hash_combine",
+    "hash_many",
+    "hash_md5",
+    "hash_sha1",
+    "hash_sha256",
+    "hash_xxhash64",
+    
+    # KQL aggregation functions
+    "any",
+    "arg_max",
+    "arg_min",
+    "avg",
+    "avgif",
+    "count",
+    "countif",
+    "dcount",
+    "dcountif",
+    "make_bag",
+    "make_bag_if",
+    "make_list",
+    "make_list_if",
+    "make_list_with_nulls",
+    "make_set",
+    "make_set_if",
+    "max",
+    "maxif",
+    "min",
+    "minif",
+    "percentile",
+    "percentiles",
+    "percentiles_array",
+    "stdev",
+    "stdevif",
+    "stdevp",
+    "sum",
+    "sumif",
+    "variance",
+    "varianceif",
+    "variancep",
+    "hll",
+    "hll_if",
+    "tdigest",
+    "tdigest_merge",
+    
+    # KQL series functions
+    "series_abs",
+    "series_acos",
+    "series_add",
+    "series_asin",
+    "series_atan",
+    "series_ceiling",
+    "series_cos",
+    "series_divide",
+    "series_equals",
+    "series_exp",
+    "series_floor",
+    "series_greater",
+    "series_greater_equals",
+    "series_less",
+    "series_less_equals",
+    "series_log",
+    "series_multiply",
+    "series_not_equals",
+    "series_pow",
+    "series_sign",
+    "series_sin",
+    "series_subtract",
+    "series_tan",
+    "series_cosine_similarity",
+    "series_decompose",
+    "series_decompose_anomalies",
+    "series_decompose_forecast",
+    "series_dot_product",
+    "series_fill_backward",
+    "series_fill_const",
+    "series_fill_forward",
+    "series_fill_linear",
+    "series_fft",
+    "series_fir",
+    "series_fit_2lines",
+    "series_fit_2lines_dynamic",
+    "series_fit_line",
+    "series_fit_line_dynamic",
+    "series_fit_poly",
+    "series_ifft",
+    "series_iir",
+    "series_magnitude",
+    "series_outliers",
+    "series_pearson_correlation",
+    "series_periods_detect",
+    "series_periods_validate",
+    "series_product",
+    "series_seasonal",
+    "series_stats",
+    "series_stats_dynamic",
+    "series_sum",
+    
+    # KQL geo functions
+    "geo_angle",
+    "geo_azimuth",
+    "geo_closest_point_on_line",
+    "geo_closest_point_on_polygon",
+    "geo_distance_2points",
+    "geo_distance_point_to_line",
+    "geo_distance_point_to_polygon",
+    "geo_from_wkt",
+    "geo_intersects_2lines",
+    "geo_intersects_2polygons",
+    "geo_intersects_line_with_polygon",
+    "geo_intersection_2lines",
+    "geo_intersection_2polygons",
+    "geo_intersection_line_with_polygon",
+    "geo_point_buffer",
+    "geo_point_in_circle",
+    "geo_point_in_polygon",
+    "geo_point_to_geohash",
+    "geo_point_to_s2cell",
+    "geo_point_to_h3cell",
+    "geo_line_buffer",
+    "geo_line_centroid",
+    "geo_line_densify",
+    "geo_line_interpolate_point",
+    "geo_line_length",
+    "geo_line_locate_point",
+    "geo_line_simplify",
+    "geo_line_to_s2cells",
+    "geo_polygon_area",
+    "geo_polygon_buffer",
+    "geo_polygon_centroid",
+    "geo_polygon_densify",
+    "geo_polygon_perimeter",
+    "geo_polygon_simplify",
+    "geo_polygon_to_s2cells",
+    "geo_polygon_to_h3cells",
+    "geo_geohash_to_central_point",
+    "geo_geohash_neighbors",
+    "geo_geohash_to_polygon",
+    "geo_s2cell_to_central_point",
+    "geo_s2cell_neighbors",
+    "geo_s2cell_to_polygon",
+    "geo_h3cell_to_central_point",
+    "geo_h3cell_neighbors",
+    "geo_h3cell_to_polygon",
+    "geo_h3cell_parent",
+    "geo_h3cell_children",
+    "geo_h3cell_level",
+    "geo_h3cell_rings",
+    "geo_simplify_polygons_array",
+    "geo_union_lines_array",
+    "geo_union_polygons_array",
+    
+    # Common false positives from workbook queries
+    "data",
+    "resources",
+    "alertentities",
+    "alerts",
+    
+    # Common variable names used in queries
+    "alldata",
+    "prefiltereddata",
+    "outputs",
+    
+    # Common field names that appear in project-away or other contexts
+    "subscriptionid",
+    "resourceid",
+    "tenantid",
+    
+    # Template placeholders
+    "{{graphqueriestablename}}",
+    
+    # Common ASIM/KQL field names that are not tables
+    "timegenerated",
+    "timestamp",
+    "url",
+    "srchostname",
+    "dsthostname",
+    "srcipaddr",
+    "dstipaddr",
+    "srcportnumber",
+    "dstportnumber",
+    "eventproduct",
+    "eventvendor",
+    "eventtype",
+    "eventresult",
+    "eventcount",
+    "httpreferrer",
+    "httpuseragent",
+    "httpmethod",
+    "threatfield",
+    "score",
+    "name",
+    "type",
+    "version",
+    "total",
+    "average",
+    
+    # Common let variable names and temporary table names
+    "hourlycount",
+    "webdata",
+    "potentialbeaconingtraffic",
+    "requestedfilename",
+    
+    # Time and type literals
+    "time",
+    "datetime",
+    "timespan",
+    "bool",
+    "int",
+    "long",
+    "real",
+    "string",
+    "guid",
+    "decimal",
 }
 PIPE_BLOCK_COMMANDS = {
     "project",
@@ -78,6 +575,39 @@ def is_valid_table_candidate(token: Optional[str], *, allow_parser_names: bool =
         return False
     if cleaned[0].isdigit():
         return False
+    # Filter out ARM template expressions (e.g., @{if(...), variables('...'), parameters('...'))
+    if '@{' in cleaned or '@(' in cleaned:
+        return False
+    if cleaned.startswith("@") or cleaned.startswith("variables(") or cleaned.startswith("parameters("):
+        return False
+    # Filter out bracket expressions and ARM parameter references
+    if cleaned.startswith("[") or "parameters(" in lowered or "variables(" in lowered:
+        return False
+    # Filter out Logic App expressions
+    if "triggerbody()" in lowered or "body(" in lowered:
+        return False
+    # Filter names that start with dot or are just _CL (incomplete table names)
+    if cleaned.startswith("."):
+        return False
+    if lowered == "_cl" or lowered == "_indicators_cl":
+        return False
+    # Filter names that are too short (less than 3 chars) unless they end in _CL
+    if len(cleaned) < 3 and not lowered.endswith("_cl"):
+        return False
+    # Allow ASIM view functions that start with _Im_ or _ASim_ (e.g., _Im_Dns, _ASim_NetworkSession)
+    # But exclude ASIM helper functions like _ASIM_GetUsernameType, _ASIM_LookupDnsQueryType
+    # Also exclude ASIM empty parsers like _Im_WebSession_Empty, _Im_Dns_Empty
+    if lowered.startswith("_im_") or lowered.startswith("_asim_"):
+        # Check if this is an empty parser (ends with _empty)
+        if lowered.endswith("_empty"):
+            return False  # Empty parsers only contain datatable definitions
+        # Check if this is a helper function (contains verb patterns after prefix)
+        # _im_ is 4 chars, _asim_ is 6 chars
+        after_prefix = lowered[6:] if lowered.startswith("_asim_") else lowered[4:]
+        helper_verbs = ("get", "lookup", "resolve", "check", "build", "extract", "parse")
+        if any(after_prefix.startswith(verb) for verb in helper_verbs):
+            return False  # This is a helper function, not a table/view
+        return True
     if lowered.startswith("_") and not cleaned.upper().endswith("_CL"):
         return False
     if lowered.endswith("_parser") and not allow_parser_names:
@@ -301,6 +831,16 @@ def strip_pipe_command_blocks(text: str) -> str:
         if skip_block:
             if stripped.startswith("|"):
                 skip_block = False
+            # Also reset skip_block on statement boundaries:
+            # - Lines starting with }; (end of let function body)
+            # - Lines starting with }); or ); (end of function call)
+            # - Lines that look like standalone table names (potential pipeline heads)
+            elif stripped.startswith("};") or stripped.startswith("});") or stripped.startswith(");"):
+                skip_block = False
+            # Check if line looks like a table name (word followed by nothing or just whitespace)
+            # This helps catch pipeline heads like "TableName" on their own line
+            elif TOKEN_PATTERN.fullmatch(stripped.rstrip(";")):
+                skip_block = False
             else:
                 continue
         if stripped.startswith("|"):
@@ -346,15 +886,17 @@ def detect_pipeline_heads(
     for idx, line in enumerate(lines):
         stripped = line.strip()
         
-        # Check if this line starts a top-level field-generating operation (at start of line)
-        if pipeline_field_pattern.match(line):
-            in_field_context = True
-            continue
-        
-        # Reset field context when we hit a new pipeline operator (that's not field-generating)
+        # Any line starting with | resets the field context first
         if stripped.startswith("|"):
             in_field_context = False
+            # Then check if this line starts a new field-generating operation
+            if pipeline_field_pattern.match(line):
+                in_field_context = True
             continue
+        
+        # Reset field context on statement boundaries (end of let functions, etc.)
+        if stripped.startswith("};") or stripped.startswith("});") or stripped.startswith(");") or stripped == "}":
+            in_field_context = False
         
         # Skip lines in field context that don't start with |
         if in_field_context:
@@ -485,6 +1027,25 @@ def extract_query_table_tokens(
         allow_parser_tokens=allow_parser_tokens,
     )
     tokens.update(pipeline_tokens)
+    
+    # Detect inline pipeline patterns: TableName | where ...
+    # This handles cases where table and pipe are on the SAME line (with optional leading whitespace)
+    # Use [^\S\n]* instead of \s* to match whitespace but not newlines
+    inline_pipe_pattern = re.compile(r'^[^\S\n]*([A-Za-z_][A-Za-z0-9_]*)[^\S\n]*\|', re.MULTILINE)
+    for match in inline_pipe_pattern.finditer(without_comments):
+        candidate = match.group(1)
+        lowered = candidate.lower()
+        if lowered not in assigned_variables:
+            if is_valid_table_candidate(candidate, allow_parser_names=allow_parser_tokens):
+                tokens.add(candidate)
+    
+    # Detect ASIM view function calls: _Im_Dns(...), _ASim_NetworkSession(...)
+    # These are called like functions but reference underlying tables
+    asim_view_pattern = re.compile(r'(_Im_[A-Za-z0-9_]+|_ASim_[A-Za-z0-9_]+)\s*\(', re.IGNORECASE)
+    for match in asim_view_pattern.finditer(without_comments):
+        view_name = match.group(1)
+        tokens.add(view_name)
+    
     token = extract_table_token(raw_text, root, cache, allow_parser_tokens=allow_parser_tokens)
     if token and is_valid_table_candidate(token, allow_parser_names=allow_parser_tokens):
         tokens.add(token)
@@ -845,21 +1406,145 @@ def _capture_block_scalar(lines: List[str], start_index: int) -> Tuple[str, int]
     return joined, idx - 1 if idx <= total else total - 1
 
 
+def load_asim_parsers(repo_root: Path) -> Tuple[Set[str], Dict[str, Set[str]], Dict[str, str]]:
+    """
+    Load ASIM parsers from /Parsers/ASim*/Parsers directories.
+    
+    Returns:
+        - parser_names: Set of all ASIM parser names (both ParserName and EquivalentBuiltInParser)
+        - parser_table_map: Dict mapping parser name (lowercased) to tables/sub-parsers it references
+        - parser_alias_map: Dict mapping EquivalentBuiltInParser to ParserName (both lowercased)
+    """
+    try:
+        import yaml
+    except ImportError:
+        print("  Warning: PyYAML not installed, skipping ASIM parser loading")
+        return set(), {}, {}
+    
+    parsers_dir = repo_root / "Parsers"
+    parser_names: Set[str] = set()
+    parser_table_map: Dict[str, Set[str]] = defaultdict(set)
+    parser_alias_map: Dict[str, str] = {}  # Maps EquivalentBuiltInParser -> ParserName
+    
+    if not parsers_dir.exists():
+        return parser_names, parser_table_map, parser_alias_map
+    
+    # Find all ASim* directories
+    asim_dirs = [d for d in parsers_dir.iterdir() if d.is_dir() and d.name.startswith("ASim")]
+    
+    for asim_dir in asim_dirs:
+        parsers_subdir = asim_dir / "Parsers"
+        if not parsers_subdir.exists():
+            continue
+        
+        for yaml_path in list(parsers_subdir.glob("*.yaml")) + list(parsers_subdir.glob("*.yml")):
+            try:
+                content = yaml_path.read_text(encoding="utf-8")
+                data = yaml.safe_load(content)
+                if not isinstance(data, dict):
+                    continue
+                
+                parser_name = data.get("ParserName", "")
+                equivalent_builtin = data.get("EquivalentBuiltInParser", "")
+                parser_query = data.get("ParserQuery", "")
+                sub_parsers = data.get("Parsers", [])  # List of sub-parser references
+                
+                if parser_name:
+                    parser_names.add(parser_name)
+                    parser_name_lower = parser_name.lower()
+                    
+                    # Extract tables from the parser query
+                    if parser_query:
+                        tables = extract_query_table_tokens(parser_query, {}, {})
+                        parser_table_map[parser_name_lower].update(tables)
+                    
+                    # Add sub-parser references (these will be expanded recursively later)
+                    if isinstance(sub_parsers, list):
+                        for sub_parser in sub_parsers:
+                            if isinstance(sub_parser, str) and sub_parser.strip():
+                                parser_table_map[parser_name_lower].add(sub_parser.strip())
+                
+                # Map the EquivalentBuiltInParser to the ParserName
+                if equivalent_builtin and parser_name:
+                    parser_names.add(equivalent_builtin)
+                    equivalent_lower = equivalent_builtin.lower()
+                    parser_name_lower = parser_name.lower()
+                    parser_alias_map[equivalent_lower] = parser_name_lower
+                    # Also make the equivalent name point to the same tables
+                    if parser_name_lower in parser_table_map:
+                        parser_table_map[equivalent_lower] = parser_table_map[parser_name_lower]
+                    
+            except Exception:
+                continue
+    
+    return parser_names, dict(parser_table_map), parser_alias_map
+
+
+def normalize_parser_name(name: str) -> str:
+    """
+    Normalize an ASIM parser name by removing leading underscore.
+    
+    ASIM parsers have inconsistent naming:
+    - Parsers lists use _ASim_* (with underscore prefix)
+    - EquivalentBuiltInParser uses ASim_* (without underscore)
+    
+    This normalizes to the form without underscore for consistent lookups.
+    """
+    lowered = name.lower()
+    if lowered.startswith('_'):
+        return lowered[1:]
+    return lowered
+
+
+def is_parser_name(name: str, parser_names_normalized: Set[str]) -> bool:
+    """Check if a name matches a known parser name (handling underscore variations)."""
+    normalized = normalize_parser_name(name)
+    return normalized in parser_names_normalized
+
+
 def expand_parser_tables(parser_name: str, parser_table_map: Dict[str, Set[str]], max_depth: int = 5) -> Set[str]:
+    """
+    Expand a parser name to its underlying tables by recursively resolving sub-parsers.
+    
+    Handles ASIM parser naming variations:
+    - _ASim_* (underscore prefix used in Parsers lists)
+    - ASim_* (no underscore, used in EquivalentBuiltInParser)
+    """
     visited: Set[str] = set()
+    
+    def _normalize_parser_key(name: str) -> List[str]:
+        """Return possible key variations for a parser name."""
+        lowered = name.lower()
+        keys = [lowered]
+        # If starts with underscore, also try without it
+        if lowered.startswith('_'):
+            keys.append(lowered[1:])
+        # If doesn't start with underscore, also try with it
+        else:
+            keys.append('_' + lowered)
+        return keys
 
     def _walk(name: str, depth: int) -> Set[str]:
         lowered = name.lower()
         if not lowered or lowered in visited or depth > max_depth:
             return set()
         visited.add(lowered)
-        direct = parser_table_map.get(lowered)
+        
+        # Try different key variations
+        direct = None
+        for key in _normalize_parser_key(name):
+            if key in parser_table_map:
+                direct = parser_table_map[key]
+                break
+        
         if not direct:
             return set()
         resolved: Set[str] = set()
         for candidate in direct:
             candidate_lower = candidate.lower()
-            if candidate_lower in parser_table_map:
+            # Check if candidate is a parser using normalized keys
+            is_parser = any(k in parser_table_map for k in _normalize_parser_key(candidate))
+            if is_parser:
                 resolved.update(_walk(candidate, depth + 1))
             else:
                 resolved.add(candidate)
@@ -1162,6 +1847,493 @@ def add_issue(
     })
 
 
+# ============================================================================
+# Content Items Extraction (Analytics Rules, Hunting Queries, Workbooks, etc.)
+# ============================================================================
+
+# Content type folder name variations
+CONTENT_TYPE_FOLDERS: Dict[str, List[str]] = {
+    "analytic_rule": ["Analytic Rules", "Analytical Rules", "Analytics Rules"],
+    "hunting_query": ["Hunting Queries"],
+    "workbook": ["Workbooks", "Workbook"],
+    "playbook": ["Playbooks", "Playbook"],
+    "parser": ["Parsers", "Parser"],
+    "watchlist": ["Watchlists"],
+}
+
+
+def read_yaml_safe(path: Path) -> Optional[Dict[str, Any]]:
+    """Read a YAML file safely, handling common issues."""
+    try:
+        import yaml
+        with path.open("r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except ImportError:
+        # Fallback to basic parsing if PyYAML not available
+        return _parse_yaml_basic(path)
+    except Exception as e:
+        # Try basic parsing as fallback
+        result = _parse_yaml_basic(path)
+        if result:
+            return result
+        return None
+
+
+def _parse_yaml_basic(path: Path) -> Optional[Dict[str, Any]]:
+    """Basic YAML parsing for simple key: value structures."""
+    try:
+        content = path.read_text(encoding="utf-8")
+        result: Dict[str, Any] = {}
+        current_key = None
+        multiline_value: List[str] = []
+        in_multiline = False
+        
+        for line in content.splitlines():
+            # Skip comments
+            if line.strip().startswith("#"):
+                continue
+            
+            # Check for multiline continuation
+            if in_multiline:
+                if line.startswith("  ") or line.startswith("\t"):
+                    multiline_value.append(line.strip())
+                    continue
+                else:
+                    # End of multiline
+                    if current_key:
+                        result[current_key] = "\n".join(multiline_value)
+                    in_multiline = False
+                    multiline_value = []
+            
+            # Parse key: value
+            if ":" in line and not line.strip().startswith("-"):
+                parts = line.split(":", 1)
+                key = parts[0].strip().strip("'\"")
+                value = parts[1].strip() if len(parts) > 1 else ""
+                
+                # Check for multiline indicator
+                if value == "|" or value == ">":
+                    current_key = key
+                    in_multiline = True
+                    multiline_value = []
+                elif value.startswith("'") or value.startswith('"'):
+                    result[key] = value.strip("'\"")
+                elif value:
+                    result[key] = value
+                else:
+                    current_key = key
+        
+        # Handle any remaining multiline content
+        if in_multiline and current_key:
+            result[current_key] = "\n".join(multiline_value)
+        
+        return result if result else None
+    except Exception:
+        return None
+
+
+def extract_queries_from_workbook(data: Dict[str, Any]) -> List[str]:
+    """Extract all KQL queries from a workbook JSON structure."""
+    queries: List[str] = []
+    
+    def traverse(obj: Any) -> None:
+        if isinstance(obj, dict):
+            # Look for query fields
+            if "query" in obj and isinstance(obj["query"], str):
+                query = obj["query"]
+                # Workbook queries often have \r\n or escaped characters
+                query = query.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+                queries.append(query)
+            for value in obj.values():
+                traverse(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                traverse(item)
+    
+    traverse(data)
+    return queries
+
+
+def extract_content_item_from_yaml(
+    yaml_path: Path,
+    content_type: str,
+    solution_name: str,
+    solution_folder: str,
+) -> Optional[Dict[str, Any]]:
+    """Extract content item metadata and query from a YAML file."""
+    data = read_yaml_safe(yaml_path)
+    if not data:
+        return None
+    
+    # Extract common fields
+    item_id = data.get("id", "")
+    name = data.get("name", yaml_path.stem)
+    description = data.get("description", "")
+    if isinstance(description, str):
+        description = description.replace("\n", " ").replace("\r", "").strip()
+    
+    # Get query
+    query = data.get("query", "")
+    if isinstance(query, str):
+        query = query.strip()
+    
+    # Determine query status for analytic rules and hunting queries
+    query_status = "has_query"
+    if content_type in ("analytic_rule", "hunting_query"):
+        if not query:
+            # No query present - check if retired or deprecated
+            desc_lower = description.lower() if description else ""
+            name_lower = name.lower() if name else ""
+            
+            if "retired" in desc_lower or "retired" in name_lower:
+                query_status = "retired"
+            elif "deprecated" in desc_lower or "deprecated" in name_lower:
+                query_status = "deprecated"
+            elif "moved" in desc_lower or "replaced" in desc_lower:
+                query_status = "moved_or_replaced"
+            else:
+                query_status = "missing_query"
+    
+    # Get required data connectors
+    required_connectors: List[str] = []
+    req_dc = data.get("requiredDataConnectors", [])
+    if isinstance(req_dc, list):
+        for dc in req_dc:
+            if isinstance(dc, dict) and "connectorId" in dc:
+                required_connectors.append(dc["connectorId"])
+    
+    # Get tactics and techniques (for analytics/hunting)
+    tactics = data.get("tactics", [])
+    if isinstance(tactics, list):
+        tactics = ",".join(tactics)
+    else:
+        tactics = str(tactics) if tactics else ""
+    
+    techniques = data.get("relevantTechniques", [])
+    if isinstance(techniques, list):
+        techniques = ",".join(techniques)
+    else:
+        techniques = str(techniques) if techniques else ""
+    
+    # Get severity (for analytics)
+    severity = data.get("severity", "")
+    
+    # Get status
+    status = data.get("status", "")
+    
+    # Get kind (for analytics rules)
+    kind = data.get("kind", "")
+    
+    return {
+        "content_id": item_id,
+        "content_name": name,
+        "content_type": content_type,
+        "content_description": description[:500] if description else "",  # Truncate long descriptions
+        "content_file": yaml_path.name,
+        "content_severity": severity,
+        "content_status": status,
+        "content_kind": kind,
+        "content_tactics": tactics,
+        "content_techniques": techniques,
+        "content_required_connectors": ",".join(required_connectors),
+        "content_query": query,
+        "content_query_status": query_status,
+        "solution_name": solution_name,
+        "solution_folder": solution_folder,
+    }
+
+
+def extract_content_item_from_workbook(
+    json_path: Path,
+    solution_name: str,
+    solution_folder: str,
+) -> Optional[Dict[str, Any]]:
+    """Extract content item metadata from a workbook JSON file."""
+    data = read_json(json_path)
+    if not data:
+        return None
+    
+    # Skip ARM template files (azuredeploy*.json)
+    if json_path.name.lower().startswith("azuredeploy"):
+        return None
+    
+    # Use filename as workbook name (workbooks don't have reliable metadata)
+    name = json_path.stem
+    
+    # Extract all queries from the workbook
+    queries = extract_queries_from_workbook(data) if isinstance(data, dict) else []
+    combined_query = "\n---\n".join(queries) if queries else ""
+    
+    return {
+        "content_id": "",  # Workbooks typically don't have an ID in the JSON
+        "content_name": name,
+        "content_type": "workbook",
+        "content_description": "",  # Description not used for workbooks
+        "content_file": json_path.name,
+        "content_severity": "",
+        "content_status": "",
+        "content_kind": "",
+        "content_tactics": "",
+        "content_techniques": "",
+        "content_required_connectors": "",
+        "content_query": combined_query,
+        "content_query_status": "has_query" if combined_query else "no_query",
+        "solution_name": solution_name,
+        "solution_folder": solution_folder,
+    }
+
+
+def extract_playbook_queries_and_tables(data: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    """
+    Extract KQL queries and write-to tables from a playbook (Logic App) JSON structure.
+    
+    Returns:
+        Tuple of (queries, write_tables):
+        - queries: List of KQL query strings from /queryData steps
+        - write_tables: List of table names from /api/logs steps (Log-Type header)
+    """
+    queries: List[str] = []
+    write_tables: List[str] = []
+    
+    def traverse(obj: Any) -> None:
+        if isinstance(obj, dict):
+            # Check if this is an ApiConnection action
+            if obj.get("type") == "ApiConnection":
+                inputs = obj.get("inputs", {})
+                if isinstance(inputs, dict):
+                    path = inputs.get("path", "")
+                    
+                    # Query step: /queryData or /queryDataV2
+                    if path in ("/queryData", "/queryDataV2"):
+                        body = inputs.get("body", "")
+                        if isinstance(body, str) and body.strip():
+                            # Clean up the query - may have escaped newlines
+                            query = body.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+                            queries.append(query)
+                    
+                    # Write to table step: /api/logs
+                    elif path == "/api/logs":
+                        headers = inputs.get("headers", {})
+                        if isinstance(headers, dict):
+                            log_type = headers.get("Log-Type", "")
+                            if isinstance(log_type, str) and log_type.strip():
+                                # Log-Type is the table name (without _CL suffix typically added by LA)
+                                table_name = log_type.strip()
+                                if not table_name.endswith("_CL"):
+                                    table_name = f"{table_name}_CL"
+                                if table_name not in write_tables:
+                                    write_tables.append(table_name)
+            
+            # Continue traversing
+            for value in obj.values():
+                traverse(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                traverse(item)
+    
+    traverse(data)
+    return queries, write_tables
+
+
+def extract_content_item_from_playbook(
+    json_path: Path,
+    solution_name: str,
+    solution_folder: str,
+) -> Optional[Dict[str, Any]]:
+    """Extract content item metadata from a playbook (Logic App) JSON file."""
+    data = read_json(json_path)
+    if not data:
+        return None
+    
+    # Playbooks are ARM templates or Logic App definitions
+    if not isinstance(data, dict):
+        return None
+    
+    # Skip linked deployment templates (they deploy multiple playbooks)
+    if "resources" in data:
+        resources = data.get("resources", [])
+        if isinstance(resources, list):
+            for resource in resources:
+                if isinstance(resource, dict):
+                    res_type = resource.get("type", "")
+                    # Skip if this is a linked deployment template
+                    if res_type == "Microsoft.Resources/deployments":
+                        return None
+                    # Skip if this is a custom API connector (not a playbook)
+                    if res_type == "Microsoft.Web/customApis":
+                        return None
+    
+    name = None
+    description = ""
+    
+    # Priority 1: metadata.title (most reliable for display name)
+    if "metadata" in data:
+        meta = data["metadata"]
+        if isinstance(meta, dict):
+            if "title" in meta:
+                name = meta.get("title")
+            description = meta.get("description", "")
+    
+    # Priority 2: parameters.PlaybookName.defaultValue (only if no metadata title)
+    if not name and "parameters" in data:
+        params = data["parameters"]
+        if isinstance(params, dict):
+            if "PlaybookName" in params:
+                param_def = params["PlaybookName"]
+                if isinstance(param_def, dict):
+                    name = param_def.get("defaultValue")
+    
+    # Priority 3: Use parent folder name if file is azuredeploy.json
+    if not name:
+        if json_path.stem.lower() == "azuredeploy":
+            # Use the parent folder name as the playbook name
+            name = json_path.parent.name
+        else:
+            name = json_path.stem
+    
+    # Clean up description - replace newlines with space for single-line display
+    if description:
+        description = " ".join(description.split())
+    
+    # content_file will be overwritten by the caller with the full relative path
+    content_file = json_path.name
+    
+    # Extract queries and write-to tables from the playbook
+    queries, write_tables = extract_playbook_queries_and_tables(data)
+    combined_query = "\n---\n".join(queries) if queries else ""
+    write_tables_str = ",".join(write_tables) if write_tables else ""
+    
+    return {
+        "content_id": "",
+        "content_name": name,
+        "content_type": "playbook",
+        "content_description": description[:500] if description else "",
+        "content_file": content_file,
+        "content_severity": "",
+        "content_status": "",
+        "content_kind": "",
+        "content_tactics": "",
+        "content_techniques": "",
+        "content_required_connectors": "",
+        "content_query": combined_query,
+        "content_query_status": "has_query" if combined_query else "no_query",
+        "content_write_tables": write_tables_str,
+        "solution_name": solution_name,
+        "solution_folder": solution_folder,
+    }
+
+
+def collect_content_items(solution_dir: Path, solution_name: str, solution_folder: str) -> List[Dict[str, Any]]:
+    """Collect all content items from a solution directory."""
+    content_items: List[Dict[str, Any]] = []
+    
+    for content_type, folder_names in CONTENT_TYPE_FOLDERS.items():
+        for folder_name in folder_names:
+            content_dir = solution_dir / folder_name
+            if not content_dir.exists():
+                continue
+            
+            if content_type in ["analytic_rule", "hunting_query", "parser"]:
+                # YAML-based content
+                for yaml_path in list(content_dir.rglob("*.yaml")) + list(content_dir.rglob("*.yml")):
+                    item = extract_content_item_from_yaml(yaml_path, content_type, solution_name, solution_folder)
+                    if item:
+                        # Calculate relative path within the content folder
+                        try:
+                            rel_path = yaml_path.relative_to(content_dir)
+                            item["content_file"] = str(rel_path).replace("\\", "/")
+                        except ValueError:
+                            pass
+                        content_items.append(item)
+                        
+            elif content_type == "workbook":
+                # JSON-based content (workbooks)
+                for json_path in content_dir.rglob("*.json"):
+                    # Skip ARM templates
+                    if json_path.name.lower().startswith("azuredeploy"):
+                        continue
+                    item = extract_content_item_from_workbook(json_path, solution_name, solution_folder)
+                    if item:
+                        content_items.append(item)
+                        
+            elif content_type == "playbook":
+                # JSON-based content (playbooks/Logic Apps)
+                for json_path in content_dir.rglob("*.json"):
+                    item = extract_content_item_from_playbook(json_path, solution_name, solution_folder)
+                    if item:
+                        # Calculate relative path from content folder (Playbooks folder)
+                        try:
+                            rel_path = json_path.relative_to(content_dir)
+                            item["content_file"] = str(rel_path).replace("\\", "/")
+                        except ValueError:
+                            pass
+                        content_items.append(item)
+                        
+            elif content_type == "watchlist":
+                # Watchlists are typically JSON
+                for json_path in content_dir.rglob("*.json"):
+                    data = read_json(json_path)
+                    if data:
+                        name = json_path.stem
+                        if isinstance(data, dict):
+                            name = data.get("name", name) or data.get("displayName", name)
+                        content_items.append({
+                            "content_id": "",
+                            "content_name": name,
+                            "content_type": "watchlist",
+                            "content_description": "",
+                            "content_file": json_path.name,
+                            "content_severity": "",
+                            "content_status": "",
+                            "content_kind": "",
+                            "content_tactics": "",
+                            "content_techniques": "",
+                            "content_required_connectors": "",
+                            "content_query": "",
+                            "content_query_status": "no_query",  # Watchlists don't have queries
+                            "solution_name": solution_name,
+                            "solution_folder": solution_folder,
+                        })
+    
+    return content_items
+
+
+def extract_tables_from_content_query(
+    query: str,
+    parser_names: Set[str],
+    parser_table_map: Dict[str, Set[str]],
+) -> Set[str]:
+    """Extract table names from a content item's KQL query, expanding parser references recursively."""
+    if not query:
+        return set()
+    
+    # Use existing query parsing infrastructure
+    cache: Dict[str, Optional[str]] = {}
+    tables = extract_query_table_tokens(query, {}, cache, allow_parser_tokens=True)
+    
+    # Expand parser references to actual tables using recursive expansion
+    # Normalize parser names to handle underscore prefix variations
+    expanded_tables: Set[str] = set()
+    parser_names_normalized = {normalize_parser_name(p) for p in parser_names}
+    parser_table_map_normalized = {normalize_parser_name(k): v for k, v in parser_table_map.items()}
+    
+    for table in tables:
+        table_normalized = normalize_parser_name(table)
+        if table_normalized in parser_names_normalized or table_normalized in parser_table_map_normalized:
+            # This is a parser, expand recursively to underlying tables
+            derived_tables = expand_parser_tables(table, parser_table_map)
+            if derived_tables:
+                expanded_tables.update(derived_tables)
+            else:
+                # Keep the parser name if we can't expand it
+                expanded_tables.add(table)
+        else:
+            expanded_tables.add(table)
+    
+    # Filter expanded tables through is_valid_table_candidate to remove helper functions
+    return {t for t in expanded_tables if is_valid_table_candidate(t)}
+
+
 def parse_args(default_repo_root: Path) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extract connector metadata and table usage per solution")
     parser.add_argument(
@@ -1224,6 +2396,18 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "solution_analyzer_overrides.csv",
         help="Path to overrides CSV file for field value overrides (default: %(default)s)",
     )
+    parser.add_argument(
+        "--content-items-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "content_items.csv",
+        help="Path for the content items CSV file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--content-tables-mapping-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "content_tables_mapping.csv",
+        help="Path for the content items to tables mapping CSV file (default: %(default)s)",
+    )
     return parser.parse_args()
 
 
@@ -1243,6 +2427,11 @@ def main() -> None:
     report_path = args.report.resolve()
     report_parent = report_path.parent
     report_parent.mkdir(parents=True, exist_ok=True)
+
+    # Load ASIM parsers once at startup for global parser expansion
+    print("Loading ASIM parsers from /Parsers/ASim*/Parsers...")
+    asim_parser_names, asim_parser_table_map, asim_alias_map = load_asim_parsers(repo_root)
+    print(f"  Loaded {len(asim_parser_names)} ASIM parser names, {len(asim_parser_table_map)} parser mappings")
 
     # Load tables_reference.csv early for use in collection method detection
     tables_reference: Dict[str, Dict[str, str]] = {}
@@ -1270,6 +2459,10 @@ def main() -> None:
     solution_parser_skipped: Dict[str, Set[str]] = defaultdict(set)
     issues: List[Dict[str, str]] = []
     
+    # Content items tracking
+    all_content_items: List[Dict[str, Any]] = []
+    content_table_mappings: List[Dict[str, str]] = []
+    
     # Track all solutions and identify those without any connectors
     all_solutions_info: Dict[str, Dict[str, str]] = {}
     solutions_without_connectors: Set[str] = set()
@@ -1281,8 +2474,69 @@ def main() -> None:
         all_solutions_info[solution_info["solution_name"]] = solution_info
         
         has_metadata = (solution_dir / "SolutionMetadata.json").exists()
-        parser_names, parser_table_map = collect_parser_metadata(solution_dir.resolve())
-        parser_names_lower = {name.lower() for name in parser_names if name}
+        solution_parser_names, solution_parser_table_map = collect_parser_metadata(solution_dir.resolve())
+        
+        # Merge solution parsers with global ASIM parsers
+        # ASIM parsers take precedence for parser expansion (they're the canonical source)
+        parser_names = solution_parser_names | asim_parser_names
+        parser_table_map = {**solution_parser_table_map, **asim_parser_table_map}
+        # Normalize parser names for lookups (handles underscore prefix variations)
+        parser_names_lower = {normalize_parser_name(name) for name in parser_names if name}
+        
+        # Collect content items for this solution
+        solution_content_items = collect_content_items(
+            solution_dir.resolve(),
+            solution_info["solution_name"],
+            solution_info["solution_folder"],
+        )
+        
+        # Extract tables from content queries and build mappings
+        # Consolidate read/write usage per table per content item
+        for item in solution_content_items:
+            # Track table usage for this content item: table_name -> set of usages
+            item_table_usage: Dict[str, set] = defaultdict(set)
+            
+            # Extract read tables from queries
+            query = item.get("content_query", "")
+            if query:
+                tables = extract_tables_from_content_query(query, parser_names, parser_table_map)
+                for table in tables:
+                    if is_valid_table_candidate(table):
+                        item_table_usage[table].add("read")
+            
+            # Extract write tables (from playbooks)
+            write_tables_str = item.get("content_write_tables", "")
+            if write_tables_str:
+                for table in write_tables_str.split(","):
+                    table = table.strip()
+                    if table and is_valid_table_candidate(table):
+                        item_table_usage[table].add("write")
+            
+            # Now emit one row per table with consolidated usage
+            for table, usages in item_table_usage.items():
+                # Determine usage string: read, write, or read/write
+                if "read" in usages and "write" in usages:
+                    usage_str = "read/write"
+                elif "write" in usages:
+                    usage_str = "write"
+                else:
+                    usage_str = "read"
+                
+                content_table_mappings.append({
+                    "solution_name": item["solution_name"],
+                    "solution_folder": item.get("solution_folder", ""),
+                    "content_type": item["content_type"],
+                    "content_id": item.get("content_id", ""),
+                    "content_name": item["content_name"],
+                    "content_file": item.get("content_file", ""),
+                    "table_name": table,
+                    "table_usage": usage_str,
+                })
+            
+            # Remove query and write_tables from output to keep CSV manageable
+            item_for_csv = {k: v for k, v in item.items() if k not in ("content_query", "content_write_tables")}
+            all_content_items.append(item_for_csv)
+        
         # Support "Data Connectors" (preferred), "DataConnectors", and "Data Connector" (singular) folder naming
         data_connectors_dirs = [
             solution_dir / "Data Connectors",
@@ -1331,7 +2585,7 @@ def main() -> None:
                 if parser_names_lower:
                     for info in table_map.values():
                         actual_name = info.get("actual_table")
-                        if actual_name and actual_name.lower() in parser_names_lower:
+                        if actual_name and normalize_parser_name(actual_name) in parser_names_lower:
                             info["has_mismatch"] = False
                             info["actual_table"] = None
                 table_entries = list(table_map.items())
@@ -1356,7 +2610,7 @@ def main() -> None:
                     for original_name, table_info in table_entries:
                         if not isinstance(original_name, str) or not original_name:
                             continue
-                        lowered = original_name.lower()
+                        lowered = normalize_parser_name(original_name)
                         if lowered and lowered in parser_names_lower:
                             original_sources = set(table_info.get("sources") or [])
                             derived_tables = expand_parser_tables(original_name, parser_table_map)
@@ -1413,7 +2667,7 @@ def main() -> None:
                     for table_name, table_info in effective_table_entries:
                         if table_name and not is_valid_table_candidate(table_name):
                             continue
-                        if table_name and table_name.lower() in parser_names_lower:
+                        if table_name and normalize_parser_name(table_name) in parser_names_lower:
                             continue
                         if not table_name:
                             continue
@@ -1764,10 +3018,15 @@ def main() -> None:
         })
     
     # Build tables data from tables_reference.csv metadata (tables_reference was loaded early)
-    # Collect all unique tables from connector data
+    # Collect all unique tables from connector data AND content items
     all_tables: Set[str] = set()
     for row in rows:
         table = row.get('Table', '')
+        if table:
+            all_tables.add(table)
+    # Also add tables from content items (includes custom tables written by playbooks)
+    for mapping in content_table_mappings:
+        table = mapping.get('table_name', '')
         if table:
             all_tables.add(table)
     
@@ -1848,6 +3107,43 @@ def main() -> None:
         solutions_data = apply_overrides_to_data(solutions_data, overrides, 'solution', 'solution_name')
         
         print(f"Applied overrides to data")
+
+    # Identify internal use tables: custom tables (_CL) written by playbooks AND used by non-playbook content
+    # These are solution-specific data storage tables (e.g., summarization tables for DNS/Network/Web Essentials)
+    # Standard Sentinel tables (SecurityAlert, SecurityIncident, etc.) are NOT internal even if solutions write to them
+    table_playbook_writers: Dict[str, Set[str]] = defaultdict(set)  # table -> solutions with playbooks that write
+    table_nonplaybook_readers: Dict[str, Set[str]] = defaultdict(set)  # table -> solutions with non-playbook content that reads
+    for mapping in content_table_mappings:
+        table = mapping.get('table_name', '')
+        solution = mapping.get('solution_name', '')
+        content_type = mapping.get('content_type', '')
+        usage = mapping.get('table_usage', 'read')
+        if table and solution:
+            # Track playbooks that write
+            if content_type == 'playbook' and usage in ('write', 'read/write'):
+                table_playbook_writers[table].add(solution)
+            # Track non-playbook content that reads (analytics, hunting, workbooks)
+            if content_type != 'playbook' and usage in ('read', 'read/write'):
+                table_nonplaybook_readers[table].add(solution)
+    
+    internal_tables: Set[str] = set()
+    for table in table_playbook_writers:
+        # Only custom tables (_CL suffix) can be internal - these are created by solutions
+        # Standard Sentinel tables (SecurityAlert, SecurityIncident, IdentityInfo, etc.) are not internal
+        if not table.endswith('_CL'):
+            continue
+        writing_solutions = table_playbook_writers[table]
+        reading_solutions = table_nonplaybook_readers.get(table, set())
+        # If any solution both writes (via playbook) and reads (via non-playbook content), it's internal
+        if writing_solutions & reading_solutions:
+            internal_tables.add(table)
+    
+    # Update tables_data category to "Internal" for internal tables
+    if internal_tables:
+        for table_entry in tables_data:
+            if table_entry['table_name'] in internal_tables:
+                table_entry['category'] = 'Internal'
+        print(f"Identified {len(internal_tables)} internal use tables (custom tables written by playbooks AND used by non-playbook content)")
 
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
@@ -1953,6 +3249,37 @@ def main() -> None:
         writer = csv.DictWriter(csvfile, fieldnames=mapping_fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(mapping_data)
+    
+    # Write content items CSV
+    content_items_fieldnames = [
+        'content_id',
+        'content_name',
+        'content_type',
+        'content_description',
+        'content_file',
+        'content_severity',
+        'content_status',
+        'content_kind',
+        'content_tactics',
+        'content_techniques',
+        'content_required_connectors',
+        'content_query_status',
+        'solution_name',
+        'solution_folder',
+    ]
+    content_items_path = args.content_items_csv.resolve()
+    with content_items_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=content_items_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(all_content_items)
+    
+    # Write content-to-tables mapping CSV
+    content_tables_fieldnames = ['solution_name', 'solution_folder', 'content_type', 'content_id', 'content_name', 'content_file', 'table_name', 'table_usage']
+    content_tables_path = args.content_tables_mapping_csv.resolve()
+    with content_tables_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=content_tables_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(content_table_mappings)
 
     report_fieldnames = [
         "solution_name",
@@ -2023,12 +3350,25 @@ def main() -> None:
     for method, count in sorted(method_counts.items(), key=lambda x: -x[1]):
         pct = (count / len(connectors_data) * 100) if connectors_data else 0
         print(f"  {method:30} {count:4} ({pct:.1f}%)")
+    
+    # Print content type distribution
+    content_type_counts: Dict[str, int] = defaultdict(int)
+    for item in all_content_items:
+        content_type_counts[item['content_type']] += 1
+    
+    print(f"\nContent Type Distribution ({len(all_content_items)} items):")
+    print("-" * 50)
+    for ctype, count in sorted(content_type_counts.items(), key=lambda x: -x[1]):
+        pct = (count / len(all_content_items) * 100) if all_content_items else 0
+        print(f"  {ctype:30} {count:4} ({pct:.1f}%)")
 
     print(f"\nWrote {len(rows)} rows to {safe_relative(output_path, repo_root)}")
     print(f"Wrote {len(connectors_data)} connectors to {safe_relative(connectors_path, repo_root)}")
     print(f"Wrote {len(solutions_data)} solutions to {safe_relative(solutions_path, repo_root)}")
     print(f"Wrote {len(tables_data)} tables to {safe_relative(tables_path, repo_root)}")
     print(f"Wrote {len(mapping_data)} mappings to {safe_relative(mapping_path, repo_root)}")
+    print(f"Wrote {len(all_content_items)} content items to {safe_relative(content_items_path, repo_root)}")
+    print(f"Wrote {len(content_table_mappings)} content-table mappings to {safe_relative(content_tables_path, repo_root)}")
     print(f"Logged {len(issues)} connector issues to {safe_relative(report_path, repo_root)}")
 
 

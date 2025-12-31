@@ -1,15 +1,5 @@
 # ExchangeHttpProxy_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `ExchangeHttpProxy_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 2 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -22,6 +12,8 @@ This table is ingested by the following connectors:
 
 - [[Deprecated] Microsoft Exchange Logs and Events](../connectors/esi-exchangeadminauditlogevents.md)
 - [Microsoft Exchange HTTP Proxy Logs](../connectors/esi-opt7exchangehttpproxylogs.md)
+
+---
 
 ---
 

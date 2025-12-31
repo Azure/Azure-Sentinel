@@ -1,15 +1,5 @@
 # ARGOS_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `ARGOS_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,20 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [ARGOS Cloud Security](../connectors/argoscloudsecurity.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (1)
+
+**In solution [ARGOSCloudSecurity](../solutions/argoscloudsecurity.md):**
+- [ARGOS Cloud Security - Exploitable Cloud Resources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ARGOSCloudSecurity/Analytic%20Rules/ExploitableSecurityIssues.yaml)
+
+### Workbooks (1)
+
+**In solution [ARGOSCloudSecurity](../solutions/argoscloudsecurity.md):**
+- [ARGOSCloudSecurityWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ARGOSCloudSecurity/Workbooks/ARGOSCloudSecurityWorkbook.json)
 
 ---
 

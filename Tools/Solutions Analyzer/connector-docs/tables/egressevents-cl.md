@@ -1,15 +1,5 @@
 # EgressEvents_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `EgressEvents_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Egress Iris Connector](../connectors/egresssiempolling.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [Egress Iris](../solutions/egress-iris.md):**
+- [PreventWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Iris/Workbooks/PreventWorkbook.json)
 
 ---
 

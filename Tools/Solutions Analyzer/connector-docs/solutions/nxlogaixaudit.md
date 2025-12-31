@@ -13,27 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [NXLog AIX Audit](../connectors/nxlogaixaudit.md)
-
-**Publisher:** NXLog
-
-The [NXLog AIX Audit](https://docs.nxlog.co/refman/current/im/aixaudit.html) data connector uses the AIX Audit subsystem to read events directly from the kernel for capturing audit events on the AIX platform. This REST API connector can efficiently export AIX Audit events to Microsoft Sentinel in real time.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AIX_Audit_CL` |
-| **Connector Definition Files** | [NXLogAixAudit.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NXLogAixAudit/Data%20Connectors/NXLogAixAudit.json) |
-
-[→ View full connector details](../connectors/nxlogaixaudit.md)
+- [NXLog AIX Audit](../connectors/nxlogaixaudit.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AIX_Audit_CL` | [NXLog AIX Audit](../connectors/nxlogaixaudit.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AIX_Audit_CL`](../tables/aix-audit-cl.md) | [NXLog AIX Audit](../connectors/nxlogaixaudit.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [NXLog_parsed_AIX_Audit_view](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/NXLogAixAudit/Parsers/NXLog_parsed_AIX_Audit_view.yaml) | - | - |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

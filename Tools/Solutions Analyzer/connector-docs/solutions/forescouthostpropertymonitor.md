@@ -13,32 +13,47 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md)
-
-**Publisher:** Forescout
-
-The Forescout Host Property Monitor connector allows you to connect host/policy/compliance properties from Forescout platform with Microsoft Sentinel, to view, create custom incidents, and improve investigation. This gives you more insight into your organization network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ForescoutComplianceStatus_CL` |
-| | `ForescoutHostProperties_CL` |
-| | `ForescoutPolicyStatus_CL` |
-| **Connector Definition Files** | [ForescoutHostPropertyMonitor.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ForescoutHostPropertyMonitor/Data%20Connectors/ForescoutHostPropertyMonitor.json) |
-
-[→ View full connector details](../connectors/forescouthostpropertymonitor.md)
+- [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ForescoutComplianceStatus_CL` | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) |
-| `ForescoutHostProperties_CL` | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) |
-| `ForescoutPolicyStatus_CL` | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ForescoutComplianceStatus_CL`](../tables/forescoutcompliancestatus-cl.md) | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) | Workbooks |
+| [`ForescoutHostProperties_CL`](../tables/forescouthostproperties-cl.md) | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) | Analytics, Workbooks |
+| [`ForescoutPolicyStatus_CL`](../tables/forescoutpolicystatus-cl.md) | [Forescout Host Property Monitor](../connectors/forescouthostpropertymonitor.md) | Workbooks |
+
+## Content Items
+
+This solution includes **3 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+| Playbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Forescout-DNS_Sniff_Event_Monitor](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ForescoutHostPropertyMonitor/Analytic%20Rules/ForeScout-DNSSniffEventMonitor.yaml) | Medium | - | [`ForescoutHostProperties_CL`](../tables/forescouthostproperties-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ForescoutHostPropertyMonitorWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ForescoutHostPropertyMonitor/Workbooks/ForescoutHostPropertyMonitorWorkbook.json) | [`ForescoutComplianceStatus_CL`](../tables/forescoutcompliancestatus-cl.md)<br>[`ForescoutHostProperties_CL`](../tables/forescouthostproperties-cl.md)<br>[`ForescoutPolicyStatus_CL`](../tables/forescoutpolicystatus-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Forescout-DNS_Sniff_Event_Playbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ForescoutHostPropertyMonitor/Playbooks/Forescout-DNSSniffEventPlaybook.json) | This playbook will update incident with action to perform on endpoint | - |
 
 ## Release Notes
 
@@ -48,4 +63,10 @@ This solution ingests data into **3 table(s)**:
 | 2.0.1       | 26-05-2022                     | Updated Support details from Microsoft to Forescout.                                                 |
 | 2.0.0       | 05-11-2023                     | Initial Solution Release.                                                 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

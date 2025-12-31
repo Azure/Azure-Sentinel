@@ -13,28 +13,39 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Barracuda CloudGen Firewall](../connectors/barracudacloudfirewall.md)
-
-**Publisher:** Barracuda
-
-The Barracuda CloudGen Firewall (CGFW) connector allows you to easily connect your Barracuda CGFW logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [template_BarracudaCloudFirewall.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20CloudGen%20Firewall/Data%20Connectors/template_BarracudaCloudFirewall.json) |
-
-[→ View full connector details](../connectors/barracudacloudfirewall.md)
+- [[Deprecated] Barracuda CloudGen Firewall](../connectors/barracudacloudfirewall.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Barracuda CloudGen Firewall](../connectors/barracudacloudfirewall.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | - | Workbooks |
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Barracuda CloudGen Firewall](../connectors/barracudacloudfirewall.md) | Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Barracuda](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20CloudGen%20Firewall/Workbooks/Barracuda.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`Syslog`](../tables/syslog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [CGFWFirewallActivity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Barracuda%20CloudGen%20Firewall/Parsers/CGFWFirewallActivity.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +55,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 18-07-2024                     | Deprecating data connectors                 |
 | 3.0.0       | 12-10-2023                     | The support information is revised/updated. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -16,9 +16,9 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AWSNetworkFirewallAlert`](../tables/awsnetworkfirewallalert.md) | — | ✗ |
-| [`AWSNetworkFirewallFlow`](../tables/awsnetworkfirewallflow.md) | — | ✗ |
-| [`AWSNetworkFirewallTls`](../tables/awsnetworkfirewalltls.md) | — | ✗ |
+| [`AWSNetworkFirewallAlert`](../tables/awsnetworkfirewallalert.md) | ✓ | ✗ |
+| [`AWSNetworkFirewallFlow`](../tables/awsnetworkfirewallflow.md) | ✓ | ✗ |
+| [`AWSNetworkFirewallTls`](../tables/awsnetworkfirewalltls.md) | ✓ | ✗ |
 
 ## Permissions
 

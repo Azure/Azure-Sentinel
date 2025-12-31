@@ -13,54 +13,64 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md)
-
-**Publisher:** Proofpoint
-
-The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ProofPointTAPClicksBlocked_CL` |
-| | `ProofPointTAPClicksPermitted_CL` |
-| | `ProofPointTAPMessagesBlocked_CL` |
-| | `ProofPointTAPMessagesDelivered_CL` |
-| **Connector Definition Files** | [ProofpointTAP_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Data%20Connectors/ProofpointTAP_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/proofpointtap.md)
-
-### [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md)
-
-**Publisher:** Proofpoint
-
-The [Proofpoint Targeted Attack Protection (TAP)](https://www.proofpoint.com/us/products/advanced-threat-protection/targeted-attack-protection) connector provides the capability to ingest Proofpoint TAP logs and events into Microsoft Sentinel. The connector provides visibility into Message and Click events in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ProofPointTAPClicksBlockedV2_CL` |
-| | `ProofPointTAPClicksPermittedV2_CL` |
-| | `ProofPointTAPMessagesBlockedV2_CL` |
-| | `ProofPointTAPMessagesDeliveredV2_CL` |
-| **Connector Definition Files** | [ProofpointTAP_defination.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Data%20Connectors/ProofpointTAP_CCP/ProofpointTAP_defination.json) |
-
-[→ View full connector details](../connectors/proofpointtapv2.md)
+- [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md)
+- [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md)
 
 ## Tables Reference
 
-This solution ingests data into **8 table(s)**:
+This solution uses **9 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ProofPointTAPClicksBlockedV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
-| `ProofPointTAPClicksBlocked_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
-| `ProofPointTAPClicksPermittedV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
-| `ProofPointTAPClicksPermitted_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
-| `ProofPointTAPMessagesBlockedV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
-| `ProofPointTAPMessagesBlocked_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
-| `ProofPointTAPMessagesDeliveredV2_CL` | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) |
-| `ProofPointTAPMessagesDelivered_CL` | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ProofPointData_CL`](../tables/proofpointdata-cl.md) | - | Playbooks (writes) |
+| [`ProofPointTAPClicksBlockedV2_CL`](../tables/proofpointtapclicksblockedv2-cl.md) | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) | Workbooks |
+| [`ProofPointTAPClicksBlocked_CL`](../tables/proofpointtapclicksblocked-cl.md) | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) | - |
+| [`ProofPointTAPClicksPermittedV2_CL`](../tables/proofpointtapclickspermittedv2-cl.md) | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) | Analytics, Workbooks |
+| [`ProofPointTAPClicksPermitted_CL`](../tables/proofpointtapclickspermitted-cl.md) | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) | - |
+| [`ProofPointTAPMessagesBlockedV2_CL`](../tables/proofpointtapmessagesblockedv2-cl.md) | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) | Workbooks |
+| [`ProofPointTAPMessagesBlocked_CL`](../tables/proofpointtapmessagesblocked-cl.md) | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) | - |
+| [`ProofPointTAPMessagesDeliveredV2_CL`](../tables/proofpointtapmessagesdeliveredv2-cl.md) | [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md) | Analytics, Workbooks |
+| [`ProofPointTAPMessagesDelivered_CL`](../tables/proofpointtapmessagesdelivered-cl.md) | [[Deprecated] Proofpoint TAP](../connectors/proofpointtap.md) | - |
+
+## Content Items
+
+This solution includes **7 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 3 |
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Malware Link Clicked](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Analytic%20Rules/MalwareLinkClicked.yaml) | Medium | InitialAccess | [`ProofPointTAPClicksPermittedV2_CL`](../tables/proofpointtapclickspermittedv2-cl.md) |
+| [Malware attachment delivered](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Analytic%20Rules/MalwareAttachmentDelivered.yaml) | Medium | InitialAccess | [`ProofPointTAPMessagesDeliveredV2_CL`](../tables/proofpointtapmessagesdeliveredv2-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ProofpointTAP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Workbooks/ProofpointTAP.json) | [`ProofPointTAPClicksBlockedV2_CL`](../tables/proofpointtapclicksblockedv2-cl.md)<br>[`ProofPointTAPClicksPermittedV2_CL`](../tables/proofpointtapclickspermittedv2-cl.md)<br>[`ProofPointTAPMessagesBlockedV2_CL`](../tables/proofpointtapmessagesblockedv2-cl.md)<br>[`ProofPointTAPMessagesDeliveredV2_CL`](../tables/proofpointtapmessagesdeliveredv2-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ ProofpointTAP-CheckAccountInVAP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Playbooks/ProofpointTAP-CheckAccountInVAP/azuredeploy.json) | Once a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+| [Get-ProofpointTapEvents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Playbooks/Get-ProofPointTapEvents/Azuredeploy.json) | This playbook ingests events from ProofPoint TAP to Log Analytics/MicroSoft Sentinel. | [`ProofPointData_CL`](../tables/proofpointdata-cl.md) *(write)* |
+| [ProofpointTAP-AddForensicsInfoToIncident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Playbooks/ProofpointTAP-AddForensicsInfoToIncident/azuredeploy.json) | Once a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ProofpointTAPEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Parsers/ProofpointTAPEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -80,4 +90,10 @@ This solution ingests data into **8 table(s)**:
 | 3.0.1       | 10-10-2023                     | Manual deployment instructions updated for **Data Connector**.|          
 | 3.0.0       | 01-08-2023                     | Updated solution logo with Microsoft Sentinel logo.           |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

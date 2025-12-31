@@ -13,64 +13,81 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[DEPRECATED] Snowflake](../connectors/snowflakedataconnector.md)
-
-**Publisher:** Snowflake
-
-The Snowflake data connector provides the capability to ingest Snowflake [login logs](https://docs.snowflake.com/en/sql-reference/account-usage/login_history.html) and [query logs](https://docs.snowflake.com/en/sql-reference/account-usage/query_history.html) into Microsoft Sentinel using the Snowflake Python Connector. Refer to [Snowflake  documentation](https://docs.snowflake.com/en/user-guide/python-connector.html) for more information.
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Snowflake_CL` |
-| **Connector Definition Files** | [Snowflake_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Data%20Connectors/Snowflake_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/snowflakedataconnector.md)
-
-### [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Snowflake data connector provides the capability to ingest Snowflake [Login History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/login_history), [Query History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/query_history), [User-Grant Logs](https://docs.snowflake.com/en/sql-reference/account-usage/grants_to_users), [Role-Grant Logs](https://docs.snowflake.com/en/sql-reference/account-usage/grants_to_roles), [Load History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/load_history), [Materialized View Refresh History Logs](https://docs.snowflake.com/en/sql-reference/account-usage/materialized_view_refresh_history), [Roles Logs](https://docs.snowflake.com/en/sql-reference/account-usage/roles), [Tables Logs](https://docs.snowflake.com/en/sql-reference/account-usage/tables), [Table Storage Metrics Logs](https://docs.snowflake.com/en/sql-reference/account-usage/table_storage_metrics), [Users Logs](https://docs.snowflake.com/en/sql-reference/account-usage/users) into Microsoft Sentinel using the Snowflake SQL API. Refer to [Snowflake SQL API documentation](https://docs.snowflake.com/en/developer-guide/sql-api/reference) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SnowflakeLoad_CL` |
-| | `SnowflakeLogin_CL` |
-| | `SnowflakeMaterializedView_CL` |
-| | `SnowflakeQuery_CL` |
-| | `SnowflakeRoleGrant_CL` |
-| | `SnowflakeRoles_CL` |
-| | `SnowflakeTableStorageMetrics_CL` |
-| | `SnowflakeTables_CL` |
-| | `SnowflakeUserGrant_CL` |
-| | `SnowflakeUsers_CL` |
-| **Connector Definition Files** | [SnowflakeLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Data%20Connectors/SnowflakeLogs_ccp/SnowflakeLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/snowflakelogsccpdefinition.md)
+- [[DEPRECATED] Snowflake](../connectors/snowflakedataconnector.md)
+- [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **11 table(s)**:
+This solution uses **11 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SnowflakeLoad_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeLogin_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeMaterializedView_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeQuery_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeRoleGrant_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeRoles_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeTableStorageMetrics_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeTables_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeUserGrant_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `SnowflakeUsers_CL` | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) |
-| `Snowflake_CL` | [[DEPRECATED] Snowflake](../connectors/snowflakedataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeTables_CL`](../tables/snowflaketables-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md) | [Snowflake (via Codeless Connector Framework)](../connectors/snowflakelogsccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`Snowflake_CL`](../tables/snowflake-cl.md) | [[DEPRECATED] Snowflake](../connectors/snowflakedataconnector.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **22 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Snowflake - Abnormal query process time](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeLongQueryProcessTime.yaml) | Medium | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Multiple failed queries](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeMultipleFailedQueries.yaml) | High | Discovery | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Multiple login failures by user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeMultipleLoginFailure.yaml) | High | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Multiple login failures from single IP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeMultipleLoginFailureFromIP.yaml) | High | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Possible data destraction](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakePossibleDataDestruction.yaml) | Medium | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Possible discovery activity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeDiscoveryActivity.yaml) | Medium | Discovery | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Possible privileges discovery activity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakePrivilegesDiscovery.yaml) | Medium | Discovery | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Query on sensitive or restricted table](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeQueryOnSensitiveTable.yaml) | Medium | Collection | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Unusual query](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeUnusualQuery.yaml) | Medium | Collection | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - User granted admin privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Analytic%20Rules/SnowflakeUserAddAdminPrivileges.yaml) | Medium | PrivilegeEscalation | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Snowflake - Credit consuming queries](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeHighCreditConsumingQueries.yaml) | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Deleted databases](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeDeletedDatabases.yaml) | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Deleted tables](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeDeletedTables.yaml) | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Failed logins](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeFailedLogins.yaml) | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Privileged users' source IP addresses](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeAdminSources.yaml) | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Rarely used account](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeDormantUser.yaml) | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Rarely used privileged users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeUnusedAdmins.yaml) | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Time consuming queries](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeTimeConsumingQueries.yaml) | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Unknown query type](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeUnknownQueryType.yaml) | Impact | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+| [Snowflake - Users' source IP addresses](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Hunting%20Queries/SnowflakeUserSources.yaml) | InitialAccess | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Snowflake](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Workbooks/Snowflake.json) | [`SnowflakeLoad_CL`](../tables/snowflakeload-cl.md)<br>[`SnowflakeLogin_CL`](../tables/snowflakelogin-cl.md)<br>[`SnowflakeMaterializedView_CL`](../tables/snowflakematerializedview-cl.md)<br>[`SnowflakeQuery_CL`](../tables/snowflakequery-cl.md)<br>[`SnowflakeRoleGrant_CL`](../tables/snowflakerolegrant-cl.md)<br>[`SnowflakeRoles_CL`](../tables/snowflakeroles-cl.md)<br>[`SnowflakeTableStorageMetrics_CL`](../tables/snowflaketablestoragemetrics-cl.md)<br>[`SnowflakeTables_CL`](../tables/snowflaketables-cl.md)<br>[`SnowflakeUserGrant_CL`](../tables/snowflakeusergrant-cl.md)<br>[`SnowflakeUsers_CL`](../tables/snowflakeusers-cl.md)<br>[`Snowflake_CL`](../tables/snowflake-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Snowflake](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Snowflake/Parsers/Snowflake.yaml) | - | - |
 
 ## Release Notes
 
@@ -86,4 +103,10 @@ This solution ingests data into **11 table(s)**:
 | 3.0.1       | 26-05-2025                     | Migrated the **Function app** connector to **CCP** Data Connector and Updated **Parser**|
 | 3.0.0       | 31-08-2023                     | Manual deployment instructions updated for **Data Connector** & Convert **Parser** from text to Yaml|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

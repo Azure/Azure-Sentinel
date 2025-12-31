@@ -13,27 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [NC Protect](../connectors/nucleuscyberncprotect.md)
-
-**Publisher:** archTIS
-
-[NC Protect Data Connector (archtis.com)](https://info.archtis.com/get-started-with-nc-protect-sentinel-data-connector) provides the capability to ingest user activity logs and events into Microsoft Sentinel. The connector provides visibility into NC Protect user activity logs and events in Microsoft Sentinel to improve monitoring and investigation capabilities
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `NCProtectUAL_CL` |
-| **Connector Definition Files** | [NucleusCyberNCProtect.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/archTIS/Data%20Connectors/NucleusCyberNCProtect.json) |
-
-[→ View full connector details](../connectors/nucleuscyberncprotect.md)
+- [NC Protect](../connectors/nucleuscyberncprotect.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `NCProtectUAL_CL` | [NC Protect](../connectors/nucleuscyberncprotect.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`NCProtectUAL_CL`](../tables/ncprotectual-cl.md) | [NC Protect](../connectors/nucleuscyberncprotect.md) | Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [NucleusCyber_NCProtect_Workbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/archTIS/Workbooks/NucleusCyber_NCProtect_Workbook.json) | [`NCProtectUAL_CL`](../tables/ncprotectual-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

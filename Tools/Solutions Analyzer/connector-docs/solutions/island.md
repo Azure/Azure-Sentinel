@@ -14,42 +14,34 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Island Enterprise Browser Admin Audit (Polling CCP)](../connectors/island-admin-polling.md)
-
-**Publisher:** Island
-
-The [Island](https://www.island.io) Admin connector provides the capability to ingest Island Admin Audit logs into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Island_Admin_CL` |
-| **Connector Definition Files** | [IslandAdminAPIConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Island/Data%20Connectors/IslandAdminAPIConnector.json) |
-
-[→ View full connector details](../connectors/island-admin-polling.md)
-
-### [Island Enterprise Browser User Activity (Polling CCP)](../connectors/island-user-polling.md)
-
-**Publisher:** Island
-
-The [Island](https://www.island.io) connector provides the capability to ingest Island User Activity logs into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Island_User_CL` |
-| **Connector Definition Files** | [IslandUserAPIConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Island/Data%20Connectors/IslandUserAPIConnector.json) |
-
-[→ View full connector details](../connectors/island-user-polling.md)
+- [Island Enterprise Browser Admin Audit (Polling CCP)](../connectors/island-admin-polling.md)
+- [Island Enterprise Browser User Activity (Polling CCP)](../connectors/island-user-polling.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Island_Admin_CL` | [Island Enterprise Browser Admin Audit (Polling CCP)](../connectors/island-admin-polling.md) |
-| `Island_User_CL` | [Island Enterprise Browser User Activity (Polling CCP)](../connectors/island-user-polling.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Island_Admin_CL`](../tables/island-admin-cl.md) | [Island Enterprise Browser Admin Audit (Polling CCP)](../connectors/island-admin-polling.md) | Workbooks |
+| [`Island_User_CL`](../tables/island-user-cl.md) | [Island Enterprise Browser User Activity (Polling CCP)](../connectors/island-user-polling.md) | Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 2 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [IslandAdminAuditOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Island/Workbooks/IslandAdminAuditOverview.json) | [`Island_Admin_CL`](../tables/island-admin-cl.md) |
+| [IslandUserActivityOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Island/Workbooks/IslandUserActivityOverview.json) | [`Island_User_CL`](../tables/island-user-cl.md) |
 
 ## Release Notes
 
@@ -61,4 +53,10 @@ This solution ingests data into **2 table(s)**:
 | 2.0.1       | 08-05-2023                     | Bug fix for APIVersion in Data Connector |
 | 2.0.0       | 14-02-2023                     | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

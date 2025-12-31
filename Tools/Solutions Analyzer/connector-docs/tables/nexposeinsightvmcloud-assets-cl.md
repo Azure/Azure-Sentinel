@@ -1,15 +1,5 @@
 # NexposeInsightVMCloud_assets_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `NexposeInsightVMCloud_assets_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md)
+
+---
 
 ---
 

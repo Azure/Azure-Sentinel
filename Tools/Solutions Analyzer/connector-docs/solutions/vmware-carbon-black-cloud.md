@@ -13,59 +13,58 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md)
-
-**Publisher:** VMware
-
-The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-cloud.html) connector provides the capability to ingest Carbon Black data into Microsoft Sentinel. The connector provides visibility into Audit, Notification and Event logs in Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CarbonBlackAuditLogs_CL` |
-| | `CarbonBlackEvents_CL` |
-| | `CarbonBlackNotifications_CL` |
-| **Connector Definition Files** | [VMwareCarbonBlack_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlack_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/vmwarecarbonblack.md)
-
-### [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md)
-
-**Publisher:** Microsoft
-
-The [VMware Carbon Black Cloud](https://www.vmware.com/products/carbon-black-cloud.html) via AWS S3 data connector provides the capability to ingest watchlist, alerts, auth and endpoints events via AWS S3 and stream them to ASIM normalized tables. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ASimAuthenticationEventLogs` |
-| | `ASimFileEventLogs` |
-| | `ASimNetworkSessionLogs` |
-| | `ASimProcessEventLogs` |
-| | `ASimRegistryEventLogs` |
-| | `CarbonBlack_Alerts_CL` |
-| | `CarbonBlack_Watchlist_CL` |
-| **Connector Definition Files** | [CarbonBlackViaAWSS3_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/CarbonBlackViaAWSS3_ConnectorDefinition.json) |
-| | [CarbonBlack_DataConnectorDefination.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Data%20Connectors/VMwareCarbonBlackCloud_ccp/CarbonBlack_DataConnectorDefination.json) |
-
-[→ View full connector details](../connectors/carbonblackawss3.md)
+- [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md)
+- [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md)
 
 ## Tables Reference
 
-This solution ingests data into **10 table(s)**:
+This solution uses **10 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ASimAuthenticationEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
-| `ASimFileEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
-| `ASimNetworkSessionLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
-| `ASimProcessEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
-| `ASimRegistryEventLogs` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
-| `CarbonBlackAuditLogs_CL` | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) |
-| `CarbonBlackEvents_CL` | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) |
-| `CarbonBlackNotifications_CL` | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) |
-| `CarbonBlack_Alerts_CL` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
-| `CarbonBlack_Watchlist_CL` | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ASimAuthenticationEventLogs`](../tables/asimauthenticationeventlogs.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+| [`ASimFileEventLogs`](../tables/asimfileeventlogs.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+| [`ASimNetworkSessionLogs`](../tables/asimnetworksessionlogs.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+| [`ASimProcessEventLogs`](../tables/asimprocesseventlogs.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+| [`ASimRegistryEventLogs`](../tables/asimregistryeventlogs.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+| [`CarbonBlackAuditLogs_CL`](../tables/carbonblackauditlogs-cl.md) | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) | - |
+| [`CarbonBlackEvents_CL`](../tables/carbonblackevents-cl.md) | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) | Analytics, Workbooks |
+| [`CarbonBlackNotifications_CL`](../tables/carbonblacknotifications-cl.md) | [VMware Carbon Black Cloud](../connectors/vmwarecarbonblack.md) | Analytics |
+| [`CarbonBlack_Alerts_CL`](../tables/carbonblack-alerts-cl.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+| [`CarbonBlack_Watchlist_CL`](../tables/carbonblack-watchlist-cl.md) | [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md) | - |
+
+## Content Items
+
+This solution includes **6 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 3 |
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Critical Threat Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Analytic%20Rules/CriticalThreatDetected.yaml) | Medium | LateralMovement | [`CarbonBlackNotifications_CL`](../tables/carbonblacknotifications-cl.md) |
+| [Known Malware Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Analytic%20Rules/KnownMalwareDetected.yaml) | Medium | Execution | [`CarbonBlackEvents_CL`](../tables/carbonblackevents-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [VMwareCarbonBlack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Workbooks/VMwareCarbonBlack.json) | [`CarbonBlackEvents_CL`](../tables/carbonblackevents-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Endpoint enrichment - Carbon Black](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-DeviceEnrichment/azuredeploy.json) | This playbook will collect device information from Carbon Black and post a report on the incident. | - |
+| [Endpoint take action from Teams - Carbon Black](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/azuredeploy.json) | This playbook sends an adaptive card to the SOC Teams channel, lets the analyst decide on action: Qu... | - |
+| [Isolate endpoint - Carbon Black](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/azuredeploy.json) | This playbook will quarantine the host in Carbon Black. | - |
 
 ## Release Notes
 
@@ -78,4 +77,10 @@ This solution ingests data into **10 table(s)**:
 | 3.0.1       | 17-04-2024                     | Added Azure Deploy button for government portal deployments in **Data connectors**   |
 | 3.0.0       | 19-02-2024                     | Alterts API integration done in Carbon Black **Function App**   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

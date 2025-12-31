@@ -13,32 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Qualys VM KnowledgeBase](../connectors/qualyskb.md)
-
-**Publisher:** Qualys
-
-The [Qualys Vulnerability Management (VM)](https://www.qualys.com/apps/vulnerability-management/) KnowledgeBase (KB) connector provides the capability to ingest the latest vulnerability data from the Qualys KB into Microsoft Sentinel. 
-
-
-
- This data can used to correlate and enrich vulnerability detections found by the [Qualys Vulnerability Management (VM)](https://docs.microsoft.com/azure/sentinel/connect-qualys-vm) data connector.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `QualysKB_CL` |
-| **Connector Definition Files** | [QualysKB_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Qualys%20VM%20Knowledgebase/Data%20Connectors/QualysKB_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/qualyskb.md)
+- [Qualys VM KnowledgeBase](../connectors/qualyskb.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `QualysKB_CL` | [Qualys VM KnowledgeBase](../connectors/qualyskb.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`QualysKB_CL`](../tables/qualyskb-cl.md) | [Qualys VM KnowledgeBase](../connectors/qualyskb.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [QualysKB](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Qualys%20VM%20Knowledgebase/Parsers/QualysKB.yaml) | - | - |
 
 ## Release Notes
 
@@ -47,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 03-05-2024                     | Added Deploy to Azure Goverment button for Government portal in **Dataconnector** <br/> Fixed Metadata issue for ParserName and ParentId mismatch  |
 | 3.0.0       | 12-10-2023                     | Manual deployment instructions updated for **Data Connector**		|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

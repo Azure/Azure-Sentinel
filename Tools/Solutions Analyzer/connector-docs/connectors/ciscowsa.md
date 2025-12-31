@@ -5,7 +5,7 @@
 | **Connector ID** | `CiscoWSA` |
 | **Publisher** | Cisco |
 | **Used in Solutions** | [CiscoWSA](../solutions/ciscowsa.md) |
-| **Collection Method** | MMA |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [Connector_WSA_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoWSA/Data%20Connectors/Connector_WSA_Syslog.json) |
 
 [Cisco Web Security Appliance (WSA)](https://www.cisco.com/c/en/us/products/security/web-security-appliance/index.html) data connector provides the capability to ingest [Cisco WSA Access Logs](https://www.cisco.com/c/en/us/td/docs/security/wsa/wsa_14-0/User-Guide/b_WSA_UserGuide_14_0/b_WSA_UserGuide_11_7_chapter_010101.html) into Microsoft Sentinel.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | — | ✓ |
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

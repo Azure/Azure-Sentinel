@@ -1,17 +1,14 @@
 # GKEAudit
 
+Reference for GKEAudit table in Azure Monitor Logs.
+
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `GKEAudit` |
 | **Category** | Security |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/gkeaudit) |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
 
 ## Solutions (1)
 
@@ -24,6 +21,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md)
+
+---
 
 ---
 

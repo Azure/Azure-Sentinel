@@ -13,32 +13,41 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Silverfort Admin Console](../connectors/silverfortama.md)
-
-**Publisher:** Silverfort
-
-The [Silverfort](https://silverfort.com) ITDR Admin Console connector solution allows ingestion of Silverfort events and logging into Microsoft Sentinel.
-
- Silverfort provides syslog based events and logging using Common Event Format (CEF). By forwarding your Silverfort ITDR Admin Console CEF data into Microsoft Sentinel, you can take advantage of Sentinels's search & correlation, alerting, and threat intelligence enrichment on Silverfort data. 
-
- Please contact Silverfort or consult the Silverfort documentation for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [SilverfortAma.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Data%20Connectors/SilverfortAma.json) |
-
-[→ View full connector details](../connectors/silverfortama.md)
+- [Silverfort Admin Console](../connectors/silverfortama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [Silverfort Admin Console](../connectors/silverfortama.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [Silverfort Admin Console](../connectors/silverfortama.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Silverfort - Certifried Incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Analytic%20Rules/Certifried.yaml) | High | PrivilegeEscalation | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Silverfort - Log4Shell Incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Analytic%20Rules/Log4Shell.yaml) | High | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Silverfort - NoPacBreach Incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Analytic%20Rules/NoPac_Breach.yaml) | High | PrivilegeEscalation | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Silverfort - UserBruteForce Incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Analytic%20Rules/User_Brute_Force.yaml) | High | CredentialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SilverfortWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Silverfort/Workbooks/SilverfortWorkbook.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -46,4 +55,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|-----------------------------------|
 | 3.0.0       | 13-09-2024                     | Initial Solution Release          |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

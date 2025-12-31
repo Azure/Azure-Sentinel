@@ -13,30 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md)
-
-**Publisher:** Forescout
-
-Forescout eyeInspect for OT Security connector allows you to connect Asset/Alert information from Forescout eyeInspect OT platform with Microsoft Sentinel, to view and analyze data using Log Analytics Tables and Workbooks. This gives you more insight into OT organization network and improves security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ForescoutOtAlert_CL` |
-| | `ForescoutOtAsset_CL` |
-| **Connector Definition Files** | [Forescout%20eyeInspect%20for%20OT%20Security.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forescout%20eyeInspect%20for%20OT%20Security/Data%20Connectors/Forescout%20eyeInspect%20for%20OT%20Security.json) |
-
-[→ View full connector details](../connectors/forescout-eyeinspect-for-ot-security.md)
+- [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ForescoutOtAlert_CL` | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) |
-| `ForescoutOtAsset_CL` | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ForescoutOtAlert_CL`](../tables/forescoutotalert-cl.md) | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) | Workbooks |
+| [`ForescoutOtAsset_CL`](../tables/forescoutotasset-cl.md) | [Forescout eyeInspect for OT Security](../connectors/forescout-eyeinspect-for-ot-security.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [eyeInspectOTSecurityWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forescout%20eyeInspect%20for%20OT%20Security/Workbooks/eyeInspectOTSecurityWorkbook.json) | [`ForescoutOtAlert_CL`](../tables/forescoutotalert-cl.md)<br>[`ForescoutOtAsset_CL`](../tables/forescoutotasset-cl.md) |
 
 ## Release Notes
 
@@ -44,4 +46,10 @@ This solution ingests data into **2 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------| 
 | 3.0.0       | 14-07-2025                     |	Initial Solution Release                                        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,28 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Symantec VIP](../connectors/symantecvip.md)
-
-**Publisher:** Symantec
-
-The [Symantec VIP](https://vip.symantec.com/) connector allows you to easily connect your Symantec VIP logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_Syslog_SymantecVIP.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20VIP/Data%20Connectors/Connector_Syslog_SymantecVIP.json) |
-
-[→ View full connector details](../connectors/symantecvip.md)
+- [[Deprecated] Symantec VIP](../connectors/symantecvip.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Symantec VIP](../connectors/symantecvip.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Symantec VIP](../connectors/symantecvip.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [ClientDeniedAccess](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20VIP/Analytic%20Rules/ClientDeniedAccess.yaml) | Medium | CredentialAccess | [`Syslog`](../tables/syslog.md) |
+| [Excessive Failed Authentication from Invalid Inputs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20VIP/Analytic%20Rules/ExcessiveFailedAuthenticationsfromInvalidInputs.yaml) | Medium | CredentialAccess | [`Syslog`](../tables/syslog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SymantecVIP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20VIP/Workbooks/SymantecVIP.json) | [`Syslog`](../tables/syslog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SymantecVIP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Symantec%20VIP/Parsers/SymantecVIP.yaml) | - | - |
 
 ## Release Notes
 
@@ -45,4 +63,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.0       | 01-08-2024                     | Update **Parser** as part of Syslog migration  |
 |             |                                | Deprecating data connectors                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

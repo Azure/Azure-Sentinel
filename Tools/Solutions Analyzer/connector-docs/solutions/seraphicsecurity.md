@@ -14,28 +14,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Seraphic Web Security](../connectors/seraphicwebsecurity.md)
-
-**Publisher:** Seraphic
-
-The Seraphic Web Security data connector provides the capability to ingest [Seraphic Web Security](https://seraphicsecurity.com/) events and alerts into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SeraphicWebSecurity_CL` |
-| **Connector Definition Files** | [SeraphicSecurityConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SeraphicSecurity/Data%20Connectors/SeraphicSecurityConnector.json) |
-
-[→ View full connector details](../connectors/seraphicwebsecurity.md)
+- [Seraphic Web Security](../connectors/seraphicwebsecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SeraphicWebSecurity_CL` | [Seraphic Web Security](../connectors/seraphicwebsecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SeraphicWebSecurity_CL`](../tables/seraphicwebsecurity-cl.md) | [Seraphic Web Security](../connectors/seraphicwebsecurity.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|-------------------------------|--------------------------------------------|
 | 2.0.0       | 17-11-2023                    |Initial Solution Release                             |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

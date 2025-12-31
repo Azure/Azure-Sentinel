@@ -13,54 +13,67 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Microsoft Defender for Office 365 (Preview)](../connectors/officeatp.md)
-
-**Publisher:** Microsoft
-
-Microsoft Defender for Office 365 safeguards your organization against malicious threats posed by email messages, links (URLs) and collaboration tools. By ingesting Microsoft Defender for Office 365 alerts into Microsoft Sentinel, you can incorporate information about email- and URL-based threats into your broader risk analysis and build response scenarios accordingly.
-
- 
-
-The following types of alerts will be imported:
-
-
-
--   A potentially malicious URL click was detected 
-
--   Email messages containing malware removed after delivery
-
--   Email messages containing phish URLs removed after delivery
-
--   Email reported by user as malware or phish 
-
--   Suspicious email sending patterns detected 
-
--   User restricted from sending email 
-
-
-
-These alerts can be seen by Office customers in the ** Office Security and Compliance Center**.
-
-
-
-For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219942&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SecurityAlert` |
-| **Connector Definition Files** | [template_OfficeATP.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Data%20Connectors/template_OfficeATP.json) |
-
-[→ View full connector details](../connectors/officeatp.md)
+- [Microsoft Defender for Office 365 (Preview)](../connectors/officeatp.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SecurityAlert` | [Microsoft Defender for Office 365 (Preview)](../connectors/officeatp.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`EmailAttachmentInfo`](../tables/emailattachmentinfo.md) | - | Workbooks |
+| [`EmailEvents`](../tables/emailevents.md) | - | Workbooks |
+| [`EmailUrlInfo`](../tables/emailurlinfo.md) | - | Workbooks |
+
+### Internal Tables
+
+The following **1 table(s)** are used internally by this solution's playbooks:
+
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SecurityAlert`](../tables/securityalert.md) | [Microsoft Defender for Office 365 (Preview)](../connectors/officeatp.md) | - |
+
+## Content Items
+
+This solution includes **21 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 20 |
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [MicrosoftDefenderForOffice365](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Workbooks/MicrosoftDefenderForOffice365.json) | [`EmailAttachmentInfo`](../tables/emailattachmentinfo.md)<br>[`EmailEvents`](../tables/emailevents.md)<br>[`EmailUrlInfo`](../tables/emailurlinfo.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [O365 - Block Malware file extensions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/O365DefenderPlaybooks/o365-BlockMalwareFileExtension/azuredeploy.json) | This Playbook Provides the automation on blocking the suspicious/malicious file attachment on mails | - |
+| [O365 - Block Sender Entity Trigger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/O365DefenderPlaybooks/o365-BlockSender-EntityTrigger/azuredeploy.json) | This Playbook Provides the automation on blocking the suspicious/malicious sender | - |
+| [O365 - Block Spam Domain](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/O365DefenderPlaybooks/o365-BlockSpamDomain/azuredeploy.json) | This Playbook Provides the automation on blocking the suspicious/malicious attacker Domains | - |
+| [O365 - Block Suspicious Sender](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/O365DefenderPlaybooks/o365-BlockSender/azuredeploy.json) | This Playbook Provides the automation on blocking the suspicious/malicious senders | - |
+| [O365 - Delete All Malicious Inbox Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/O365DefenderPlaybooks/o365-DeleteMaliciousInboxRule/azuredeploy.json) | This Playbook provides the automation on deleting all the suspicious/malicious Inbox Rules from Prov... | - |
+| [O365_Defender_FunctionAppConnector](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/azuredeploy.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/BlockMalwareFileExtension/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/ConnectExchangeOnline/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/CreateAllowBlockList/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/CreateSpamPolicy/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/CreateSpamRule/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/DisconnectExchangeOnline/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/GetInboxRule/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/ListMalwarePolicy/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/ListSpamPolicy/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/RemoveAllowBlockListItems/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/RemoveInboxRule/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/TenantAllowBlockList/function.json) | - | - |
+| [function](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/UpdateAllowBlockList/function.json) | - | - |
+| [host](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Office%20365/Playbooks/CustomConnector/O365_Defender_FunctionAppConnector/host.json) | - | - |
 
 ## Release Notes
 
@@ -72,4 +85,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.0       | 11-07-2023                     | 4 new **Playbooks** added to the solution                                |
 |             |                                | 1 **Custom Connector** added as a pre-requisite for playbooks deployment |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

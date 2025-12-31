@@ -13,28 +13,74 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] McAfee ePolicy Orchestrator (ePO)](../connectors/mcafeeepo.md)
-
-**Publisher:** McAfee
-
-The McAfee ePolicy Orchestrator data connector provides the capability to ingest [McAfee ePO](https://www.mcafee.com/enterprise/en-us/products/epolicy-orchestrator.html) events into Microsoft Sentinel through the syslog. Refer to [documentation](https://docs.mcafee.com/bundle/epolicy-orchestrator-landing/page/GUID-0C40020F-5B7F-4549-B9CC-0E017BC8797F.html) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_McAfee_ePO.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Data%20Connectors/Connector_McAfee_ePO.json) |
-
-[→ View full connector details](../connectors/mcafeeepo.md)
+- [[Deprecated] McAfee ePolicy Orchestrator (ePO)](../connectors/mcafeeepo.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] McAfee ePolicy Orchestrator (ePO)](../connectors/mcafeeepo.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] McAfee ePolicy Orchestrator (ePO)](../connectors/mcafeeepo.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **26 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 14 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [McAfee ePO - Agent Handler down](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOAgentHandlerDown.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Attempt uninstall McAfee agent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOAttemptUninstallAgent.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Deployment failed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPODeploymentFailed.yaml) | High | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Error sending alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOAlertError.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - File added to exceptions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOExceptionAdded.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Firewall disabled](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOFirewallDisabled.yaml) | Medium | DefenseEvasion, CommandAndControl | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Logging error occurred](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOLoggingError.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Multiple threats on same host](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOMultipleThreatsSameHost.yaml) | Medium | InitialAccess, Persistence, DefenseEvasion, PrivilegeEscalation | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Scanning engine disabled](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOScanningEngineDisabled.yaml) | Low | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Spam Email detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOSpamEmail.yaml) | Medium | InitialAccess | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Task error](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOTaskError.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Threat was not blocked](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOThreatNotBlocked.yaml) | High | InitialAccess, PrivilegeEscalation, DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Unable to clean or delete infected file](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOUnableCleanDeleteInfectedFile.yaml) | High | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Update failed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Analytic%20Rules/McAfeeEPOUpdateFailed.yaml) | Medium | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [McAfee ePO - Agent Errors](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOAgentErrors.yaml) | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Applications blocked or contained](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOApplicationsBlocked.yaml) | InitialAccess, Execution | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Email Treats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOEmailThreats.yaml) | InitialAccess | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Infected Systems](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOInfectedSystems.yaml) | InitialAccess | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Infected files by source](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOInfectedFiles.yaml) | InitialAccess | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Long term infected systems](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOLongTermInfectedSystems.yaml) | InitialAccess, Persistence | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Objects not scanned](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOObjectsNotScanned.yaml) | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Scan Errors](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOScanErrors.yaml) | DefenseEvasion | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Sources with multiple threats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOMultipleThreats.yaml) | InitialAccess | [`Syslog`](../tables/syslog.md) |
+| [McAfee ePO - Threats detected and not blocked, cleaned or deleted](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Hunting%20Queries/McAfeeEPOThreatNotBlocked.yaml) | Persistence, PrivilegeEscalation | [`Syslog`](../tables/syslog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [McAfeeePOOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Workbooks/McAfeeePOOverview.json) | [`Syslog`](../tables/syslog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [McAfeeEPOEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/McAfee%20ePolicy%20Orchestrator/Parsers/McAfeeEPOEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +90,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 24-07-2024                     | Deprecated data connectors                                                 |
 | 3.0.0       | 16-07-2024                     | Updated **Data Connector** Description                                     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

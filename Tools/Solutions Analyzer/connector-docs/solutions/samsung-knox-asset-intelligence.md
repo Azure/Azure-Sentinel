@@ -13,38 +13,49 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md)
-
-**Publisher:** Samsung
-
-Samsung Knox Asset Intelligence Data Connector lets you centralize your mobile security events and logs in order to view customized insights using the Workbook template, and identify incidents based on Analytics Rules templates.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Samsung_Knox_Application_CL` |
-| | `Samsung_Knox_Audit_CL` |
-| | `Samsung_Knox_Network_CL` |
-| | `Samsung_Knox_Process_CL` |
-| | `Samsung_Knox_System_CL` |
-| | `Samsung_Knox_User_CL` |
-| **Connector Definition Files** | [Template_Samsung.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Data%20Connectors/Template_Samsung.json) |
-
-[→ View full connector details](../connectors/samsungdcdefinition.md)
+- [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **6 table(s)**:
+This solution uses **6 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Samsung_Knox_Application_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
-| `Samsung_Knox_Audit_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
-| `Samsung_Knox_Network_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
-| `Samsung_Knox_Process_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
-| `Samsung_Knox_System_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
-| `Samsung_Knox_User_CL` | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Samsung_Knox_Application_CL`](../tables/samsung-knox-application-cl.md) | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) | Workbooks |
+| [`Samsung_Knox_Audit_CL`](../tables/samsung-knox-audit-cl.md) | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) | Analytics, Workbooks |
+| [`Samsung_Knox_Network_CL`](../tables/samsung-knox-network-cl.md) | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) | Workbooks |
+| [`Samsung_Knox_Process_CL`](../tables/samsung-knox-process-cl.md) | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) | Analytics, Workbooks |
+| [`Samsung_Knox_System_CL`](../tables/samsung-knox-system-cl.md) | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) | Analytics, Workbooks |
+| [`Samsung_Knox_User_CL`](../tables/samsung-knox-user-cl.md) | [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **8 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 7 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Samsung Knox - Application Privilege Escalation or Change Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxApplicationPrivilegeEscalationOrChange.yaml) | High | PrivilegeEscalation | [`Samsung_Knox_Process_CL`](../tables/samsung-knox-process-cl.md) |
+| [Samsung Knox - Mobile Device Boot Compromise Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxMobileDeviceBootCompromise.yaml) | High | Persistence | [`Samsung_Knox_System_CL`](../tables/samsung-knox-system-cl.md) |
+| [Samsung Knox - Password Lockout Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxPasswordLockout.yaml) | High | CredentialAccess | [`Samsung_Knox_User_CL`](../tables/samsung-knox-user-cl.md) |
+| [Samsung Knox - Peripheral Access  Detection with Camera Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxPeripheralAccessDetectionWithCamera.yaml) | High | - | [`Samsung_Knox_System_CL`](../tables/samsung-knox-system-cl.md) |
+| [Samsung Knox - Peripheral Access  Detection with Mic Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxPeripheralAccessDetectionWithMic.yaml) | High | - | [`Samsung_Knox_System_CL`](../tables/samsung-knox-system-cl.md) |
+| [Samsung Knox - Security Log Full Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxSecurityLogFull.yaml) | High | - | [`Samsung_Knox_Audit_CL`](../tables/samsung-knox-audit-cl.md) |
+| [Samsung Knox - Suspicious URL Accessed Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxSuspiciousURLs.yaml) | High | InitialAccess | [`Samsung_Knox_User_CL`](../tables/samsung-knox-user-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SamsungKnoxAssetIntelligence](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Workbooks/SamsungKnoxAssetIntelligence.json) | [`Samsung_Knox_Application_CL`](../tables/samsung-knox-application-cl.md)<br>[`Samsung_Knox_Audit_CL`](../tables/samsung-knox-audit-cl.md)<br>[`Samsung_Knox_Network_CL`](../tables/samsung-knox-network-cl.md)<br>[`Samsung_Knox_Process_CL`](../tables/samsung-knox-process-cl.md)<br>[`Samsung_Knox_System_CL`](../tables/samsung-knox-system-cl.md)<br>[`Samsung_Knox_User_CL`](../tables/samsung-knox-user-cl.md) |
 
 ## Release Notes
 
@@ -54,4 +65,10 @@ This solution ingests data into **6 table(s)**:
 | 3.0.1       | 28-01-2025                     | Enhance DCR instruction steps in **Data Connector** & Update **Analytics rules** name. |
 | 3.0.1       | 22-04-2025                     | Initial Solution public Release.                                                       |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,32 +13,35 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Windows Forwarded Events](../connectors/windowsforwardedevents.md)
-
-**Publisher:** Microsoft
-
-You can stream all Windows Event Forwarding (WEF) logs from the Windows Servers connected to your Microsoft Sentinel workspace using Azure Monitor Agent (AMA).
-
-	This connection enables you to view dashboards, create custom alerts, and improve investigation.
-
-	This gives you more insight into your organization’s network and improves your security operation capabilities. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219963&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `WindowsEvent` |
-| **Connector Definition Files** | [WindowsForwardedEvents.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Forwarded%20Events/Data%20Connectors/WindowsForwardedEvents.JSON) |
-
-[→ View full connector details](../connectors/windowsforwardedevents.md)
+- [Windows Forwarded Events](../connectors/windowsforwardedevents.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `WindowsEvent` | [Windows Forwarded Events](../connectors/windowsforwardedevents.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Event`](../tables/event.md) | - | Analytics |
+| [`WindowsEvent`](../tables/windowsevent.md) | [Windows Forwarded Events](../connectors/windowsforwardedevents.md) | Analytics |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Caramel Tsunami Actor IOC - July 2021](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Forwarded%20Events/Analytic%20Rules/CaramelTsunami_IOC_WindowsEvent.yaml) | High | Persistence | [`WindowsEvent`](../tables/windowsevent.md) |
+| [Chia_Crypto_Mining IOC - June 2021](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Forwarded%20Events/Analytic%20Rules/ChiaCryptoMining_WindowsEvent.yaml) | Low | Impact | [`WindowsEvent`](../tables/windowsevent.md) |
+| [Progress MOVEIt File transfer above threshold](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Forwarded%20Events/Analytic%20Rules/moveit_file_transfer_above_threshold.yaml) | Medium | Exfiltration | [`Event`](../tables/event.md) |
+| [Progress MOVEIt File transfer folder count above threshold](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Forwarded%20Events/Analytic%20Rules/moveit_file_transfer_folders_above_threshold.yaml) | Medium | Exfiltration | [`Event`](../tables/event.md) |
 
 ## Release Notes
 
@@ -46,4 +49,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 10-04-2024                     | Updated entity mappings of **Analytical Rule**   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

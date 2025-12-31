@@ -1,15 +1,5 @@
 # MimecastDLP_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `MimecastDLP_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Mimecast Secure Email Gateway](../connectors/mimecastsiemapi.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (2)
+
+**In solution [MimecastSEG](../solutions/mimecastseg.md):**
+- [Mimecast Data Leak Prevention - Hold](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastSEG/Analytic%20Rules/MimecastDLP_Hold.yaml)
+- [Mimecast Data Leak Prevention - Notifications](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastSEG/Analytic%20Rules/MimecastDLP.yaml)
 
 ---
 

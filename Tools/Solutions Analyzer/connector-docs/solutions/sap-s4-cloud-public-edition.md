@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SAP S/4HANA Cloud Public Edition](../connectors/saps4publicalerts.md)
-
-**Publisher:** SAP
-
-The SAP S/4HANA Cloud Public Edition (GROW with SAP) data connector enables ingestion of SAP's security audit log into the Microsoft Sentinel Solution for SAP, supporting cross-correlation, alerting, and threat hunting. Looking for alternative authentication mechanisms? See [here](https://github.com/Azure-Samples/Sentinel-For-SAP-Community/tree/main/integration-artifacts).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ABAPAuditLog` |
-| **Connector Definition Files** | [SAPS4Public_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20S4%20Cloud%20Public%20Edition/Data%20Connectors/SAPS4PublicPollerConnector/SAPS4Public_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/saps4publicalerts.md)
+- [SAP S/4HANA Cloud Public Edition](../connectors/saps4publicalerts.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ABAPAuditLog` | [SAP S/4HANA Cloud Public Edition](../connectors/saps4publicalerts.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ABAPAuditLog`](../tables/abapauditlog.md) | [SAP S/4HANA Cloud Public Edition](../connectors/saps4publicalerts.md) | - |
 
 ## Release Notes
 
@@ -44,4 +33,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 16-10-2025                     |DCR transform updates|
 | 3.0.0       | 06-10-2025                     |Initial release|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

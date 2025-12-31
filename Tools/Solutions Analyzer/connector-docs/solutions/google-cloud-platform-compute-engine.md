@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Google Cloud Platform Compute Engine (via Codeless Connector Framework)](../connectors/gcpcomputeenginelogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Cloud Platform Compute Engine data connector provides the capability to ingest Compute Engine Audit logs into Microsoft Sentinel using the Google Cloud Compute Engine API. Refer to [Cloud Compute Engine API](https://cloud.google.com/compute/docs/reference/rest/v1) documentation for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCPComputeEngine` |
-| **Connector Definition Files** | [GCPComputeEngineLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Compute%20Engine/Data%20Connectors/GCPComputeEngineLog_CCP/GCPComputeEngineLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpcomputeenginelogsccpdefinition.md)
+- [Google Cloud Platform Compute Engine (via Codeless Connector Framework)](../connectors/gcpcomputeenginelogsccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GCPComputeEngine` | [Google Cloud Platform Compute Engine (via Codeless Connector Framework)](../connectors/gcpcomputeenginelogsccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GCPComputeEngine`](../tables/gcpcomputeengine.md) | [Google Cloud Platform Compute Engine (via Codeless Connector Framework)](../connectors/gcpcomputeenginelogsccpdefinition.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1      | 28-08-2025                    | Moving Google Cloud Platform Compute Engine **CCF Data Connector** to GA.                                               |
 | 3.0.0      | 17-07-2025                    | Initial Solution Release.                                               |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

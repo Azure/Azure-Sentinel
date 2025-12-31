@@ -13,27 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Elastic Agent](../connectors/elasticagent.md)
-
-**Publisher:** Elastic
-
-The [Elastic Agent](https://www.elastic.co/security) data connector provides the capability to ingest Elastic Agent logs, metrics, and security data into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ElasticAgentLogs_CL` |
-| **Connector Definition Files** | [Connector_ElasticAgent.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ElasticAgent/Data%20Connectors/Connector_ElasticAgent.json) |
-
-[→ View full connector details](../connectors/elasticagent.md)
+- [Elastic Agent](../connectors/elasticagent.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ElasticAgentLogs_CL` | [Elastic Agent](../connectors/elasticagent.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ElasticAgentLogs_CL`](../tables/elasticagentlogs-cl.md) | [Elastic Agent](../connectors/elasticagent.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ElasticAgentEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ElasticAgent/Parsers/ElasticAgentEvent.yaml) | - | - |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

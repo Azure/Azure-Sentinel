@@ -14,28 +14,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Varonis Purview Push Connector](../connectors/varonispurviewpush.md)
-
-**Publisher:** Varonis
-
-The [Varonis Purview](https://www.varonis.com/) connector provides the capability to sync resources from Varonis to Microsoft Purview.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `varonisresources_CL` |
-| **Connector Definition Files** | [VaronisPurview_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Varonis%20Purview/Data%20Connectors/VaronisPurview_ccp/VaronisPurview_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/varonispurviewpush.md)
+- [Varonis Purview Push Connector](../connectors/varonispurviewpush.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `varonisresources_CL` | [Varonis Purview Push Connector](../connectors/varonispurviewpush.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`varonisresources_CL`](../tables/varonisresources-cl.md) | [Varonis Purview Push Connector](../connectors/varonispurviewpush.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 27-10-2025                     | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,31 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [F5 BIG-IP](../connectors/f5bigip.md)
-
-**Publisher:** F5 Networks
-
-The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `F5Telemetry_ASM_CL` |
-| | `F5Telemetry_LTM_CL` |
-| | `F5Telemetry_system_CL` |
-| **Connector Definition Files** | [F5BigIp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20BIG-IP/Data%20Connectors/F5BigIp.json) |
-
-[→ View full connector details](../connectors/f5bigip.md)
+- [F5 BIG-IP](../connectors/f5bigip.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `F5Telemetry_ASM_CL` | [F5 BIG-IP](../connectors/f5bigip.md) |
-| `F5Telemetry_LTM_CL` | [F5 BIG-IP](../connectors/f5bigip.md) |
-| `F5Telemetry_system_CL` | [F5 BIG-IP](../connectors/f5bigip.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`F5Telemetry_ASM_CL`](../tables/f5telemetry-asm-cl.md) | [F5 BIG-IP](../connectors/f5bigip.md) | Workbooks |
+| [`F5Telemetry_AVR_CL`](../tables/f5telemetry-avr-cl.md) | - | Workbooks |
+| [`F5Telemetry_LTM_CL`](../tables/f5telemetry-ltm-cl.md) | [F5 BIG-IP](../connectors/f5bigip.md) | Workbooks |
+| [`F5Telemetry_system_CL`](../tables/f5telemetry-system-cl.md) | [F5 BIG-IP](../connectors/f5bigip.md) | Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 2 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [F5BIGIPSystemMetrics](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20BIG-IP/Workbooks/F5BIGIPSystemMetrics.json) | [`F5Telemetry_AVR_CL`](../tables/f5telemetry-avr-cl.md)<br>[`F5Telemetry_system_CL`](../tables/f5telemetry-system-cl.md) |
+| [F5Networks](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20BIG-IP/Workbooks/F5Networks.json) | [`F5Telemetry_ASM_CL`](../tables/f5telemetry-asm-cl.md)<br>[`F5Telemetry_LTM_CL`](../tables/f5telemetry-ltm-cl.md)<br>[`F5Telemetry_system_CL`](../tables/f5telemetry-system-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

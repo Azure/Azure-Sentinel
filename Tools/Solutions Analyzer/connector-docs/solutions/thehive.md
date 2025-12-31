@@ -13,28 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [TheHive Project - TheHive](../connectors/thehiveprojectthehive.md)
-
-**Publisher:** TheHive Project
-
-The [TheHive](http://thehive-project.org/) data connector provides the capability to ingest common TheHive events into Microsoft Sentinel through Webhooks. TheHive can notify external system of modification events (case creation, alert update, task assignment) in real time. When a change occurs in the TheHive, an HTTPS POST request with event information is sent to a callback data connector URL.  Refer to [Webhooks documentation](https://docs.thehive-project.org/thehive/legacy/thehive3/admin/webhooks/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `TheHive_CL` |
-| **Connector Definition Files** | [TheHive_Webhooks_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TheHive/Data%20Connectors/TheHive_Webhooks_FunctionApp.json) |
-
-[→ View full connector details](../connectors/thehiveprojectthehive.md)
+- [TheHive Project - TheHive](../connectors/thehiveprojectthehive.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `TheHive_CL` | [TheHive Project - TheHive](../connectors/thehiveprojectthehive.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`TheHive_CL`](../tables/thehive-cl.md) | [TheHive Project - TheHive](../connectors/thehiveprojectthehive.md) | - |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 3 |
+| Parsers | 1 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [The Hive - Create alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TheHive/Playbooks/TheHive-CreateAlert/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+| [The Hive - Create case](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TheHive/Playbooks/TheHive-CreateCase/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+| [The Hive - Lock user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TheHive/Playbooks/TheHive-LockUser/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [TheHive](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TheHive/Parsers/TheHive.yaml) | - | - |
 
 ## Release Notes
 
@@ -42,4 +54,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------|
 | 3.0.0       | 05-09-2023                     | Manual deployment instructions updated for **Data Connector**		|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,28 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Google Security Command Center](../connectors/googlesccdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Cloud Platform (GCP) Security Command Center is a comprehensive security and risk management platform for Google Cloud, ingested from Sentinel's connector. It offers features such as asset inventory and discovery, vulnerability and threat detection, and risk mitigation and remediation to help you gain insight into your organization's security and data attack surface. This integration enables you to perform tasks related to findings and assets more effectively.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GoogleCloudSCC` |
-| **Connector Definition Files** | [GCPSecurityCommandCenter.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Data%20Connectors/GCPSecurityCommandCenter.json) |
-
-[→ View full connector details](../connectors/googlesccdefinition.md)
+- [Google Security Command Center](../connectors/googlesccdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GoogleCloudSCC` | [Google Security Command Center](../connectors/googlesccdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GoogleCloudSCC`](../tables/googlecloudscc.md) | [Google Security Command Center](../connectors/googlesccdefinition.md) | Analytics, Hunting |
+
+## Content Items
+
+This solution includes **10 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 5 |
+| Hunting Queries | 5 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [GCP Security Command Center - Detect DNSSEC disabled for DNS zones](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Analytic%20Rules/GCPDNSSECDisabled.yaml) | Medium | Collection, CommandAndControl, DefenseEvasion | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Analytic%20Rules/GCPFirewallHighRiskOpenPorts.yaml) | High | InitialAccess, LateralMovement, Discovery | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [GCP Security Command Center - Detect Open/Unrestricted API Keys](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Analytic%20Rules/GCPAPIKeyApisUnrestricted.yaml) | Medium | InitialAccess, CredentialAccess | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [GCP Security Command Center - Detect Resources with Logging Disabled](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Analytic%20Rules/GCPLoggingDisabled.yaml) | Medium | DefenseEvasion | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [GCP Security Command Center - Detect projects with API Keys present](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Analytic%20Rules/GCPAPIKeyExists.yaml) | Medium | CredentialAccess | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Identify Compute VMs with Secure Boot Disabled](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Hunting%20Queries/GCPComputeSecureBootDisabledDetection.yaml) | ResourceDevelopment, DefenseEvasion | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [Identify GCP Instances with Full API Access](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Hunting%20Queries/GCPFullAPIAccessDetection.yaml) | PrivilegeEscalation | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [Identify GCP Service Account with Overly Permissive Roles](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Hunting%20Queries/GCPAdminServiceAccountDetection.yaml) | PrivilegeEscalation, Persistence | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [Identify GCP User-Managed Service Account Keys](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Hunting%20Queries/GCPUserManagedServiceAccountKeyDetection.yaml) | CredentialAccess | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
+| [Identify Public GCP Storage Buckets](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/Hunting%20Queries/GCPPublicBuckets.yaml) | Exfiltration, Discovery | [`GoogleCloudSCC`](../tables/googlecloudscc.md) |
 
 ## Release Notes
 
@@ -45,4 +63,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.5       | 16-05-2024                     | Modification in ** Data Connector **           |
 | 3.0.4       | 28-02-2024                     | Initial solution release                       |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

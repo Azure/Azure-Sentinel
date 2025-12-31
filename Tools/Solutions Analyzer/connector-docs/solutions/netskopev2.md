@@ -14,148 +14,161 @@
 
 ## Data Connectors
 
-This solution provides **3 data connector(s)**.
+This solution provides **3 data connector(s)**:
 
-### [Netskope Alerts and Events](../connectors/netskopealertsevents.md)
-
-**Publisher:** Netskope
-
-Netskope Security Alerts and Events
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `NetskopeAlerts_CL` |
-| | `NetskopeEventsApplication_CL` |
-| | `NetskopeEventsAudit_CL` |
-| | `NetskopeEventsConnection_CL` |
-| | `NetskopeEventsDLP_CL` |
-| | `NetskopeEventsEndpoint_CL` |
-| | `NetskopeEventsInfrastructure_CL` |
-| | `NetskopeEventsNetwork_CL` |
-| | `NetskopeEventsPage_CL` |
-| **Connector Definition Files** | [NetskopeAlertsEvents_ConnectorDefination.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Data%20Connectors/NetskopeAlertsEvents_RestAPI_CCP/NetskopeAlertsEvents_ConnectorDefination.json) |
-
-[→ View full connector details](../connectors/netskopealertsevents.md)
-
-### [Netskope Data Connector](../connectors/netskopedataconnector.md)
-
-**Publisher:** Netskope
-
-The [Netskope](https://docs.netskope.com/en/netskope-help/admin-console/rest-api/rest-api-v2-overview-312207/) data connector provides the following capabilities: 
-
- 1. NetskopeToAzureStorage : 
-
- >* Get the Netskope Alerts and Events data from Netskope and ingest to Azure storage. 
-
- 2. StorageToSentinel : 
-
- >* Get the Netskope Alerts and Events data from Azure storage and ingest to custom log table in log analytics workspace. 
-
- 3. WebTxMetrics : 
-
- >* Get the WebTxMetrics data from Netskope and ingest to custom log table in log analytics workspace.
-
-
-
-
-
- For more details of REST APIs refer to the below documentations: 
-
- 1. Netskope API documentation: 
-
-> https://docs.netskope.com/en/netskope-help/admin-console/rest-api/rest-api-v2-overview-312207/ 
-
- 2. Azure storage documentation: 
-
-> https://learn.microsoft.com/azure/storage/common/storage-introduction 
-
- 3. Microsoft log analytic documentation: 
-
-> https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-overview
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Netskope_WebTx_metrics_CL` |
-| | `alertscompromisedcredentialdata_CL` |
-| | `alertsctepdata_CL` |
-| | `alertsdlpdata_CL` |
-| | `alertsmalsitedata_CL` |
-| | `alertsmalwaredata_CL` |
-| | `alertspolicydata_CL` |
-| | `alertsquarantinedata_CL` |
-| | `alertsremediationdata_CL` |
-| | `alertssecurityassessmentdata_CL` |
-| | `alertsubadata_CL` |
-| | `eventsapplicationdata_CL` |
-| | `eventsauditdata_CL` |
-| | `eventsconnectiondata_CL` |
-| | `eventsincidentdata_CL` |
-| | `eventsnetworkdata_CL` |
-| | `eventspagedata_CL` |
-| **Connector Definition Files** | [Netskope_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Data%20Connectors/NetskopeDataConnector/Netskope_FunctionApp.json) |
-
-[→ View full connector details](../connectors/netskopedataconnector.md)
-
-### [Netskope Web Transactions Data Connector](../connectors/netskopewebtransactionsdataconnector.md)
-
-**Publisher:** Netskope
-
-The [Netskope Web Transactions](https://docs.netskope.com/en/netskope-help/data-security/transaction-events/netskope-transaction-events/) data connector provides the functionality of a docker image to pull the Netskope Web Transactions data from google pubsublite, process the data and ingest the processed data to Log Analytics. As part of this data connector two tables will be formed in Log Analytics, one for Web Transactions data and other for errors encountered during execution.
-
-
-
-
-
- For more details related to Web Transactions refer to the below documentation: 
-
- 1. Netskope Web Transactions documentation: 
-
-> https://docs.netskope.com/en/netskope-help/data-security/transaction-events/netskope-transaction-events/ 
-
-
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `NetskopeWebtxData_CL` |
-| | `NetskopeWebtxErrors_CL` |
-| **Connector Definition Files** | [Netskope_WebTransactions.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Data%20Connectors/NetskopeWebTransactionsDataConnector/Netskope_WebTransactions.json) |
-
-[→ View full connector details](../connectors/netskopewebtransactionsdataconnector.md)
+- [Netskope Alerts and Events](../connectors/netskopealertsevents.md)
+- [Netskope Data Connector](../connectors/netskopedataconnector.md)
+- [Netskope Web Transactions Data Connector](../connectors/netskopewebtransactionsdataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **28 table(s)**:
+This solution uses **32 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `NetskopeAlerts_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsApplication_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsAudit_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsConnection_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsDLP_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsEndpoint_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsInfrastructure_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsNetwork_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeEventsPage_CL` | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) |
-| `NetskopeWebtxData_CL` | [Netskope Web Transactions Data Connector](../connectors/netskopewebtransactionsdataconnector.md) |
-| `NetskopeWebtxErrors_CL` | [Netskope Web Transactions Data Connector](../connectors/netskopewebtransactionsdataconnector.md) |
-| `Netskope_WebTx_metrics_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertscompromisedcredentialdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsctepdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsdlpdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsmalsitedata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsmalwaredata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertspolicydata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsquarantinedata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsremediationdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertssecurityassessmentdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `alertsubadata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `eventsapplicationdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `eventsauditdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `eventsconnectiondata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `eventsincidentdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `eventsnetworkdata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
-| `eventspagedata_CL` | [Netskope Data Connector](../connectors/netskopedataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`NetskopeAlerts_CL`](../tables/netskopealerts-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | Workbooks |
+| [`NetskopeEventsApplication_CL`](../tables/netskopeeventsapplication-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | Workbooks |
+| [`NetskopeEventsAudit_CL`](../tables/netskopeeventsaudit-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeEventsConnection_CL`](../tables/netskopeeventsconnection-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeEventsDLP_CL`](../tables/netskopeeventsdlp-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeEventsEndpoint_CL`](../tables/netskopeeventsendpoint-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeEventsInfrastructure_CL`](../tables/netskopeeventsinfrastructure-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeEventsNetwork_CL`](../tables/netskopeeventsnetwork-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeEventsPage_CL`](../tables/netskopeeventspage-cl.md) | [Netskope Alerts and Events](../connectors/netskopealertsevents.md) | - |
+| [`NetskopeWebTransactions_CL`](../tables/netskopewebtransactions-cl.md) | - | Workbooks |
+| [`NetskopeWebtxData_CL`](../tables/netskopewebtxdata-cl.md) | [Netskope Web Transactions Data Connector](../connectors/netskopewebtransactionsdataconnector.md) | Workbooks |
+| [`NetskopeWebtxErrors_CL`](../tables/netskopewebtxerrors-cl.md) | [Netskope Web Transactions Data Connector](../connectors/netskopewebtransactionsdataconnector.md) | Analytics |
+| [`Netskope_Alerts_CL`](../tables/netskope-alerts-cl.md) | - | Workbooks |
+| [`Netskope_Events_CL`](../tables/netskope-events-cl.md) | - | Workbooks |
+| [`Netskope_WebTX_CL`](../tables/netskope-webtx-cl.md) | - | Workbooks |
+| [`Netskope_WebTx_metrics_CL`](../tables/netskope-webtx-metrics-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertscompromisedcredentialdata_CL`](../tables/alertscompromisedcredentialdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsctepdata_CL`](../tables/alertsctepdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsdlpdata_CL`](../tables/alertsdlpdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsmalsitedata_CL`](../tables/alertsmalsitedata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsmalwaredata_CL`](../tables/alertsmalwaredata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertspolicydata_CL`](../tables/alertspolicydata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsquarantinedata_CL`](../tables/alertsquarantinedata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsremediationdata_CL`](../tables/alertsremediationdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertssecurityassessmentdata_CL`](../tables/alertssecurityassessmentdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`alertsubadata_CL`](../tables/alertsubadata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`eventsapplicationdata_CL`](../tables/eventsapplicationdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | Workbooks |
+| [`eventsauditdata_CL`](../tables/eventsauditdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`eventsconnectiondata_CL`](../tables/eventsconnectiondata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`eventsincidentdata_CL`](../tables/eventsincidentdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`eventsnetworkdata_CL`](../tables/eventsnetworkdata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+| [`eventspagedata_CL`](../tables/eventspagedata-cl.md) | [Netskope Data Connector](../connectors/netskopedataconnector.md) | - |
+
+## Content Items
+
+This solution includes **37 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 30 |
+| Workbooks | 4 |
+| Playbooks | 2 |
+| Analytic Rules | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Netskope - WebTransaction Error Detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Analytic%20Rules/NetskopeWebTxErrors.yaml) | Medium | Execution | [`NetskopeWebtxErrors_CL`](../tables/netskopewebtxerrors-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [NetskopeCCFWebtxDashboard](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Workbooks/NetskopeCCFWebtxDashboard.json) | [`NetskopeWebTransactions_CL`](../tables/netskopewebtransactions-cl.md) |
+| [NetskopeCCPDashboard](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Workbooks/NetskopeCCPDashboard.json) | [`NetskopeAlerts_CL`](../tables/netskopealerts-cl.md)<br>[`NetskopeEventsApplication_CL`](../tables/netskopeeventsapplication-cl.md) |
+| [NetskopeCEDashboard](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Workbooks/NetskopeCEDashboard.json) | [`Netskope_Alerts_CL`](../tables/netskope-alerts-cl.md)<br>[`Netskope_Events_CL`](../tables/netskope-events-cl.md)<br>[`Netskope_WebTX_CL`](../tables/netskope-webtx-cl.md) |
+| [NetskopeDashboard](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Workbooks/NetskopeDashboard.json) | [`NetskopeWebtxData_CL`](../tables/netskopewebtxdata-cl.md)<br>[`eventsapplicationdata_CL`](../tables/eventsapplicationdata-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [NetskopeDataConnectorsTriggerSync](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Playbooks/NetskopeDataConnectorsTriggerSync/azuredeploy.json) | Playbook to sync timer trigger of all Netskope data connectors. | - |
+| [NetskopeWebTxErrorEmail](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Playbooks/NetskopeWebTxErrorEmail/azuredeploy.json) | This playbook sends email when Netskope Web Transaction data connector error is detected. | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [AlertsCompromisedCredential](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsCompromisedCredential.yaml) | - | - |
+| [AlertsCtep](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsCtep.yaml) | - | - |
+| [AlertsDLP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsDLP.yaml) | - | - |
+| [AlertsMalsite](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsMalsite.yaml) | - | - |
+| [AlertsMalware](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsMalware.yaml) | - | - |
+| [AlertsPolicy](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsPolicy.yaml) | - | - |
+| [AlertsQuarantine](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsQuarantine.yaml) | - | - |
+| [AlertsRemediation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsRemediation.yaml) | - | - |
+| [AlertsSecurityAssessment](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsSecurityAssessment.yaml) | - | - |
+| [AlertsUba](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/AlertsUba.yaml) | - | - |
+| [EventIncident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/EventIncident.yaml) | - | - |
+| [EventsApplication](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/EventsApplication.yaml) | - | - |
+| [EventsAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/EventsAudit.yaml) | - | - |
+| [EventsConnection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/EventsConnection.yaml) | - | - |
+| [EventsNetwork](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/EventsNetwork.yaml) | - | - |
+| [EventsPage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/EventsPage.yaml) | - | - |
+| [NetskopeAlerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeAlerts.yaml) | - | - |
+| [NetskopeCCFWebTransactions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeCCFWebTransactions.yaml) | - | - |
+| [NetskopeCEAlerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeCEAlerts.yaml) | - | - |
+| [NetskopeCEEventsApplication](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeCEEventsApplication.yaml) | - | - |
+| [NetskopeCEWebTransactions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeCEWebTransactions.yaml) | - | - |
+| [NetskopeEventsApplication](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsApplication.yaml) | - | - |
+| [NetskopeEventsAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsAudit.yaml) | - | - |
+| [NetskopeEventsConnection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsConnection.yaml) | - | - |
+| [NetskopeEventsDLP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsDLP.yaml) | - | - |
+| [NetskopeEventsEndpoint](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsEndpoint.yaml) | - | - |
+| [NetskopeEventsInfrastructure](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsInfrastructure.yaml) | - | - |
+| [NetskopeEventsNetwork](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsNetwork.yaml) | - | - |
+| [NetskopeEventsPage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeEventsPage.yaml) | - | - |
+| [NetskopeWebTransactions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/Parsers/NetskopeWebTransactions.yaml) | - | - |
+
+## Additional Documentation
+
+> 📄 *Source: [Netskopev2/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskopev2/README.md)*
+
+## Quick Links
+- **Alerts & Events (CCF):** [Sending Alerts and Events to Microsoft Sentinel using the Codeless Connector Platform](https://community.netskope.com/discussions-37/sending-alerts-and-events-to-microsoft-sentinel-using-the-codeless-connector-platform-6910)
+- **Web Transactions (CCF):** [Integration: Web Transactions from Netskope Log Streaming to Microsoft Sentinel](https://community.netskope.com/discussions-37/integration-web-transactions-from-netskope-log-streaming-to-microsoft-sentinel-7646)
+- **Netskope Log Streaming Connector Documentation:** [View Documentation](https://docs.netskope.com/en/log-streaming/)
+
+
+
+## Overview
+The **Netskope Microsoft Sentinel Solution** integrates Netskope logs (events, alerts, and WebTransactions) into **Microsoft Sentinel** for centralized monitoring and investigation.  
+
+> **Note:** Work to update this solution is currently **in progress**. For any questions, please contact **tech-alliances@netskope.com**.
+
+---
+
+## Contents
+
+### Data Connectors
+1. **NetskopeAlertsEvents_RestAPI_CCP** *(Recommended)*  
+   Fetches alerts and events from Netskope using Microsoft's Codeless Connector Framework.
+2. **NetskopeDataConnector** *(Deprecated)*  
+   Azure Functions–based data connector to fetch alerts and events from Netskope.
+3. **NetskopeWebTransactionsDataConnector** *(Deprecated)*  
+   Docker–based data connector to fetch Netskope WebTx logs.
+
+> **Note:** Installation steps for each data connector are available on their respective **UI pages** within Microsoft Sentinel.
+
+### Workbook
+> **Note:** The workbook is only compatible with the **Azure Functions–based data connector** data, and **not** compatible with **NetskopeAlertsEvents_RestAPI_CCP** or **Netskope CE** data.
+
+### Parsers
+> **Note:** The parsers are only compatible with the **Azure Functions–based data connector** data, and **not** compatible with **NetskopeAlertsEvents_RestAPI_CCP** or **Netskope CE** data.
+
+---
+
+## Support
+- [tech-alliances@netskope.com](mailto:tech-alliances@netskope.com)
+- [Netskope Documentation](https://docs.netskope.com)
+- [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel)
 
 ## Release Notes
 
@@ -169,4 +182,10 @@ This solution ingests data into **28 table(s)**:
 | 3.0.1       | 03-05-2024                     | Repackaged for **Parser** issue fix on reinstall.                    |
 | 3.0.0       | 03-04-2024                     | Initial Solution Release.                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

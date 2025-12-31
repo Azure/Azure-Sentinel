@@ -17,6 +17,7 @@ This connector ingests data into the following tables:
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
 | [`Jira_Audit_CL`](../tables/jira-audit-cl.md) | — | — |
+| [`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) | — | — |
 
 ## Permissions
 

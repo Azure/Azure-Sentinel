@@ -13,28 +13,51 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Azure Key Vault](../connectors/azurekeyvault.md)
-
-**Publisher:** Microsoft
-
-Azure Key Vault is a cloud service for securely storing and accessing secrets. A secret is anything that you want to tightly control access to, such as API keys, passwords, certificates, or cryptographic keys.   This connector lets you stream your Azure Key Vault diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220125&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AzureDiagnostics` |
-| **Connector Definition Files** | [AzureKeyVault.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Key%20Vault/Data%20Connectors/AzureKeyVault.JSON) |
-
-[→ View full connector details](../connectors/azurekeyvault.md)
+- [Azure Key Vault](../connectors/azurekeyvault.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AzureDiagnostics` | [Azure Key Vault](../connectors/azurekeyvault.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AzureDiagnostics`](../tables/azurediagnostics.md) | [Azure Key Vault](../connectors/azurekeyvault.md) | Analytics, Workbooks |
+| [`securityresources`](../tables/securityresources.md) | - | Workbooks |
+
+### Internal Tables
+
+The following **2 table(s)** are used internally by this solution's playbooks:
+
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SecurityAlert`](../tables/securityalert.md) | - | Workbooks |
+| [`SecurityIncident`](../tables/securityincident.md) | - | Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Azure Key Vault access TimeSeries anomaly](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Key%20Vault/Analytic%20Rules/TimeSeriesKeyvaultAccessAnomaly.yaml) | Low | CredentialAccess | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+| [Mass secret retrieval from Azure Key Vault](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Key%20Vault/Analytic%20Rules/KeyvaultMassSecretRetrieval.yaml) | Low | CredentialAccess | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+| [NRT Sensitive Azure Key Vault operations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Key%20Vault/Analytic%20Rules/NRT_KeyVaultSensitiveOperations.yaml) | Low | Impact | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+| [Sensitive Azure Key Vault operations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Key%20Vault/Analytic%20Rules/KeyVaultSensitiveOperations.yaml) | Low | Impact | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [AzureKeyVaultWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Key%20Vault/Workbooks/AzureKeyVaultWorkbook.json) | [`AzureDiagnostics`](../tables/azurediagnostics.md)<br>[`securityresources`](../tables/securityresources.md)<br>*Internal use:*<br>[`SecurityAlert`](../tables/securityalert.md)<br>[`SecurityIncident`](../tables/securityincident.md) |
 
 ## Release Notes
 
@@ -45,4 +68,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 01-02-2024                     | Updated ObjectGuid Identifier with Name (KeyvaultMassSecretRetrieval) **Analytic Rule** to render the GUID information correctly| 
 | 3.0.0       | 03-01-2024                     | Added field ResourceId in (KeyvaultMassSecretRetrieval) **Analytic Rule** for proper Entity Mapping|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

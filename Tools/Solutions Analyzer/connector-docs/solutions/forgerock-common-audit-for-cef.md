@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] ForgeRock Identity Platform](../connectors/forgerock.md)
-
-**Publisher:** ForgeRock Inc
-
-The ForgeRock Identity Platform provides a single common auditing framework. Extract and aggregate log data across the entire platform with common audit (CAUD) event handlers and unique IDs so that it can be tracked holistically. Open and extensible, you can leverage audit logging and reporting capabilities for integration with Microsoft Sentinel via this CAUD for CEF connector.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [ForgeRock_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ForgeRock%20Common%20Audit%20for%20CEF/Data%20Connectors/ForgeRock_CEF.json) |
-
-[→ View full connector details](../connectors/forgerock.md)
+- [[Deprecated] ForgeRock Identity Platform](../connectors/forgerock.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] ForgeRock Identity Platform](../connectors/forgerock.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] ForgeRock Identity Platform](../connectors/forgerock.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ForgeRockParser](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ForgeRock%20Common%20Audit%20for%20CEF/Parsers/ForgeRockParser.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.0       | 01-07-2024                     |  Deprecating data connectors                                          |
 | 2.0.0       | 06-05-2023                     |  Initial Solution Release                                          |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

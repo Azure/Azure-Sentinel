@@ -28,4 +28,10 @@ This solution may contain other components such as analytics rules, workbooks, h
 | 3.0.1       | 06-08-2024                     | Updated the URL in **data connector**       |
 | 3.0.0       | 02-08-2024                     | Added a new **data connector** of "Threat Intelligence Upload Indicators API" for Fairfax|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

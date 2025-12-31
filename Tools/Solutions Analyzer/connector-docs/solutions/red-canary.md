@@ -14,27 +14,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Red Canary Threat Detection](../connectors/redcanarydataconnector.md)
-
-**Publisher:** Red Canary
-
-The Red Canary data connector provides the capability to ingest published Detections into Microsoft Sentinel using the Data Collector REST API.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `RedCanaryDetections_CL` |
-| **Connector Definition Files** | [RedCanaryDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Red%20Canary/Data%20Connectors/RedCanaryDataConnector.json) |
-
-[→ View full connector details](../connectors/redcanarydataconnector.md)
+- [Red Canary Threat Detection](../connectors/redcanarydataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `RedCanaryDetections_CL` | [Red Canary Threat Detection](../connectors/redcanarydataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`RedCanaryDetections_CL`](../tables/redcanarydetections-cl.md) | [Red Canary Threat Detection](../connectors/redcanarydataconnector.md) | Analytics |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Red Canary Threat Detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Red%20Canary/Analytic%20Rules/RedCanaryThreatDetection.yaml) | High | Collection, CommandAndControl, CredentialAccess, DefenseEvasion, Discovery, Execution, Exfiltration, Impact, InitialAccess, LateralMovement, Persistence, PrivilegeEscalation | [`RedCanaryDetections_CL`](../tables/redcanarydetections-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

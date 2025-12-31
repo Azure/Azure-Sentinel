@@ -1,15 +1,5 @@
 # PrismaCloudCompute_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `PrismaCloudCompute_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 2 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -22,6 +12,8 @@ This table is ingested by the following connectors:
 
 - [Palo Alto Prisma Cloud CWPP (using REST API)](../connectors/paloaltoprismacloudcwpp.md)
 - [Palo Alto Prisma Cloud CWPP (using REST API)](../connectors/prismacloudcomputenativepoller.md)
+
+---
 
 ---
 

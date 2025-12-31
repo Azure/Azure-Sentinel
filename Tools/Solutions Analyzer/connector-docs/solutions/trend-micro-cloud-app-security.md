@@ -13,27 +13,75 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Trend Micro Cloud App Security](../connectors/trendmicrocas.md)
-
-**Publisher:** Trend Micro
-
-The [Trend Micro Cloud App Security](https://www.trendmicro.com/en_be/business/products/user-protection/sps/email-and-collaboration/cloud-app-security.html) data connector provides the capability to retrieve security event logs of the services that Cloud App Security protects and more events into Microsoft Sentinel through the Log Retrieval API. Refer to API [documentation](https://docs.trendmicro.com/en-us/enterprise/cloud-app-security-integration-api-online-help/supported-cloud-app-/log-retrieval-api/get-security-logs.aspx) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `TrendMicroCAS_CL` |
-| **Connector Definition Files** | [TerndMicroCAS_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Data%20Connectors/TerndMicroCAS_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/trendmicrocas.md)
+- [Trend Micro Cloud App Security](../connectors/trendmicrocas.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `TrendMicroCAS_CL` | [Trend Micro Cloud App Security](../connectors/trendmicrocas.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) | [Trend Micro Cloud App Security](../connectors/trendmicrocas.md) | Analytics, Hunting, Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **22 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Trend Micro CAS - DLP violation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASDLPViolation.yaml) | High | Exfiltration | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Infected user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASVAInfectedUser.yaml) | High | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Multiple infected users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASVAOutbreak.yaml) | High | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Possible phishing mail](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASPossiblePhishingMail.yaml) | Medium | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Ransomware infection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASRansomwareOnHost.yaml) | High | Impact | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Ransomware outbreak](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASRansomwareOutbreak.yaml) | High | Impact | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Suspicious filename](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASSuspiciousFilename.yaml) | Medium | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Threat detected and not blocked](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASThreatNotBlocked.yaml) | High | DefenseEvasion | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Unexpected file on file share](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASUnexpectedFileOnFileShare.yaml) | Medium | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Unexpected file via mail](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Analytic%20Rules/TrendMicroCASUnexpectedFileInMail.yaml) | Medium | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Trend Micro CAS - DLP violations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASUserDLPViolations.yaml) | Exfiltration | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Files received via email services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASTopFilesRecievedViaEmail.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Files stored on cloud fileshare services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASFilesOnShares.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Infected files received via email](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASInfectedFilesInEmails.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Ransomware threats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASRansomwareThreats.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Rare files received via email services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASRareFilesRecievedViaEmail.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Risky users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASRiskyUsers.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Security risk scan threats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASScanDiscoveredThreats.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Suspicious files on sharepoint](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASSuspiciousFilesSharepoint.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+| [Trend Micro CAS - Virtual Analyzer threats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Hunting%20Queries/TrendMicroCASVAThreats.yaml) | InitialAccess | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [TrendMicroCAS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Workbooks/TrendMicroCAS.json) | [`TrendMicroCAS_CL`](../tables/trendmicrocas-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [TrendMicroCAS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Cloud%20App%20Security/Parsers/TrendMicroCAS.yaml) | - | - |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

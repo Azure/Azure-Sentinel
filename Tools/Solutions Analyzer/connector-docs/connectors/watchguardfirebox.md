@@ -5,7 +5,7 @@
 | **Connector ID** | `WatchguardFirebox` |
 | **Publisher** | WatchGuard Technologies |
 | **Used in Solutions** | [Watchguard Firebox](../solutions/watchguard-firebox.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [Connector_syslog_WatchGuardFirebox.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Watchguard%20Firebox/Data%20Connectors/Connector_syslog_WatchGuardFirebox.json) |
 
 WatchGuard Firebox (https://www.watchguard.com/wgrd-products/firewall-appliances and https://www.watchguard.com/wgrd-products/cloud-and-virtual-firewalls) is security products/firewall-appliances. Watchguard Firebox will send syslog to Watchguard Firebox collector agent.The agent then sends the message to the workspace.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | — | ✓ |
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

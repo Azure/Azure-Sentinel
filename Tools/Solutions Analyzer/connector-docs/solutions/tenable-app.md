@@ -14,50 +14,74 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Tenable Identity Exposure](../connectors/tenableie.md)
-
-**Publisher:** Tenable
-
-Tenable Identity Exposure connector allows Indicators of Exposure, Indicators of Attack and trailflow logs to be ingested into Microsoft Sentinel.The different work books and data parsers allow you to more easily manipulate logs and monitor your Active Directory environment.  The analytic templates allow you to automate responses regarding different events, exposures and attacks.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Tenable_IE_CL` |
-| **Connector Definition Files** | [TenableIE.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Data%20Connectors/TenableIE/TenableIE.json) |
-
-[→ View full connector details](../connectors/tenableie.md)
-
-### [Tenable Vulnerability Management](../connectors/tenablevm.md)
-
-**Publisher:** Tenable
-
-The TVM data connector provides the ability to ingest Asset, Vulnerability, Compliance, WAS assets and WAS vulnerabilities data into Microsoft Sentinel using TVM REST APIs. Refer to [API documentation](https://developer.tenable.com/reference) for more information. The connector provides the ability to get data which helps to examine potential security risks, get insight into your computing assets, diagnose configuration problems and more
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Tenable_VM_Asset_CL` |
-| | `Tenable_VM_Compliance_CL` |
-| | `Tenable_VM_Vuln_CL` |
-| | `Tenable_WAS_Asset_CL` |
-| | `Tenable_WAS_Vuln_CL` |
-| **Connector Definition Files** | [TenableVM.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Data%20Connectors/TenableVM/TenableVM.json) |
-
-[→ View full connector details](../connectors/tenablevm.md)
+- [Tenable Identity Exposure](../connectors/tenableie.md)
+- [Tenable Vulnerability Management](../connectors/tenablevm.md)
 
 ## Tables Reference
 
-This solution ingests data into **6 table(s)**:
+This solution uses **6 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Tenable_IE_CL` | [Tenable Identity Exposure](../connectors/tenableie.md) |
-| `Tenable_VM_Asset_CL` | [Tenable Vulnerability Management](../connectors/tenablevm.md) |
-| `Tenable_VM_Compliance_CL` | [Tenable Vulnerability Management](../connectors/tenablevm.md) |
-| `Tenable_VM_Vuln_CL` | [Tenable Vulnerability Management](../connectors/tenablevm.md) |
-| `Tenable_WAS_Asset_CL` | [Tenable Vulnerability Management](../connectors/tenablevm.md) |
-| `Tenable_WAS_Vuln_CL` | [Tenable Vulnerability Management](../connectors/tenablevm.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) | [Tenable Identity Exposure](../connectors/tenableie.md) | Analytics, Workbooks |
+| [`Tenable_VM_Asset_CL`](../tables/tenable-vm-asset-cl.md) | [Tenable Vulnerability Management](../connectors/tenablevm.md) | Playbooks |
+| [`Tenable_VM_Compliance_CL`](../tables/tenable-vm-compliance-cl.md) | [Tenable Vulnerability Management](../connectors/tenablevm.md) | - |
+| [`Tenable_VM_Vuln_CL`](../tables/tenable-vm-vuln-cl.md) | [Tenable Vulnerability Management](../connectors/tenablevm.md) | Playbooks |
+| [`Tenable_WAS_Asset_CL`](../tables/tenable-was-asset-cl.md) | [Tenable Vulnerability Management](../connectors/tenablevm.md) | - |
+| [`Tenable_WAS_Vuln_CL`](../tables/tenable-was-vuln-cl.md) | [Tenable Vulnerability Management](../connectors/tenablevm.md) | - |
+
+## Content Items
+
+This solution includes **20 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 12 |
+| Playbooks | 3 |
+| Parsers | 3 |
+| Workbooks | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [TIE Active Directory attacks pathways](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEADAttacksPathways.yaml) | Low | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE DCShadow](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEDCShadow.yaml) | High | DefenseEvasion | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE DCSync](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEDCSync.yaml) | High | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE Golden Ticket](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEGoldenTicket.yaml) | High | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE Indicators of Attack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEIndicatorsOfAttack.yaml) | Low | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE Indicators of Exposures](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEIndicatorsOfExposures.yaml) | Low | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE LSASS Memory](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIELSASSMemory.yaml) | High | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE Password Guessing](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEPasswordGuessing.yaml) | High | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE Password Spraying](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEPasswordSpraying.yaml) | High | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE Password issues](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEPasswordIssues.yaml) | Low | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE privileged accounts issues](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEPrivilegedAccountIssues.yaml) | Low | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TIE user accounts issues](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Analytic%20Rules/TIEUserAccountIssues.yaml) | Low | CredentialAccess | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [TenableIEIoA](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Workbooks/TenableIEIoA.json) | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+| [TenableIEIoE](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Workbooks/TenableIEIoE.json) | [`Tenable_IE_CL`](../tables/tenable-ie-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Tenable VM - Enrich incident with asset info](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Playbooks/Playbooks/Tenable-EnrichIncidentWithAssetsInfo/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | [`Tenable_VM_Asset_CL`](../tables/tenable-vm-asset-cl.md) *(read)* |
+| [Tenable VM - Enrich incident with vulnerability info](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Playbooks/Playbooks/Tenable-EnrichIncidentWithVulnInfo/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | [`Tenable_VM_Vuln_CL`](../tables/tenable-vm-vuln-cl.md) *(read)* |
+| [Tenable VM - Launch Scan](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Playbooks/Playbooks/Tenable-LaunchScan/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [TenableVMAssets](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Parsers/TenableVMAssets.yaml) | - | - |
+| [TenableVMVulnerabilities](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Parsers/TenableVMVulnerabilities.yaml) | - | - |
+| [afad_parser](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Tenable%20App/Parsers/afad_parser.yaml) | - | - |
 
 ## Release Notes
 
@@ -68,4 +92,10 @@ This solution ingests data into **6 table(s)**:
 | 3.0.1       | 05-09-2024                     | Updated the python runtime version to 3.11 |
 | 3.0.0       | 03-07-2024                     | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

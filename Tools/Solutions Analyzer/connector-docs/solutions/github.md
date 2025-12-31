@@ -13,72 +13,87 @@
 
 ## Data Connectors
 
-This solution provides **3 data connector(s)**.
+This solution provides **3 data connector(s)**:
 
-### [GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)](../connectors/githubauditdefinitionv2.md)
-
-**Publisher:** Microsoft
-
-The GitHub audit log connector provides the capability to ingest GitHub logs into Microsoft Sentinel. By connecting GitHub audit logs into Microsoft Sentinel, you can view this data in workbooks, use it to create custom alerts, and improve your investigation process. 
-
-
-
- **Note:** If you intended to ingest GitHub subscribed events into Microsoft Sentinel, please refer to GitHub (using Webhooks) Connector from "**Data Connectors**" gallery.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GitHubAuditLogsV2_CL` |
-| **Connector Definition Files** | [GitHubAuditLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GitHubAuditLogs_CCF/GitHubAuditLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/githubauditdefinitionv2.md)
-
-### [[Deprecated] GitHub Enterprise Audit Log](../connectors/githubecauditlogpolling.md)
-
-**Publisher:** GitHub
-
-The GitHub audit log connector provides the capability to ingest GitHub logs into Microsoft Sentinel. By connecting GitHub audit logs into Microsoft Sentinel, you can view this data in workbooks, use it to create custom alerts, and improve your investigation process. 
-
-
-
- **Note:** If you intended to ingest GitHub subscribed events into Microsoft Sentinel, please refer to GitHub (using Webhooks) Connector from "**Data Connectors**" gallery.
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GitHubAuditLogPolling_CL` |
-| **Connector Definition Files** | [azuredeploy_GitHub_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/azuredeploy_GitHub_native_poller_connector.json) |
-
-[→ View full connector details](../connectors/githubecauditlogpolling.md)
-
-### [GitHub (using Webhooks)](../connectors/githubwebhook.md)
-
-**Publisher:** Microsoft
-
-The [GitHub](https://www.github.com) webhook data connector provides the capability to ingest GitHub subscribed events into Microsoft Sentinel using [GitHub webhook events](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads). The connector provides ability to get events into Microsoft Sentinel which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more. 
-
-
-
- **Note:** If you are intended to ingest Github Audit logs, Please refer to GitHub Enterprise Audit Log Connector from "**Data Connectors**" gallery.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `githubscanaudit_CL` |
-| **Connector Definition Files** | [GithubWebhook_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Data%20Connectors/GithubWebhook/GithubWebhook_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/githubwebhook.md)
+- [GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)](../connectors/githubauditdefinitionv2.md)
+- [[Deprecated] GitHub Enterprise Audit Log](../connectors/githubecauditlogpolling.md)
+- [GitHub (using Webhooks)](../connectors/githubwebhook.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **10 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GitHubAuditLogPolling_CL` | [[Deprecated] GitHub Enterprise Audit Log](../connectors/githubecauditlogpolling.md) |
-| `GitHubAuditLogsV2_CL` | [GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)](../connectors/githubauditdefinitionv2.md) |
-| `githubscanaudit_CL` | [GitHub (using Webhooks)](../connectors/githubwebhook.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GitHubActorLogin`](../tables/githubactorlogin.md) | - | Hunting |
+| [`GitHubAudit`](../tables/githubaudit.md) | - | Analytics |
+| [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md) | [[Deprecated] GitHub Enterprise Audit Log](../connectors/githubecauditlogpolling.md) | Analytics, Hunting |
+| [`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) | [GitHub Enterprise Audit Log (via Codeless Connector Framework) (Preview)](../connectors/githubauditdefinitionv2.md), [[Deprecated] GitHub Enterprise Audit Log](../connectors/githubecauditlogpolling.md) | Analytics, Hunting |
+| [`GitHubCountryCodeLogs`](../tables/githubcountrycodelogs.md) | - | Analytics |
+| [`GitHubOrgMemberLogs`](../tables/githuborgmemberlogs.md) | - | Hunting |
+| [`GitHubRepo`](../tables/githubrepo.md) | - | Analytics |
+| [`GitHubRepositoryDestroyEvents`](../tables/githubrepositorydestroyevents.md) | - | Hunting |
+| [`GitHubUser`](../tables/githubuser.md) | - | Hunting |
+| [`githubscanaudit_CL`](../tables/githubscanaudit-cl.md) | [GitHub (using Webhooks)](../connectors/githubwebhook.md) | Workbooks |
+
+## Content Items
+
+This solution includes **28 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 14 |
+| Hunting Queries | 8 |
+| Parsers | 4 |
+| Workbooks | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [(Preview) GitHub - A payment method was removed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20A%20payment%20method%20was%20removed.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - Oauth application - a client secret was removed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20Oauth%20application%20-%20a%20client%20secret%20was%20removed.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - Repository was created](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20Repository%20was%20created.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - Repository was destroyed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20Repository%20was%20destroyed.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - User visibility Was changed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20User%20visibility%20Was%20changed.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - User was added to the organization](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20User%20was%20added%20to%20the%20organization.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - User was blocked](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20User%20was%20blocked.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - User was invited to the repository](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20User%20was%20invited%20to%20the%20repository.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - pull request was created](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20pull%20request%20was%20created.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [(Preview) GitHub - pull request was merged](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20pull%20request%20was%20merged.yaml) | Medium | InitialAccess | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [GitHub Activites from a New Country](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20Activities%20from%20Infrequent%20Country.yaml) | Medium | InitialAccess | [`GitHubCountryCodeLogs`](../tables/githubcountrycodelogs.md) |
+| [GitHub Security Vulnerability in Repository](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/Security%20Vulnerability%20in%20Repo.yaml) | Informational | InitialAccess, Execution, PrivilegeEscalation, DefenseEvasion, CredentialAccess, LateralMovement | [`GitHubRepo`](../tables/githubrepo.md) |
+| [GitHub Two Factor Auth Disable](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/%28Preview%29%20GitHub%20-%20Two%20Factor%20Authentication%20Disabled%20in%20GitHub.yaml) | Medium | DefenseEvasion | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [NRT GitHub Two Factor Auth Disable](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Analytic%20Rules/NRT%20Two%20Factor%20Authentication%20Disabled.yaml) | Medium | DefenseEvasion | [`GitHubAudit`](../tables/githubaudit.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [GitHub First Time Invite Member and Add Member to Repo](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/First%20Time%20User%20Invite%20and%20Add%20Member%20to%20Org.yaml) | Persistence | [`GitHubOrgMemberLogs`](../tables/githuborgmemberlogs.md) |
+| [GitHub First Time Repo Delete](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/User%20First%20Time%20Repository%20Delete%20Activity.yaml) | Impact | [`GitHubRepositoryDestroyEvents`](../tables/githubrepositorydestroyevents.md) |
+| [GitHub Inactive or New Account Access or Usage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/Inactive%20or%20New%20Account%20Usage.yaml) | Persistence | [`GitHubActorLogin`](../tables/githubactorlogin.md)<br>[`GitHubUser`](../tables/githubuser.md) |
+| [GitHub Mass Deletion of repos or projects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/Mass%20Deletion%20of%20Repositories%20.yaml) | Impact | [`GitHubRepositoryDestroyEvents`](../tables/githubrepositorydestroyevents.md) |
+| [GitHub OAuth App Restrictions Disabled](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/Oauth%20App%20Restrictions%20Disabled.yaml) | Persistence, DefenseEvasion | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [GitHub Repo switched from private to public](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/Repository%20Permission%20Switched%20to%20Public.yaml) | Collection | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [GitHub Update Permissions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/Org%20Repositories%20Default%20Permissions%20Change.yaml) | Persistence, DefenseEvasion | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+| [GitHub User Grants Access and Other User Grants Access](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Hunting%20Queries/User%20Grant%20Access%20and%20Grants%20Other%20Access.yaml) | Persistence, PrivilegeEscalation | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md)<br>[`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [GitHub](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Workbooks/GitHub.json) | [`githubscanaudit_CL`](../tables/githubscanaudit-cl.md) |
+| [GitHubAdvancedSecurity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Workbooks/GitHubAdvancedSecurity.json) | [`githubscanaudit_CL`](../tables/githubscanaudit-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [GitHubAuditData](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Parsers/GitHubAuditData.yaml) | - | - |
+| [GitHubCodeScanningData](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Parsers/GitHubCodeScanningData.yaml) | - | - |
+| [GitHubDependabotData](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Parsers/GitHubDependabotData.yaml) | - | - |
+| [GitHubSecretScanningData](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Parsers/GitHubSecretScanningData.yaml) | - | - |
 
 ## Release Notes
 
@@ -98,4 +113,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 22-08-2023                     | Modified **GitHubWorkbook** to add new features (a.Filtering by organizations, b.Filtering by repository topics).  |
 | 3.0.0       | 17-07-2023                     | **Data Connectors** description updated & Code Enhancements added for **Workbooks**. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -16,11 +16,11 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AzureMetrics`](../tables/azuremetrics.md) | — | ✗ |
-| [`StorageBlobLogs`](../tables/storagebloblogs.md) | — | ✗ |
-| [`StorageFileLogs`](../tables/storagefilelogs.md) | — | ✗ |
-| [`StorageQueueLogs`](../tables/storagequeuelogs.md) | — | ✗ |
-| [`StorageTableLogs`](../tables/storagetablelogs.md) | — | ✗ |
+| [`AzureMetrics`](../tables/azuremetrics.md) | ✗ | ✗ |
+| [`StorageBlobLogs`](../tables/storagebloblogs.md) | ✓ | ✗ |
+| [`StorageFileLogs`](../tables/storagefilelogs.md) | ✓ | ✗ |
+| [`StorageQueueLogs`](../tables/storagequeuelogs.md) | ✓ | ✗ |
+| [`StorageTableLogs`](../tables/storagetablelogs.md) | ✓ | ✗ |
 
 ## Permissions
 

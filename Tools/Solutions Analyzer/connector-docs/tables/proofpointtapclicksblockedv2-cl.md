@@ -1,15 +1,5 @@
 # ProofPointTAPClicksBlockedV2_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `ProofPointTAPClicksBlockedV2_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Proofpoint TAP (via Codeless Connector Platform)](../connectors/proofpointtapv2.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [ProofPointTap](../solutions/proofpointtap.md):**
+- [ProofpointTAP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ProofPointTap/Workbooks/ProofpointTAP.json)
 
 ---
 

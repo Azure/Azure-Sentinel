@@ -13,28 +13,9 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Microsoft 365 Assets (formerly, Office 365)](../connectors/m365assets.md)
-
-**Publisher:** Microsoft
-
-The Microsoft 365 (formerly, Office 365) asset connector gives richer insights into ongoing user activities in Microsoft Sentinel by supplementing activity logs with details such as owners, permissions, retention policies and sensitivity labels.
-
-
-
-Data from this connector is used to build data risk graphs in Purview. If you've enabled those graphs, deactivating this connector will prevent the graphs from being built. [Learn about the data risk graph](https://go.microsoft.com/fwlink/?linkid=2320023).
-
-
-
-This connector is in limited private preview.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `` |
-| **Connector Definition Files** | [M365Asset_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20365%20Assets/Data%20Connectors/M365Asset_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/m365assets.md)
+- [Microsoft 365 Assets (formerly, Office 365)](../connectors/m365assets.md)
 
 ## Release Notes
 
@@ -42,4 +23,10 @@ This connector is in limited private preview.
 |-------------|--------------------------------|---------------------------------------------------------------------------------------------------|
 | 3.0.0       | 20-06-2025                     | Releasing a new Microsoft 365 Asset connector solution in Content Hub and Data Connector gallery. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

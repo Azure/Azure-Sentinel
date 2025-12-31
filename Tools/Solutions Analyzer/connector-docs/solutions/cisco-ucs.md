@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Cisco UCS](../connectors/ciscoucs.md)
-
-**Publisher:** Cisco
-
-The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/products/servers-unified-computing/index.html) connector allows you to easily connect your Cisco UCS logs with Microsoft Sentinel This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_Syslog_CiscoUCS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20UCS/Data%20Connectors/Connector_Syslog_CiscoUCS.json) |
-
-[→ View full connector details](../connectors/ciscoucs.md)
+- [[Deprecated] Cisco UCS](../connectors/ciscoucs.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Cisco UCS](../connectors/ciscoucs.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Cisco UCS](../connectors/ciscoucs.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [CiscoUCS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20UCS/Parsers/CiscoUCS.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +47,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.0       | 30-07-2024                     | Update the **Parser** as part of Syslog migration                  |
 |             |                                | Deprecating data connectors                                        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

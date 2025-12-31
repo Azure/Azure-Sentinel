@@ -13,42 +13,88 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [SecurityBridge Solution for SAP](../connectors/securitybridge.md)
-
-**Publisher:** SecurityBridge Group GmbH
-
-SecurityBridge enhances SAP security by integrating seamlessly with Microsoft Sentinel, enabling real-time monitoring and threat detection across SAP environments. This integration allows Security Operations Centers (SOCs) to consolidate SAP security events with other organizational data, providing a unified view of the threat landscape . Leveraging AI-powered analytics and Microsoft’s Security Copilot, SecurityBridge identifies sophisticated attack patterns and vulnerabilities within SAP applications, including ABAP code scanning and configuration assessments . The solution supports scalable deployments across complex SAP landscapes, whether on-premises, in the cloud, or hybrid environments . By bridging the gap between IT and SAP security teams, SecurityBridge empowers organizations to proactively detect, investigate, and respond to threats, enhancing overall security posture.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ABAPAuditLog` |
-| **Connector Definition Files** | [SecurityBridge_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityBridge%20App/Data%20Connectors/SecurityBridge_PUSH_CCP/SecurityBridge_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/securitybridge.md)
-
-### [SecurityBridge Threat Detection for SAP](../connectors/securitybridgesap.md)
-
-**Publisher:** SecurityBridge
-
-SecurityBridge is the first and only holistic, natively integrated security platform, addressing all aspects needed to protect organizations running SAP from internal and external threats against their core business applications. The SecurityBridge platform is an SAP-certified add-on, used by organizations around the globe, and addresses the clients’ need for advanced cybersecurity, real-time monitoring, compliance, code security, and patching to protect against internal and external threats.This Microsoft Sentinel Solution allows you to integrate SecurityBridge Threat Detection events from all your on-premise and cloud based SAP instances into your security monitoring.Use this Microsoft Sentinel Solution to receive normalized and speaking security events, pre-built dashboards and out-of-the-box templates for your SAP security monitoring.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SecurityBridgeLogs_CL` |
-| **Connector Definition Files** | [Connector_SecurityBridge.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityBridge%20App/Data%20Connectors/Connector_SecurityBridge.json) |
-
-[→ View full connector details](../connectors/securitybridgesap.md)
+- [SecurityBridge Solution for SAP](../connectors/securitybridge.md)
+- [SecurityBridge Threat Detection for SAP](../connectors/securitybridgesap.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ABAPAuditLog` | [SecurityBridge Solution for SAP](../connectors/securitybridge.md) |
-| `SecurityBridgeLogs_CL` | [SecurityBridge Threat Detection for SAP](../connectors/securitybridgesap.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ABAPAuditLog`](../tables/abapauditlog.md) | [SecurityBridge Solution for SAP](../connectors/securitybridge.md) | - |
+| [`SecurityBridgeLogs`](../tables/securitybridgelogs.md) | - | Analytics, Workbooks |
+| [`SecurityBridgeLogs_CL`](../tables/securitybridgelogs-cl.md) | [SecurityBridge Threat Detection for SAP](../connectors/securitybridgesap.md) | - |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [SecurityBridge: A critical event occured](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityBridge%20App/Analytic%20Rules/CriticalEventTriggered.yaml) | Medium | InitialAccess | [`SecurityBridgeLogs`](../tables/securitybridgelogs.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SecurityBridgeThreatDetectionforSAP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityBridge%20App/Workbooks/SecurityBridgeThreatDetectionforSAP.json) | [`SecurityBridgeLogs`](../tables/securitybridgelogs.md) |
+
+## Additional Documentation
+
+> 📄 *Source: [SecurityBridge App/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SecurityBridge App/README.md)*
+
+# Deployment of Sentinel Connector for SecurityBridge Threat Detection for SAP through Content Hub
+This ARM template will deploy a connecter for "SecurityBridge Threat Detection for SAP" with the following elements:
+* Connector
+* Workbook
+* Parser Function
+
+Follow the below steps to deploy this solution in your environment:
+* Log on to Azure Portal
+* Navigate to Azure Sentinel and select your workspace
+* Select `Content Hub`
+* Search for `SecurityBridge Threat Detection for SAP`
+* Click on `Install` and then click on `Create`
+* Follow the steps to install the connector
+
+# Deployment of Sentinel Connector for SecurityBridge Threat Detection for SAP through ARM template
+
+This ARM template will deploy a connecter for "SecurityBridge Threat Detection for SAP" with the following elements:
+* Connector
+* Workbook
+* Parser Function
+
+This is only a temporary solution to deploy the connector manually until the official connector is available on the content hub.
+
+### Pre-reqs
+* Log in: You should be logged into the Azure Sentinel Environment
+* Workspace Name: Workspace id of the azure sentinel.
+* Workspace Location: You can get that from Sentinel > Settings > Workspace Settings > Properties > Location.  For example `southcentralus`
+* Installation of Azure Sentinel Agent on the SAP Machine
+* Path of logs file generation
+* Cron job to be added to the machine to append the newly created logs into an already existing file
+* Logs reception in a custom table named "SecurityBridgeLogs_CL"
+
+### Installation Steps 
+* Click on the Deploy to Azure button below
+* Select the **Resource Group** where Azure Sentinel is deployed
+* Add the name of the **Azure Sentinel Workspace** in the Workspace box
+* Leave rest of the items intact 
+* Click on **Review + create** button
+* Wait for the validation to complete
+* Click on **Create**
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Ffrozenstrawberries%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSecurityBridge%2FPackage%2FmainTemplate.json)
 
 ## Release Notes
 
@@ -60,4 +106,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       | 07-01-2025                     | Removed Deprecated **Data connector**   |
 | 3.0.0       | 08-08-2024                     | Deprecating data connectors             |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

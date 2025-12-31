@@ -1,15 +1,5 @@
 # Rubrik_Events_Data_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Rubrik_Events_Data_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Analytic Rules (1)
+
+**In solution [RubrikSecurityCloud](../solutions/rubriksecuritycloud.md):**
+- [Rubrik Threat Monitoring](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Analytic%20Rules/RubrikThreatMonitoring.yaml)
 
 ---
 

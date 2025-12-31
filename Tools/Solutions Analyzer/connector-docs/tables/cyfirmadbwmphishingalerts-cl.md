@@ -1,15 +1,5 @@
 # CyfirmaDBWMPhishingAlerts_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `CyfirmaDBWMPhishingAlerts_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [CYFIRMA Digital Risk](../connectors/cyfirmadigitalriskalertsconnector.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (2)
+
+**In solution [Cyfirma Digital Risk](../solutions/cyfirma-digital-risk.md):**
+- [CYFIRMA - Data Breach and Web Monitoring - Phishing Campaign Detection Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Digital%20Risk/Analytic%20Rules/DBWMPhishingCampaignDetectionHighRule.yaml)
+- [CYFIRMA - Data Breach and Web Monitoring - Phishing Campaign Detection Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Digital%20Risk/Analytic%20Rules/DBWMPhishingCampaignDetectionMediumRule.yaml)
 
 ---
 

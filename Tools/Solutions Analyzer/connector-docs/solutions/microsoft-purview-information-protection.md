@@ -13,30 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Microsoft Purview Information Protection](../connectors/microsoftpurviewinformationprotection.md)
-
-**Publisher:** Microsoft
-
-Microsoft Purview Information Protection helps you discover, classify, protect, and govern sensitive information wherever it lives or travels. Using these capabilities enable you to know your data, identify items that are sensitive and gain visibility into how they are being used to better protect your data. Sensitivity labels are the foundational capability that provide protection actions, applying encryption, access restrictions and visual markings.
-
-    Integrate Microsoft Purview Information Protection logs with Microsoft Sentinel to view dashboards, create custom alerts and improve investigation. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2223811&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `MicrosoftPurviewInformationProtection` |
-| **Connector Definition Files** | [MicrosoftPurviewInformationProtection.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Purview%20Information%20Protection/Data%20Connectors/MicrosoftPurviewInformationProtection.json) |
-
-[→ View full connector details](../connectors/microsoftpurviewinformationprotection.md)
+- [Microsoft Purview Information Protection](../connectors/microsoftpurviewinformationprotection.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `MicrosoftPurviewInformationProtection` | [Microsoft Purview Information Protection](../connectors/microsoftpurviewinformationprotection.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`MicrosoftPurviewInformationProtection`](../tables/microsoftpurviewinformationprotection.md) | [Microsoft Purview Information Protection](../connectors/microsoftpurviewinformationprotection.md) | - |
 
 ## Release Notes
 
@@ -44,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------|
 | 3.0.0       | 19-03-2024                     | Adjust wording for Microsoft Purview Information Protection logs - log source isn't Azure Diagnostics for this one                                     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

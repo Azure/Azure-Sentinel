@@ -13,27 +13,44 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Azure DDoS Protection](../connectors/ddos.md)
-
-**Publisher:** Microsoft
-
-Connect to Azure DDoS Protection Standard logs via Public IP Address Diagnostic Logs. In addition to the core DDoS protection in the platform, Azure DDoS Protection Standard provides advanced DDoS mitigation capabilities against network attacks. It's automatically tuned to protect your specific Azure resources. Protection is simple to enable during the creation of new virtual networks. It can also be done after creation and requires no application or resource changes. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2219760&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AzureDiagnostics` |
-| **Connector Definition Files** | [DDOS.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20DDoS%20Protection/Data%20Connectors/DDOS.JSON) |
-
-[→ View full connector details](../connectors/ddos.md)
+- [Azure DDoS Protection](../connectors/ddos.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AzureDiagnostics` | [Azure DDoS Protection](../connectors/ddos.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AzureDiagnostics`](../tables/azurediagnostics.md) | [Azure DDoS Protection](../connectors/ddos.md) | Analytics, Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **3 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [DDoS Attack IP Addresses - PPS Threshold](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20DDoS%20Protection/Analytic%20Rules/AttackSourcesPPSThreshold.yaml) | Medium | Impact | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+| [DDoS Attack IP Addresses - Percent Threshold](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20DDoS%20Protection/Analytic%20Rules/AttackSourcesPercentThreshold.yaml) | Medium | Impact | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [AzDDoSStandardWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20DDoS%20Protection/Workbooks/AzDDoSStandardWorkbook.json) | [`AzureDiagnostics`](../tables/azurediagnostics.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

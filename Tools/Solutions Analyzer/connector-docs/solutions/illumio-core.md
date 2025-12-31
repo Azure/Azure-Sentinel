@@ -13,41 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Illumio Core via Legacy Agent](../connectors/illumiocore.md)
-
-**Publisher:** Illumio
-
-The [Illumio Core](https://www.illumio.com/products/) data connector provides the capability to ingest Illumio Core logs into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_IllumioCore_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Data%20Connectors/Connector_IllumioCore_CEF.json) |
-
-[→ View full connector details](../connectors/illumiocore.md)
-
-### [[Deprecated] Illumio Core via AMA](../connectors/illumiocoreama.md)
-
-**Publisher:** Illumio
-
-The [Illumio Core](https://www.illumio.com/products/) data connector provides the capability to ingest Illumio Core logs into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_IllumioCoreAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Data%20Connectors/template_IllumioCoreAMA.json) |
-
-[→ View full connector details](../connectors/illumiocoreama.md)
+- [[Deprecated] Illumio Core via Legacy Agent](../connectors/illumiocore.md)
+- [[Deprecated] Illumio Core via AMA](../connectors/illumiocoreama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Illumio Core via AMA](../connectors/illumiocoreama.md), [[Deprecated] Illumio Core via Legacy Agent](../connectors/illumiocore.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Illumio Core via AMA](../connectors/illumiocoreama.md), [[Deprecated] Illumio Core via Legacy Agent](../connectors/illumiocore.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [IllumioCoreEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illumio%20Core/Parsers/IllumioCoreEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -58,4 +49,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 12-09-2023                     | Addition of new Illumio Core AMA **Data Connector** |  
 | 3.0.0       | 24-07-2023                     | Corrected the links in the solution.  	             |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

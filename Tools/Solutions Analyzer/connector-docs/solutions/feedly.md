@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Feedly](../connectors/feedly.md)
-
-**Publisher:** Feedly
-
-This connector allows you to ingest IoCs from Feedly.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `feedly_indicators_CL` |
-| **Connector Definition Files** | [Feedly_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Feedly/Data%20Connectors/Feedly_API_AzureFunctionApp.json) |
-
-[→ View full connector details](../connectors/feedly.md)
+- [Feedly](../connectors/feedly.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `feedly_indicators_CL` | [Feedly](../connectors/feedly.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`feedly_indicators_CL`](../tables/feedly-indicators-cl.md) | [Feedly](../connectors/feedly.md) | - |
 
 ## Release Notes
 
@@ -48,4 +37,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 25-10-2023                     | Fixed the runtime of the functionapp for the **Data Connector** | 
 | 3.0.0       | 17-08-2023                     | Initial Solution Release 								                                |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

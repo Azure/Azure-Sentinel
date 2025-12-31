@@ -21,4 +21,10 @@ This solution may contain other components such as analytics rules, workbooks, h
 |-------------|--------------------------------|-------------------------------------------------------------|
 | 3.0.0       |          Contribution date in specific format            |  overview about solution   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

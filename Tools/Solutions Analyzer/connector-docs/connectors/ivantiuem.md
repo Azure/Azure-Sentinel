@@ -5,7 +5,7 @@
 | **Connector ID** | `IvantiUEM` |
 | **Publisher** | Ivanti |
 | **Used in Solutions** | [Ivanti Unified Endpoint Management](../solutions/ivanti-unified-endpoint-management.md) |
-| **Collection Method** | MMA |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [Ivanti_UEM_Syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ivanti%20Unified%20Endpoint%20Management/Data%20Connectors/Ivanti_UEM_Syslog.json) |
 
 The [Ivanti Unified Endpoint Management](https://www.ivanti.com/products/unified-endpoint-manager) data connector provides the capability to ingest [Ivanti UEM Alerts](https://help.ivanti.com/ld/help/en_US/LDMS/11.0/Windows/alert-c-monitoring-overview.htm) into Microsoft Sentinel.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | — | ✓ |
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

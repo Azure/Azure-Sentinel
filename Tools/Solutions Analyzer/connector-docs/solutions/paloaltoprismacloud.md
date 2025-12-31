@@ -13,50 +13,82 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[DEPRECATED] Palo Alto Prisma Cloud CSPM](../connectors/paloaltoprismacloud.md)
-
-**Publisher:** Palo Alto
-
-The Palo Alto Prisma Cloud CSPM data connector provides the capability to ingest [Prisma Cloud CSPM alerts](https://prisma.pan.dev/api/cloud/cspm/alerts#operation/get-alerts) and [audit logs](https://prisma.pan.dev/api/cloud/cspm/audit-logs#operation/rl-audit-logs) into Microsoft sentinel using the Prisma Cloud CSPM API. Refer to [Prisma Cloud CSPM API documentation](https://prisma.pan.dev/api/cloud/cspm) for more information.
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `PaloAltoPrismaCloudAlert_CL` |
-| | `PaloAltoPrismaCloudAudit_CL` |
-| **Connector Definition Files** | [PrismaCloud_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Data%20Connectors/PrismaCloud_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/paloaltoprismacloud.md)
-
-### [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Palo Alto Prisma Cloud CSPM data connector allows you to connect to your Palo Alto Prisma Cloud CSPM instance and ingesting Alerts (https://pan.dev/prisma-cloud/api/cspm/alerts/) & Audit Logs(https://pan.dev/prisma-cloud/api/cspm/audit-logs/) into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `PaloAltoPrismaCloudAlertV2_CL` |
-| | `PaloAltoPrismaCloudAuditV2_CL` |
-| **Connector Definition Files** | [PaloAltoPrismaCloudCSPMLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Data%20Connectors/PrismaCloudCSPMLog_CCF/PaloAltoPrismaCloudCSPMLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/paloaltoprismacloudcspmccpdefinition.md)
+- [[DEPRECATED] Palo Alto Prisma Cloud CSPM](../connectors/paloaltoprismacloud.md)
+- [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **4 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `PaloAltoPrismaCloudAlertV2_CL` | [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md) |
-| `PaloAltoPrismaCloudAlert_CL` | [[DEPRECATED] Palo Alto Prisma Cloud CSPM](../connectors/paloaltoprismacloud.md) |
-| `PaloAltoPrismaCloudAuditV2_CL` | [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md) |
-| `PaloAltoPrismaCloudAudit_CL` | [[DEPRECATED] Palo Alto Prisma Cloud CSPM](../connectors/paloaltoprismacloud.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md) | [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md) | [[DEPRECATED] Palo Alto Prisma Cloud CSPM](../connectors/paloaltoprismacloud.md) | Analytics, Hunting, Workbooks |
+| [`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md) | [Palo Alto Prisma Cloud CSPM (via Codeless Connector Framework)](../connectors/paloaltoprismacloudcspmccpdefinition.md) | Analytics, Hunting, Workbooks |
+| [`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) | [[DEPRECATED] Palo Alto Prisma Cloud CSPM](../connectors/paloaltoprismacloud.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **24 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 11 |
+| Hunting Queries | 9 |
+| Playbooks | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Palo Alto Prisma Cloud - Access keys are not rotated for 90 days](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudAclAccessKeysNotRotated.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Anomalous access key usage](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudAnomalousApiKeyActivity.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - High risk score alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudHighRiskScoreAlert.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - High severity alert opened for several days](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudHighSeverityAlertOpenedForXDays.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - IAM Group with Administrator Access Permissions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudIamAdminGroup.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Inactive user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudInactiveUser.yaml) | Low | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Maximum risk score alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudMaxRiskScoreAlert.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Multiple failed logins for user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudMultipleFailedLoginsUser.yaml) | Medium | CredentialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Network ACL allow all outbound traffic](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudAclAllowAllOut.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Network ACL allow ingress traffic to server administration ports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudAclAllowInToAdminPort.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Network ACLs Inbound rule to allow All Traffic](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Analytic%20Rules/PaloAltoPrismaCloudAclInAllowAll.yaml) | Medium | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Palo Alto Prisma Cloud - Access keys used](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudAccessKeysUsed.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - High risk score opened alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudHighRiskScoreOpenedAlerts.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - High severity alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudHighSeverityAlerts.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - New users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudNewUsers.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Opened alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudOpenedAlerts.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Top recources with alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudTopResources.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Top sources of failed logins](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudFailedLoginsSources.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Top users by failed logins](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudFailedLoginsUsers.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+| [Palo Alto Prisma Cloud - Updated resources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Hunting%20Queries/PaloAltoPrismaCloudUpdatedResources.yaml) | InitialAccess | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [PaloAltoPrismaCloudOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Workbooks/PaloAltoPrismaCloudOverview.json) | [`PaloAltoPrismaCloudAlertV2_CL`](../tables/paloaltoprismacloudalertv2-cl.md)<br>[`PaloAltoPrismaCloudAlert_CL`](../tables/paloaltoprismacloudalert-cl.md)<br>[`PaloAltoPrismaCloudAuditV2_CL`](../tables/paloaltoprismacloudauditv2-cl.md)<br>[`PaloAltoPrismaCloudAudit_CL`](../tables/paloaltoprismacloudaudit-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Fetch Security Posture from Prisma Cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Playbooks/PrismaCloudCSPMPlaybooks/PrismaCloudCSPM-Enrichment/azuredeploy.json) | This playbook provides/updates the compliance security posture details of asset in comments section ... | - |
+| [Remediate assets on prisma cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Playbooks/PrismaCloudCSPMPlaybooks/PrismaCloudCSPM-Remediation/azuredeploy.json) | This playbook provides/updates the compliance security posture details of asset in comments section ... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [PaloAltoPrismaCloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAltoPrismaCloud/Parsers/PaloAltoPrismaCloud.yaml) | - | - |
 
 ## Release Notes
 
@@ -68,4 +100,10 @@ This solution ingests data into **4 table(s)**:
 | 3.0.1       | 17-07-2025                     | 1 **Analytic Rule** updated with improved rule logic.<br/> Added new **CCF Connector** - *Palo Alto Prisma Cloud CSPM.*   |  
 | 3.0.0       | 18-08-2023                     | Manual deployment instructions updated for **Data Connector**		|
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

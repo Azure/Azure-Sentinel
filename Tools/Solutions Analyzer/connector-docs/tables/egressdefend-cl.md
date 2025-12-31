@@ -1,15 +1,5 @@
 # EgressDefend_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `EgressDefend_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,26 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Egress Defend](../connectors/egressdefendpolling.md)
+
+---
+
+## Content Items Using This Table (4)
+
+### Analytic Rules (2)
+
+**In solution [Egress Defend](../solutions/egress-defend.md):**
+- [Egress Defend - Dangerous Attachment Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Analytic%20Rules/DangerousAttachmentReceived.yaml)
+- [Egress Defend - Dangerous Link Click](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Analytic%20Rules/DangerousLinksClicked.yaml)
+
+### Hunting Queries (1)
+
+**In solution [Egress Defend](../solutions/egress-defend.md):**
+- [Dangerous emails with links clicked](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Hunting%20Queries/DangerousLinksClicked.yaml)
+
+### Workbooks (1)
+
+**In solution [Egress Defend](../solutions/egress-defend.md):**
+- [DefendMetrics](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Defend/Workbooks/DefendMetrics.json)
 
 ---
 

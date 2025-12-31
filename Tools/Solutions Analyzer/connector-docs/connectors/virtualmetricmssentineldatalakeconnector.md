@@ -5,7 +5,7 @@
 | **Connector ID** | `VirtualMetricMSSentinelDataLakeConnector` |
 | **Publisher** | VirtualMetric |
 | **Used in Solutions** | [VirtualMetric DataStream](../solutions/virtualmetric-datastream.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [Template_SentinelDataLake.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/VirtualMetric%20DataStream/Data%20Connectors/VirtualMetric-SentinelDataLake/Template_SentinelDataLake.json) |
 
 VirtualMetric DataStream connector deploys Data Collection Rules to ingest security telemetry into Microsoft Sentinel data lake.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | — | ✓ |
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

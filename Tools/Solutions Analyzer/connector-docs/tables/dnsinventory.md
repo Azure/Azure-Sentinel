@@ -1,17 +1,14 @@
 # DnsInventory
 
+Reference for DnsInventory table in Azure Monitor Logs.
+
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `DnsInventory` |
 | **Category** | Network |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
+| **Basic Logs Eligible** | ✗ No |
+| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/dnsinventory) |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
 
 ## Solutions (1)
 
@@ -24,6 +21,24 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [DNS](../connectors/dns.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [Windows Server DNS](../solutions/windows-server-dns.md):**
+- [Dns](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Windows%20Server%20DNS/Workbooks/Dns.json)
+
+## Resource Types
+
+This table collects data from the following Azure resource types:
+
+- `microsoft.compute/virtualmachines`
+- `microsoft.conenctedvmwarevsphere/virtualmachines`
+- `microsoft.azurestackhci/virtualmachines`
+- `microsoft.scvmm/virtualmachines`
 
 ---
 

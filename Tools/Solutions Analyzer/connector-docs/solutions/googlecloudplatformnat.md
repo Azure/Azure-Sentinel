@@ -13,30 +13,18 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Cloud Platform NAT data connector provides the capability to ingest Cloud NAT Audit logs and Cloud NAT Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/nat/docs/overview) document for more details.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCPNAT` |
-| | `GCPNATAudit` |
-| **Connector Definition Files** | [GCPNATLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformNAT/Data%20Connectors/GCPNATLogs_ccp/GCPNATLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpnatlogsccpdefinition.md)
+- [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GCPNAT` | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) |
-| `GCPNATAudit` | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GCPNAT`](../tables/gcpnat.md) | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) | - |
+| [`GCPNATAudit`](../tables/gcpnataudit.md) | [Google Cloud Platform NAT (via Codeless Connector Framework)](../connectors/gcpnatlogsccpdefinition.md) | - |
 
 ## Release Notes
 
@@ -45,4 +33,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1      | 03-09-2025                    | Google Cloud Platform NAT **CCF Data Connector** moving to GA							 |
 | 3.0.0      | 17-07-2025                    | Initial Solution Release. <br/> Added new **CCF Connector** - *GCPNATLogsCCPDefinition.*	 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

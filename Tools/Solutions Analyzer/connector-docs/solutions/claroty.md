@@ -13,41 +13,71 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Claroty via Legacy Agent](../connectors/claroty.md)
-
-**Publisher:** Claroty
-
-The [Claroty](https://claroty.com/) data connector provides the capability to ingest [Continuous Threat Detection](https://claroty.com/resources/datasheets/continuous-threat-detection) and [Secure Remote Access](https://claroty.com/industrial-cybersecurity/sra) events into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Connector_Claroty_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Data%20Connectors/Connector_Claroty_CEF.json) |
-
-[→ View full connector details](../connectors/claroty.md)
-
-### [[Deprecated] Claroty via AMA](../connectors/clarotyama.md)
-
-**Publisher:** Claroty
-
-The [Claroty](https://claroty.com/) data connector provides the capability to ingest [Continuous Threat Detection](https://claroty.com/resources/datasheets/continuous-threat-detection) and [Secure Remote Access](https://claroty.com/industrial-cybersecurity/sra) events into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_ClarotyAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Data%20Connectors/template_ClarotyAMA.json) |
-
-[→ View full connector details](../connectors/clarotyama.md)
+- [[Deprecated] Claroty via Legacy Agent](../connectors/claroty.md)
+- [[Deprecated] Claroty via AMA](../connectors/clarotyama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Claroty via AMA](../connectors/clarotyama.md), [[Deprecated] Claroty via Legacy Agent](../connectors/claroty.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Claroty via AMA](../connectors/clarotyama.md), [[Deprecated] Claroty via Legacy Agent](../connectors/claroty.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **22 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Claroty - Asset Down](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyAssetDown.yaml) | High | Impact | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Critical baseline deviation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyCriticalBaselineDeviation.yaml) | High | Impact | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Login to uncommon location](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyLoginToUncommonSite.yaml) | Medium | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Multiple failed logins by user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyMultipleFailedLogin.yaml) | High | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Multiple failed logins to same destinations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyMultipleFailedLoginsSameDst.yaml) | High | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - New Asset](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyNewAsset.yaml) | High | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Policy violation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyPolicyViolation.yaml) | High | Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Suspicious activity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotySuspiciousActivity.yaml) | High | Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Suspicious file transfer](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotySuspiciousFileTransfer.yaml) | High | Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Treat detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Analytic%20Rules/ClarotyTreat.yaml) | High | Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Claroty - Baseline deviation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyBaselineDeviation.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Conflict assets](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyConflictAssets.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Critical Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyCriticalEvents.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Network scan sources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyScanSources.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Network scan targets](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyScantargets.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - PLC logins](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyPLCLogins.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Unapproved access](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyUnapprovedAccess.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Unresolved alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyUnresolvedAlerts.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - User failed logins](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotySRAFailedLogins.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Claroty - Write and Execute operations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Hunting%20Queries/ClarotyWriteExecuteOperations.yaml) | InitialAccess | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ClarotyOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Workbooks/ClarotyOverview.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ClarotyEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty/Parsers/ClarotyEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -58,4 +88,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 11-09-2023                     | Addition of new Claroty AMA **Data Connector** |
 | 3.0.0       | 27-07-2023                     | Corrected the links in the solution.           |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

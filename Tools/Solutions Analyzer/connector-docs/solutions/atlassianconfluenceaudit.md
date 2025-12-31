@@ -13,56 +13,35 @@
 
 ## Data Connectors
 
-This solution provides **3 data connector(s)**.
+This solution provides **3 data connector(s)**:
 
-### [Atlassian Confluence](../connectors/atlassianconfluence.md)
-
-**Publisher:** Atlassian
-
-The Atlassian Confluence data connector provides the capability to ingest [Atlassian Confluence audit logs](https://developer.atlassian.com/cloud/confluence/rest/api-group-audit/) into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AtlassianConfluenceNativePoller_CL` |
-| **Connector Definition Files** | [azuredeploy_Confluence_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianConfluenceAudit/Data%20Connectors/ConfluenceNativePollerConnector/azuredeploy_Confluence_native_poller_connector.json) |
-
-[→ View full connector details](../connectors/atlassianconfluence.md)
-
-### [[Deprecated] Atlassian Confluence Audit](../connectors/confluenceauditapi.md)
-
-**Publisher:** Atlassian
-
-The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Confluence_Audit_CL` |
-| **Connector Definition Files** | [ConfluenceAudit_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianConfluenceAudit/Data%20Connectors/AtlassianConfluenceAuditDataConnector/ConfluenceAudit_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/confluenceauditapi.md)
-
-### [ Atlassian Confluence Audit (via Codeless Connector Framework)](../connectors/confluenceauditccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ConfluenceAuditLogs_CL` |
-| **Connector Definition Files** | [AtlassianConfluenceAudit_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianConfluenceAudit/Data%20Connectors/AtlassianConfluenceAuditLogs_CCP/AtlassianConfluenceAudit_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/confluenceauditccpdefinition.md)
+- [Atlassian Confluence](../connectors/atlassianconfluence.md)
+- [[Deprecated] Atlassian Confluence Audit](../connectors/confluenceauditapi.md)
+- [ Atlassian Confluence Audit (via Codeless Connector Framework)](../connectors/confluenceauditccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AtlassianConfluenceNativePoller_CL` | [Atlassian Confluence](../connectors/atlassianconfluence.md) |
-| `ConfluenceAuditLogs_CL` | [ Atlassian Confluence Audit (via Codeless Connector Framework)](../connectors/confluenceauditccpdefinition.md) |
-| `Confluence_Audit_CL` | [[Deprecated] Atlassian Confluence Audit](../connectors/confluenceauditapi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AtlassianConfluenceNativePoller_CL`](../tables/atlassianconfluencenativepoller-cl.md) | [Atlassian Confluence](../connectors/atlassianconfluence.md) | - |
+| [`ConfluenceAuditLogs_CL`](../tables/confluenceauditlogs-cl.md) | [ Atlassian Confluence Audit (via Codeless Connector Framework)](../connectors/confluenceauditccpdefinition.md) | - |
+| [`Confluence_Audit_CL`](../tables/confluence-audit-cl.md) | [[Deprecated] Atlassian Confluence Audit](../connectors/confluenceauditapi.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ConfluenceAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianConfluenceAudit/Parsers/ConfluenceAudit.yaml) | - | - |
 
 ## Release Notes
 
@@ -76,4 +55,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 03-05-2024                     | Repackaged for **Parser** issue fix on reinstall.   	   |
 | 3.0.0       | 19-07-2023                     | Updated to enable solution for **Azure government**.  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -54,7 +54,7 @@ This connector ingests data into the following tables:
 |-------|:------------------------:|:-----------------------:|
 | [`Cofense_Triage_failed_indicators_CL`](../tables/cofense-triage-failed-indicators-cl.md) | — | — |
 | [`Report_links_data_CL`](../tables/report-links-data-cl.md) | — | — |
-| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | — | ✗ |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
 
 ## Permissions
 

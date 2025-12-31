@@ -17,7 +17,7 @@ This connector ingests data into the following tables:
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
 | [`AzureDiagnostics`](../tables/azurediagnostics.md) | — | ✗ |
-| [`AzureMetrics`](../tables/azuremetrics.md) | — | ✗ |
+| [`AzureMetrics`](../tables/azuremetrics.md) | ✗ | ✗ |
 
 ## Permissions
 

@@ -14,28 +14,49 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Azure CloudNGFW By Palo Alto Networks](../connectors/azurecloudngfwbypaloaltonetworks.md)
-
-**Publisher:** Palo Alto Networks
-
-Cloud Next-Generation Firewall by Palo Alto Networks - an Azure Native ISV Service - is Palo Alto Networks Next-Generation Firewall (NGFW) delivered as a cloud-native service on Azure. You can discover Cloud NGFW in the Azure Marketplace and consume it in your Azure Virtual Networks (VNet). With Cloud NGFW, you can access the core NGFW capabilities such as App-ID, URL filtering based technologies. It provides threat prevention and detection through cloud-delivered security services and threat prevention signatures. The connector allows you to easily connect your Cloud NGFW logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities. For more information, see the [Cloud NGFW for Azure documentation](https://docs.paloaltonetworks.com/cloud-ngfw/azure).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `fluentbit_CL` |
-| **Connector Definition Files** | [CloudNgfwByPAN.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Data%20Connectors/CloudNgfwByPAN.json) |
-
-[→ View full connector details](../connectors/azurecloudngfwbypaloaltonetworks.md)
+- [Azure CloudNGFW By Palo Alto Networks](../connectors/azurecloudngfwbypaloaltonetworks.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `fluentbit_CL` | [Azure CloudNGFW By Palo Alto Networks](../connectors/azurecloudngfwbypaloaltonetworks.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`fluentbit_CL`](../tables/fluentbit-cl.md) | [Azure CloudNGFW By Palo Alto Networks](../connectors/azurecloudngfwbypaloaltonetworks.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **7 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 3 |
+| Hunting Queries | 2 |
+| Workbooks | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [CloudNGFW By Palo Alto Networks - Threat signatures from Unusual IP addresses](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Analytic%20Rules/CloudNGFW-UnusualThreatSignatures.yaml) | Medium | Discovery, Exfiltration, CommandAndControl | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [CloudNGFW By Palo Alto Networks - possible internal to external port scanning](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Analytic%20Rules/CloudNGFW-PortScanning.yaml) | Low | Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [Palo Alto - potential beaconing detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Analytic%20Rules/CloudNGFW-NetworkBeaconing.yaml) | Low | CommandAndControl | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Palo Alto - high-risk ports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Hunting%20Queries/CloudNGFW-HighRiskPorts.yaml) | InitialAccess, Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [Palo Alto - potential beaconing detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Hunting%20Queries/CloudNGFW-PotentialBeaconing.yaml) | CommandAndControl | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [CloudNGFW-NetworkThreat](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Workbooks/CloudNGFW-NetworkThreat.json) | [`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [CloudNGFW-Overview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Cloud%20NGFW%20by%20Palo%20Alto%20Networks/Workbooks/CloudNGFW-Overview.json) | [`fluentbit_CL`](../tables/fluentbit-cl.md) |
 
 ## Release Notes
 
@@ -45,4 +66,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 02-12-2024                     | Updated **Data Connector** Ids for dependent content                     |
 | 3.0.0       | 15-02-2024                     | Initial Solution Release                                                      |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

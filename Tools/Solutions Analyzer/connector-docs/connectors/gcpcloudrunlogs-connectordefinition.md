@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GCPCloudRun`](../tables/gcpcloudrun.md) | — | ✗ |
+| [`GCPCloudRun`](../tables/gcpcloudrun.md) | ✓ | ✗ |
 
 ## Permissions
 

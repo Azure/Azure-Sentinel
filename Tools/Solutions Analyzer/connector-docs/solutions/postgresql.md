@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] PostgreSQL Events](../connectors/postgresql.md)
-
-**Publisher:** PostgreSQL
-
-PostgreSQL data connector provides the capability to ingest [PostgreSQL](https://www.postgresql.org/) events into Microsoft Sentinel. Refer to [PostgreSQL documentation](https://www.postgresql.org/docs/current/index.html) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `PostgreSQL_CL` |
-| **Connector Definition Files** | [Connector_PostgreSQL.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PostgreSQL/Data%20Connectors/Connector_PostgreSQL.json) |
-
-[→ View full connector details](../connectors/postgresql.md)
+- [[Deprecated] PostgreSQL Events](../connectors/postgresql.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `PostgreSQL_CL` | [[Deprecated] PostgreSQL Events](../connectors/postgresql.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`PostgreSQL_CL`](../tables/postgresql-cl.md) | [[Deprecated] PostgreSQL Events](../connectors/postgresql.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [PostgreSQLEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PostgreSQL/Parsers/PostgreSQLEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -43,4 +46,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 12-12-2024                     | Removed Deprecated **Data connectors**                                       |
 | 3.0.0       | 09-08-2024                     | Deprecating data connectors                                                  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

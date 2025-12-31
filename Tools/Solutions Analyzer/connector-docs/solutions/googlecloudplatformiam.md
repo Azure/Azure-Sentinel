@@ -13,46 +13,81 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Google Cloud Platform IAM (via Codeless Connector Framework)](../connectors/gcpiamccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Cloud Platform IAM data connector provides the capability to ingest the Audit logs relating to Identity and Access Management (IAM) activities within Google Cloud into Microsoft Sentinel using the Google IAM API. Refer to [GCP IAM API](https://cloud.google.com/iam/docs/reference/rest) documentation for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCPIAM` |
-| **Connector Definition Files** | [GCPIAMLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Data%20Connectors/GCPIAMLog_CCP/GCPIAMLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpiamccpdefinition.md)
-
-### [[DEPRECATED] Google Cloud Platform IAM](../connectors/gcpiamdataconnector.md)
-
-**Publisher:** Google
-
-The Google Cloud Platform Identity and Access Management (IAM) data connector provides the capability to ingest [GCP IAM logs](https://cloud.google.com/iam/docs/audit-logging) into Microsoft Sentinel using the GCP Logging API. Refer to [GCP Logging API documentation](https://cloud.google.com/logging/docs/api) for more information.
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCP_IAM_CL` |
-| **Connector Definition Files** | [GCP_IAM_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Data%20Connectors/GCP_IAM_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/gcpiamdataconnector.md)
+- [Google Cloud Platform IAM (via Codeless Connector Framework)](../connectors/gcpiamccpdefinition.md)
+- [[DEPRECATED] Google Cloud Platform IAM](../connectors/gcpiamdataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GCPIAM` | [Google Cloud Platform IAM (via Codeless Connector Framework)](../connectors/gcpiamccpdefinition.md) |
-| `GCP_IAM_CL` | [[DEPRECATED] Google Cloud Platform IAM](../connectors/gcpiamdataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GCPIAM`](../tables/gcpiam.md) | [Google Cloud Platform IAM (via Codeless Connector Framework)](../connectors/gcpiamccpdefinition.md) | - |
+| [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) | [[DEPRECATED] Google Cloud Platform IAM](../connectors/gcpiamdataconnector.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **25 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Playbooks | 3 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [GCP IAM - Disable Data Access Logging](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMDisableDataAccessLogging.yaml) | Medium | DefenseEvasion | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Empty user agent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMEmptyUA.yaml) | Medium | DefenseEvasion | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - High privileged role added to service account](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMHighPrivilegedRoleAdded.yaml) | High | PrivilegeEscalation | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - New Authentication Token for Service Account](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMNewAuthenticationToken.yaml) | Medium | LateralMovement | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - New Service Account](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMNewServiceAccount.yaml) | Low | Persistence | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - New Service Account Key](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMNewServiceAccountKey.yaml) | Low | LateralMovement | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Privileges Enumeration](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMPrivilegesEnumeration.yaml) | Low | Discovery | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Publicly exposed storage bucket](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMPublicBucket.yaml) | Medium | Discovery | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Service Account Enumeration](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMServiceAccountEnumeration.yaml) | Low | Discovery | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Service Account Keys Enumeration](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Analytic%20Rules/GCPIAMServiceAccountKeysEnumeration.yaml) | Low | Discovery | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [GCP IAM - Changed roles](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMChangedRoles.yaml) | PrivilegeEscalation | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Deleted service accounts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMDeletedServiceAccounts.yaml) | Impact | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Disabled service accounts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMDisabledServiceAccounts.yaml) | Impact | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - New custom roles](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMNewCustomRoles.yaml) | PrivilegeEscalation | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - New service account keys](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMNewServiceAccountsKeys.yaml) | LateralMovement | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - New service accounts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMNewServiceAccounts.yaml) | Persistence | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Rare IAM actions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMRareActionUser.yaml) | InitialAccess | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Rare user agent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMRareUA.yaml) | DefenseEvasion | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Top service accounts by failed actions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMTopServiceAccountsFailedActions.yaml) | Discovery | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+| [GCP IAM - Top source IP addresses with failed actions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Hunting%20Queries/GCPIAMTopSrcIpAddrFailedActions.yaml) | Discovery | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [GCP_IAM](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Workbooks/GCP_IAM.json) | [`GCP_IAM_CL`](../tables/gcp-iam-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [GCP-DisableServiceAccountFromTeams](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Playbooks/GCP-DisableServiceAccountFromTeams/azuredeploy.json) | When a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+| [GCP-DisableServiceAccountKey](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Playbooks/GCP-DisableServiceAccountKey/azuredeploy.json) | Once a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+| [GCP-EnrichServiseAccountInfo](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Playbooks/GCP-EnrichServiseAccountInfo/azuredeploy.json) | Once a new sentinel incident is created, this playbook gets triggered and performs the following act... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [GCP_IAM](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformIAM/Parsers/GCP_IAM.yaml) | - | - |
 
 ## Release Notes
 
@@ -67,4 +102,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1      | 10-09-2024                    | Repackaged solution to add existing **Parser**.                                            |
 | 3.0.0      | 04-09-2024                    | Updated the python runtime version to 3.11.                                                |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

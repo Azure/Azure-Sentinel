@@ -13,28 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Sophos XG Firewall](../connectors/sophosxgfirewall.md)
-
-**Publisher:** Sophos
-
-The [Sophos XG Firewall](https://www.sophos.com/products/next-gen-firewall.aspx) allows you to easily connect your Sophos XG Firewall logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigations. Integrating Sophos XG Firewall with Microsoft Sentinel provides more visibility into your organization's firewall traffic and will enhance security monitoring capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_Syslog_SophosXGFirewall.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Data%20Connectors/Connector_Syslog_SophosXGFirewall.json) |
-
-[→ View full connector details](../connectors/sophosxgfirewall.md)
+- [[Deprecated] Sophos XG Firewall](../connectors/sophosxgfirewall.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Sophos XG Firewall](../connectors/sophosxgfirewall.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Sophos XG Firewall](../connectors/sophosxgfirewall.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Excessive Amount of Denied Connections from a Single Source](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Analytic%20Rules/ExcessiveAmountofDeniedConnectionsfromASingleSource.yaml) | Medium | Impact | [`Syslog`](../tables/syslog.md) |
+| [Port Scan Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Analytic%20Rules/PortScanDetected.yaml) | Medium | Discovery | [`Syslog`](../tables/syslog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SophosXGFirewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Workbooks/SophosXGFirewall.json) | [`Syslog`](../tables/syslog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SophosXGFirewall](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Sophos%20XG%20Firewall/Parsers/SophosXGFirewall.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +62,10 @@ This solution ingests data into **1 table(s)**:
 |             |                                | Updated SophosXGFirewall.json **Workbook** to fix missing fields                    |
 | 3.0.0       | 01-08-2024                     | Update **Parser** as part of Syslog migration </br> Deprecating **Data Connectors** |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

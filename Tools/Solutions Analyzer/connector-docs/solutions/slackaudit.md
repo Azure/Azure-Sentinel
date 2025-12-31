@@ -13,56 +13,73 @@
 
 ## Data Connectors
 
-This solution provides **3 data connector(s)**.
+This solution provides **3 data connector(s)**:
 
-### [Slack](../connectors/slackaudit.md)
-
-**Publisher:** Slack
-
-The [Slack](https://slack.com) data connector provides the capability to ingest [Slack Audit Records](https://api.slack.com/admins/audit-logs) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs#the_audit_event) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more. This data connector uses Microsoft Sentinel native polling capability.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SlackAuditNativePoller_CL` |
-| **Connector Definition Files** | [azuredeploy_Slack_native_poller_connector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Data%20Connectors/SlackNativePollerConnector/azuredeploy_Slack_native_poller_connector.json) |
-
-[→ View full connector details](../connectors/slackaudit.md)
-
-### [[DEPRECATED] Slack Audit](../connectors/slackauditapi.md)
-
-**Publisher:** Slack
-
-The [Slack](https://slack.com) Audit data connector provides the capability to ingest [Slack Audit Records](https://api.slack.com/admins/audit-logs) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs#the_audit_event) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SlackAudit_CL` |
-| **Connector Definition Files** | [SlackAudit_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Data%20Connectors/SlackAudit_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/slackauditapi.md)
-
-### [SlackAudit (via Codeless Connector Framework)](../connectors/slackauditlogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The SlackAudit data connector provides the capability to ingest [Slack Audit logs](https://api.slack.com/admins/audit-logs) into Microsoft Sentinel through the REST API. Refer to [API documentation](https://api.slack.com/admins/audit-logs-call) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SlackAuditV2_CL` |
-| **Connector Definition Files** | [SlackAuditLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Data%20Connectors/SlackAuditLog_CCP/SlackAuditLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/slackauditlogsccpdefinition.md)
+- [Slack](../connectors/slackaudit.md)
+- [[DEPRECATED] Slack Audit](../connectors/slackauditapi.md)
+- [SlackAudit (via Codeless Connector Framework)](../connectors/slackauditlogsccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SlackAuditNativePoller_CL` | [Slack](../connectors/slackaudit.md) |
-| `SlackAuditV2_CL` | [SlackAudit (via Codeless Connector Framework)](../connectors/slackauditlogsccpdefinition.md) |
-| `SlackAudit_CL` | [[DEPRECATED] Slack Audit](../connectors/slackauditapi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md) | [Slack](../connectors/slackaudit.md), [[DEPRECATED] Slack Audit](../connectors/slackauditapi.md) | Analytics, Hunting, Workbooks |
+| [`SlackAuditV2_CL`](../tables/slackauditv2-cl.md) | [SlackAudit (via Codeless Connector Framework)](../connectors/slackauditlogsccpdefinition.md), [[DEPRECATED] Slack Audit](../connectors/slackauditapi.md) | Analytics, Hunting, Workbooks |
+| [`SlackAudit_CL`](../tables/slackaudit-cl.md) | [[DEPRECATED] Slack Audit](../connectors/slackauditapi.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **21 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Hunting Queries | 10 |
+| Analytic Rules | 9 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [SlackAudit - Empty User Agent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditEmptyUA.yaml) | Low | InitialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Multiple archived files uploaded in short period of time](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditMultipleArchivedFilesUploadedInShortTimePeriod.yaml) | Low | Exfiltration | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Multiple failed logins for user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditMultipleFailedLoginsForUser.yaml) | Medium | CredentialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Public link created for file which can contain sensitive information.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditSensitiveFile.yaml) | Medium | Exfiltration | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Suspicious file downloaded.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditSuspiciousFileDownloaded.yaml) | Medium | InitialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Unknown User Agent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditUnknownUA.yaml) | Low | CommandAndControl | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - User email linked to account changed.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditUserEmailChanged.yaml) | Medium | InitialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - User login after deactivated.](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditUserLoginAfterDeactivated.yaml) | Medium | InitialAccess, Persistence, PrivilegeEscalation | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - User role changed to admin or owner](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Analytic%20Rules/SlackAuditUserChangedToAdminOrOwner.yaml) | Low | Persistence, PrivilegeEscalation | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [SlackAudit - Applications installed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditApplicationsInstalled.yaml) | InitialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Deactivated users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditDeactivatedUsers.yaml) | Impact | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Downloaded files stats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditDownloadedFilesByUser.yaml) | InitialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Failed logins with unknown username](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditFailedLoginsUnknownUsername.yaml) | CredentialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - New User created](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditNewUsers.yaml) | Persistence | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Suspicious files downloaded](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditSuspiciousFilesDownloaded.yaml) | InitialAccess | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Uploaded files stats](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditUploadedFilesByUser.yaml) | Exfiltration | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - User Permission Changed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditUserPermissionsChanged.yaml) | PrivilegeEscalation | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - User logins by IP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditUserLoginsByIP.yaml) | InitialAccess, Persistence | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+| [SlackAudit - Users joined channels without invites](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Hunting%20Queries/SlackAuditUsersJoinedChannelsWithoutInvites.yaml) | InitialAccess, Persistence | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SlackAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Workbooks/SlackAudit.json) | [`SlackAuditNativePoller_CL`](../tables/slackauditnativepoller-cl.md)<br>[`SlackAuditV2_CL`](../tables/slackauditv2-cl.md)<br>[`SlackAudit_CL`](../tables/slackaudit-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SlackAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SlackAudit/Parsers/SlackAudit.yaml) | - | - |
 
 ## Release Notes
 
@@ -75,4 +92,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 24-04-2025                     | Migrated the **Function app Connector** to **CCP Data Connector** and Updated the **Parser**. |
 | 3.0.0       | 23-08-2023                     | Manual deployment instructions updated for **Data Connector** & Convert **Parser** from text to yaml. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

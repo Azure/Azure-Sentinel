@@ -1,15 +1,5 @@
 # BitsightAlerts_data_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `BitsightAlerts_data_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Bitsight data connector](../connectors/bitsight.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Analytic Rules (1)
+
+**In solution [BitSight](../solutions/bitsight.md):**
+- [BitSight - new alert found](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BitSight/Analytic%20Rules/BitSightNewAlertFound.yaml)
 
 ---
 

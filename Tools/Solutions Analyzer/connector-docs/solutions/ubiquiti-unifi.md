@@ -13,28 +13,71 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Ubiquiti UniFi](../connectors/ubiquitiunifi.md)
-
-**Publisher:** Ubiquiti
-
-The [Ubiquiti UniFi](https://www.ui.com/) data connector provides the capability to ingest [Ubiquiti UniFi firewall, dns, ssh, AP events](https://help.ui.com/hc/en-us/articles/204959834-UniFi-How-to-View-Log-Files) into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Ubiquiti_CL` |
-| **Connector Definition Files** | [Connector_Ubiquiti_agent.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Data%20Connectors/Connector_Ubiquiti_agent.json) |
-
-[→ View full connector details](../connectors/ubiquitiunifi.md)
+- [[Deprecated] Ubiquiti UniFi](../connectors/ubiquitiunifi.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Ubiquiti_CL` | [[Deprecated] Ubiquiti UniFi](../connectors/ubiquitiunifi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | - | Analytics |
+| [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) | [[Deprecated] Ubiquiti UniFi](../connectors/ubiquitiunifi.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **22 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Ubiquiti - Connection to known malicious IP or C2](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiDestinationInTiList.yaml) | Medium | Exfiltration, CommandAndControl | [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) |
+| [Ubiquiti - Large ICMP to external server](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiL2RLargeIcmp.yaml) | Medium | Exfiltration, CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Possible connection to cryptominning pool](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiCryptominer.yaml) | Medium | CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - RDP from external source](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiR2LRDP.yaml) | Medium | InitialAccess | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - SSH from external source](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiR2LSSH.yaml) | Medium | InitialAccess | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Unknown MAC Joined AP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiUnknownMacJoined.yaml) | Medium | InitialAccess | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Unusual DNS connection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiR2LDns.yaml) | Medium | CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Unusual FTP connection to external server](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiL2RFTP.yaml) | Medium | Exfiltration, CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Unusual traffic](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiUnusualTraffic.yaml) | Medium | CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - connection to non-corporate DNS server](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Analytic%20Rules/UbiquitiNonCorpDns.yaml) | Medium | CommandAndControl, Exfiltration | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Ubiquiti - DNS requests timed out](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiDnsTimeOut.yaml) | CommandAndControl, Exfiltration | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Hidden internal DNS server](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiInternalDnsServer.yaml) | CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Rare internal ports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiRareInternalPorts.yaml) | CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Top blocked destinations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiTopBlockedDst.yaml) | CommandAndControl, Exfiltration | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Top blocked external services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiTopBlockedExternalServices.yaml) | CommandAndControl, Exfiltration | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Top blocked internal services](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiTopBlockedInternalServices.yaml) | InitialAccess, CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Top blocked sources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiTopBlockedSrc.yaml) | CommandAndControl, Exfiltration | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Top firewall rules](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiTopFirewallRules.yaml) | CommandAndControl, Exfiltration | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Unusual number of subdomains for top level domain (TLD)](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiUnusualSubdomains.yaml) | CommandAndControl | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+| [Ubiquiti - Vulnerable devices](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Hunting%20Queries/UbiquitiVulnerableDevices.yaml) | InitialAccess | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Ubiquiti](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Workbooks/Ubiquiti.json) | [`Ubiquiti_CL`](../tables/ubiquiti-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [UbiquitiAuditEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ubiquiti%20UniFi/Parsers/UbiquitiAuditEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -45,4 +88,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 16-07-2024                     | Updated the **Analytic rules** for missing TTP					   		   |
 | 3.0.0       | 23-01-2024                     | Updated the **Data Connector** by removing preview-tag   				   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

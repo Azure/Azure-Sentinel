@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Workday User Activity](../connectors/workdayccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The [Workday](https://www.workday.com/) User Activity data connector provides the capability to ingest User Activity Logs from [Workday API](https://community.workday.com/sites/default/files/file-hosting/restapi/index.html#privacy/v1/get-/activityLogging) into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ASimAuditEventLogs` |
-| **Connector Definition Files** | [Workday_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Workday/Data%20Connectors/Workday_ccp/Workday_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/workdayccpdefinition.md)
+- [Workday User Activity](../connectors/workdayccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ASimAuditEventLogs` | [Workday User Activity](../connectors/workdayccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ASimAuditEventLogs`](../tables/asimauditeventlogs.md) | [Workday User Activity](../connectors/workdayccpdefinition.md) | - |
 
 ## Release Notes
 
@@ -44,4 +33,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 10-01-2025                     | Transitioned the **CCP Connector** to General Availability (GA).     |
 | 3.0.0       | 13-03-2024                     | Initial Solution Release.                                     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -16,12 +16,12 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GKEAPIServer`](../tables/gkeapiserver.md) | — | ✗ |
-| [`GKEApplication`](../tables/gkeapplication.md) | — | ✗ |
-| [`GKEAudit`](../tables/gkeaudit.md) | — | ✗ |
-| [`GKEControllerManager`](../tables/gkecontrollermanager.md) | — | ✗ |
-| [`GKEHPADecision`](../tables/gkehpadecision.md) | — | ✗ |
-| [`GKEScheduler`](../tables/gkescheduler.md) | — | ✗ |
+| [`GKEAPIServer`](../tables/gkeapiserver.md) | ✓ | ✗ |
+| [`GKEApplication`](../tables/gkeapplication.md) | ✓ | ✗ |
+| [`GKEAudit`](../tables/gkeaudit.md) | ✓ | ✗ |
+| [`GKEControllerManager`](../tables/gkecontrollermanager.md) | ✓ | ✗ |
+| [`GKEHPADecision`](../tables/gkehpadecision.md) | ✓ | ✗ |
+| [`GKEScheduler`](../tables/gkescheduler.md) | ✓ | ✗ |
 
 ## Permissions
 

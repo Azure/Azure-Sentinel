@@ -1,15 +1,5 @@
 # ContrastADRIncident_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `ContrastADRIncident_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [ContrastADR](../connectors/contrastadr.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (2)
+
+**In solution [ContrastADR](../solutions/contrastadr.md):**
+- [Contrast ADR - EDR Alert Correlation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ContrastADR/Analytic%20Rules/Contrast_ADR_Confirmed_EDR.yaml)
+- [Contrast ADR - Security Incident Alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/ContrastADR/Analytic%20Rules/Contrast_Security_ADR_incident.yaml)
 
 ---
 

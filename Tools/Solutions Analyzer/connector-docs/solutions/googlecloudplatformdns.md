@@ -13,46 +13,73 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[DEPRECATED] Google Cloud Platform DNS](../connectors/gcpdnsdataconnector.md)
-
-**Publisher:** Google
-
-The Google Cloud Platform DNS data connector provides the capability to ingest [Cloud DNS query logs](https://cloud.google.com/dns/docs/monitoring#using_logging) and [Cloud DNS audit logs](https://cloud.google.com/dns/docs/audit-logging) into Microsoft Sentinel using the GCP Logging API. Refer to [GCP Logging API documentation](https://cloud.google.com/logging/docs/api) for more information.
-
-
-
-<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCF data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCP_DNS_CL` |
-| **Connector Definition Files** | [GCP_DNS_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Data%20Connectors/GCP_DNS_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/gcpdnsdataconnector.md)
-
-### [Google Cloud Platform DNS (via Codeless Connector Framework)](../connectors/gcpdnslogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Cloud Platform DNS data connector provides the capability to ingest Cloud DNS Query logs and Cloud DNS Audit logs into Microsoft Sentinel using the Google Cloud DNS API. Refer to [Cloud DNS API](https://cloud.google.com/dns/docs/reference/rest/v1) documentation for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCPDNS` |
-| **Connector Definition Files** | [GCPDNSLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Data%20Connectors/GCPDNSLog_CCP/GCPDNSLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpdnslogsccpdefinition.md)
+- [[DEPRECATED] Google Cloud Platform DNS](../connectors/gcpdnsdataconnector.md)
+- [Google Cloud Platform DNS (via Codeless Connector Framework)](../connectors/gcpdnslogsccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GCPDNS` | [Google Cloud Platform DNS (via Codeless Connector Framework)](../connectors/gcpdnslogsccpdefinition.md) |
-| `GCP_DNS_CL` | [[DEPRECATED] Google Cloud Platform DNS](../connectors/gcpdnsdataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GCPDNS`](../tables/gcpdns.md) | [Google Cloud Platform DNS (via Codeless Connector Framework)](../connectors/gcpdnslogsccpdefinition.md) | - |
+| [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) | [[DEPRECATED] Google Cloud Platform DNS](../connectors/gcpdnsdataconnector.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **23 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 11 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Google DNS - CVE-2020-1350 (SIGRED) exploitation pattern](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSSIGREDPattern.yaml) | High | PrivilegeEscalation | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - CVE-2021-34527 (PrintNightmare) external exploit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSPrintNightmare.yaml) | High | PrivilegeEscalation | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - CVE-2021-40444 exploitation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSCVE-2021-40444.yaml) | High | PrivilegeEscalation | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Exchange online autodiscover abuse](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSExchangeAutodiscoverAbuse.yaml) | Medium | InitialAccess, CredentialAccess | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - IP check activity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSIpCheck.yaml) | Medium | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Malicous Python packages](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSMaliciousPythonPackages.yaml) | High | InitialAccess | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Multiple errors for source](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSMultipleErrorsFromIp.yaml) | Medium | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Multiple errors to same domain](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSMultipleErrorsQuery.yaml) | Medium | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Possible data exfiltration](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSDataExfiltration.yaml) | High | Exfiltration | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Request to dynamic DNS service](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSIpDynDns.yaml) | Medium | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - UNC2452 (Nobelium) APT Group activity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Analytic%20Rules/GCPDNSUNC2452AptActivity.yaml) | High | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Google DNS - Domains with rare errors](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSRareErrors.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Errors](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSErrors.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Rare domains](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSRareDomains.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Requests to IP lookup resources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSIpLookup.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Requests to TOR resources](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSRequestToTOR.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Requests to online shares](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSOnlineShares.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Server latency](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSServerLatency.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Sources with high number of errors](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSSourceHighErrors.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Unexpected top level domains](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSUnexpectedTLD.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+| [Google DNS - Unusual top level domains](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Hunting%20Queries/GCPDNSUnusualTLD.yaml) | CommandAndControl | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [GCPDNS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Workbooks/GCPDNS.json) | [`GCP_DNS_CL`](../tables/gcp-dns-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [GCPCloudDNS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformDNS/Parsers/GCPCloudDNS.yaml) | - | - |
 
 ## Release Notes
 
@@ -65,4 +92,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1      | 10-09-2024                    | Repackaged solution to add existing **Parser**.                                            |
 | 3.0.0      | 04-09-2024                    | Updated the python runtime version to 3.11 Function app **Data Connector**.                      |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

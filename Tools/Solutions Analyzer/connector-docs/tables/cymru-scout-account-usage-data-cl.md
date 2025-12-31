@@ -1,15 +1,5 @@
 # Cymru_Scout_Account_Usage_Data_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Cymru_Scout_Account_Usage_Data_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [Team Cymru Scout](../solutions/team-cymru-scout.md):**
+- [TeamCymruScout](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Team%20Cymru%20Scout/Workbooks/TeamCymruScout.json)
 
 ---
 

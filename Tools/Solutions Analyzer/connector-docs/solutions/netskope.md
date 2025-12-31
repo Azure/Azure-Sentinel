@@ -13,27 +13,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Netskope](../connectors/netskope.md)
-
-**Publisher:** Netskope
-
-The [Netskope Cloud Security Platform](https://www.netskope.com/platform) connector provides the capability to ingest Netskope logs and events into Microsoft Sentinel. The connector provides visibility into Netskope Platform Events and Alerts in Microsoft Sentinel to improve monitoring and investigation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Netskope_CL` |
-| **Connector Definition Files** | [Netskope_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskope/Data%20Connectors/Netskope/Netskope_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/netskope.md)
+- [Netskope](../connectors/netskope.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Netskope_CL` | [Netskope](../connectors/netskope.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Netskope_Alerts_CL`](../tables/netskope-alerts-cl.md) | - | Workbooks |
+| [`Netskope_CL`](../tables/netskope-cl.md) | [Netskope](../connectors/netskope.md) | - |
+| [`Netskope_Events_CL`](../tables/netskope-events-cl.md) | - | Workbooks |
+| [`Netskope_WebTX_CL`](../tables/netskope-webtx-cl.md) | - | Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [NetskopeEvents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskope/Workbooks/NetskopeEvents.json) | [`Netskope_Alerts_CL`](../tables/netskope-alerts-cl.md)<br>[`Netskope_Events_CL`](../tables/netskope-events-cl.md)<br>[`Netskope_WebTX_CL`](../tables/netskope-webtx-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Netskope](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Netskope/Parsers/Netskope.yaml) | - | - |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

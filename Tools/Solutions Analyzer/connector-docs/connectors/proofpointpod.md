@@ -16,10 +16,12 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
+| [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md) | — | — |
 | [`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md) | — | — |
 | [`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md) | — | — |
 | [`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md) | — | — |
 | [`maillog_CL`](../tables/maillog-cl.md) | — | — |
+| [`message_CL`](../tables/message-cl.md) | — | — |
 
 ## Permissions
 

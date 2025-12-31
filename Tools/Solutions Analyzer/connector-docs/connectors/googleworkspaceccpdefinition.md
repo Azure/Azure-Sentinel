@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`GoogleWorkspaceReports`](../tables/googleworkspacereports.md) | — | ✗ |
+| [`GoogleWorkspaceReports`](../tables/googleworkspacereports.md) | ✓ | ✗ |
 
 ## Permissions
 

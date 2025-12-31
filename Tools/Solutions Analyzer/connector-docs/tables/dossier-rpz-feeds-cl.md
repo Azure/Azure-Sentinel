@@ -1,15 +1,5 @@
 # dossier_rpz_feeds_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `dossier_rpz_feeds_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Infoblox Data Connector via REST API](../connectors/infobloxdataconnector.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [Infoblox](../solutions/infoblox.md):**
+- [Infoblox_Lookup_Workbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox/Workbooks/Infoblox_Lookup_Workbook.json)
 
 ---
 

@@ -1,15 +1,5 @@
 # QualysHostDetectionV2_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `QualysHostDetectionV2_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,21 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [[DEPRECATED] Qualys Vulnerability Management](../connectors/qualysvulnerabilitymanagement.md)
+
+---
+
+## Content Items Using This Table (3)
+
+### Analytic Rules (2)
+
+**In solution [QualysVM](../solutions/qualysvm.md):**
+- [High Number of Urgent Vulnerabilities Detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Analytic%20Rules/HighNumberofVulnDetectedV2.yaml)
+- [New High Severity Vulnerability Detected Across Multiple Hosts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Analytic%20Rules/NewHighSeverityVulnDetectedAcrossMulitpleHostsV2.yaml)
+
+### Workbooks (1)
+
+**In solution [QualysVM](../solutions/qualysvm.md):**
+- [QualysVMv2](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/QualysVM/Workbooks/QualysVMv2.json)
 
 ---
 

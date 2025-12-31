@@ -13,29 +13,47 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Tenable.io Vulnerability Management](../connectors/tenableioapi.md)
-
-**Publisher:** Tenable
-
-The [Tenable.io](https://www.tenable.com/products/tenable-io) data connector provides the capability to ingest Asset and Vulnerability data into Microsoft Sentinel through the REST API from the Tenable.io platform (Managed in the cloud). Refer to [API documentation](https://developer.tenable.com/reference) for more information. The connector provides the ability to get data which helps to examine potential security risks, get insight into your computing assets, diagnose configuration problems and more
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Tenable_IO_Assets_CL` |
-| | `Tenable_IO_Vuln_CL` |
-| **Connector Definition Files** | [TenableIO.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Data%20Connectors/TenableIO.json) |
-
-[→ View full connector details](../connectors/tenableioapi.md)
+- [Tenable.io Vulnerability Management](../connectors/tenableioapi.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Tenable_IO_Assets_CL` | [Tenable.io Vulnerability Management](../connectors/tenableioapi.md) |
-| `Tenable_IO_Vuln_CL` | [Tenable.io Vulnerability Management](../connectors/tenableioapi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Tenable_IO_Assets_CL`](../tables/tenable-io-assets-cl.md) | [Tenable.io Vulnerability Management](../connectors/tenableioapi.md) | Playbooks |
+| [`Tenable_IO_Vuln_CL`](../tables/tenable-io-vuln-cl.md) | [Tenable.io Vulnerability Management](../connectors/tenableioapi.md) | Playbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 3 |
+| Parsers | 2 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Tenable.io - Enrich incident with asset info](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Playbooks/Playbooks/Tenable-EnrichIncidentWithAssetsInfo/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | [`Tenable_IO_Assets_CL`](../tables/tenable-io-assets-cl.md) *(read)* |
+| [Tenable.io - Enrich incident with vulnerability info](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Playbooks/Playbooks/Tenable-EnrichIncidentWithVulnInfo/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | [`Tenable_IO_Vuln_CL`](../tables/tenable-io-vuln-cl.md) *(read)* |
+| [Tenable.io - Launch Scan](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Playbooks/Playbooks/Tenable-LaunchScan/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [TenableIOAssets](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Parsers/TenableIOAssets.yaml) | - | - |
+| [TenableIOVulnerabilities](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/TenableIO/Parsers/TenableIOVulnerabilities.yaml) | - | - |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

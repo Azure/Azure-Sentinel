@@ -13,30 +13,42 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md)
-
-**Publisher:** Rapid7
-
-The [Rapid7 Insight VM](https://www.rapid7.com/products/insightvm/) Report data connector provides the capability to ingest Scan reports and vulnerability data into Microsoft Sentinel through the REST API from the  Rapid7 Insight platform (Managed in the cloud). Refer to [API documentation](https://docs.rapid7.com/insight/api-overview/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `NexposeInsightVMCloud_assets_CL` |
-| | `NexposeInsightVMCloud_vulnerabilities_CL` |
-| **Connector Definition Files** | [InsightVMCloud_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Rapid7InsightVM/Data%20Connectors/InsightVMCloud_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/insightvmcloudapi.md)
+- [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `NexposeInsightVMCloud_assets_CL` | [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md) |
-| `NexposeInsightVMCloud_vulnerabilities_CL` | [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`NexposeInsightVMCloud_assets_CL`](../tables/nexposeinsightvmcloud-assets-cl.md) | [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md) | - |
+| [`NexposeInsightVMCloud_vulnerabilities_CL`](../tables/nexposeinsightvmcloud-vulnerabilities-cl.md) | [Rapid7 Insight Platform Vulnerability Management Reports](../connectors/insightvmcloudapi.md) | - |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 3 |
+| Parsers | 2 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Rapid7 Insight VM - Enrich incident with asset info](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Rapid7InsightVM/Playbooks/Playbooks/Rapid7InsightVM-EnrichIncidentWithAssetInfo/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+| [Rapid7 Insight VM - Enrich vulnerability info](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Rapid7InsightVM/Playbooks/Playbooks/Rapid7InsightVM-EnrichVulnerabilityInfo/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+| [Rapid7 Insight VM - Run scan](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Rapid7InsightVM/Playbooks/Playbooks/Rapid7InsightVM-RunScan/azuredeploy.json) | Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the fol... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [InsightVMAssets](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Rapid7InsightVM/Parsers/InsightVMAssets.yaml) | - | - |
+| [InsightVMVulnerabilities](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Rapid7InsightVM/Parsers/InsightVMVulnerabilities.yaml) | - | - |
 
 ## Release Notes
 
@@ -45,4 +57,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       | 03-05-2024                     | Fixed Metadata issue for ParserName and ParentId mismatch  |
 | 3.0.0       | 16-01-2024                     | Updated Manual Deployment instructions in **Data Connector** Description  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

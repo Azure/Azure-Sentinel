@@ -13,27 +13,22 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Azure Logic Apps](../connectors/azurelogicapps-ccp.md)
-
-**Publisher:** Microsoft
-
-Azure Logic Apps is a cloud-based platform for creating and running automated workflows that integrate your apps, data, services, and systems. This connector lets you stream your Azure Logic Apps diagnostics logs into Microsoft Sentinel, allowing you to continuously monitor activity. 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AzureDiagnostics` |
-| **Connector Definition Files** | [AzureLogicApps_CCP.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Logic%20Apps/Data%20Connectors/AzureLogicApps_CCP.JSON) |
-
-[→ View full connector details](../connectors/azurelogicapps-ccp.md)
+- [Azure Logic Apps](../connectors/azurelogicapps-ccp.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AzureDiagnostics` | [Azure Logic Apps](../connectors/azurelogicapps-ccp.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AzureDiagnostics`](../tables/azurediagnostics.md) | [Azure Logic Apps](../connectors/azurelogicapps-ccp.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

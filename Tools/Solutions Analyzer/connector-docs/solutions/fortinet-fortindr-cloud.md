@@ -13,32 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md)
-
-**Publisher:** Fortinet
-
-The Fortinet FortiNDR Cloud data connector provides the capability to ingest [Fortinet FortiNDR Cloud](https://docs.fortinet.com/product/fortindr-cloud) data into Microsoft Sentinel using the FortiNDR Cloud API
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `FncEventsDetections_CL` |
-| | `FncEventsObservation_CL` |
-| | `FncEventsSuricata_CL` |
-| **Connector Definition Files** | [FortinetFortiNdrCloud_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiNDR%20Cloud/Data%20Connectors/FortinetFortiNdrCloud_API_AzureFunctionApp.json) |
-
-[→ View full connector details](../connectors/fortinetfortindrclouddataconnector.md)
+- [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `FncEventsDetections_CL` | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) |
-| `FncEventsObservation_CL` | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) |
-| `FncEventsSuricata_CL` | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`FncEventsDetections_CL`](../tables/fnceventsdetections-cl.md) | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) | Workbooks |
+| [`FncEventsObservation_CL`](../tables/fnceventsobservation-cl.md) | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) | Workbooks |
+| [`FncEventsSuricata_CL`](../tables/fnceventssuricata-cl.md) | [Fortinet FortiNDR Cloud](../connectors/fortinetfortindrclouddataconnector.md) | Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [FortinetFortiNdrCloudWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiNDR%20Cloud/Workbooks/FortinetFortiNdrCloudWorkbook.json) | [`FncEventsDetections_CL`](../tables/fnceventsdetections-cl.md)<br>[`FncEventsObservation_CL`](../tables/fnceventsobservation-cl.md)<br>[`FncEventsSuricata_CL`](../tables/fnceventssuricata-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Fortinet_FortiNDR_Cloud](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiNDR%20Cloud/Parsers/Fortinet_FortiNDR_Cloud.yaml) | - | - |
 
 ## Release Notes
 
@@ -49,4 +57,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 31-05-2024                     | Replace Metastream with FortiNDR Cloud API            |
 | 3.0.0       | 29-02-2024                     | Initial Solution Release                              |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

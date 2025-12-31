@@ -14,34 +14,38 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Mimecast Audit & Authentication](../connectors/mimecastauditapi.md)
-
-**Publisher:** Mimecast
-
-The data connector for [Mimecast Audit & Authentication](https://integrations.mimecast.com/tech-partners/microsoft-sentinel/) provides customers with the visibility into security events related to audit and authentication events within Microsoft Sentinel. The data connector provides pre-created dashboards to allow analysts to view insight into user activity, aid in incident correlation and reduce investigation response times coupled with custom alert capabilities.  
-
-The Mimecast products included within the connector are: 
-
-Audit & Authentication
-
- 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `MimecastAudit_CL` |
-| **Connector Definition Files** | [MimecastAudit_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit/Data%20Connectors/MimecastAudit_API_AzureFunctionApp.json) |
-
-[→ View full connector details](../connectors/mimecastauditapi.md)
+- [Mimecast Audit & Authentication](../connectors/mimecastauditapi.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `MimecastAudit_CL` | [Mimecast Audit & Authentication](../connectors/mimecastauditapi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`MimecastAudit_CL`](../tables/mimecastaudit-cl.md) | [Mimecast Audit & Authentication](../connectors/mimecastauditapi.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Mimecast Audit - Logon Authentication Failed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit/Analytic%20Rules/MimecastAudit.yaml) | High | Discovery, InitialAccess, CredentialAccess | [`MimecastAudit_CL`](../tables/mimecastaudit-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [MimecastAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastAudit/Workbooks/MimecastAudit.json) | [`MimecastAudit_CL`](../tables/mimecastaudit-cl.md) |
 
 ## Release Notes
 
@@ -51,4 +55,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 05-12-2023                     | Enhanced **Dataconnector** to use existing workspace and updated checkpoint mechanism |
 | 3.0.0       | 23-08-2023                     | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

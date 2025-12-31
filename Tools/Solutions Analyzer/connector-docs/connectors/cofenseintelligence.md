@@ -55,7 +55,7 @@ This connector ingests data into the following tables:
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
 | [`Malware_Data_CL`](../tables/malware-data-cl.md) | — | — |
-| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | — | ✗ |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | ✓ | ✗ |
 
 ## Permissions
 

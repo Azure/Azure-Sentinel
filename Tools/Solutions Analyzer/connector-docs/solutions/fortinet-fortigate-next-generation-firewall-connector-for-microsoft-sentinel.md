@@ -13,41 +13,42 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Fortinet via Legacy Agent](../connectors/fortinet.md)
-
-**Publisher:** Fortinet
-
-The Fortinet firewall connector allows you to easily connect your Fortinet logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Fortinet-FortiGate.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Data%20Connectors/Fortinet-FortiGate.json) |
-
-[→ View full connector details](../connectors/fortinet.md)
-
-### [[Deprecated] Fortinet via AMA](../connectors/fortinetama.md)
-
-**Publisher:** Fortinet
-
-The Fortinet firewall connector allows you to easily connect your Fortinet logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_Fortinet-FortiGateAma.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Data%20Connectors/template_Fortinet-FortiGateAma.json) |
-
-[→ View full connector details](../connectors/fortinetama.md)
+- [[Deprecated] Fortinet via Legacy Agent](../connectors/fortinet.md)
+- [[Deprecated] Fortinet via AMA](../connectors/fortinetama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Fortinet via AMA](../connectors/fortinetama.md), [[Deprecated] Fortinet via Legacy Agent](../connectors/fortinet.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Fortinet via AMA](../connectors/fortinetama.md), [[Deprecated] Fortinet via Legacy Agent](../connectors/fortinet.md) | Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 4 |
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Fortigate](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Workbooks/Fortigate.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Fortinet-FortiGate-FunctionApp](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Playbooks/FortinetFortigateFunctionApp/azuredeploy.json) | This function app connects to Fortinet service end point and fetch the details of the entities of th... | - |
+| [Fortinet-FortiGate-IPEnrichment](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Playbooks/Fortinet_IncidentEnrichment/azuredeploy.json) | This playbook enriches the incident with address object and address group. | - |
+| [Fortinet-FortiGate-ResponseOnBlockIP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Playbooks/Fortinet_ResponseOnIP/azuredeploy.json) | This playbook allows the SOC users to automatically response to Microsoft Sentinel incidents which i... | - |
+| [Fortinet-FortiGate-ResponseOnBlockURL](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Fortinet%20FortiGate%20Next-Generation%20Firewall%20connector%20for%20Microsoft%20Sentinel/Playbooks/Fortinet_ResponseOnURL/azuredeploy.json) | This playbook allows the SOC users to automatically response to Microsoft Sentinel incidents which i... | - |
 
 ## Release Notes
 
@@ -65,4 +66,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 21-07-2023                     |Updated the description in the solution                                                  |
 | 3.0.0       | 11-07-2023                     |Updated the title, logo and the description in the solution                              |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

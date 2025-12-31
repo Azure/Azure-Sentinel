@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Google Cloud Platform CDN (via Codeless Connector Framework)](../connectors/gcpcdnlogsccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Cloud Platform CDN data connector provides the capability to ingest Cloud CDN Audit logs and Cloud CDN Traffic logs into Microsoft Sentinel using the Compute Engine API. Refer the [Product overview](https://cloud.google.com/cdn/docs/overview) document for more details.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCPCDN` |
-| **Connector Definition Files** | [GCPCDNLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformCDN/Data%20Connectors/GCPCDNLogs_ccp/GCPCDNLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpcdnlogsccpdefinition.md)
+- [Google Cloud Platform CDN (via Codeless Connector Framework)](../connectors/gcpcdnlogsccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GCPCDN` | [Google Cloud Platform CDN (via Codeless Connector Framework)](../connectors/gcpcdnlogsccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GCPCDN`](../tables/gcpcdn.md) | [Google Cloud Platform CDN (via Codeless Connector Framework)](../connectors/gcpcdnlogsccpdefinition.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1      | 13-08-2025                    | Google Cloud Platform CDN **CCF Connector** moving to GA.                 |
 | 3.0.0      | 20-03-2025                    | Initial Solution Release.                                                 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

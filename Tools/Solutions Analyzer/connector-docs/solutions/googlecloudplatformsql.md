@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [GCP Cloud SQL (via Codeless Connector Framework)](../connectors/gcpcloudsqlccfdefinition.md)
-
-**Publisher:** Microsoft
-
-The GCP Cloud SQL data connector provides the capability to ingest Audit logs into Microsoft Sentinel using the GCP Cloud SQL API. Refer to [GCP cloud SQL Audit Logs](https://cloud.google.com/sql/docs/mysql/audit-logging) documentation for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GCPCloudSQL` |
-| **Connector Definition Files** | [GCPCloudSQLLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GoogleCloudPlatformSQL/Data%20Connectors/GCPCloudSQLLog_CCF/GCPCloudSQLLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gcpcloudsqlccfdefinition.md)
+- [GCP Cloud SQL (via Codeless Connector Framework)](../connectors/gcpcloudsqlccfdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GCPCloudSQL` | [GCP Cloud SQL (via Codeless Connector Framework)](../connectors/gcpcloudsqlccfdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GCPCloudSQL`](../tables/gcpcloudsql.md) | [GCP Cloud SQL (via Codeless Connector Framework)](../connectors/gcpcloudsqlccfdefinition.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1      | 02-09-2025                    | GCP Cloud SQL **CCF Conector** moving to GA  |
 | 3.0.0      | 16-07-2025                    | Initial Solution Release and Added new **CCF Data Connector**. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

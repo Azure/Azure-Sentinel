@@ -13,41 +13,42 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Contrast Protect via Legacy Agent](../connectors/contrastprotect.md)
-
-**Publisher:** Contrast Security
-
-Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [ContrastProtect.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Data%20Connectors/ContrastProtect.json) |
-
-[→ View full connector details](../connectors/contrastprotect.md)
-
-### [[Deprecated] Contrast Protect via AMA](../connectors/contrastprotectama.md)
-
-**Publisher:** Contrast Security
-
-Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_ContrastProtectAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Data%20Connectors/template_ContrastProtectAMA.json) |
-
-[→ View full connector details](../connectors/contrastprotectama.md)
+- [[Deprecated] Contrast Protect via Legacy Agent](../connectors/contrastprotect.md)
+- [[Deprecated] Contrast Protect via AMA](../connectors/contrastprotectama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Contrast Protect via AMA](../connectors/contrastprotectama.md), [[Deprecated] Contrast Protect via Legacy Agent](../connectors/contrastprotect.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Contrast Protect via AMA](../connectors/contrastprotectama.md), [[Deprecated] Contrast Protect via Legacy Agent](../connectors/contrastprotect.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Contrast Blocks](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Analytic%20Rules/ContrastBlocks.yaml) | Low | InitialAccess, Exfiltration | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Contrast Exploits](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Analytic%20Rules/ContrastExploits.yaml) | High | InitialAccess, Exfiltration | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Contrast Probes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Analytic%20Rules/ContrastProbes.yaml) | Informational | InitialAccess, Exfiltration | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Contrast Suspicious](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Analytic%20Rules/ContrastSuspicious.yaml) | Medium | InitialAccess, Exfiltration | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ContrastProtect](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Contrast%20Protect/Workbooks/ContrastProtect.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -56,4 +57,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
 | 3.0.0       | 07-09-2023                     |	Addition of new Contrast Protect AMA **Data Connector**         |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

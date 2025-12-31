@@ -14,34 +14,58 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md)
-
-**Publisher:** Rubrik, Inc
-
-The Rubrik Security Cloud data connector enables security operations teams to integrate insights from Rubrik's Data Observability services into Microsoft Sentinel. The insights include identification of anomalous filesystem behavior associated with ransomware and mass deletion, assess the blast radius of a ransomware attack, and sensitive data operators to prioritize and more rapidly investigate potential incidents.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Rubrik_Anomaly_Data_CL` |
-| | `Rubrik_Events_Data_CL` |
-| | `Rubrik_Ransomware_Data_CL` |
-| | `Rubrik_ThreatHunt_Data_CL` |
-| **Connector Definition Files** | [RubrikWebhookEvents_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Data%20Connectors/RubrikWebhookEvents/RubrikWebhookEvents_FunctionApp.json) |
-
-[→ View full connector details](../connectors/rubriksecuritycloudazurefunctions.md)
+- [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md)
 
 ## Tables Reference
 
-This solution ingests data into **4 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Rubrik_Anomaly_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
-| `Rubrik_Events_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
-| `Rubrik_Ransomware_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
-| `Rubrik_ThreatHunt_Data_CL` | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Rubrik_Anomaly_Data_CL`](../tables/rubrik-anomaly-data-cl.md) | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) | Analytics |
+| [`Rubrik_Events_Data_CL`](../tables/rubrik-events-data-cl.md) | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) | Analytics |
+| [`Rubrik_Ransomware_Data_CL`](../tables/rubrik-ransomware-data-cl.md) | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) | - |
+| [`Rubrik_ThreatHunt_Data_CL`](../tables/rubrik-threathunt-data-cl.md) | [Rubrik Security Cloud data connector](../connectors/rubriksecuritycloudazurefunctions.md) | - |
+
+## Content Items
+
+This solution includes **19 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 17 |
+| Analytic Rules | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Rubrik Critical Anomaly](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Analytic%20Rules/RubrikCriticalAnomaly.yaml) | Medium | Persistence | [`Rubrik_Anomaly_Data_CL`](../tables/rubrik-anomaly-data-cl.md) |
+| [Rubrik Threat Monitoring](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Analytic%20Rules/RubrikThreatMonitoring.yaml) | Medium | Persistence | [`Rubrik_Events_Data_CL`](../tables/rubrik-events-data-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Rubrik Advanced Threat Hunt](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikAdvanceThreatHunt/azuredeploy.json) | This playbook fetches the object mapped with incident and starts advance threat hunt. | - |
+| [Rubrik Anomaly Analysis](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikAnomalyAnalysis/azuredeploy.json) | This playbook queries Rubrik Security Cloud to enrich the Anomaly event with additional information ... | - |
+| [Rubrik Anomaly Generate Downloadable Link](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikAnomalyGenerateDownloadableLink/azuredeploy.json) | This playbook will generate downloadable links according to objectType (VMware, Fileset or VolumeGro... | - |
+| [Rubrik Anomaly Incident Response](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikAnomalyIncidentResponse/azuredeploy.json) | This playbook provides an end to end example of the collection of Ransomware Anomaly information fro... | - |
+| [Rubrik Data Object Discovery](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikDataObjectDiscovery/azuredeploy.json) | This playbook queries Rubrik Security Cloud to enrich the incoming event with additional information... | - |
+| [Rubrik File Object Context Analysis](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikFileObjectContextAnalysis/azuredeploy.json) | This playbook will retrieve policy hits from Rubrik Security Cloud for a given object, for a particu... | - |
+| [Rubrik Fileset Ransomware Discovery](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikFilesetRansomwareDiscovery/azuredeploy.json) | This playbook queries Rubrik Security Cloud to enrich the incoming event with additional information... | - |
+| [Rubrik IOC Scan](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikIOCScan/azuredeploy.json) | This playbook interacts with Rubrik Security Cloud to scan backups for specified IOCs. This playbook... | - |
+| [Rubrik Poll Async Result](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikPollAsyncResult/azuredeploy.json) | This playbook is used by other playbooks to poll for results from some of the asynchronous API calls... | - |
+| [Rubrik Ransomware Discovery and File Recovery](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikRansomwareDiscoveryAndFileRecovery/azuredeploy.json) | This playbook interacts with Rubrik Security Cloud to (1) optionally preserve evidence by creating a... | - |
+| [Rubrik Ransomware Discovery and VM Recovery](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikRansomwareDiscoveryAndVMRecovery/azuredeploy.json) | This playbook interacts with Rubrik Security Cloud to (1) optionally preserve evidence by creating a... | - |
+| [Rubrik Retrieve User Intelligence Information](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikRetrieveUserIntelligenceInformation/azuredeploy.json) | This playbook queries Rubrik Security Cloud to get risk detail and policy hits details for a usernam... | - |
+| [Rubrik Turbo Threat Hunt](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikTurboThreatHunt/azuredeploy.json) | This playbook fetches the object mapped with incident and starts turbo threat hunt. | - |
+| [Rubrik Update Anomaly Status](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikUpdateAnomalyStatus/azuredeploy.json) | This playbook will resolve or report false positive to unresolved anomaly and update status as resol... | - |
+| [Rubrik Update Anomaly Status Via Incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikUpdateAnomalyStatusViaIncident/azuredeploy.json) | This playbook queries Rubrik Security Cloud to enrich the Anomaly event with additional information ... | - |
+| [Rubrik User Intelligence Analysis](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikUserIntelligenceAnalysis/azuredeploy.json) | This playbook queries Rubrik Security Cloud to get user sensitive data and update severity of incide... | - |
+| [RubrikWorkloadAnalysis](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RubrikSecurityCloud/Playbooks/RubrikWorkloadAnalysis/azuredeploy.json) | This playbook retrieves sensitive IP and Host data to enrich the incident details, and adjusts the i... | - |
 
 ## Release Notes
 
@@ -56,4 +80,10 @@ This solution ingests data into **4 table(s)**:
 | 3.1.0       | 20-10-2023                     | Updated the **DataConnector** code by implementing Durable Function App. |
 | 3.0.0       | 14-07-2023                     | Updated the title in such a way that user can identify the adaptive card based on incident. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

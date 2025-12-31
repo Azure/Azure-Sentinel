@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [StyxView Alerts (via Codeless Connector Platform)](../connectors/styxviewendpointconnectordefinition.md)
-
-**Publisher:** Styx Intelligence
-
-The [StyxView Alerts](https://styxintel.com/) data connector enables seamless integration between the StyxView Alerts platform and Microsoft Sentinel. This connector ingests alert data from the StyxView Alerts API, allowing organizations to centralize and correlate actionable threat intelligence directly within their Microsoft Sentinel workspace.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `StyxViewAlerts_CL` |
-| **Connector Definition Files** | [StyxView%20Alerts_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Styx%20Intelligence/Data%20Connectors/Alerts/StyxView%20Alerts_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/styxviewendpointconnectordefinition.md)
+- [StyxView Alerts (via Codeless Connector Platform)](../connectors/styxviewendpointconnectordefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `StyxViewAlerts_CL` | [StyxView Alerts (via Codeless Connector Platform)](../connectors/styxviewendpointconnectordefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`StyxViewAlerts_CL`](../tables/styxviewalerts-cl.md) | [StyxView Alerts (via Codeless Connector Platform)](../connectors/styxviewendpointconnectordefinition.md) | - |
 
 ## Release Notes
 
@@ -42,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |---------------|----------------------------------|-------------------------------------------------------------------------|
 | 3.0.0         | 14-04-2025                       | Initial Solution Release.                                               |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

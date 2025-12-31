@@ -4,22 +4,18 @@ Network properties of devices, including physical adapters, IP and MAC addresses
 
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `DeviceNetworkInfo` |
-| **Category** | XDR |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
+| **Category** | MDE |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/devicenetworkinfo) |
 | **Defender XDR Docs** | [View Documentation](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicenetworkinfo-table) |
 
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
-## Solutions (1)
+## Solutions (2)
 
 This table is used by the following solutions:
 
+- [MaturityModelForEventLogManagementM2131](../solutions/maturitymodelforeventlogmanagementm2131.md)
 - [Microsoft Defender XDR](../solutions/microsoft-defender-xdr.md)
 
 ## Connectors (1)
@@ -27,6 +23,18 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Microsoft Defender XDR](../connectors/microsoftthreatprotection.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Workbooks (2)
+
+**In solution [MaturityModelForEventLogManagementM2131](../solutions/maturitymodelforeventlogmanagementm2131.md):**
+- [MaturityModelForEventLogManagement_M2131](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MaturityModelForEventLogManagementM2131/Workbooks/MaturityModelForEventLogManagement_M2131.json)
+
+**In solution [Microsoft Defender XDR](../solutions/microsoft-defender-xdr.md):**
+- [MicrosoftDefenderForEndPoint](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20XDR/Workbooks/MicrosoftDefenderForEndPoint.json)
 
 ---
 

@@ -13,41 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Forcepoint CASB via Legacy Agent](../connectors/forcepointcasb.md)
-
-**Publisher:** Forcepoint CASB
-
-The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Forcepoint%20CASB.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forcepoint%20CASB/Data%20Connectors/Forcepoint%20CASB.json) |
-
-[→ View full connector details](../connectors/forcepointcasb.md)
-
-### [[Deprecated] Forcepoint CASB via AMA](../connectors/forcepointcasbama.md)
-
-**Publisher:** Forcepoint CASB
-
-The Forcepoint CASB (Cloud Access Security Broker) Connector allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_Forcepoint%20CASBAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forcepoint%20CASB/Data%20Connectors/template_Forcepoint%20CASBAMA.json) |
-
-[→ View full connector details](../connectors/forcepointcasbama.md)
+- [[Deprecated] Forcepoint CASB via Legacy Agent](../connectors/forcepointcasb.md)
+- [[Deprecated] Forcepoint CASB via AMA](../connectors/forcepointcasbama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Forcepoint CASB via AMA](../connectors/forcepointcasbama.md), [[Deprecated] Forcepoint CASB via Legacy Agent](../connectors/forcepointcasb.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Forcepoint CASB via AMA](../connectors/forcepointcasbama.md), [[Deprecated] Forcepoint CASB via Legacy Agent](../connectors/forcepointcasb.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ForcepointCASB](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forcepoint%20CASB/Workbooks/ForcepointCASB.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -57,4 +48,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 15-07-2024                     |	Deprecating data connectors                                     |
 | 3.0.0       | 31-08-2023                     |	Addition of new Forcepoint CASB AMA **Data Connector**          |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

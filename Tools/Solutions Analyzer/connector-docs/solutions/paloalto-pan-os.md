@@ -14,41 +14,67 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Palo Alto Networks (Firewall) via Legacy Agent](../connectors/paloaltonetworks.md)
-
-**Publisher:** Palo Alto Networks
-
-The Palo Alto Networks firewall connector allows you to easily connect your Palo Alto Networks logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [PaloAltoNetworks.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Data%20Connectors/PaloAltoNetworks.json) |
-
-[→ View full connector details](../connectors/paloaltonetworks.md)
-
-### [[Deprecated] Palo Alto Networks (Firewall) via AMA](../connectors/paloaltonetworksama.md)
-
-**Publisher:** Palo Alto Networks
-
-The Palo Alto Networks firewall connector allows you to easily connect your Palo Alto Networks logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_PaloAltoNetworksAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Data%20Connectors/template_PaloAltoNetworksAMA.json) |
-
-[→ View full connector details](../connectors/paloaltonetworksama.md)
+- [[Deprecated] Palo Alto Networks (Firewall) via Legacy Agent](../connectors/paloaltonetworks.md)
+- [[Deprecated] Palo Alto Networks (Firewall) via AMA](../connectors/paloaltonetworksama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Palo Alto Networks (Firewall) via AMA](../connectors/paloaltonetworksama.md), [[Deprecated] Palo Alto Networks (Firewall) via Legacy Agent](../connectors/paloaltonetworks.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Palo Alto Networks (Firewall) via AMA](../connectors/paloaltonetworksama.md), [[Deprecated] Palo Alto Networks (Firewall) via Legacy Agent](../connectors/paloaltonetworks.md) | Analytics, Hunting, Workbooks |
+| [`covidIndicators`](../tables/covidindicators.md) | - | Analytics |
+| [`triggerBody`](../tables/triggerbody.md) | - | Playbooks |
+
+## Content Items
+
+This solution includes **16 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 7 |
+| Analytic Rules | 5 |
+| Hunting Queries | 2 |
+| Workbooks | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Microsoft COVID-19 file hash indicator matches](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Analytic%20Rules/FileHashEntity_Covid19_CommonSecurityLog.yaml) | Medium | Execution | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`covidIndicators`](../tables/covidindicators.md) |
+| [Palo Alto - possible internal to external port scanning](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Analytic%20Rules/PaloAlto-PortScanning.yaml) | Low | Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [Palo Alto - possible nmap scan on with top 100 option](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Analytic%20Rules/PaloAlto-Top100_NmapScan.yaml) | Medium | Reconnaissance | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Palo Alto - potential beaconing detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Analytic%20Rules/PaloAlto-NetworkBeaconing.yaml) | Low | CommandAndControl | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [Palo Alto Threat signatures from Unusual IP addresses](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Analytic%20Rules/PaloAlto-UnusualThreatSignatures.yaml) | Medium | Discovery, Exfiltration, CommandAndControl | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Palo Alto - high-risk ports](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Hunting%20Queries/PaloAlto-HighRiskPorts.yaml) | InitialAccess, Discovery | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+| [Palo Alto - potential beaconing detected](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Hunting%20Queries/Palo%20Alto%20-%20potential%20beaconing%20detected.yaml) | CommandAndControl | [`CommonSecurityLog`](../tables/commonsecuritylog.md)<br>[`fluentbit_CL`](../tables/fluentbit-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [PaloAltoNetworkThreat](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Workbooks/PaloAltoNetworkThreat.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [PaloAltoOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Workbooks/PaloAltoOverview.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Block IP - Palo Alto PAN-OS - Entity trigger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-BlockIP-EntityTrigger/azuredeploy.json) | This playbook interacts with relevant stakeholders, such incident response team, to approve blocking... | - |
+| [Get System Info - Palo Alto PAN-OS XML API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-GetSystemInfo/azuredeploy.json) | This playbook allows us to get System Info of a Palo Alto device for a Microsoft Sentinel alert. | - |
+| [Get Threat PCAP - Palo Alto PAN-OS XML API](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-GetThreatPCAP/azuredeploy.json) | This playbook allows us to get a threat PCAP for a given PCAP ID. | [`triggerBody`](../tables/triggerbody.md) *(read)* |
+| [PaloAlto-PAN-OS-BlockIP](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-BlockIP/azuredeploy.json) | This playbook allows blocking/unblocking IPs in PaloAlto, using **Address Object Groups**. This allo... | - |
+| [PaloAlto-PAN-OS-BlockURL](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-BlockURL/azuredeploy.json) | This playbook allows blocking/unblocking URLs in PaloAlto, using **predefined address group**. This ... | - |
+| [PaloAlto-PAN-OS-BlockURL-EntityTrigger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-BlockURL-EntityTrigger/azuredeploy.json) | This playbook allows blocking/unblocking URLs in PaloAlto, using **predefined address group**. This ... | - |
+| [PaloAlto-PAN-OS-GetURLCategoryInfo](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/PaloAlto-PAN-OS/Playbooks/PaloAltoPlaybooks/PaloAlto-PAN-OS-GetURLCategoryInfo/azuredeploy.json) | When a new sentinal incident is created, this playbook gets triggered and performs below actions: | - |
 
 ## Release Notes
 
@@ -67,4 +93,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 22-01-2024                     |   Added subTechniques in Template                                  |
 | 3.0.0       | 12-12-2023                     |   Fixed **Playbooks** issue                                        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

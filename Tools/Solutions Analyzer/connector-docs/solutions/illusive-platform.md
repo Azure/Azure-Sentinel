@@ -13,41 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Illusive Platform via Legacy Agent](../connectors/illusiveattackmanagementsystem.md)
-
-**Publisher:** illusive
-
-The Illusive Platform Connector allows you to share Illusive's attack surface analysis data and incident logs with Microsoft Sentinel and view this information in dedicated dashboards that offer insight into your organization's attack surface risk (ASM Dashboard) and track unauthorized lateral movement in your organization's network (ADS Dashboard).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [illusive%20Attack%20Management%20System.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Data%20Connectors/illusive%20Attack%20Management%20System.json) |
-
-[→ View full connector details](../connectors/illusiveattackmanagementsystem.md)
-
-### [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md)
-
-**Publisher:** illusive
-
-The Illusive Platform Connector allows you to share Illusive's attack surface analysis data and incident logs with Microsoft Sentinel and view this information in dedicated dashboards that offer insight into your organization's attack surface risk (ASM Dashboard) and track unauthorized lateral movement in your organization's network (ADS Dashboard).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_IllusivePlatformAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Data%20Connectors/template_IllusivePlatformAMA.json) |
-
-[→ View full connector details](../connectors/illusiveattackmanagementsystemama.md)
+- [[Deprecated] Illusive Platform via Legacy Agent](../connectors/illusiveattackmanagementsystem.md)
+- [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md), [[Deprecated] Illusive Platform via Legacy Agent](../connectors/illusiveattackmanagementsystem.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Illusive Platform via AMA](../connectors/illusiveattackmanagementsystemama.md), [[Deprecated] Illusive Platform via Legacy Agent](../connectors/illusiveattackmanagementsystem.md) | Analytics |
+
+## Content Items
+
+This solution includes **3 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 2 |
+| Analytic Rules | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Illusive Incidents Analytic Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Analytic%20Rules/Illusive_Detection_Query.yaml) | Medium | Persistence, PrivilegeEscalation, DefenseEvasion, CredentialAccess, LateralMovement | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [IllusiveADS](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Workbooks/IllusiveADS.json) | - |
+| [IllusiveASM](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Illusive%20Platform/Workbooks/IllusiveASM.json) | - |
 
 ## Release Notes
 
@@ -56,4 +55,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 12-07-2024                     |    Deprecating data connector                                      |
 | 3.0.0       | 13-09-2023                     |	Addition of new Illusive Platform AMA **Data Connector**        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

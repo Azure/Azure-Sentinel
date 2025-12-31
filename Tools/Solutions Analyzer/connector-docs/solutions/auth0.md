@@ -13,42 +13,66 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Auth0 Access Management](../connectors/auth0.md)
-
-**Publisher:** Auth0
-
-The [Auth0 Access Management](https://auth0.com/access-management) data connector provides the capability to ingest [Auth0 log events](https://auth0.com/docs/api/management/v2/#!/Logs/get_logs) into Microsoft Sentinel
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Auth0AM_CL` |
-| **Connector Definition Files** | [Auth0_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Auth0/Data%20Connectors/Auth0_FunctionApp.json) |
-
-[→ View full connector details](../connectors/auth0.md)
-
-### [Auth0 Logs](../connectors/auth0connectorccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The [Auth0](https://auth0.com/docs/api/management/v2/logs/get-logs) data connector allows ingesting logs from Auth0 API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses Auth0 API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Auth0Logs_CL` |
-| **Connector Definition Files** | [DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Auth0/Data%20Connectors/Auth0_CCP/DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/auth0connectorccpdefinition.md)
+- [Auth0 Access Management](../connectors/auth0.md)
+- [Auth0 Logs](../connectors/auth0connectorccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Auth0AM_CL` | [Auth0 Access Management](../connectors/auth0.md) |
-| `Auth0Logs_CL` | [Auth0 Logs](../connectors/auth0connectorccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Auth0AM_CL`](../tables/auth0am-cl.md) | [Auth0 Access Management](../connectors/auth0.md) | - |
+| [`Auth0Logs_CL`](../tables/auth0logs-cl.md) | [Auth0 Logs](../connectors/auth0connectorccpdefinition.md) | - |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 2 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Auth0](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Auth0/Parsers/Auth0.yaml) | - | - |
+| [Auth0AM](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Auth0/Parsers/Auth0AM.yaml) | - | - |
+
+## Additional Documentation
+
+> 📄 *Source: [Auth0/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Auth0/README.md)*
+
+# Steps to Configure Auth0 app
+The following are steps to be followed in Auth0 App.
+
+1. Please go to applications and select application from auth0 side, Please find below screen shot for reference :-
+
+![](Images/Applications.png?raw=true)
+
+2. Click on settings of the App and note down the credentials
+<br>***a. Copy the domain
+    b. Get the client id value
+    c. Get the client secret***<br>
+
+3. Under Application properties --> Select Application type as Machine to Machine. Please find below screen shot for reference :-
+
+![](Images/ApplicationProperties.png?raw=true)
+
+4. Under credentials tab --> Select client secret (Post). Please find below screen shot for reference :-
+
+![](Images/Credentials.png?raw=true)
+
+5. Under API tab, please make sure Authorized to scopes, Please find below screen shot for reference :-
+
+![](Images/API.png?raw=true)
+
+6. Please make sure the domain value under settings --> Environment Variables, please refer below screen shot for reference and other values are entered from the above step copied values and Domain should be  starts with https://,then click on Apply  and restart function app
+
+![](Images/functionappvalues.png?raw=true)
 
 ## Release Notes
 
@@ -60,4 +84,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.0       | 24-08-2024                     | Updated the **Data Connector** Function app python runtime version to 3.11             |
 |             | 11-12-2023                     | Added new **Parser** (Auth0AM)                                                         |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

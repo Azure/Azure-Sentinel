@@ -13,38 +13,22 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The Google Kubernetes Engine (GKE) Logs enable you to capture cluster activity, workload behavior, and security events, allowing you to monitor Kubernetes workloads, analyze performance, and detect potential threats across GKE clusters.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `GKEAPIServer` |
-| | `GKEApplication` |
-| | `GKEAudit` |
-| | `GKEControllerManager` |
-| | `GKEHPADecision` |
-| | `GKEScheduler` |
-| **Connector Definition Files** | [GoogleKubernetesEngineLogs_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Google%20Kubernetes%20Engine/Data%20Connectors/GoogleKubernetesEngineLogs_ccp/GoogleKubernetesEngineLogs_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/gkeccpdefinition.md)
+- [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **6 table(s)**:
+This solution uses **6 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `GKEAPIServer` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
-| `GKEApplication` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
-| `GKEAudit` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
-| `GKEControllerManager` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
-| `GKEHPADecision` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
-| `GKEScheduler` | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`GKEAPIServer`](../tables/gkeapiserver.md) | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) | - |
+| [`GKEApplication`](../tables/gkeapplication.md) | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) | - |
+| [`GKEAudit`](../tables/gkeaudit.md) | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) | - |
+| [`GKEControllerManager`](../tables/gkecontrollermanager.md) | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) | - |
+| [`GKEHPADecision`](../tables/gkehpadecision.md) | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) | - |
+| [`GKEScheduler`](../tables/gkescheduler.md) | [Google Kubernetes Engine (via Codeless Connector Framework)](../connectors/gkeccpdefinition.md) | - |
 
 ## Release Notes
 
@@ -53,4 +37,10 @@ This solution ingests data into **6 table(s)**:
 | 3.0.1       | 06-10-2025                     | Google Kubernetes Engine CCF **Data Connector** Moving to GA.  |
 | 3.0.0       | 08-04-2025                     | Initial Solution Release.<br/>New CCF **Data Connector** 'Google Kubernetes Engine'.  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -13,41 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Delinea Secret Server via AMA](../connectors/delineasecretserverama.md)
-
-**Publisher:** Delinea, Inc
-
-Common Event Format (CEF) from Delinea Secret Server 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_DelineaSecretServerAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Delinea%20Secret%20Server/Data%20Connectors/template_DelineaSecretServerAMA.json) |
-
-[→ View full connector details](../connectors/delineasecretserverama.md)
-
-### [[Deprecated] Delinea Secret Server via Legacy Agent](../connectors/delineasecretserver-cef.md)
-
-**Publisher:** Delinea, Inc
-
-Common Event Format (CEF) from Delinea Secret Server 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [DelineaSecretServer_CEF.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Delinea%20Secret%20Server/Data%20Connectors/DelineaSecretServer_CEF.json) |
-
-[→ View full connector details](../connectors/delineasecretserver-cef.md)
+- [[Deprecated] Delinea Secret Server via AMA](../connectors/delineasecretserverama.md)
+- [[Deprecated] Delinea Secret Server via Legacy Agent](../connectors/delineasecretserver-cef.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Delinea Secret Server via AMA](../connectors/delineasecretserverama.md), [[Deprecated] Delinea Secret Server via Legacy Agent](../connectors/delineasecretserver-cef.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Delinea Secret Server via AMA](../connectors/delineasecretserverama.md), [[Deprecated] Delinea Secret Server via Legacy Agent](../connectors/delineasecretserver-cef.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [DelineaWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Delinea%20Secret%20Server/Workbooks/DelineaWorkbook.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -56,4 +47,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
 | 3.0.0       | 20-09-2023                     |	Addition of new Delinea Secret Server AMA **Data Connector**    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

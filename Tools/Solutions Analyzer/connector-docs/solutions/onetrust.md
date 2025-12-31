@@ -14,28 +14,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [OneTrust](../connectors/onetrustpush.md)
-
-**Publisher:** OneTrust
-
-The OneTrust connector for Microsoft Sentinel provides the capability to have near real time visibility into where sensitive data has been located or remediated across across Google Cloud and other OneTrust supported data sources.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `OneTrustMetadataV3_CL` |
-| **Connector Definition Files** | [OneTrustLogs_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/OneTrust/Data%20Connectors/OneTrustLogs_CCF/OneTrustLogs_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/onetrustpush.md)
+- [OneTrust](../connectors/onetrustpush.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `OneTrustMetadataV3_CL` | [OneTrust](../connectors/onetrustpush.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`OneTrustMetadataV3_CL`](../tables/onetrustmetadatav3-cl.md) | [OneTrust](../connectors/onetrustpush.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 |3.0.0        | 24-10-2025                     | Initial release of the OneTrust **CCF connector**.  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

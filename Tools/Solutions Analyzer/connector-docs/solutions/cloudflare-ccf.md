@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](../connectors/cloudflaredefinition.md)
-
-**Publisher:** Microsoft
-
- The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/)for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CloudflareV2_CL` |
-| **Connector Definition Files** | [CloudflareLog_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cloudflare%20CCF/Data%20Connectors/CloudflareLog_CCF/CloudflareLog_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/cloudflaredefinition.md)
+- [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](../connectors/cloudflaredefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CloudflareV2_CL` | [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](../connectors/cloudflaredefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CloudflareV2_CL`](../tables/cloudflarev2-cl.md) | [Cloudflare (Using Blob Container) (via Codeless Connector Framework)](../connectors/cloudflaredefinition.md) | - |
 
 ## Release Notes
 
@@ -42,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |------------|-------------------------------|-------------------------------------------------------------------------------------------|
 | 3.0.0      | 02-10-2025                    | Includes all CCF connector definitions and configurations.                                |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

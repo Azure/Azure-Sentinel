@@ -13,28 +13,38 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [IONIX Security Logs](../connectors/cyberpionsecuritylogs.md)
-
-**Publisher:** IONIX
-
-The IONIX Security Logs data connector, ingests logs from the IONIX system directly into Sentinel. The connector allows users to visualize their data, create alerts and incidents and improve security investigations.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CyberpionActionItems_CL` |
-| **Connector Definition Files** | [IONIXSecurityLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IONIX/Data%20Connectors/IONIXSecurityLogs.json) |
-
-[→ View full connector details](../connectors/cyberpionsecuritylogs.md)
+- [IONIX Security Logs](../connectors/cyberpionsecuritylogs.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CyberpionActionItems_CL` | [IONIX Security Logs](../connectors/cyberpionsecuritylogs.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CyberpionActionItems_CL`](../tables/cyberpionactionitems-cl.md) | [IONIX Security Logs](../connectors/cyberpionsecuritylogs.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [High Urgency IONIX Action Items](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IONIX/Analytic%20Rules/HighUrgencyActionItems.yaml) | High | InitialAccess | [`CyberpionActionItems_CL`](../tables/cyberpionactionitems-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [IONIXOverviewWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/IONIX/Workbooks/IONIXOverviewWorkbook.json) | [`CyberpionActionItems_CL`](../tables/cyberpionactionitems-cl.md) |
 
 ## Release Notes
 
@@ -42,4 +52,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------------------------------|
 | 3.0.0       | 20-09-2023                     | 	A UI-only update as part of a re-branding from "Cyberpion" to "IONIX" (no change to core functionality) \| v1.0.1 |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

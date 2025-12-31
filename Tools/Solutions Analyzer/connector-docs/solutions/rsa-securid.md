@@ -13,28 +13,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] RSA® SecurID (Authentication Manager)](../connectors/rsasecuridam.md)
-
-**Publisher:** RSA
-
-The [RSA® SecurID Authentication Manager](https://www.securid.com/) data connector provides the capability to ingest [RSA® SecurID Authentication Manager events](https://community.rsa.com/t5/rsa-authentication-manager/rsa-authentication-manager-log-messages/ta-p/630160) into Microsoft Sentinel. Refer to [RSA® SecurID Authentication Manager documentation](https://community.rsa.com/t5/rsa-authentication-manager/getting-started-with-rsa-authentication-manager/ta-p/569582) for more information.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [RSASecurID.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RSA%20SecurID/Data%20Connectors/RSASecurID.json) |
-
-[→ View full connector details](../connectors/rsasecuridam.md)
+- [[Deprecated] RSA® SecurID (Authentication Manager)](../connectors/rsasecuridam.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] RSA® SecurID (Authentication Manager)](../connectors/rsasecuridam.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] RSA® SecurID (Authentication Manager)](../connectors/rsasecuridam.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 1 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [RSASecurIDAMEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RSA%20SecurID/Parsers/RSASecurIDAMEvent.yaml) | - | - |
 
 ## Release Notes
 
@@ -44,4 +47,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.0       | 01-08-2024                     |Update **Parser** as part of Syslog migration                                   |
 |             |                                |Deprecating data connectors                                                     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

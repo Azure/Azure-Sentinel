@@ -13,41 +13,50 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Cisco ASA via Legacy Agent](../connectors/ciscoasa.md)
-
-**Publisher:** Cisco
-
-The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [CiscoASA.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Data%20Connectors/CiscoASA.JSON) |
-
-[→ View full connector details](../connectors/ciscoasa.md)
-
-### [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md)
-
-**Publisher:** Microsoft
-
-The Cisco ASA firewall connector allows you to easily connect your Cisco ASA logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_CiscoAsaAma.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Data%20Connectors/template_CiscoAsaAma.JSON) |
-
-[→ View full connector details](../connectors/ciscoasaama.md)
+- [Cisco ASA via Legacy Agent](../connectors/ciscoasa.md)
+- [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [Cisco ASA via Legacy Agent](../connectors/ciscoasa.md), [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [Cisco ASA via Legacy Agent](../connectors/ciscoasa.md), [Cisco ASA/FTD via AMA](../connectors/ciscoasaama.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **7 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 4 |
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Cisco ASA - average attack detection rate increase](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Analytic%20Rules/CiscoASA-AvgAttackDetectRateIncrease.yaml) | Low | Discovery, Impact | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Cisco ASA - threat detection message fired](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Analytic%20Rules/CiscoASA-ThreatDetectionMessage.yaml) | Medium | Discovery, Impact | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Cisco](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Workbooks/Cisco.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Block IP - Cisco ASA](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Playbooks/CiscoASA-AddIPtoNetworkObjectGroup/azuredeploy.json) | This playbook allows blocking/allowing of IPs in Cisco ASA, using a Network Object Group. The Networ... | - |
+| [Cisco ASA - Create or Inbound Access Rule On Interface](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Playbooks/CiscoASA-CreateInboundAccessRuleOnInterface/azuredeploy.json) | This playbook allows blocking/unblocking of IPs in Cisco ASA, using **Access Rules** which will be c... | - |
+| [Cisco ASA - Create or remove access rules on an interface for IP Addresses](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Playbooks/CiscoASA-CreateACEInACL/azuredeploy.json) | This playbook allows blocking/unblocking of IPs in Cisco ASA, using **Access Control Entries** which... | - |
+| [CiscoASA-swagger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CiscoASA/Playbooks/CiscoASAConnector/CiscoASA-swagger.json) | - | - |
 
 ## Release Notes
 
@@ -61,4 +70,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.2       | 07-03-2024                     | New AMA based connector is now in public preview							  |
 | 3.0.1       | 31-01-2023                     | Added new **Data Connector** Cisco ASA/FTD via AMA (Preview) to the solution |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

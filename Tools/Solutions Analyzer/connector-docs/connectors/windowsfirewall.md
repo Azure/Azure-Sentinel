@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`WindowsFirewall`](../tables/windowsfirewall.md) | — | ✗ |
+| [`WindowsFirewall`](../tables/windowsfirewall.md) | ✓ | ✗ |
 
 ## Permissions
 

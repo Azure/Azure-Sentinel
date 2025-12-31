@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Microsoft Copilot](../connectors/microsoftcopilot.md)
-
-**Publisher:** Microsoft
-
-The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless ingestion of Copilot-generated activity logs into Microsoft Sentinel for advanced threat detection, investigation, and response. It collects telemetry from Microsoft Copilot services - such as usage data, prompts and system responses - and ingests into Microsoft Sentinel, allowing security teams to monitor for misuse, detect anomalies, and maintain compliance with organizational policies.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CopilotActivity` |
-| **Connector Definition Files** | [MicrosoftCopilot_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Copilot/Data%20Connectors/MicrosoftCopilot_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/microsoftcopilot.md)
+- [Microsoft Copilot](../connectors/microsoftcopilot.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CopilotActivity` | [Microsoft Copilot](../connectors/microsoftcopilot.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CopilotActivity`](../tables/copilotactivity.md) | [Microsoft Copilot](../connectors/microsoftcopilot.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 12-12-2025                     | Update copilot table name from LLMActivity to CopilotActivity.       |
 | 3.0.0       | 10-09-2025                     | Releasing a new Microsoft Copilot connector solution in Content Hub and **Data Connector** gallery.   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

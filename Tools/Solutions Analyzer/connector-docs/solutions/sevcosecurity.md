@@ -13,32 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Sevco Platform - Devices](../connectors/sevcodevices.md)
-
-**Publisher:** Sevco Security
-
-The Sevco Platform - Devices connector allows you to easily connect your Sevco Device Assets with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization’s assets and improves your security operation capabilities.
-
-
-
-[For more information >​](https://docs.sev.co/docs/microsoft-sentinel-inventory)
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Sevco_Devices_CL` |
-| **Connector Definition Files** | [Connector_SevcoSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SevcoSecurity/Data%20Connectors/Connector_SevcoSecurity.json) |
-
-[→ View full connector details](../connectors/sevcodevices.md)
+- [Sevco Platform - Devices](../connectors/sevcodevices.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Sevco_Devices_CL` | [Sevco Platform - Devices](../connectors/sevcodevices.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Sevco_Devices_CL`](../tables/sevco-devices-cl.md) | [Sevco Platform - Devices](../connectors/sevcodevices.md) | - |
 
 ## Release Notes
 
@@ -46,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 18-07-2023                     | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

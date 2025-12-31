@@ -1,15 +1,5 @@
 # Cymru_Scout_IP_Data_Fingerprints_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Cymru_Scout_IP_Data_Fingerprints_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Team Cymru Scout Data Connector](../connectors/teamcymruscout.md)
+
+---
 
 ---
 

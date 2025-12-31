@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Dynamics365Activity`](../tables/dynamics365activity.md) | — | ✗ |
+| [`Dynamics365Activity`](../tables/dynamics365activity.md) | ✓ | ✗ |
 
 ## Permissions
 

@@ -13,38 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Wiz](../connectors/wiz.md)
-
-**Publisher:** Wiz
-
-The Wiz connector allows you to easily send Wiz Issues, Vulnerability Findings, and Audit logs to Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `WizAuditLogsV2_CL` |
-| | `WizAuditLogs_CL` |
-| | `WizIssuesV2_CL` |
-| | `WizIssues_CL` |
-| | `WizVulnerabilitiesV2_CL` |
-| | `WizVulnerabilities_CL` |
-| **Connector Definition Files** | [template_WIZ.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Wiz/Data%20Connectors/template_WIZ.json) |
-
-[→ View full connector details](../connectors/wiz.md)
+- [Wiz](../connectors/wiz.md)
 
 ## Tables Reference
 
-This solution ingests data into **6 table(s)**:
+This solution uses **6 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `WizAuditLogsV2_CL` | [Wiz](../connectors/wiz.md) |
-| `WizAuditLogs_CL` | [Wiz](../connectors/wiz.md) |
-| `WizIssuesV2_CL` | [Wiz](../connectors/wiz.md) |
-| `WizIssues_CL` | [Wiz](../connectors/wiz.md) |
-| `WizVulnerabilitiesV2_CL` | [Wiz](../connectors/wiz.md) |
-| `WizVulnerabilities_CL` | [Wiz](../connectors/wiz.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`WizAuditLogsV2_CL`](../tables/wizauditlogsv2-cl.md) | [Wiz](../connectors/wiz.md) | - |
+| [`WizAuditLogs_CL`](../tables/wizauditlogs-cl.md) | [Wiz](../connectors/wiz.md) | - |
+| [`WizIssuesV2_CL`](../tables/wizissuesv2-cl.md) | [Wiz](../connectors/wiz.md) | Workbooks |
+| [`WizIssues_CL`](../tables/wizissues-cl.md) | [Wiz](../connectors/wiz.md) | Workbooks |
+| [`WizVulnerabilitiesV2_CL`](../tables/wizvulnerabilitiesv2-cl.md) | [Wiz](../connectors/wiz.md) | - |
+| [`WizVulnerabilities_CL`](../tables/wizvulnerabilities-cl.md) | [Wiz](../connectors/wiz.md) | - |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [WizFindings](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Wiz/Workbooks/WizFindings.json) | [`WizIssuesV2_CL`](../tables/wizissuesv2-cl.md)<br>[`WizIssues_CL`](../tables/wizissues-cl.md) |
 
 ## Release Notes
 
@@ -53,4 +51,10 @@ This solution ingests data into **6 table(s)**:
 | 3.0.0       | 15-07-2024                     | Updated the queries on the **Workbook** and **Connector** to match with the new table names we offer  |
 | 2.0.0       | 07-09-2023                     | Updated **Workbook** query in Maintemplate  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -12,28 +12,46 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Digital Shadows Searchlight](../connectors/digitalshadowssearchlightazurefunctions.md)
-
-**Publisher:** Digital Shadows
-
-The Digital Shadows data connector provides ingestion of the incidents and alerts from Digital Shadows Searchlight into the Microsoft Sentinel using the REST API. The connector will provide the incidents and alerts information such that it helps to examine, diagnose and analyse the potential security risks and threats.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DigitalShadows_CL` |
-| **Connector Definition Files** | [DigitalShadowsSearchlight_API_functionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Data%20Connectors/Digital%20Shadows/DigitalShadowsSearchlight_API_functionApp.json) |
-
-[→ View full connector details](../connectors/digitalshadowssearchlightazurefunctions.md)
+- [Digital Shadows Searchlight](../connectors/digitalshadowssearchlightazurefunctions.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `DigitalShadows_CL` | [Digital Shadows Searchlight](../connectors/digitalshadowssearchlightazurefunctions.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`DigitalShadows_CL`](../tables/digitalshadows-cl.md) | [Digital Shadows Searchlight](../connectors/digitalshadowssearchlightazurefunctions.md) | Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+| Workbooks | 1 |
+| Playbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Digital Shadows Incident Creation for exclude-app](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Analytic%20Rules/Digital_Shadows_incident_creation_exclude.yaml) | Medium | - | - |
+| [Digital Shadows Incident Creation for include-app](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Analytic%20Rules/Digital_Shadows_incident_creation_include.yaml) | Medium | - | - |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [DigitalShadows](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Workbooks/DigitalShadows.json) | [`DigitalShadows_CL`](../tables/digitalshadows-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Digital Shadows Playbook to Update Incident Status](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Digital%20Shadows/Playbooks/DigitalShadowsPlaybooktoUpdateIncidentStatus/DigitalShadowsPlaybook-UpdateIncidentStatus.json) | This playbook will update the status of Microsoft Sentinel incidents to match the status of the aler... | - |
 
 ## Release Notes
 
@@ -41,4 +59,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------|
 | 3.0.0       | 30-11-2023                     |  Added new Entity Mapping to **Analytic Rules**                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

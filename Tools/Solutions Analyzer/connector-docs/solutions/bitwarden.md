@@ -14,32 +14,42 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md)
-
-**Publisher:** Bitwarden Inc
-
-This connector provides insight into activity of your Bitwarden organization such as user's activity (logged in, changed password, 2fa, etc.), cipher activity (created, updated, deleted, shared, etc.), collection activity, organization activity, and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `BitwardenEventLogs_CL` |
-| | `BitwardenGroups_CL` |
-| | `BitwardenMembers_CL` |
-| **Connector Definition Files** | [definitions.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Data%20Connectors/BitwardenEventLogs/definitions.json) |
-
-[→ View full connector details](../connectors/bitwardeneventlogs.md)
+- [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `BitwardenEventLogs_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
-| `BitwardenGroups_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
-| `BitwardenMembers_CL` | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`BitwardenEventLogs_CL`](../tables/bitwardeneventlogs-cl.md) | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) | Workbooks |
+| [`BitwardenGroups_CL`](../tables/bitwardengroups-cl.md) | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) | - |
+| [`BitwardenMembers_CL`](../tables/bitwardenmembers-cl.md) | [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md) | - |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 3 |
+| Parsers | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [BitwardenEventLogsAuthentication](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Workbooks/BitwardenEventLogsAuthentication.json) | [`BitwardenEventLogs_CL`](../tables/bitwardeneventlogs-cl.md) |
+| [BitwardenEventLogsOrganization](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Workbooks/BitwardenEventLogsOrganization.json) | [`BitwardenEventLogs_CL`](../tables/bitwardeneventlogs-cl.md) |
+| [BitwardenEventLogsVaultItems](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Workbooks/BitwardenEventLogsVaultItems.json) | [`BitwardenEventLogs_CL`](../tables/bitwardeneventlogs-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [BitwardenEventLogs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Parsers/BitwardenEventLogs.yaml) | - | - |
 
 ## Release Notes
 
@@ -47,4 +57,10 @@ This solution ingests data into **3 table(s)**:
 |-------------|--------------------------------|----------------------------------------------------|
 | 3.0.0       | 07-06-2024                     | Initial Solution Release                           |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -1,15 +1,5 @@
 # SailPointIDN_Triggers_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `SailPointIDN_Triggers_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [SailPoint IdentityNow](../connectors/sailpointidentitynow.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Analytic Rules (1)
+
+**In solution [SailPointIdentityNow](../solutions/sailpointidentitynow.md):**
+- [SailPointIdentityNowAlertForTriggers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowAlertsForTriggers.yaml)
 
 ---
 

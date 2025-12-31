@@ -13,42 +13,86 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Atlassian Jira Audit](../connectors/jiraauditapi.md)
-
-**Publisher:** Atlassian
-
-The [Atlassian Jira](https://www.atlassian.com/software/jira) Audit data connector provides the capability to ingest [Jira Audit Records](https://support.atlassian.com/jira-cloud-administration/docs/audit-activities-in-jira-applications/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Jira_Audit_CL` |
-| **Connector Definition Files** | [JiraAudit_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Data%20Connectors/JiraAudit_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/jiraauditapi.md)
-
-### [Atlassian Jira Audit (using REST API)](../connectors/jiraauditccpdefinition.md)
-
-**Publisher:** Microsoft
-
-The [Atlassian Jira](https://www.atlassian.com/software/jira) Audit data connector provides the capability to ingest [Jira Audit Records](https://support.atlassian.com/jira-cloud-administration/docs/audit-activities-in-jira-applications/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Jira_Audit_v2_CL` |
-| **Connector Definition Files** | [JiraAudit_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Data%20Connectors/JiraAuditAPISentinelConnector_ccpv2/JiraAudit_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/jiraauditccpdefinition.md)
+- [Atlassian Jira Audit](../connectors/jiraauditapi.md)
+- [Atlassian Jira Audit (using REST API)](../connectors/jiraauditccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Jira_Audit_CL` | [Atlassian Jira Audit](../connectors/jiraauditapi.md) |
-| `Jira_Audit_v2_CL` | [Atlassian Jira Audit (using REST API)](../connectors/jiraauditccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Jira_Audit_CL`](../tables/jira-audit-cl.md) | [Atlassian Jira Audit](../connectors/jiraauditapi.md) | Analytics, Hunting, Workbooks |
+| [`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) | [Atlassian Jira Audit](../connectors/jiraauditapi.md), [Atlassian Jira Audit (using REST API)](../connectors/jiraauditccpdefinition.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **30 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Playbooks | 8 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Jira - Global permission added](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraGlobalPermissionAdded.yaml) | Medium | PrivilegeEscalation | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - New site admin user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraNewPrivilegedUser.yaml) | High | Persistence, PrivilegeEscalation | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - New site admin user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraPrivilegedUserPasswordChanged.yaml) | High | InitialAccess | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - New user created](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraNewUser.yaml) | Medium | Persistence | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Permission scheme updated](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraPermissionSchemeUpdated.yaml) | Medium | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Project roles changed](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraProjectRolesChanged.yaml) | Medium | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - User removed from group](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraUserRemovedFromGroup.yaml) | Medium | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - User removed from project](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraUserRemovedFromProject.yaml) | Medium | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - User's password changed multiple times](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraUserPasswordChange.yaml) | High | Persistence | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Workflow scheme copied](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Analytic%20Rules/JiraWorkflowSchemeCopied.yaml) | Medium | Collection | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Jira - Blocked tasks](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraBlockedTasks.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - New users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraNewUsers.yaml) | Persistence | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Project versions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraUpdatedProjectVersions.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Project versions released](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraProjectVersionsReleased.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Updated projects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraUpdatedProjects.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Updated users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraUpdatedUsers.yaml) | PrivilegeEscalation, Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Updated workflow schemes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraUpdatedWorkflowSchemes.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Updated workflows](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraUpdatedWorkflows.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Users' IP addresses](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraUserIPs.yaml) | Persistence | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+| [Jira - Workflow schemes added to projects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Hunting%20Queries/JiraWorkflowAddedToProject.yaml) | Impact | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [AtlassianJiraAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Workbooks/AtlassianJiraAudit.json) | [`Jira_Audit_CL`](../tables/jira-audit-cl.md)<br>[`Jira_Audit_v2_CL`](../tables/jira-audit-v2-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Create And Update Jira Issue](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Jira-CreateAndUpdateIssue/azuredeploy.json) | This playbook will create or update incident in Jira. When incident is created, playbook will run an... | - |
+| [Create Jira Issue alert-trigger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Create-Jira-Issue/alert-trigger/azuredeploy.json) | This playbook will open a Jira Issue when a new incident is opened in Microsoft Sentinel. | - |
+| [Create Jira Issue incident-trigger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Create-Jira-Issue/incident-trigger/azuredeploy.json) | This playbook will open a Jira Issue when a new incident is opened in Microsoft Sentinel. | - |
+| [Sync Jira from Sentinel - Create incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Sync-Incidents/azuredeploy.json) | This Playbook will create JIRA incidents for every Microsoft Sentinel which is created. It includes ... | - |
+| [Sync Jira to Sentinel - Assigned User](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Sync-AssignedUser/azuredeploy.json) | This Playbook will sync the assigned user from JIRA to Microsoft Sentinel. | - |
+| [Sync Jira to Sentinel - Status](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Sync-Status/azuredeploy.json) | This Playbook will sync the status from JIRA to Microsoft Sentinel. | - |
+| [Sync Jira to Sentinel - public comments](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Add-JiraLinkComment/azuredeploy.json) | This Playbook will sync the public comments from JIRA to Microsoft Sentinel. | - |
+| [Sync-CommentsFunctionApp](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Playbooks/Sync-CommentsFunctionApp/azuredeploy.json) | - | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [JiraAudit](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AtlassianJiraAudit/Parsers/JiraAudit.yaml) | - | - |
 
 ## Release Notes
 
@@ -60,4 +104,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       | 16-04-2024                     | Added Deploy to Azure Goverment button for Government portal in **Dataconnector** |
 | 3.0.0       | 06-11-2023                     | Modified text as there is rebranding from Azure Active Directory to Microsoft Entra ID.  |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

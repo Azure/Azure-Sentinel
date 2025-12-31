@@ -13,20 +13,9 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Azure Resource Graph](../connectors/azureresourcegraph.md)
-
-**Publisher:** Microsoft
-
-Azure Resource Graph connector gives richer insights into Azure events by supplementing details about Azure subscriptions and Azure resources.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `` |
-| **Connector Definition Files** | [AzureResourceGraph_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Resource%20Graph/Data%20Connectors/AzureResourceGraph_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/azureresourcegraph.md)
+- [Azure Resource Graph](../connectors/azureresourcegraph.md)
 
 ## Release Notes
 
@@ -34,4 +23,10 @@ Azure Resource Graph connector gives richer insights into Azure events by supple
 |-------------|--------------------------------|---------------------------------------------------------------------------------------|
 | 3.0.0       | 20-06-2025                     | Releasing a new ARG **Data Connector** Solution in Content Hub and Data Connector gallery.     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

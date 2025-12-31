@@ -14,30 +14,35 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md)
-
-**Publisher:** SAP
-
-The SAP Enterprise Threat Detection, cloud edition (ETD) data connector enables ingestion of security alerts from ETD into Microsoft Sentinel, supporting cross-correlation, alerting, and threat hunting.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SAPETDAlerts_CL` |
-| | `SAPETDInvestigations_CL` |
-| **Connector Definition Files** | [SAPETD_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Data%20Connectors/SAPETD_PUSH_CCP/SAPETD_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/sapetdalerts.md)
+- [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SAPETDAlerts_CL` | [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md) |
-| `SAPETDInvestigations_CL` | [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SAPETDAlerts_CL`](../tables/sapetdalerts-cl.md) | [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md) | Analytics |
+| [`SAPETDInvestigations_CL`](../tables/sapetdinvestigations-cl.md) | [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md) | Analytics |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [SAP ETD - Execution of Sensitive Function Module](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-ExecutionofSensitiveFunctionModule.yaml) | Medium | Discovery | - |
+| [SAP ETD - Login from unexpected network](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-LoginFromUnexpectedNetwork.yaml) | Medium | Discovery | [`SAPETDAlerts_CL`](../tables/sapetdalerts-cl.md) |
+| [SAP ETD - Synch alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-SynchAlerts.yaml) | Medium | - | [`SAPETDAlerts_CL`](../tables/sapetdalerts-cl.md) |
+| [SAP ETD - Synch investigations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-SynchInvestigations.yaml) | High | - | [`SAPETDInvestigations_CL`](../tables/sapetdinvestigations-cl.md) |
 
 ## Release Notes
 
@@ -48,4 +53,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       |  31-03-2025                    | SAP OData entity change from TriggeringEvents to new NormalizedTriggeringEvents |
 | 3.0.0       |  17-02-2025                    | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

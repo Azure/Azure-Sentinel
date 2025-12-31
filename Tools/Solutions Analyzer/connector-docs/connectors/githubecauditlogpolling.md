@@ -25,6 +25,7 @@ This connector ingests data into the following tables:
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
 | [`GitHubAuditLogPolling_CL`](../tables/githubauditlogpolling-cl.md) | — | — |
+| [`GitHubAuditLogsV2_CL`](../tables/githubauditlogsv2-cl.md) | — | — |
 
 ## Permissions
 

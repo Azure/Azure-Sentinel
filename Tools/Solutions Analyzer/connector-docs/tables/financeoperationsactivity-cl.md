@@ -1,15 +1,5 @@
 # FinanceOperationsActivity_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `FinanceOperationsActivity_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,18 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Dynamics 365 Finance and Operations](../connectors/dynamics365finance.md)
+
+---
+
+## Content Items Using This Table (4)
+
+### Analytic Rules (4)
+
+**In solution [Microsoft Business Applications](../solutions/microsoft-business-applications.md):**
+- [F&O - Bank account change following network alias reassignment](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Business%20Applications/Analytic%20Rules/F%26O%20-%20Bank%20account%20change%20following%20network%20alias%20reassignment.yaml)
+- [F&O - Mass update or deletion of user records](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Business%20Applications/Analytic%20Rules/F%26O%20-%20Mass%20update%20or%20deletion%20of%20user%20records.yaml)
+- [F&O - Non-interactive account mapped to self or sensitive privileged user](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Business%20Applications/Analytic%20Rules/F%26O%20-%20Non-interactive%20account%20mapped%20to%20self%20or%20sensitive%20privileged%20user.yaml)
+- [F&O - Reverted bank account number modifications](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Business%20Applications/Analytic%20Rules/F%26O%20-%20Reverted%20bank%20account%20number%20modifications.yaml)
 
 ---
 

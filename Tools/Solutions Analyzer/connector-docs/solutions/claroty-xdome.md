@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Claroty xDome](../connectors/clarotyxdome.md)
-
-**Publisher:** Claroty
-
-[Claroty](https://claroty.com/) xDome delivers comprehensive security and alert management capabilities for healthcare and industrial network environments. It is designed to map multiple source types, identify the collected data, and integrate it into Microsoft Sentinel data models. This results in the ability to monitor all potential threats in your healthcare and industrial environments in one location, leading to more effective security monitoring and a stronger security posture.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [Claroty_xDome.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Claroty%20xDome/Data%20Connectors/Claroty_xDome.json) |
-
-[→ View full connector details](../connectors/clarotyxdome.md)
+- [Claroty xDome](../connectors/clarotyxdome.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [Claroty xDome](../connectors/clarotyxdome.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [Claroty xDome](../connectors/clarotyxdome.md) | - |
 
 ## Release Notes
 
@@ -42,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
 | 3.0.0       | 16-04-2024                     | Initial Solution Release                                                       |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

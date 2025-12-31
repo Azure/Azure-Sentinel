@@ -6,11 +6,27 @@
 
 Scans the Solutions directory to:
 - Extract table references from connector JSON files (queries, sample queries, data types)
+- **Extract table references from content items** (analytics rules, hunting queries, playbooks, workbooks, watchlists, summary rules)
 - Resolve parser function references to actual tables
 - Flatten solution metadata from SolutionMetadata.json files
 - Generate a comprehensive mapping of connectors to tables with full metadata
 - **Include ALL solutions in the output**, even those without data connectors (e.g., solutions containing only analytics rules, workbooks, hunting queries, or playbooks)
 - Report issues and exceptions for solutions with missing or incomplete definitions
+
+### Content Item Analysis
+
+The script analyzes KQL queries in solution content items to extract table references:
+
+| Content Type | File Patterns | Query Fields |
+|--------------|---------------|--------------|
+| **Analytics Rules** | `Analytic Rules/*.yaml`, `Detections/*.yaml` | `query`, `triggerOperator` |
+| **Hunting Queries** | `Hunting Queries/*.yaml` | `query` |
+| **Playbooks** | `Playbooks/**/*.json` | Azure Monitor Logs query actions |
+| **Workbooks** | `Workbooks/*.json` | `query` fields in workbook steps |
+| **Watchlists** | `Watchlists/*.json` | Table references in watchlist queries |
+| **Summary Rules** | `Summary Rules/*.json` | Query fields |
+
+For playbooks, the script tracks whether tables are **read from** (Azure Monitor query), **written to** (Send Data action), or both.
 
 **Note:** Solutions without data connectors are included in the CSV output with empty `connector_id`, `connector_title`, `connector_description`, `connector_publisher`, `connector_files`, and `Table` fields. This ensures complete solution coverage in the documentation while clearly indicating which solutions do not include data ingestion components.
 
@@ -81,6 +97,7 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--connectors-csv` | `connectors.csv` | Path for the connectors output CSV file (with collection method) |
 | `--solutions-csv` | `solutions.csv` | Path for the solutions output CSV file |
 | `--tables-csv` | `tables.csv` | Path for the tables output CSV file (with metadata) |
+| `--content-tables-mapping-csv` | `content_tables_mapping.csv` | Path for the content-to-tables mapping CSV file |
 | `--tables-reference-csv` | `tables_reference.csv` | Path to tables_reference.csv for table metadata |
 | `--mapping-csv` | `solutions_connectors_tables_mapping_simplified.csv` | Path for the simplified mapping CSV file |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
@@ -271,7 +288,21 @@ A simplified mapping file containing only key fields for linking connectors, tab
 | `connector_id` | Connector identifier |
 | `table_name` | Table name |
 
-### 6. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 6. content_tables_mapping.csv (Content Item to Table Mapping)
+
+Contains one row per unique combination of solution, content item, and table. This maps tables found in KQL queries within analytics rules, hunting queries, playbooks, workbooks, watchlists, and summary rules.
+
+| Column | Description |
+|--------|-------------|
+| `solution_name` | Solution folder name |
+| `content_type` | Type of content item: `AnalyticsRule`, `HuntingQuery`, `Playbook`, `Workbook`, `Watchlist`, `SummaryRule` |
+| `content_name` | Name or filename of the content item |
+| `table_name` | Table name extracted from the KQL query |
+| `table_usage` | Usage indicator for playbooks: `read`, `write`, or `read/write`. Empty for other content types (assumed read). |
+
+> **Note:** For playbooks, `table_usage` tracks whether the playbook reads from a table (Azure Monitor query), writes to it (Send Data action), or both. Other content types are assumed to only read from tables.
+
+### 7. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 

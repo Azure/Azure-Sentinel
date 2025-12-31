@@ -14,42 +14,42 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md)
-
-**Publisher:** Mimecast
-
-The data connector for [Mimecast Targeted Threat Protection](https://integrations.mimecast.com/tech-partners/microsoft-sentinel/) provides customers with the visibility into security events related to the Targeted Threat Protection inspection technologies within Microsoft Sentinel. The data connector provides pre-created dashboards to allow analysts to view insight into email based threats, aid in incident correlation and reduce investigation response times coupled with custom alert capabilities.  
-
-The Mimecast products included within the connector are: 
-
-- URL Protect 
-
-- Impersonation Protect 
-
-- Attachment Protect
-
-
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `MimecastTTPAttachment_CL` |
-| | `MimecastTTPImpersonation_CL` |
-| | `MimecastTTPUrl_CL` |
-| **Connector Definition Files** | [MimecastTTP_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Data%20Connectors/MimecastTTP_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/mimecastttpapi.md)
+- [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `MimecastTTPAttachment_CL` | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) |
-| `MimecastTTPImpersonation_CL` | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) |
-| `MimecastTTPUrl_CL` | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`MimecastTTPAttachment_CL`](../tables/mimecastttpattachment-cl.md) | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) | Analytics, Workbooks |
+| [`MimecastTTPImpersonation_CL`](../tables/mimecastttpimpersonation-cl.md) | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) | Analytics, Workbooks |
+| [`MimecastTTPUrl_CL`](../tables/mimecastttpurl-cl.md) | [Mimecast Targeted Threat Protection](../connectors/mimecastttpapi.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 3 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Mimecast Targeted Threat Protection - Attachment Protect](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Analytic%20Rules/MimecastTTPAttachment.yaml) | High | InitialAccess, Discovery | [`MimecastTTPAttachment_CL`](../tables/mimecastttpattachment-cl.md) |
+| [Mimecast Targeted Threat Protection - Impersonation Protect](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Analytic%20Rules/MimecastTTPImpersonation.yaml) | High | Exfiltration, Collection, Discovery | [`MimecastTTPImpersonation_CL`](../tables/mimecastttpimpersonation-cl.md) |
+| [Mimecast Targeted Threat Protection - URL Protect](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Analytic%20Rules/MimecastTTPUrl.yaml) | High | InitialAccess, Discovery | [`MimecastTTPUrl_CL`](../tables/mimecastttpurl-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [MimecastTTPWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTTP/Workbooks/MimecastTTPWorkbook.json) | [`MimecastTTPAttachment_CL`](../tables/mimecastttpattachment-cl.md)<br>[`MimecastTTPImpersonation_CL`](../tables/mimecastttpimpersonation-cl.md)<br>[`MimecastTTPUrl_CL`](../tables/mimecastttpurl-cl.md) |
 
 ## Release Notes
 
@@ -59,4 +59,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 05-12-2023                     | Enhanced **Dataconnector** to use existing workspace and updated checkpoint mechanism |
 | 3.0.0       | 23-08-2023                     | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

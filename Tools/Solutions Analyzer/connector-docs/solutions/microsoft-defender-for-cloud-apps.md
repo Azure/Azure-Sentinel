@@ -13,48 +13,48 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md)
-
-**Publisher:** Microsoft
-
-By connecting with [Microsoft Defender for Cloud Apps](https://aka.ms/asi-mcas-connector-description) you will gain visibility into your cloud apps, get sophisticated analytics to identify and combat cyberthreats, and control how your data travels.
-
-
-
--   Identify shadow IT cloud apps on your network.
-
--   Control and limit access based on conditions and session context.
-
--   Use built-in or custom policies for data sharing and data loss prevention.
-
--   Identify high-risk use and get alerts for unusual user activities with Microsoft behavioral analytics and anomaly detection capabilities, including ransomware activity, impossible travel, suspicious email forwarding rules, and mass download of files.
-
--   Mass download of files
-
-
-
-[Deploy now >](https://aka.ms/asi-mcas-connector-deploynow)
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `McasShadowItReporting` |
-| | `SecurityAlert` |
-| | `discoveryLogs` |
-| **Connector Definition Files** | [MicrosoftCloudAppSecurity.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud%20Apps/Data%20Connectors/MicrosoftCloudAppSecurity.JSON) |
-
-[→ View full connector details](../connectors/microsoftcloudappsecurity.md)
+- [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `McasShadowItReporting` | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) |
-| `SecurityAlert` | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) |
-| `discoveryLogs` | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`McasShadowItReporting`](../tables/mcasshadowitreporting.md) | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) | Workbooks |
+| [`StorageBlobLogs`](../tables/storagebloblogs.md) | - | Analytics |
+| [`discoveryLogs`](../tables/discoverylogs.md) | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) | - |
+
+### Internal Tables
+
+The following **1 table(s)** are used internally by this solution's playbooks:
+
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SecurityAlert`](../tables/securityalert.md) | [Microsoft Defender for Cloud Apps](../connectors/microsoftcloudappsecurity.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Linked Malicious Storage Artifacts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud%20Apps/Analytic%20Rules/AdditionalFilesUploadedByActor.yaml) | Medium | CommandAndControl, Exfiltration | [`StorageBlobLogs`](../tables/storagebloblogs.md)<br>*Internal use:*<br>[`SecurityAlert`](../tables/securityalert.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [MicrosoftCloudAppSecurity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud%20Apps/Workbooks/MicrosoftCloudAppSecurity.json) | [`McasShadowItReporting`](../tables/mcasshadowitreporting.md)<br>*Internal use:*<br>[`SecurityAlert`](../tables/securityalert.md) |
 
 ## Release Notes
 
@@ -62,4 +62,10 @@ This solution ingests data into **3 table(s)**:
 |-------------|--------------------------------|----------------------------------------|
 | 3.0.0       | 07-04-2025                     | Updated ConnectivityCriteria Type in **Data Connector**.				   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -16,6 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
+| [`CiscoMerakiNativePoller_CL`](../tables/ciscomerakinativepoller-cl.md) | — | — |
 | [`meraki_CL`](../tables/meraki-cl.md) | — | — |
 
 ## Permissions

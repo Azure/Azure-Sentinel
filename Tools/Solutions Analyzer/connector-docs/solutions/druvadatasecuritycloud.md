@@ -13,32 +13,37 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Druva Events Connector](../connectors/druvaeventccpdefinition.md)
-
-**Publisher:** Microsoft
-
-Provides capability to ingest the Druva events from Druva APIs
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DruvaInsyncEvents_CL` |
-| | `DruvaPlatformEvents_CL` |
-| | `DruvaSecurityEvents_CL` |
-| **Connector Definition Files** | [Druva_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Data%20Connectors/Druva_ccp/Druva_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/druvaeventccpdefinition.md)
+- [Druva Events Connector](../connectors/druvaeventccpdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `DruvaInsyncEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
-| `DruvaPlatformEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
-| `DruvaSecurityEvents_CL` | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`DruvaInsyncEvents_CL`](../tables/druvainsyncevents-cl.md) | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) | - |
+| [`DruvaPlatformEvents_CL`](../tables/druvaplatformevents-cl.md) | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) | - |
+| [`DruvaSecurityEvents_CL`](../tables/druvasecurityevents-cl.md) | [Druva Events Connector](../connectors/druvaeventccpdefinition.md) | - |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 5 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Druva Quarantine Playbook for Enterprise Workload](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Playbooks/DruvaQuarantineEnterpriseWorkload/azuredeploy.json) | This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid... | - |
+| [Druva Quarantine Playbook for Shared Drive](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Playbooks/DruvaQuarantineSharedDrive/azuredeploy.json) | This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid... | - |
+| [Druva Quarantine Playbook for Sharepoint](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Playbooks/DruvaQuarantineSharePoint/azuredeploy.json) | This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid... | - |
+| [Druva Quarantine Playbook for inSync Workloads](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Playbooks/DruvaQuarantineInsyncWorkloads/azuredeploy.json) | This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid... | - |
+| [Druva Quarantine Using Resource id](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DruvaDataSecurityCloud/Playbooks/DruvaQuarantineUsingResourceID/azuredeploy.json) | This playbook uses Druva-Ransomware-Response capabilities to stop the spread of ransomware and avoid... | - |
 
 ## Release Notes
 
@@ -46,4 +51,10 @@ This solution ingests data into **3 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------|
 | 3.0.0       | 09-01-2025                     | Initial Solution Release                               |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

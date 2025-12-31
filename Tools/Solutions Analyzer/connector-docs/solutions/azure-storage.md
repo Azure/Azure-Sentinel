@@ -13,35 +13,26 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Azure Storage Account](../connectors/azurestorageaccount.md)
-
-**Publisher:** Microsoft
-
-Azure Storage account is a cloud solution for modern data storage scenarios. It contains all your data objects: blobs, files, queues, tables, and disks. This connector lets you stream Azure Storage accounts diagnostics logs into your Microsoft Sentinel workspace, allowing you to continuously monitor activity in all your instances, and detect malicious activity in your organization. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220068&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AzureMetrics` |
-| | `StorageBlobLogs` |
-| | `StorageFileLogs` |
-| | `StorageQueueLogs` |
-| | `StorageTableLogs` |
-| **Connector Definition Files** | [AzureStorageAccount_CCP.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Azure%20Storage/Data%20Connectors/AzureStorageAccount_CCP.JSON) |
-
-[→ View full connector details](../connectors/azurestorageaccount.md)
+- [Azure Storage Account](../connectors/azurestorageaccount.md)
 
 ## Tables Reference
 
-This solution ingests data into **5 table(s)**:
+This solution uses **5 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AzureMetrics` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
-| `StorageBlobLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
-| `StorageFileLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
-| `StorageQueueLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
-| `StorageTableLogs` | [Azure Storage Account](../connectors/azurestorageaccount.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AzureMetrics`](../tables/azuremetrics.md) | [Azure Storage Account](../connectors/azurestorageaccount.md) | - |
+| [`StorageBlobLogs`](../tables/storagebloblogs.md) | [Azure Storage Account](../connectors/azurestorageaccount.md) | - |
+| [`StorageFileLogs`](../tables/storagefilelogs.md) | [Azure Storage Account](../connectors/azurestorageaccount.md) | - |
+| [`StorageQueueLogs`](../tables/storagequeuelogs.md) | [Azure Storage Account](../connectors/azurestorageaccount.md) | - |
+| [`StorageTableLogs`](../tables/storagetablelogs.md) | [Azure Storage Account](../connectors/azurestorageaccount.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

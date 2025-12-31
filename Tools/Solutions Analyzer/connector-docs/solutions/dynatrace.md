@@ -14,70 +14,78 @@
 
 ## Data Connectors
 
-This solution provides **4 data connector(s)**.
+This solution provides **4 data connector(s)**:
 
-### [Dynatrace Attacks](../connectors/dynatraceattacks.md)
-
-**Publisher:** Dynatrace
-
-This connector uses the Dynatrace Attacks REST API to ingest detected attacks into Microsoft Sentinel Log Analytics
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DynatraceAttacks_CL` |
-| **Connector Definition Files** | [Connector_Dynatrace_Attacks.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_Attacks.json) |
-
-[→ View full connector details](../connectors/dynatraceattacks.md)
-
-### [Dynatrace Audit Logs](../connectors/dynatraceauditlogs.md)
-
-**Publisher:** Dynatrace
-
-This connector uses the [Dynatrace Audit Logs REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/audit-logs) to ingest tenant audit logs into Microsoft Sentinel Log Analytics
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DynatraceAuditLogs_CL` |
-| **Connector Definition Files** | [Connector_Dynatrace_AuditLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_AuditLogs.json) |
-
-[→ View full connector details](../connectors/dynatraceauditlogs.md)
-
-### [Dynatrace Problems](../connectors/dynatraceproblems.md)
-
-**Publisher:** Dynatrace
-
-This connector uses the [Dynatrace Problem REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/problems-v2) to ingest problem events into Microsoft Sentinel Log Analytics
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DynatraceProblems_CL` |
-| **Connector Definition Files** | [Connector_Dynatrace_Problems.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_Problems.json) |
-
-[→ View full connector details](../connectors/dynatraceproblems.md)
-
-### [Dynatrace Runtime Vulnerabilities](../connectors/dynatraceruntimevulnerabilities.md)
-
-**Publisher:** Dynatrace
-
-This connector uses the [Dynatrace Security Problem REST API](https://docs.dynatrace.com/docs/dynatrace-api/environment-api/application-security/vulnerabilities/get-vulnerabilities) to ingest detected runtime vulnerabilities into Microsoft Sentinel Log Analytics.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DynatraceSecurityProblems_CL` |
-| **Connector Definition Files** | [Connector_Dynatrace_RuntimeVulnerabilities.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Data%20Connectors/Connector_Dynatrace_RuntimeVulnerabilities.json) |
-
-[→ View full connector details](../connectors/dynatraceruntimevulnerabilities.md)
+- [Dynatrace Attacks](../connectors/dynatraceattacks.md)
+- [Dynatrace Audit Logs](../connectors/dynatraceauditlogs.md)
+- [Dynatrace Problems](../connectors/dynatraceproblems.md)
+- [Dynatrace Runtime Vulnerabilities](../connectors/dynatraceruntimevulnerabilities.md)
 
 ## Tables Reference
 
-This solution ingests data into **4 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `DynatraceAttacks_CL` | [Dynatrace Attacks](../connectors/dynatraceattacks.md) |
-| `DynatraceAuditLogs_CL` | [Dynatrace Audit Logs](../connectors/dynatraceauditlogs.md) |
-| `DynatraceProblems_CL` | [Dynatrace Problems](../connectors/dynatraceproblems.md) |
-| `DynatraceSecurityProblems_CL` | [Dynatrace Runtime Vulnerabilities](../connectors/dynatraceruntimevulnerabilities.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`DynatraceAttacks_CL`](../tables/dynatraceattacks-cl.md) | [Dynatrace Attacks](../connectors/dynatraceattacks.md) | Analytics, Workbooks |
+| [`DynatraceAuditLogs_CL`](../tables/dynatraceauditlogs-cl.md) | [Dynatrace Audit Logs](../connectors/dynatraceauditlogs.md) | Workbooks |
+| [`DynatraceProblems_CL`](../tables/dynatraceproblems-cl.md) | [Dynatrace Problems](../connectors/dynatraceproblems.md) | Analytics, Workbooks |
+| [`DynatraceSecurityProblems_CL`](../tables/dynatracesecurityproblems-cl.md) | [Dynatrace Runtime Vulnerabilities](../connectors/dynatraceruntimevulnerabilities.md) | Analytics, Workbooks |
+
+### Internal Tables
+
+The following **1 table(s)** are used internally by this solution's playbooks:
+
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SecurityAlert`](../tables/securityalert.md) | - | Playbooks |
+
+## Content Items
+
+This solution includes **16 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 6 |
+| Analytic Rules | 5 |
+| Parsers | 4 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Dynatrace - Problem detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Analytic%20Rules/Dynatrace_ProblemDetection.yaml) | Informational | DefenseEvasion, Execution, Impact, InitialAccess, LateralMovement, Persistence, PrivilegeEscalation | [`DynatraceProblems_CL`](../tables/dynatraceproblems-cl.md) |
+| [Dynatrace Application Security - Attack detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Analytic%20Rules/DynatraceApplicationSecurity_AttackDetection.yaml) | High | Execution, Impact, InitialAccess, PrivilegeEscalation | [`DynatraceAttacks_CL`](../tables/dynatraceattacks-cl.md) |
+| [Dynatrace Application Security - Code-Level runtime vulnerability detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Analytic%20Rules/DynatraceApplicationSecurity_CodeLevelVulnerabilityDetection.yaml) | Medium | DefenseEvasion, Execution, Impact, InitialAccess, LateralMovement, Persistence, PrivilegeEscalation | [`DynatraceSecurityProblems_CL`](../tables/dynatracesecurityproblems-cl.md) |
+| [Dynatrace Application Security - Non-critical runtime vulnerability detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Analytic%20Rules/DynatraceApplicationSecurity_NonCriticalVulnerabilityDetection.yaml) | Informational | DefenseEvasion, Execution, Impact, InitialAccess, LateralMovement, Persistence, PrivilegeEscalation | [`DynatraceSecurityProblems_CL`](../tables/dynatracesecurityproblems-cl.md) |
+| [Dynatrace Application Security - Third-Party runtime vulnerability detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Analytic%20Rules/DynatraceApplicationSecurity_ThirdPartyVulnerabilityDetection.yaml) | Medium | DefenseEvasion, Execution, Impact, InitialAccess, LateralMovement, Persistence, PrivilegeEscalation | [`DynatraceSecurityProblems_CL`](../tables/dynatracesecurityproblems-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Dynatrace](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Workbooks/Dynatrace.json) | [`DynatraceAttacks_CL`](../tables/dynatraceattacks-cl.md)<br>[`DynatraceAuditLogs_CL`](../tables/dynatraceauditlogs-cl.md)<br>[`DynatraceProblems_CL`](../tables/dynatraceproblems-cl.md)<br>[`DynatraceSecurityProblems_CL`](../tables/dynatracesecurityproblems-cl.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Playbooks/Add_DynatraceApplicationSecurityAttackSourceIpThreatIntelligence/azuredeploy.json) | This playbook will add an attackers source ip to Threat Intelligence when a new incident is opened i... | - |
+| [Enrich Dynatrace Application Security Attack Incident](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Playbooks/Enrich_DynatraceApplicationSecurityAttackIncident/azuredeploy.json) | This playbook will enriche Dynatrace Application Security Attack Incidents with additional informati... | - |
+| [Enrich Dynatrace Application Security Attack with related Microsoft Defender XDR insights](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Playbooks/Enrich-DynatraceAppSecAttackMSDefenderXDR/azuredeploy.json) | This playbook will enrich Dynatrace Application Security Attack with related Microsoft Defender XDR ... | *Internal use:*<br>[`SecurityAlert`](../tables/securityalert.md) *(read)* |
+| [Enrich Dynatrace Application Security Attack with related Microsoft Sentinel Security Alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Playbooks/Enrich-DynatraceAppSecAttackWithSecurityAlerts/azuredeploy.json) | This playbook will enrich Dynatrace Application Security Attack with related Microsoft Sentinel Secu... | *Internal use:*<br>[`SecurityAlert`](../tables/securityalert.md) *(read)* |
+| [Ingest Microsoft Defender XDR insights into Dynatrace](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Playbooks/Ingest-DynatraceMSDefenderXDR/azuredeploy.json) | This playbook will ingest Microsoft Defender XDR insights into Dynatrace. | - |
+| [Ingest Microsoft Sentinel Security Alerts into Dynatrace](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Playbooks/Ingest-DynatraceMSSentinelSecurityAlerts/azuredeploy.json) | This playbook will ingest Microsoft Sentinel Security Alerts into Dynatrace. | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [DynatraceAttacks](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Parsers/DynatraceAttacks.yaml) | - | - |
+| [DynatraceAuditLogs](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Parsers/DynatraceAuditLogs.yaml) | - | - |
+| [DynatraceProblems](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Parsers/DynatraceProblems.yaml) | - | - |
+| [DynatraceSecurityProblems](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Dynatrace/Parsers/DynatraceSecurityProblems.yaml) | - | - |
 
 ## Release Notes
 
@@ -91,4 +99,10 @@ This solution ingests data into **4 table(s)**:
 | 3.0.0       | 16-10-2023                     | Enabled new api paging mode on **Data Connector** to fix issues related to polling Dynatrace REST API's with a large number of results.   |
 | 2.0.0       | 18-10-2022                     | Initial Solution Release.   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

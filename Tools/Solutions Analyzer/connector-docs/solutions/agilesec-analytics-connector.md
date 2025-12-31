@@ -12,27 +12,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [InfoSecGlobal Data Connector](../connectors/infosecdataconnector.md)
-
-**Publisher:** InfoSecGlobal
-
-Use this data connector to integrate with InfoSec Crypto Analytics and get data sent directly to Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `InfoSecAnalytics_CL` |
-| **Connector Definition Files** | [Connector_Analytics_InfoSec.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AgileSec%20Analytics%20Connector/Data%20Connectors/Connector_Analytics_InfoSec.json) |
-
-[→ View full connector details](../connectors/infosecdataconnector.md)
+- [InfoSecGlobal Data Connector](../connectors/infosecdataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `InfoSecAnalytics_CL` | [InfoSecGlobal Data Connector](../connectors/infosecdataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`InfoSecAnalytics_CL`](../tables/infosecanalytics-cl.md) | [InfoSecGlobal Data Connector](../connectors/infosecdataconnector.md) | Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [InfoSecGlobal](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AgileSec%20Analytics%20Connector/Workbooks/InfoSecGlobal.json) | [`InfoSecAnalytics_CL`](../tables/infosecanalytics-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -1,15 +1,5 @@
 # Failed_Range_To_Ingest_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Failed_Range_To_Ingest_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Infoblox Data Connector via REST API](../connectors/infobloxdataconnector.md)
+
+---
 
 ---
 

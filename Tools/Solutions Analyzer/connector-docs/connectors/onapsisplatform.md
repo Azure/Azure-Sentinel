@@ -5,7 +5,7 @@
 | **Connector ID** | `OnapsisPlatform` |
 | **Publisher** | Onapsis |
 | **Used in Solutions** | [Onapsis Platform](../solutions/onapsis-platform.md) |
-| **Collection Method** | MMA |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [OnapsisPlatform.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Onapsis%20Platform/Data%20Connectors/OnapsisPlatform.json) |
 
 The Onapsis Connector allows you to export the alarms triggered in the Onapsis Platform into Microsoft Sentinel in real-time. This gives you the ability to monitor the activity on your SAP systems, identify incidents and respond to them quickly.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | — | ✓ |
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

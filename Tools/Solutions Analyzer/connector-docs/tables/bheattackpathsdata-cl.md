@@ -1,15 +1,5 @@
 # BHEAttackPathsData_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `BHEAttackPathsData_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,122 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Bloodhound Enterprise](../connectors/bloodhoundenterprise.md)
+
+---
+
+## Content Items Using This Table (104)
+
+### Analytic Rules (102)
+
+**In solution [BloodHound Enterprise](../solutions/bloodhound-enterprise.md):**
+- [BloodHound Attack Path Finding - AKS Contributor Role on Tier Zero Managed Cluster](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AksContributorRoleOnTierZeroManagedCluster.yaml)
+- [BloodHound Attack Path Finding - AS-REP Roastable User Accounts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/RepRoastableUserAccounts.yaml)
+- [BloodHound Attack Path Finding - Add Key Credential Link Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddKeyCredentialLinkPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Add Member Privileges on Tier Zero Security Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddMemberPrivilegesOnTierZeroSecurityGroups.yaml)
+- [BloodHound Attack Path Finding - Add Members to Tier Zero Group](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddMembersToTierZeroGroup.yaml)
+- [BloodHound Attack Path Finding - Add Owner to Tier Zero Object via MS Graph App Role](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddOwnerToTierZeroObjectViaMsGraphAppRole.yaml)
+- [BloodHound Attack Path Finding - Add Resource-Based Constrained Delegation Privileges on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/BasedConstrainedDelegationPrivilegesOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - Add Secret to Tier Zero Principal](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddSecretToTierZeroPrincipal.yaml)
+- [BloodHound Attack Path Finding - AddOwner Role on Tier Zero Resource](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddownerRoleOnTierZeroResource.yaml)
+- [BloodHound Attack Path Finding - AddSelf Privilege on Tier Zero Security Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AddselfPrivilegeOnTierZeroSecurityGroups.yaml)
+- [BloodHound Attack Path Finding - Admins on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AdminsOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - AllExtended Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AllextendedPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - App Admin Control of Tier Zero Principal](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AppAdminControlOfTierZeroPrincipal.yaml)
+- [BloodHound Attack Path Finding - Avere Contributor Role on Tier Zero Virtual Machine](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/AvereContributorRoleOnTierZeroVirtualMachine.yaml)
+- [BloodHound Attack Path Finding - Cloud App Admin Over Tier Zero Principal](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/CloudAppAdminOverTierZeroPrincipal.yaml)
+- [BloodHound Attack Path Finding - Command Execution on Tier Zero Virtual Machine](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/CommandExecutionOnTierZeroVirtualMachine.yaml)
+- [BloodHound Attack Path Finding - Computers Vulnerable to Coercion-Based NTLM Relay to SMB Attack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/BasedNtlmRelayToSmbAttack.yaml)
+- [BloodHound Attack Path Finding - Constrained Delegation on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ConstrainedDelegationOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - Contributor Role on Tier Zero Automation Account](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ContributorRoleOnTierZeroAutomationAccount.yaml)
+- [BloodHound Attack Path Finding - Contributor Role on Tier Zero Resource](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ContributorRoleOnTierZeroResource.yaml)
+- [BloodHound Attack Path Finding - DCOM Users on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/DcomUsersOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - ForceChangePassword Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ForcechangepasswordPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - GenericAll Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/GenericallPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - GenericWrite Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/GenericwritePrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Get Certifcates on Tier Zero Key Vault](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/GetCertifcatesOnTierZeroKeyVault.yaml)
+- [BloodHound Attack Path Finding - Get Keys on Tier Zero Key Vault](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/GetKeysOnTierZeroKeyVault.yaml)
+- [BloodHound Attack Path Finding - Get Secrets on Tier Zero Key Vault](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/GetSecretsOnTierZeroKeyVault.yaml)
+- [BloodHound Attack Path Finding - Kerberoastable User Accounts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/KerberoastableUserAccounts.yaml)
+- [BloodHound Attack Path Finding - Kerberos Delegation on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/KerberosDelegationOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Key Vault Contributor Role on Tier Zero Resource](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/KeyVaultContributorRoleOnTierZeroResource.yaml)
+- [BloodHound Attack Path Finding - Large Default Group With SyncLapsPassword Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupWithSynclapspasswordPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Add Key Credential Link Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithAddKeyCredentialLinkPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Add Member Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithAddMemberPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Add Self Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithAddSelfPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With All Extended Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithAllExtendedPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With ForceChangePassword Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithForcechangepasswordPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With GenericAll Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithGenericallPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With GenericWrite Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithGenericwritePrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Limited Ownership Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithLimitedOwnershipPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Ownership Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithOwnershipPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With RDP Access](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithRdpAccess.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Read GMSA Password Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithReadGmsaPasswordPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Read LAPS Password Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithReadLapsPasswordPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With Resource-Based Constrained Delegation Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/BasedConstrainedDelegationPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With WriteAccountRestrictions Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithWriteaccountrestrictionsPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With WriteDacl Privilege](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithWritedaclPrivilege.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With WriteGpLink Privilege](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithWritegplinkPrivilege.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With WriteOwner Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithWriteownerPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With WriteOwnerLimitedRights Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithWriteownerlimitedrightsPrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups With WriteServicePrincipalName Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsWithWriteserviceprincipalnamePrivileges.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups in DCOM Users Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsInDcomUsersGroups.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups in Local Administrator Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsInLocalAdministratorGroups.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups in PS Remote Users Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsInPsRemoteUsersGroups.yaml)
+- [BloodHound Attack Path Finding - Large Default Groups in SQL Admins Groups](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LargeDefaultGroupsInSqlAdminsGroups.yaml)
+- [BloodHound Attack Path Finding - Legacy SID History on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LegacySidHistoryOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Limited Ownership Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LimitedOwnershipPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Logic App Contributor Role on Tier Zero Logic App](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LogicAppContributorRoleOnTierZeroLogicApp.yaml)
+- [BloodHound Attack Path Finding - Logons From Tier Zero Users](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/LogonsFromTierZeroUsers.yaml)
+- [BloodHound Attack Path Finding - Non Tier Zero Principals With ADCS ESC1 Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/NonTierZeroPrincipalsWithAdcsEsc1Privileges.yaml)
+- [BloodHound Attack Path Finding - Non Tier Zero Principals With ADCS ESC10 Scenario A Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/NonTierZeroPrincipalsWithAdcsEsc10ScenarioAPrivileges.yaml)
+- [BloodHound Attack Path Finding - Non Tier Zero Principals With ADCS ESC13 Privileges Against Tier Zero Group](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/NonTierZeroPrincipalsWithAdcsEsc13PrivilegesAgainstTierZeroGroup.yaml)
+- [BloodHound Attack Path Finding - Non Tier Zero Resource Assigned to Tier Zero Service Principal](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/NonTierZeroResourceAssignedToTierZeroServicePrincipal.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero AD User Synced to Tier Zero Entra User](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroAdUserSyncedToTierZeroEntraUser.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Computer Hosting EnterpriseCA Trusted for NT Authentication](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroComputerHostingEnterprisecaTrustedForNtAuthentication.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Entra User Synced to Tier Zero AD User](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroEntraUserSyncedToTierZeroAdUser.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principal Can Grant Tier Zero App Roles](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalCanGrantTierZeroAppRoles.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principal Can Grant Tier Zero Entra ID Role](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalCanGrantTierZeroEntraIdRole.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principal Trusted for Unconstrained Delegation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalTrustedForUnconstrainedDelegation.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC10 Scenario B Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc10ScenarioBPrivileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC3 Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc3Privileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC4 Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc4Privileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC6 Scenario A Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc6ScenarioAPrivileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC6 Scenario B Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc6ScenarioBPrivileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC9 Scenario A Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc9ScenarioAPrivileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With ADCS ESC9 Scenario B Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithAdcsEsc9ScenarioBPrivileges.yaml)
+- [BloodHound Attack Path Finding - Non-Tier Zero Principals With DCSync Privileges](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroPrincipalsWithDcsyncPrivileges.yaml)
+- [BloodHound Attack Path Finding - Owner Role on Tier Zero Resource](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/OwnerRoleOnTierZeroResource.yaml)
+- [BloodHound Attack Path Finding - Ownership Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/OwnershipPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Ownership of Tier Zero Principal](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/OwnershipOfTierZeroPrincipal.yaml)
+- [BloodHound Attack Path Finding - PS Remote Users on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/PsRemoteUsersOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - RDP Users on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/RdpUsersOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - Read GMSA Password Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ReadGmsaPasswordPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - ReadLapsPassword Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ReadlapspasswordPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Reset a Tier Zero User's Password](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/ResetATierZeroUser_sPassword.yaml)
+- [BloodHound Attack Path Finding - SQL Admin Users on Tier Zero Computers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/SqlAdminUsersOnTierZeroComputers.yaml)
+- [BloodHound Attack Path Finding - SyncLapsPassword Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/SynclapspasswordPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - Tier Zero Computer Vulnerable to Coercion-Based NTLM Relay to ADCS (ESC8) Attack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/BasedNtlmRelayToAdcs%28esc8%29Attack.yaml)
+- [BloodHound Attack Path Finding - Tier Zero Computer Vulnerable to Coercion-Based NTLM Relay to LDAP Attack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/BasedNtlmRelayToLdapAttack.yaml)
+- [BloodHound Attack Path Finding - Tier Zero Computer Vulnerable to Coercion-Based NTLM Relay to LDAPS Attack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/BasedNtlmRelayToLdapsAttack.yaml)
+- [BloodHound Attack Path Finding - Tier Zero Group Control via MS Graph App Role](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroGroupControlViaMsGraphAppRole.yaml)
+- [BloodHound Attack Path Finding - Tier Zero SMSA Installed on Non-Tier Zero Computer](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroComputer.yaml)
+- [BloodHound Attack Path Finding - Tier Zero Service Principal Control via MS Graph App Role](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/TierZeroServicePrincipalControlViaMsGraphAppRole.yaml)
+- [BloodHound Attack Path Finding - User Access Admin Role on Tier Zero Resource](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/UserAccessAdminRoleOnTierZeroResource.yaml)
+- [BloodHound Attack Path Finding - VM Admin Login Role on Tier Zero System](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/VmAdminLoginRoleOnTierZeroSystem.yaml)
+- [BloodHound Attack Path Finding - VM Contributor Role on Tier Zero System](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/VmContributorRoleOnTierZeroSystem.yaml)
+- [BloodHound Attack Path Finding - Website Contributor Role on Tier Zero Resource](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WebsiteContributorRoleOnTierZeroResource.yaml)
+- [BloodHound Attack Path Finding - Write Account Restrictions Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WriteAccountRestrictionsPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - WriteDacl Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WritedaclPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - WriteGpLink Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WritegplinkPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - WriteOwner Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WriteownerPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - WriteOwnerLimitedRights Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WriteownerlimitedrightsPrivilegesOnTierZeroObjects.yaml)
+- [BloodHound Attack Path Finding - WriteServicePrincipalName Privileges on Tier Zero Objects](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Analytic%20Rules/WriteserviceprincipalnamePrivilegesOnTierZeroObjects.yaml)
+
+### Workbooks (2)
+
+**In solution [BloodHound Enterprise](../solutions/bloodhound-enterprise.md):**
+- [BloodHoundEnterpriseAttackPathDetails](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Workbooks/BloodHoundEnterpriseAttackPathDetails.json)
+- [BloodHoundEnterpriseAttackPathOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/BloodHound%20Enterprise/Workbooks/BloodHoundEnterpriseAttackPathOverview.json)
 
 ---
 

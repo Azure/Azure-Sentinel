@@ -14,38 +14,32 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md)
-
-**Publisher:** Mimecast
-
-The data connector for Mimecast Intelligence for Microsoft provides regional threat intelligence curated from Mimecast’s email inspection technologies with pre-created dashboards to allow analysts to view insight into email based threats, aid in incident correlation and reduce investigation response times.  
-
-Mimecast products and features required: 
-
-- Mimecast Secure Email Gateway 
-
-- Mimecast Threat Intelligence
-
-
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Event` |
-| | `ThreatIntelligenceIndicator` |
-| **Connector Definition Files** | [MimecastTIRegional_API_AzureFunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTIRegional/Data%20Connectors/MimecastTIRegional_API_AzureFunctionApp.json) |
-
-[→ View full connector details](../connectors/mimecasttiregionalconnectorazurefunctions.md)
+- [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Event` | [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md) |
-| `ThreatIntelligenceIndicator` | [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Event`](../tables/event.md) | [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md) | - |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [MimecastTIRegional](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MimecastTIRegional/Workbooks/MimecastTIRegional.json) | [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) |
 
 ## Release Notes
 
@@ -55,4 +49,10 @@ This solution ingests data into **2 table(s)**:
 | 3.0.1       | 05-12-2023                     | Enhanced **Dataconnector** to use existing workspace and updated checkpoint mechanism |
 | 3.0.0       | 23-08-2023                     | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

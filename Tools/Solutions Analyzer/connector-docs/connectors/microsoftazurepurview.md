@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`PurviewDataSensitivityLogs`](../tables/purviewdatasensitivitylogs.md) | — | ✗ |
+| [`PurviewDataSensitivityLogs`](../tables/purviewdatasensitivitylogs.md) | ✓ | ✗ |
 
 ## Permissions
 

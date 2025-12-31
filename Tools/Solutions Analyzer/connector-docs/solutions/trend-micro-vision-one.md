@@ -14,38 +14,41 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Trend Vision One](../connectors/trendmicroxdr.md)
-
-**Publisher:** Trend Micro
-
-The [Trend Vision One](https://www.trendmicro.com/en_us/business/products/detection-response/xdr.html) connector allows you to easily connect your Workbench alert data with Microsoft Sentinel to view dashboards, create custom alerts, and to improve monitoring and investigation capabilities. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.
-
-
-
-The Trend Vision One connector is supported in Microsoft Sentinel in the following regions: Australia East, Australia Southeast, Brazil South, Canada Central, Canada East, Central India, Central US, East Asia, East US, East US 2, France Central, Japan East, Korea Central, North Central US, North Europe, Norway East, South Africa North, South Central US, Southeast Asia, Sweden Central, Switzerland North, UAE North, UK South, UK West, West Europe, West US, West US 2, West US 3.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `TrendMicro_XDR_OAT_CL` |
-| | `TrendMicro_XDR_RCA_Result_CL` |
-| | `TrendMicro_XDR_RCA_Task_CL` |
-| | `TrendMicro_XDR_WORKBENCH_CL` |
-| **Connector Definition Files** | [TrendMicroXDR.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Vision%20One/Data%20Connectors/TrendMicroXDR.json) |
-
-[→ View full connector details](../connectors/trendmicroxdr.md)
+- [Trend Vision One](../connectors/trendmicroxdr.md)
 
 ## Tables Reference
 
-This solution ingests data into **4 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `TrendMicro_XDR_OAT_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
-| `TrendMicro_XDR_RCA_Result_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
-| `TrendMicro_XDR_RCA_Task_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
-| `TrendMicro_XDR_WORKBENCH_CL` | [Trend Vision One](../connectors/trendmicroxdr.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`TrendMicro_XDR_OAT_CL`](../tables/trendmicro-xdr-oat-cl.md) | [Trend Vision One](../connectors/trendmicroxdr.md) | - |
+| [`TrendMicro_XDR_RCA_Result_CL`](../tables/trendmicro-xdr-rca-result-cl.md) | [Trend Vision One](../connectors/trendmicroxdr.md) | - |
+| [`TrendMicro_XDR_RCA_Task_CL`](../tables/trendmicro-xdr-rca-task-cl.md) | [Trend Vision One](../connectors/trendmicroxdr.md) | - |
+| [`TrendMicro_XDR_WORKBENCH_CL`](../tables/trendmicro-xdr-workbench-cl.md) | [Trend Vision One](../connectors/trendmicroxdr.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Create Incident for XDR Alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Vision%20One/Analytic%20Rules/Create%20Incident%20for%20XDR%20Alerts.yaml) | High | - | [`TrendMicro_XDR_WORKBENCH_CL`](../tables/trendmicro-xdr-workbench-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [TrendMicroXDROverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Vision%20One/Workbooks/TrendMicroXDROverview.json) | [`TrendMicro_XDR_WORKBENCH_CL`](../tables/trendmicro-xdr-workbench-cl.md) |
 
 ## Release Notes
 
@@ -53,4 +56,10 @@ This solution ingests data into **4 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.1       | 30-01-2025                     | Updated hyperlink in **Data Connector**     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

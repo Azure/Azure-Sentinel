@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Check Point Cyberint IOC Connector](../connectors/checkpointcyberintioc.md)
-
-**Publisher:** Checkpoint Cyberint
-
-This is data connector for Check Point Cyberint IOC.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `iocsent_CL` |
-| **Connector Definition Files** | [CyberintArgosIOCLogs_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Check%20Point%20Cyberint%20IOC/Data%20Connectors/CyberintArgosIOCLogs_ccp/CyberintArgosIOCLogs_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/checkpointcyberintioc.md)
+- [Check Point Cyberint IOC Connector](../connectors/checkpointcyberintioc.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `iocsent_CL` | [Check Point Cyberint IOC Connector](../connectors/checkpointcyberintioc.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`iocsent_CL`](../tables/iocsent-cl.md) | [Check Point Cyberint IOC Connector](../connectors/checkpointcyberintioc.md) | - |
 
 ## Release Notes
 
@@ -43,4 +32,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 12-09-2025                     | Replaces the variable reference for graphQueriesTableName with the explicit table name **'iocsent_CL'** |
 | 3.0.0       | 17-06-2025                     | Initial Solution release. |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

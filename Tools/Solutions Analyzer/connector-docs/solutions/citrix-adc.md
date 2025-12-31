@@ -13,28 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Citrix ADC (former NetScaler)](../connectors/citrixadc.md)
-
-**Publisher:** Citrix
-
-The [Citrix ADC (former NetScaler)](https://www.citrix.com/products/citrix-adc/) data connector provides the capability to ingest Citrix ADC logs into Microsoft Sentinel. If you want to ingest Citrix WAF logs into Microsoft Sentinel, refer this [documentation](https://learn.microsoft.com/azure/sentinel/data-connectors/citrix-waf-web-app-firewall)
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_CitrixADC_syslog.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Data%20Connectors/Connector_CitrixADC_syslog.json) |
-
-[→ View full connector details](../connectors/citrixadc.md)
+- [[Deprecated] Citrix ADC (former NetScaler)](../connectors/citrixadc.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Citrix ADC (former NetScaler)](../connectors/citrixadc.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Citrix ADC (former NetScaler)](../connectors/citrixadc.md) | - |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 2 |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [CitrixADCEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Parsers/CitrixADCEvent.yaml) | - | - |
+| [CitrixADCEventOld](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Citrix%20ADC/Parsers/CitrixADCEventOld.yaml) | - | - |
 
 ## Release Notes
 
@@ -47,4 +51,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.0       | 14-07-2023                     | Modified the **Data Connector** with improved onboarding instructions \| v 1.0.1
 |             |                                | Modified the **Parser** to process the logs coming from Citrix ADC to Syslog table
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

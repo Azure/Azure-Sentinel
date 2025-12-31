@@ -14,35 +14,42 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SAP LogServ (RISE), S/4HANA Cloud private edition](../connectors/saplogserv.md)
-
-**Publisher:** SAP SE
-
-SAP LogServ is an SAP Enterprise Cloud Services (ECS) service aimed at collection, storage, forwarding and access of logs. LogServ centralizes the logs from all systems, applications, and ECS services used by a registered customer. 
-
- Main Features include:
-
-Near Realtime Log Collection: With ability to integrate into Microsoft Sentinel as SIEM solution.
-
-LogServ complements the existing SAP application layer threat monitoring and detections in Microsoft Sentinel with the log types owned by SAP ECS as the system provider. This includes logs like: SAP Security Audit Log (AS ABAP), HANA database, AS JAVA, ICM, SAP Web Dispatcher, SAP Cloud Connector, OS, SAP Gateway, 3rd party Database, Network, DNS, Proxy, Firewall
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SAPLogServ_CL` |
-| **Connector Definition Files** | [SAPLogServ.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Data%20Connectors/SAPLogServ.json) |
-| | [SAPLogServ_connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Data%20Connectors/SAPLogServ_PUSH_CCP/SAPLogServ_connectorDefinition.json) |
-
-[→ View full connector details](../connectors/saplogserv.md)
+- [SAP LogServ (RISE), S/4HANA Cloud private edition](../connectors/saplogserv.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SAPLogServ_CL` | [SAP LogServ (RISE), S/4HANA Cloud private edition](../connectors/saplogserv.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SAPLogServ_CL`](../tables/saplogserv-cl.md) | [SAP LogServ (RISE), S/4HANA Cloud private edition](../connectors/saplogserv.md) | Analytics, Workbooks |
+| [`filteredLogs`](../tables/filteredlogs.md) | - | Workbooks |
+
+## Content Items
+
+This solution includes **5 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [SAP LogServ - HANA DB - Assign Admin Authorizations](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-AssignAdminAuthorizations.yaml) | High | PrivilegeEscalation | [`SAPLogServ_CL`](../tables/saplogserv-cl.md) |
+| [SAP LogServ - HANA DB - Audit Trail Policy Changes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-AuditTrailPolicyChanges.yaml) | High | Persistence, LateralMovement, DefenseEvasion | [`SAPLogServ_CL`](../tables/saplogserv-cl.md) |
+| [SAP LogServ - HANA DB - Deactivation of Audit Trail](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-DeactivationofAuditTrail.yaml) | High | Persistence, LateralMovement, DefenseEvasion | [`SAPLogServ_CL`](../tables/saplogserv-cl.md) |
+| [SAP LogServ - HANA DB - User Admin actions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Analytic%20Rules/SAPLogServ-UserAdminActions.yaml) | High | PrivilegeEscalation | [`SAPLogServ_CL`](../tables/saplogserv-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SAPLogServObserve](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20LogServ/Workbooks/SAPLogServObserve.json) | [`SAPLogServ_CL`](../tables/saplogserv-cl.md)<br>[`filteredLogs`](../tables/filteredlogs.md) |
 
 ## Release Notes
 
@@ -54,4 +61,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       |  09-04-2025                    | Retention setting dropped from table to default to LogAnalytics ws default |
 | 3.0.0       |  17-02-2025                    | Initial Solution Release |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

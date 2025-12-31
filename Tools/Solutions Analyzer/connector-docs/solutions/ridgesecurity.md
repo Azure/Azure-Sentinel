@@ -14,28 +14,32 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] RIDGEBOT - data connector for Microsoft Sentinel](../connectors/ridgebotdataconnector.md)
-
-**Publisher:** RidgeSecurity
-
-The RidgeBot connector lets users connect RidgeBot with Microsoft Sentinel, allowing creation of Dashboards, Workbooks, Notebooks and Alerts.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [RidgeSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Data%20Connectors/RidgeSecurity.json) |
-
-[→ View full connector details](../connectors/ridgebotdataconnector.md)
+- [[Deprecated] RIDGEBOT - data connector for Microsoft Sentinel](../connectors/ridgebotdataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] RIDGEBOT - data connector for Microsoft Sentinel](../connectors/ridgebotdataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] RIDGEBOT - data connector for Microsoft Sentinel](../connectors/ridgebotdataconnector.md) | Analytics |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Critical Risks](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Analytic%20Rules/RidgeSecurity_Risks.yaml) | High | Execution, InitialAccess, PrivilegeEscalation | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [Vulerabilities](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/RidgeSecurity/Analytic%20Rules/RidgeSecurity_Vulnerabilities.yaml) | High | Execution, InitialAccess, PrivilegeEscalation | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -44,4 +48,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 01-07-2024                     |  Deprecating data connectors                                          |
 | 3.0.0       | 23-10-2023                     |  Initial Solution Release                                          |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

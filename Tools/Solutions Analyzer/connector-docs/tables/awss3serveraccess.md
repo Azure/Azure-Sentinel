@@ -1,17 +1,14 @@
 # AWSS3ServerAccess
 
+Reference for AWSS3ServerAccess table in Azure Monitor Logs.
+
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `AWSS3ServerAccess` |
-| **Category** | Security |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
+| **Category** | AWS |
+| **Basic Logs Eligible** | ✓ Yes |
+| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
 | **Azure Monitor Docs** | [View Documentation](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/awss3serveraccess) |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
 
 ## Solutions (1)
 
@@ -24,6 +21,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [AWS S3 Server Access Logs (via Codeless Connector Framework)](../connectors/awss3serveraccesslogsdefinition.md)
+
+---
 
 ---
 

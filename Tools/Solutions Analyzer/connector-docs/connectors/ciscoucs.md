@@ -5,7 +5,7 @@
 | **Connector ID** | `CiscoUCS` |
 | **Publisher** | Cisco |
 | **Used in Solutions** | [Cisco UCS](../solutions/cisco-ucs.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [Connector_Syslog_CiscoUCS.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20UCS/Data%20Connectors/Connector_Syslog_CiscoUCS.json) |
 
 The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/products/servers-unified-computing/index.html) connector allows you to easily connect your Cisco UCS logs with Microsoft Sentinel This gives you more insight into your organization's network and improves your security operation capabilities.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`Syslog`](../tables/syslog.md) | — | ✓ |
+| [`Syslog`](../tables/syslog.md) | ✓ | ✓ |
 
 > 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.
 

@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AWSWAF`](../tables/awswaf.md) | — | ✗ |
+| [`AWSWAF`](../tables/awswaf.md) | ✓ | ✗ |
 
 ## Permissions
 

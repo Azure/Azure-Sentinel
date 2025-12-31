@@ -13,49 +13,78 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md)
-
-**Publisher:** Proofpoint
-
-Proofpoint On Demand Email Security data connector provides the capability to get Proofpoint on Demand Email Protection data, allows users to check message traceability, monitoring into email activity, threats,and data exfiltration by attackers and malicious insiders. The connector provides ability to review events in your org on an accelerated basis, get event log files in hourly increments for recent activity.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ProofpointPODMailLog_CL` |
-| | `ProofpointPODMessage_CL` |
-| **Connector Definition Files** | [ProofpointPOD_Definaton.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Data%20Connectors/ProofPointEmailSecurity_CCP/ProofpointPOD_Definaton.json) |
-
-[→ View full connector details](../connectors/proofpointccpdefinition.md)
-
-### [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md)
-
-**Publisher:** Proofpoint
-
-Proofpoint On Demand Email Security data connector provides the capability to get Proofpoint on Demand Email Protection data, allows users to check message traceability, monitoring into email activity, threats,and data exfiltration by attackers and malicious insiders. The connector provides ability to review events in your org on an accelerated basis, get event log files in hourly increments for recent activity.<p><span style='color:red; font-weight:bold;'>NOTE</span>: This data connector has been deprecated, consider moving to the CCP data connector available in the solution which replaces ingestion via the <a href='https://learn.microsoft.com/en-us/azure/azure-monitor/logs/custom-logs-migrate' style='color:#1890F1;'>deprecated HTTP Data Collector API</a>.</p>
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ProofpointPODMessage_CL` |
-| | `ProofpointPOD_maillog_CL` |
-| | `ProofpointPOD_message_CL` |
-| | `maillog_CL` |
-| **Connector Definition Files** | [ProofpointPOD_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Data%20Connectors/ProofpointPOD_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/proofpointpod.md)
+- [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md)
+- [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md)
 
 ## Tables Reference
 
-This solution ingests data into **5 table(s)**:
+This solution uses **8 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ProofpointPODMailLog_CL` | [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md) |
-| `ProofpointPODMessage_CL` | [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md), [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
-| `ProofpointPOD_maillog_CL` | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
-| `ProofpointPOD_message_CL` | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
-| `maillog_CL` | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md) | [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md), [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) | Analytics, Hunting, Workbooks |
+| [`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md) | [Proofpoint On Demand Email Security (via Codeless Connector Platform)](../connectors/proofpointccpdefinition.md), [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) | Analytics, Hunting, Workbooks |
+| [`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md) | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) | Analytics, Hunting, Workbooks |
+| [`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md) | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) | Analytics, Hunting, Workbooks |
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | - | Analytics |
+| [`maillog_CL`](../tables/maillog-cl.md) | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) | Analytics, Hunting, Workbooks |
+| [`message_CL`](../tables/message-cl.md) | [[Deprecated] Proofpoint On Demand Email Security](../connectors/proofpointpod.md) | Analytics, Hunting, Workbooks |
+| [`trend_result`](../tables/trend-result.md) | - | Workbooks |
+
+## Content Items
+
+This solution includes **22 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 10 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [ProofpointPOD - Binary file in attachment](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODBinaryInAttachment.yaml) | Medium | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Email sender IP in TI list](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODEmailSenderIPinTIList.yaml) | Medium | Exfiltration, InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Email sender in TI list](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODEmailSenderInTIList.yaml) | Medium | Exfiltration, InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - High risk message not discarded](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODHighRiskNotDiscarded.yaml) | Low | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Multiple archived attachments to the same recipient](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODMultipleArchivedAttachmentsToSameRecipient.yaml) | Medium | Exfiltration | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Multiple large emails to the same recipient](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODMultipleLargeEmailsToSameRecipient.yaml) | Medium | Exfiltration | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Multiple protected emails to unknown recipient](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODMultipleProtectedEmailsToUnknownRecipient.yaml) | Medium | Exfiltration | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Possible data exfiltration to private email](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODDataExfiltrationToPrivateEmail.yaml) | Medium | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Suspicious attachment](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODSuspiciousAttachment.yaml) | Medium | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Weak ciphers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Analytic%20Rules/ProofpointPODWeakCiphers.yaml) | Low | CommandAndControl | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [ProofpointPOD - Emails with high score of 'adult' filter classifier value](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODHighScoreAdultValue.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Emails with high score of 'malware' filter classifier value](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODHighScoreMalwareValue.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Emails with high score of 'phish' filter classifier value](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODHighScorePhishValue.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Emails with high score of 'spam' filter classifier value](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODHighScoreSpamValue.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Emails with high score of 'suspect' filter classifier value](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODHighScoreSuspectValue.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Large size outbound emails](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODLargeOutboundEmails.yaml) | Exfiltration | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Recipients with high number of discarded or rejected emails](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODRecipientsHighNumberDiscardReject.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Recipients with large number of corrupted emails](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODRecipientsLargeNumberOfCorruptedEmails.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Senders with large number of corrupted messages](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODSendersLargeNumberOfCorruptedEmails.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+| [ProofpointPOD - Suspicious file types in attachments](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Hunting%20Queries/ProofpointPODSuspiciousFileTypesInAttachments.yaml) | InitialAccess | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ProofpointPOD](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Workbooks/ProofpointPOD.json) | [`ProofpointPODMailLog_CL`](../tables/proofpointpodmaillog-cl.md)<br>[`ProofpointPODMessage_CL`](../tables/proofpointpodmessage-cl.md)<br>[`ProofpointPOD_maillog_CL`](../tables/proofpointpod-maillog-cl.md)<br>[`ProofpointPOD_message_CL`](../tables/proofpointpod-message-cl.md)<br>[`maillog_CL`](../tables/maillog-cl.md)<br>[`message_CL`](../tables/message-cl.md)<br>[`trend_result`](../tables/trend-result.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ProofpointPOD](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Proofpoint%20On%20demand%28POD%29%20Email%20Security/Parsers/ProofpointPOD.yaml) | - | - |
 
 ## Release Notes
 
@@ -71,4 +100,10 @@ This solution ingests data into **5 table(s)**:
 | 3.0.1       | 02-05-2024                     | Optimized **Parser**.                                      |
 | 3.0.0       | 01-08-2023                     | Updated solution logo with Microsoft Sentinel logo.   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

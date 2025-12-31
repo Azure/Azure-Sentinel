@@ -13,28 +13,34 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [CYFIRMA Vulnerabilities Intelligence](../connectors/cyfirmavulnerabilitiesinteldc.md)
-
-**Publisher:** Microsoft
-
-The CYFIRMA Vulnerabilities Intelligence data connector enables seamless log ingestion from the DeCYFIR API into Microsoft Sentinel. Built on the Microsoft Sentinel Codeless Connector Platform, it leverages the CYFIRMA API's to retrieve logs. Additionally, it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview), which parse security data into a custom table during ingestion. This eliminates the need for query-time parsing, enhancing performance and efficiency.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CyfirmaVulnerabilities_CL` |
-| **Connector Definition Files** | [CyfirmaVulnerabilities_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Vulnerabilities%20Intel/Data%20Connectors/CyfirmaVulnerabilitiesIntel_ccp/CyfirmaVulnerabilities_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/cyfirmavulnerabilitiesinteldc.md)
+- [CYFIRMA Vulnerabilities Intelligence](../connectors/cyfirmavulnerabilitiesinteldc.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CyfirmaVulnerabilities_CL` | [CYFIRMA Vulnerabilities Intelligence](../connectors/cyfirmavulnerabilitiesinteldc.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CyfirmaVulnerabilities_CL`](../tables/cyfirmavulnerabilities-cl.md) | [CYFIRMA Vulnerabilities Intelligence](../connectors/cyfirmavulnerabilitiesinteldc.md) | Analytics |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 4 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [CYFIRMA - High Severity Asset based Vulnerabilities Rule Alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Vulnerabilities%20Intel/Analytic%20Rules/AssetVulnerabilitiesHighSeverityRule.yaml) | High | Execution, LateralMovement, PrivilegeEscalation, InitialAccess, CredentialAccess, DefenseEvasion | [`CyfirmaVulnerabilities_CL`](../tables/cyfirmavulnerabilities-cl.md) |
+| [CYFIRMA - High Severity Attack Surface based Vulnerabilities Rule Alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Vulnerabilities%20Intel/Analytic%20Rules/AttackSurfaceVulnerabilitiesHighSeverityRule.yaml) | High | Execution, LateralMovement, PrivilegeEscalation, InitialAccess, CredentialAccess, DefenseEvasion | [`CyfirmaVulnerabilities_CL`](../tables/cyfirmavulnerabilities-cl.md) |
+| [CYFIRMA - Medium Severity Asset based Vulnerabilities Rule Alert](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Vulnerabilities%20Intel/Analytic%20Rules/AssetVulnerabilitiesMediumSeverityRule.yaml) | Medium | Execution, LateralMovement, PrivilegeEscalation, InitialAccess, CredentialAccess, DefenseEvasion | [`CyfirmaVulnerabilities_CL`](../tables/cyfirmavulnerabilities-cl.md) |
+| [CYFIRMA - Medium Severity Attack Surface based Vulnerabilities Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Vulnerabilities%20Intel/Analytic%20Rules/AttackSurfaceVulnerabilitiesMediumSeverityRule.yaml) | Medium | Execution, LateralMovement, PrivilegeEscalation, InitialAccess, CredentialAccess, DefenseEvasion | [`CyfirmaVulnerabilities_CL`](../tables/cyfirmavulnerabilities-cl.md) |
 
 ## Release Notes
 
@@ -44,4 +50,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 24-07-2025                     | Minor changes and New analytics rules added to **CCF Data Connector**. |
 | 3.0.0       | 17-06-2025                     | Initial Solution Release.                                              |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

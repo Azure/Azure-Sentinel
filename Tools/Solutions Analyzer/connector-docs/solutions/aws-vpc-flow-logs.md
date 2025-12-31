@@ -13,28 +13,44 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Amazon Web Services S3 VPC Flow Logs](../connectors/awss3vpcflowlogsparquetdefinition.md)
-
-**Publisher:** Microsoft
-
-This connector allows you to ingest AWS VPC Flow Logs, collected in AWS S3 buckets, to Microsoft Sentinel. AWS VPC Flow Logs provide visibility into network traffic within your AWS Virtual Private Cloud (VPC), enabling security analysis and network monitoring.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `AWSVPCFlow` |
-| **Connector Definition Files** | [AWSVPCFlowLogs_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AWS%20VPC%20Flow%20Logs/Data%20Connectors/AWSVPCFlowLogs_CCP/AWSVPCFlowLogs_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/awss3vpcflowlogsparquetdefinition.md)
+- [Amazon Web Services S3 VPC Flow Logs](../connectors/awss3vpcflowlogsparquetdefinition.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `AWSVPCFlow` | [Amazon Web Services S3 VPC Flow Logs](../connectors/awss3vpcflowlogsparquetdefinition.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`AWSVPCFlow`](../tables/awsvpcflow.md) | [Amazon Web Services S3 VPC Flow Logs](../connectors/awss3vpcflowlogsparquetdefinition.md) | - |
+
+## Additional Documentation
+
+> 📄 *Source: [AWS VPC Flow Logs/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AWS VPC Flow Logs/README.md)*
+
+### 1. Polling Configuration Fix
+Due to a bug in CCF (Common Collection Framework), you must set the destination table to null in the polling configuration file:
+
+```json
+"destinationTable": null
+```
+
+### 2. Main Template File Format Update
+In the `mainTemplate.json` file, update the `fileFormat` parameter as shown below, then update the zip package with the modified template:
+
+```json
+"fileFormat": {
+  "defaultValue": [
+    "Json"
+  ],
+  "type": "array",
+  "minLength": 1
+}
+```
+
+## Post-Update Steps
+After making these changes, ensure you update the solution package (zip file) with the modified `mainTemplate.json` file.
 
 ## Release Notes
 
@@ -42,4 +58,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 25-07-2025                     | New **Data Connector**, Preview |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

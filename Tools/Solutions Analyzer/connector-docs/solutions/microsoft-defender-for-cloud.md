@@ -13,45 +13,40 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md)
-
-**Publisher:** Microsoft
-
-Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your security alerts from Microsoft Defender for Cloud into Microsoft Sentinel, so you can view Defender data in workbooks, query it to produce alerts, and investigate and respond to incidents.
-
-
-
-[For more information>](https://aka.ms/ASC-Connector)
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SecurityAlert` |
-| **Connector Definition Files** | [AzureSecurityCenter.JSON](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud/Data%20Connectors/AzureSecurityCenter.JSON) |
-
-[→ View full connector details](../connectors/azuresecuritycenter.md)
-
-### [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md)
-
-**Publisher:** Microsoft
-
-Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your MDC security alerts from Microsoft 365 Defender into Microsoft Sentinel, so you can can leverage the advantages of XDR correlations connecting the dots across your cloud resources, devices and identities and view the data in workbooks, queries and investigate and respond to incidents. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2269832&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SecurityAlert` |
-| **Connector Definition Files** | [MicrosoftDefenderForCloudTenantBased.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud/Data%20Connectors/MicrosoftDefenderForCloudTenantBased.json) |
-
-[→ View full connector details](../connectors/microsoftdefenderforcloudtenantbased.md)
+- [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md)
+- [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SecurityAlert` | [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md), [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CoreAzureBackup`](../tables/coreazurebackup.md) | - | Analytics |
+
+### Internal Tables
+
+The following **1 table(s)** are used internally by this solution's playbooks:
+
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SecurityAlert`](../tables/securityalert.md) | [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md), [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md) | Analytics |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Detect CoreBackUp Deletion Activity from related Security Alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Defender%20for%20Cloud/Analytic%20Rules/CoreBackupDeletionwithSecurityAlert.yaml) | Medium | Impact | [`CoreAzureBackup`](../tables/coreazurebackup.md)<br>*Internal use:*<br>[`SecurityAlert`](../tables/securityalert.md) |
 
 ## Release Notes
 
@@ -62,4 +57,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 03-04-2024                    |Corrected the standard tier in **Data Connector** and Updated MicrosoftDefenderForCloudTenantBased.json to support FFX  |
 | 3.0.0       | 08-11-2023                    |New **Data Connector** included		        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

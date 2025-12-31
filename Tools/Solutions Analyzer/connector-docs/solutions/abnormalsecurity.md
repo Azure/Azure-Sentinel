@@ -13,30 +13,18 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [AbnormalSecurity ](../connectors/abnormalsecurity.md)
-
-**Publisher:** AbnormalSecurity
-
-The Abnormal Security data connector provides the capability to ingest threat and case logs into Microsoft Sentinel using the [Abnormal Security Rest API.](https://app.swaggerhub.com/apis/abnormal-security/abx/)
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ABNORMAL_CASES_CL` |
-| | `ABNORMAL_THREAT_MESSAGES_CL` |
-| **Connector Definition Files** | [AbnormalSecurity_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AbnormalSecurity/Data%20Connectors/AbnormalSecurity_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/abnormalsecurity.md)
+- [AbnormalSecurity ](../connectors/abnormalsecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ABNORMAL_CASES_CL` | [AbnormalSecurity ](../connectors/abnormalsecurity.md) |
-| `ABNORMAL_THREAT_MESSAGES_CL` | [AbnormalSecurity ](../connectors/abnormalsecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ABNORMAL_CASES_CL`](../tables/abnormal-cases-cl.md) | [AbnormalSecurity ](../connectors/abnormalsecurity.md) | - |
+| [`ABNORMAL_THREAT_MESSAGES_CL`](../tables/abnormal-threat-messages-cl.md) | [AbnormalSecurity ](../connectors/abnormalsecurity.md) | - |
 
 ## Release Notes
 
@@ -44,4 +32,10 @@ This solution ingests data into **2 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
 | 3.0.0       | 29-06-2023                     | Renaming Azure Function to Azure Functions in **Data Connector** Description and  Updated the python runtime version to 3.11      |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

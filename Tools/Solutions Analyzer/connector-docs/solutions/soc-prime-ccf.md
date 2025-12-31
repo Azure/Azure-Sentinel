@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SOC Prime Platform Audit Logs Data Connector](../connectors/socprimeauditlogsdataconnector.md)
-
-**Publisher:** Microsoft
-
-The [SOC Prime Audit Logs](https://tdm.socprime.com/login) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SOCPrimeAuditLogs_CL` |
-| **Connector Definition Files** | [SOCPrime_DataConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SOC%20Prime%20CCF/Data%20Connectors/SOCPrime_ccp/SOCPrime_DataConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/socprimeauditlogsdataconnector.md)
+- [SOC Prime Platform Audit Logs Data Connector](../connectors/socprimeauditlogsdataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SOCPrimeAuditLogs_CL` | [SOC Prime Platform Audit Logs Data Connector](../connectors/socprimeauditlogsdataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SOCPrimeAuditLogs_CL`](../tables/socprimeauditlogs-cl.md) | [SOC Prime Platform Audit Logs Data Connector](../connectors/socprimeauditlogsdataconnector.md) | - |
 
 ## Release Notes
 
@@ -42,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|----------------------------------------|
 | 3.0.0       | 24-11-2025                     | Initial Solution Release.               |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

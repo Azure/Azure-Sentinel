@@ -1,15 +1,5 @@
 # CyfirmaASCertificatesAlerts_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `CyfirmaASCertificatesAlerts_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [CYFIRMA Attack Surface](../connectors/cyfirmaattacksurfacealertsconnector.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (2)
+
+**In solution [Cyfirma Attack Surface](../solutions/cyfirma-attack-surface.md):**
+- [CYFIRMA - Attack Surface - Weak Certificate Exposure - High Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Attack%20Surface/Analytic%20Rules/ASCertificatesHighRule.yaml)
+- [CYFIRMA - Attack Surface - Weak Certificate Exposure - Medium Rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyfirma%20Attack%20Surface/Analytic%20Rules/ASCertificatesMediumRule.yaml)
 
 ---
 

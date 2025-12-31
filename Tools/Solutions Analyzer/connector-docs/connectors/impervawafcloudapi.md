@@ -16,6 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
+| [`ImpervaWAFCloudV2_CL`](../tables/impervawafcloudv2-cl.md) | — | — |
 | [`ImpervaWAFCloud_CL`](../tables/impervawafcloud-cl.md) | — | — |
 
 ## Permissions

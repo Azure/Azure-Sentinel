@@ -14,70 +14,45 @@
 
 ## Data Connectors
 
-This solution provides **4 data connector(s)**.
+This solution provides **4 data connector(s)**:
 
-### [Armis Activities](../connectors/armisactivities.md)
-
-**Publisher:** Armis
-
-The [Armis](https://www.armis.com/) Activities connector gives the capability to ingest Armis device Activities into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/doc` for more information. The connector provides the ability to get device activity information from the Armis platform. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. Armis detects what all devices are doing in your environment and classifies those activities to get a complete picture of device behavior. These activities are analyzed for an understanding of normal and abnormal device behavior and used to assess device and network risk.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Armis_Activities_CL` |
-| **Connector Definition Files** | [ArmisActivities_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Data%20Connectors/ArmisActivities/ArmisActivities_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/armisactivities.md)
-
-### [Armis Alerts](../connectors/armisalerts.md)
-
-**Publisher:** Armis
-
-The [Armis](https://www.armis.com/) Alerts connector gives the capability to ingest Armis Alerts into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/docs` for more information. The connector provides the ability to get alert information from the Armis platform and to identify and prioritize threats in your environment. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Armis_Alerts_CL` |
-| **Connector Definition Files** | [ArmisAlerts_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Data%20Connectors/ArmisAlerts/ArmisAlerts_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/armisalerts.md)
-
-### [Armis Alerts Activities](../connectors/armisalertsactivities.md)
-
-**Publisher:** Armis
-
-The [Armis](https://www.armis.com/) Alerts Activities connector gives the capability to ingest Armis Alerts and Activities into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/docs` for more information. The connector provides the ability to get alert and activity information from the Armis platform and to identify and prioritize threats in your environment. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Armis_Activities_CL` |
-| | `Armis_Alerts_CL` |
-| **Connector Definition Files** | [ArmisAlertsActivities_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Data%20Connectors/ArmisAlertsActivities/ArmisAlertsActivities_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/armisalertsactivities.md)
-
-### [Armis Devices](../connectors/armisdevices.md)
-
-**Publisher:** Armis
-
-The [Armis](https://www.armis.com/) Device connector gives the capability to ingest Armis Devices into Microsoft Sentinel through the Armis REST API. Refer to the API documentation: `https://<YourArmisInstance>.armis.com/api/v1/docs` for more information. The connector provides the ability to get device information from the Armis platform. Armis uses your existing infrastructure to discover and identify devices without having to deploy any agents. Armis can also integrate with your existing IT & security management tools to identify and classify each and every device, managed or unmanaged in your environment.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Armis_Devices_CL` |
-| **Connector Definition Files** | [ArmisDevice_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Data%20Connectors/ArmisDevice/ArmisDevice_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/armisdevices.md)
+- [Armis Activities](../connectors/armisactivities.md)
+- [Armis Alerts](../connectors/armisalerts.md)
+- [Armis Alerts Activities](../connectors/armisalertsactivities.md)
+- [Armis Devices](../connectors/armisdevices.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Armis_Activities_CL` | [Armis Activities](../connectors/armisactivities.md), [Armis Alerts Activities](../connectors/armisalertsactivities.md) |
-| `Armis_Alerts_CL` | [Armis Alerts](../connectors/armisalerts.md), [Armis Alerts Activities](../connectors/armisalertsactivities.md) |
-| `Armis_Devices_CL` | [Armis Devices](../connectors/armisdevices.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Armis_Activities_CL`](../tables/armis-activities-cl.md) | [Armis Activities](../connectors/armisactivities.md), [Armis Alerts Activities](../connectors/armisalertsactivities.md) | - |
+| [`Armis_Alerts_CL`](../tables/armis-alerts-cl.md) | [Armis Alerts](../connectors/armisalerts.md), [Armis Alerts Activities](../connectors/armisalertsactivities.md) | - |
+| [`Armis_Devices_CL`](../tables/armis-devices-cl.md) | [Armis Devices](../connectors/armisdevices.md) | - |
+
+## Content Items
+
+This solution includes **4 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 3 |
+| Playbooks | 1 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Armis Update Alert Status](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Playbooks/ArmisUpdateAlertStatus/azuredeploy.json) | Armis Update Alert Status playbook would be responsible to update the Alert status from the sentinel... | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [ArmisActivities](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Parsers/ArmisActivities.yaml) | - | - |
+| [ArmisAlerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Parsers/ArmisAlerts.yaml) | - | - |
+| [ArmisDevice](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Armis/Parsers/ArmisDevice.yaml) | - | - |
 
 ## Release Notes
 
@@ -91,4 +66,10 @@ This solution ingests data into **3 table(s)**:
 | 3.0.1       | 15-04-2024                     | Added Deploy to Azure Government button in **Data connectors**|
 | 3.0.0       | 03-11-2023                     | Fixed vulnerability related issue by passing the scret key in the body of the request instead of the param in the data connector and playbook        |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

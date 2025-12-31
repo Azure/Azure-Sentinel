@@ -5,7 +5,7 @@
 | **Connector ID** | `ESI-Opt5ExchangeIISLogs` |
 | **Publisher** | Microsoft |
 | **Used in Solutions** | [Microsoft Exchange Security - Exchange On-Premises](../solutions/microsoft-exchange-security---exchange-on-premises.md) |
-| **Collection Method** | Unknown |
+| **Collection Method** | AMA |
 | **Connector Definition Files** | [ESI-Opt5ExchangeIISLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/Data%20Connectors/ESI-Opt5ExchangeIISLogs.json) |
 
 [Option 5] - Using Azure Monitor Agent - You can stream all IIS Logs from the Windows machines connected to your Microsoft Sentinel workspace using the Windows agent. This connection enables you to create custom alerts, and improve investigation.
@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`W3CIISLog`](../tables/w3ciislog.md) | — | ✗ |
+| [`W3CIISLog`](../tables/w3ciislog.md) | ✓ | ✗ |
 
 ## Permissions
 

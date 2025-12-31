@@ -22,12 +22,11 @@ from pathlib import Path
 from typing import List, Tuple
 
 try:
-    from azure.kusto.data import KustoClient, KustoConnectionStringBuilder
+    from azure.kusto.data import KustoClient, KustoConnectionStringBuilder, DataFormat
     from azure.kusto.data.exceptions import KustoServiceError
     from azure.kusto.ingest import (
         ManagedStreamingIngestClient,
         IngestionProperties,
-        DataFormat,
     )
     from azure.identity import DefaultAzureCredential
 except ImportError as e:
@@ -215,11 +214,11 @@ def main():
         )
         mgmt_client = KustoClient(mgmt_kcsb)
         
-        # Managed streaming ingest client (handles both streaming and queued automatically)
+        # Managed streaming ingest client (auto_correct_endpoint=True derives ingest URL automatically)
         ingest_kcsb = KustoConnectionStringBuilder.with_azure_token_credential(
             cluster_url, credential
         )
-        ingest_client = ManagedStreamingIngestClient.from_dm_kcsb(ingest_kcsb)
+        ingest_client = ManagedStreamingIngestClient(ingest_kcsb)
         
         print("Authentication successful.\n")
     except Exception as e:

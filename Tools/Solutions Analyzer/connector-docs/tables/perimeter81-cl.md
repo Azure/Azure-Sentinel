@@ -1,15 +1,5 @@
 # Perimeter81_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Perimeter81_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Perimeter 81 Activity Logs](../connectors/perimeter81activitylogs.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [Perimeter 81](../solutions/perimeter-81.md):**
+- [Perimeter81OverviewWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Perimeter%2081/Workbooks/Perimeter81OverviewWorkbook.json)
 
 ---
 

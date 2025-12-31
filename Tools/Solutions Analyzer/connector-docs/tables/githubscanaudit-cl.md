@@ -1,15 +1,5 @@
 # githubscanaudit_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `githubscanaudit_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [GitHub (using Webhooks)](../connectors/githubwebhook.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Workbooks (2)
+
+**In solution [GitHub](../solutions/github.md):**
+- [GitHub](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Workbooks/GitHub.json)
+- [GitHubAdvancedSecurity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/GitHub/Workbooks/GitHubAdvancedSecurity.json)
 
 ---
 

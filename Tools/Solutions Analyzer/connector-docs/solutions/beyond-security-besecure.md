@@ -13,31 +13,24 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md)
-
-**Publisher:** Beyond Security
-
-The [Beyond Security beSECURE](https://beyondsecurity.com/) connector allows you to easily connect your Beyond Security beSECURE scan events, scan results and audit trail with Azure Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `beSECURE_Audit_CL` |
-| | `beSECURE_ScanEvent_CL` |
-| | `beSECURE_ScanResults_CL` |
-| **Connector Definition Files** | [Beyond%20Security%20beSECURE.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Beyond%20Security%20beSECURE/Data%20Connectors/Beyond%20Security%20beSECURE.json) |
-
-[→ View full connector details](../connectors/beyondsecuritybesecure.md)
+- [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md)
 
 ## Tables Reference
 
-This solution ingests data into **3 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `beSECURE_Audit_CL` | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) |
-| `beSECURE_ScanEvent_CL` | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) |
-| `beSECURE_ScanResults_CL` | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`beSECURE_Audit_CL`](../tables/besecure-audit-cl.md) | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) | - |
+| [`beSECURE_ScanEvent_CL`](../tables/besecure-scanevent-cl.md) | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) | - |
+| [`beSECURE_ScanResults_CL`](../tables/besecure-scanresults-cl.md) | [Beyond Security beSECURE](../connectors/beyondsecuritybesecure.md) | - |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

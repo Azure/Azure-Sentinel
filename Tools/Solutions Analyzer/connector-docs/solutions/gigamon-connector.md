@@ -12,28 +12,31 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Gigamon AMX Data Connector](../connectors/gigamondataconnector.md)
-
-**Publisher:** Gigamon
-
-Use this data connector to integrate with Gigamon Application Metadata Exporter (AMX) and get data sent directly to Microsoft Sentinel. 
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Gigamon_CL` |
-| **Connector Definition Files** | [Connector_Analytics_Gigamon.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Gigamon%20Connector/Data%20Connectors/Connector_Analytics_Gigamon.json) |
-
-[→ View full connector details](../connectors/gigamondataconnector.md)
+- [Gigamon AMX Data Connector](../connectors/gigamondataconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Gigamon_CL` | [Gigamon AMX Data Connector](../connectors/gigamondataconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Gigamon_CL`](../tables/gigamon-cl.md) | [Gigamon AMX Data Connector](../connectors/gigamondataconnector.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Gigamon](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Gigamon%20Connector/Workbooks/Gigamon.json) | [`Gigamon_CL`](../tables/gigamon-cl.md) |
 
 ## Release Notes
 
@@ -41,4 +44,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 25-10-2023                     | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

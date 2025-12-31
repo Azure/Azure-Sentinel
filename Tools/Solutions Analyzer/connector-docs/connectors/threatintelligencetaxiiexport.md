@@ -16,7 +16,7 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`ThreatIntelExportOperation`](../tables/threatintelexportoperation.md) | — | ✗ |
+| [`ThreatIntelExportOperation`](../tables/threatintelexportoperation.md) | ✗ | ✗ |
 
 ## Permissions
 

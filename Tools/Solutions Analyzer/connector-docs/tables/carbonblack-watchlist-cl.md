@@ -1,13 +1,5 @@
 # CarbonBlack_Watchlist_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `CarbonBlack_Watchlist_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -19,6 +11,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [VMware Carbon Black Cloud via AWS S3](../connectors/carbonblackawss3.md)
+
+---
 
 ---
 

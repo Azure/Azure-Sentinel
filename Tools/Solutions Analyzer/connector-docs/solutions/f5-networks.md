@@ -13,41 +13,18 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] F5 Networks via Legacy Agent](../connectors/f5.md)
-
-**Publisher:** F5 Networks
-
-The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_F5.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20Networks/Data%20Connectors/template_F5.json) |
-
-[→ View full connector details](../connectors/f5.md)
-
-### [[Deprecated] F5 Networks via AMA](../connectors/f5ama.md)
-
-**Publisher:** F5 Networks
-
-The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_F5NetworksAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/F5%20Networks/Data%20Connectors/template_F5NetworksAMA.json) |
-
-[→ View full connector details](../connectors/f5ama.md)
+- [[Deprecated] F5 Networks via Legacy Agent](../connectors/f5.md)
+- [[Deprecated] F5 Networks via AMA](../connectors/f5ama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] F5 Networks via AMA](../connectors/f5ama.md), [[Deprecated] F5 Networks via Legacy Agent](../connectors/f5.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] F5 Networks via AMA](../connectors/f5ama.md), [[Deprecated] F5 Networks via Legacy Agent](../connectors/f5.md) | - |
 
 ## Release Notes
 
@@ -56,4 +33,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
 | 3.0.0       | 29-09-2023                     |	Addition of new F5 Networks AMA **Data Connector**              |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

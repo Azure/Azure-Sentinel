@@ -13,41 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] Forcepoint CSG via Legacy Agent](../connectors/forcepointcsg.md)
-
-**Publisher:** Forcepoint
-
-Forcepoint Cloud Security Gateway is a converged cloud security service that provides visibility, control, and threat protection for users and data, wherever they are. For more information visit: https://www.forcepoint.com/product/cloud-security-gateway
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [ForcepointCloudSecurityGateway.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forcepoint%20CSG/Data%20Connectors/ForcepointCloudSecurityGateway.json) |
-
-[→ View full connector details](../connectors/forcepointcsg.md)
-
-### [[Deprecated] Forcepoint CSG via AMA](../connectors/forcepointcsgama.md)
-
-**Publisher:** Forcepoint
-
-Forcepoint Cloud Security Gateway is a converged cloud security service that provides visibility, control, and threat protection for users and data, wherever they are. For more information visit: https://www.forcepoint.com/product/cloud-security-gateway
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_ForcepointCloudSecurityGatewayAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forcepoint%20CSG/Data%20Connectors/template_ForcepointCloudSecurityGatewayAMA.json) |
-
-[→ View full connector details](../connectors/forcepointcsgama.md)
+- [[Deprecated] Forcepoint CSG via Legacy Agent](../connectors/forcepointcsg.md)
+- [[Deprecated] Forcepoint CSG via AMA](../connectors/forcepointcsgama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Forcepoint CSG via AMA](../connectors/forcepointcsgama.md), [[Deprecated] Forcepoint CSG via Legacy Agent](../connectors/forcepointcsg.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Forcepoint CSG via AMA](../connectors/forcepointcsgama.md), [[Deprecated] Forcepoint CSG via Legacy Agent](../connectors/forcepointcsg.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ForcepointCloudSecuirtyGateway](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Forcepoint%20CSG/Workbooks/ForcepointCloudSecuirtyGateway.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -58,4 +49,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 19-12-2023                     |	Workbook moved from standalone to solution and repackage        |
 | 3.0.0       | 11-09-2023                     |	Addition of new Forcepoint CSG AMA **Data Connector**           |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

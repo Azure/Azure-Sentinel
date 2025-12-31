@@ -13,27 +13,36 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Perimeter 81 Activity Logs](../connectors/perimeter81activitylogs.md)
-
-**Publisher:** Perimeter 81
-
-The Perimeter 81 Activity Logs connector allows you to easily connect your Perimeter 81 activity logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Perimeter81_CL` |
-| **Connector Definition Files** | [Perimeter81ActivityLogs.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Perimeter%2081/Data%20Connectors/Perimeter81ActivityLogs.json) |
-
-[→ View full connector details](../connectors/perimeter81activitylogs.md)
+- [Perimeter 81 Activity Logs](../connectors/perimeter81activitylogs.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Perimeter81_CL` | [Perimeter 81 Activity Logs](../connectors/perimeter81activitylogs.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Perimeter81_CL`](../tables/perimeter81-cl.md) | [Perimeter 81 Activity Logs](../connectors/perimeter81activitylogs.md) | Workbooks |
 
-[← Back to Solutions Index](../solutions-index.md)
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Perimeter81OverviewWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Perimeter%2081/Workbooks/Perimeter81OverviewWorkbook.json) | [`Perimeter81_CL`](../tables/perimeter81-cl.md) |
+
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

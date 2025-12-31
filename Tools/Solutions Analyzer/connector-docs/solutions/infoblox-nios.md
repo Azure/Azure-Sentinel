@@ -13,28 +13,71 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Infoblox NIOS](../connectors/infobloxnios.md)
-
-**Publisher:** Infoblox
-
-The [Infoblox Network Identity Operating System (NIOS)](https://www.infoblox.com/glossary/network-identity-operating-system-nios/) connector allows you to easily connect your Infoblox NIOS logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Syslog` |
-| **Connector Definition Files** | [Connector_Syslog_Infoblox.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Data%20Connectors/Connector_Syslog_Infoblox.json) |
-
-[→ View full connector details](../connectors/infobloxnios.md)
+- [[Deprecated] Infoblox NIOS](../connectors/infobloxnios.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **4 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Syslog` | [[Deprecated] Infoblox NIOS](../connectors/infobloxnios.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Infoblox`](../tables/infoblox.md) | - | Analytics |
+| [`Infoblox_dhcp_consolidated`](../tables/infoblox-dhcp-consolidated.md) | - | Workbooks |
+| [`Infoblox_dns_consolidated`](../tables/infoblox-dns-consolidated.md) | - | Workbooks |
+| [`Syslog`](../tables/syslog.md) | [[Deprecated] Infoblox NIOS](../connectors/infobloxnios.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **26 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Parsers | 22 |
+| Analytic Rules | 2 |
+| Workbooks | 2 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Excessive NXDOMAIN DNS Queries](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Analytic%20Rules/ExcessiveNXDOMAINDNSQueries.yaml) | Medium | CommandAndControl | [`Syslog`](../tables/syslog.md) |
+| [Potential DHCP Starvation Attack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Analytic%20Rules/PotentialDHCPStarvationAttack.yaml) | Medium | InitialAccess | [`Infoblox`](../tables/infoblox.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [Infoblox-Workbook-V2](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Workbooks/Infoblox-Workbook-V2.json) | [`Infoblox_dhcp_consolidated`](../tables/infoblox-dhcp-consolidated.md)<br>[`Infoblox_dns_consolidated`](../tables/infoblox-dns-consolidated.md)<br>[`Syslog`](../tables/syslog.md) |
+| [Sources_by_SourceType](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Workbooks/Sources_by_SourceType.json) | - |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Infoblox](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox.yaml) | - | - |
+| [Infoblox_allotherdhcpdTypes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_allotherdhcpdTypes.yaml) | - | - |
+| [Infoblox_allotherdnsTypes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_allotherdnsTypes.yaml) | - | - |
+| [Infoblox_allotherlogTypes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_allotherlogTypes.yaml) | - | - |
+| [Infoblox_dhcp_consolidated](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcp_consolidated.yaml) | - | - |
+| [Infoblox_dhcpack](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpack.yaml) | - | - |
+| [Infoblox_dhcpadded](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpadded.yaml) | - | - |
+| [Infoblox_dhcpbindupdate](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpbindupdate.yaml) | - | - |
+| [Infoblox_dhcpdiscover](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpdiscover.yaml) | - | - |
+| [Infoblox_dhcpexpire](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpexpire.yaml) | - | - |
+| [Infoblox_dhcpinform](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpinform.yaml) | - | - |
+| [Infoblox_dhcpoffer](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpoffer.yaml) | - | - |
+| [Infoblox_dhcpoption](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpoption.yaml) | - | - |
+| [Infoblox_dhcpother](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpother.yaml) | - | - |
+| [Infoblox_dhcprelease](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcprelease.yaml) | - | - |
+| [Infoblox_dhcpremoved](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpremoved.yaml) | - | - |
+| [Infoblox_dhcprequest](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcprequest.yaml) | - | - |
+| [Infoblox_dhcpsession](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dhcpsession.yaml) | - | - |
+| [Infoblox_dns_consolidated](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dns_consolidated.yaml) | - | - |
+| [Infoblox_dnsclient](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dnsclient.yaml) | - | - |
+| [Infoblox_dnsgss](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dnsgss.yaml) | - | - |
+| [Infoblox_dnszone](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Infoblox%20NIOS/Parsers/Infoblox_dnszone.yaml) | - | - |
 
 ## Release Notes
 
@@ -48,4 +91,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 24-07-2023                     |Updated ApiVersion for Watchlist                                      |
 | 3.0.0       | 11-07-2023                     |Updated support information for this solution                         |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

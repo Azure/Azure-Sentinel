@@ -1,15 +1,5 @@
 # CybleVisionAlerts_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `CybleVisionAlerts_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Cyble Vision Alerts](../connectors/cyblevisionalerts.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Workbooks (1)
+
+**In solution [Cyble Vision](../solutions/cyble-vision.md):**
+- [CybleVisionAlertsWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cyble%20Vision/Workbooks/CybleVisionAlertsWorkbook.json)
 
 ---
 

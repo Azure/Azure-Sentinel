@@ -13,28 +13,39 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [[Deprecated] Trend Micro Deep Security via Legacy](../connectors/trendmicro.md)
-
-**Publisher:** Trend Micro
-
-The Trend Micro Deep Security connector allows you to easily connect your Deep Security logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's networks/systems and improves your security operation capabilities.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [TrendMicroDeepSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Deep%20Security/Data%20Connectors/TrendMicroDeepSecurity.json) |
-
-[→ View full connector details](../connectors/trendmicro.md)
+- [[Deprecated] Trend Micro Deep Security via Legacy](../connectors/trendmicro.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] Trend Micro Deep Security via Legacy](../connectors/trendmicro.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] Trend Micro Deep Security via Legacy](../connectors/trendmicro.md) | Workbooks |
+
+## Content Items
+
+This solution includes **3 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 2 |
+| Parsers | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [TrendMicroDeepSecurityAttackActivity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Deep%20Security/Workbooks/TrendMicroDeepSecurityAttackActivity.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+| [TrendMicroDeepSecurityOverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Deep%20Security/Workbooks/TrendMicroDeepSecurityOverview.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [TrendMicroDeepSecurity](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Deep%20Security/Parsers/TrendMicroDeepSecurity.yaml) | - | - |
 
 ## Release Notes
 
@@ -45,4 +56,10 @@ This solution ingests data into **1 table(s)**:
 | 2.0.1       | 11-11-2022                     | Updated OfferId     |
 | 2.0.0       | 20-07-2022                     | Initial Package     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

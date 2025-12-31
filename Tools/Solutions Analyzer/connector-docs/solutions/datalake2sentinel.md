@@ -14,28 +14,23 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md)
-
-**Publisher:** Orange Cyberdefense
-
-This solution installs the Datalake2Sentinel connector which is built using the Codeless Connector Platform and allows you to automatically ingest threat intelligence indicators from **Datalake Orange Cyberdefense's CTI platform** into Microsoft Sentinel via the Upload Indicators REST API. After installing the solution, configure and enable this data connector by following guidance in Manage solution view.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ThreatIntelligenceIndicator` |
-| **Connector Definition Files** | [Datalake2SentinelConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Datalake2Sentinel/Data%20Connectors/Datalake2SentinelConnector.json) |
-
-[→ View full connector details](../connectors/datalake2sentinelconnector.md)
+- [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ThreatIntelligenceIndicator` | [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ThreatIntelligenceIndicator`](../tables/threatintelligenceindicator.md) | [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md) | - |
+
+## Additional Documentation
+
+> 📄 *Source: [Datalake2Sentinel/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Datalake2Sentinel/README.md)*
+
+The Datalake to Microsoft Sentinel integration allows you to upload indicators from Orange Cyberdefense **Datalake** Platform to Microsoft Sentinel.
 
 ## Release Notes
 
@@ -43,4 +38,10 @@ This solution ingests data into **1 table(s)**:
 | ----------- | ------------------------------ | -------------------------------------|
 | 3.0.0       | 31-01-2024                     | Initial Solution Release             |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

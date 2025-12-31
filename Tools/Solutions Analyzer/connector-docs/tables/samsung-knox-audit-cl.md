@@ -1,15 +1,5 @@
 # Samsung_Knox_Audit_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `Samsung_Knox_Audit_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,20 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Samsung Knox Asset Intelligence](../connectors/samsungdcdefinition.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (1)
+
+**In solution [Samsung Knox Asset Intelligence](../solutions/samsung-knox-asset-intelligence.md):**
+- [Samsung Knox - Security Log Full Events](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Analytic%20Rules/SamsungKnoxSecurityLogFull.yaml)
+
+### Workbooks (1)
+
+**In solution [Samsung Knox Asset Intelligence](../solutions/samsung-knox-asset-intelligence.md):**
+- [SamsungKnoxAssetIntelligence](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Samsung%20Knox%20Asset%20Intelligence/Workbooks/SamsungKnoxAssetIntelligence.json)
 
 ---
 

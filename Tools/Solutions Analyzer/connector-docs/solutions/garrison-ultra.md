@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Garrison ULTRA Remote Logs](../connectors/garrisonultraremotelogs.md)
-
-**Publisher:** Garrison
-
-The [Garrison ULTRA](https://www.garrison.com/en/garrison-ultra-cloud-platform) Remote Logs connector allows you to ingest Garrison ULTRA Remote Logs into Microsoft Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `Garrison_ULTRARemoteLogs_CL` |
-| **Connector Definition Files** | [GarrisonULTRARemoteLogs_ConnectorUI.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Garrison%20ULTRA/Data%20Connectors/GarrisonULTRARemoteLogs/GarrisonULTRARemoteLogs_ConnectorUI.json) |
-
-[→ View full connector details](../connectors/garrisonultraremotelogs.md)
+- [Garrison ULTRA Remote Logs](../connectors/garrisonultraremotelogs.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `Garrison_ULTRARemoteLogs_CL` | [Garrison ULTRA Remote Logs](../connectors/garrisonultraremotelogs.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`Garrison_ULTRARemoteLogs_CL`](../tables/garrison-ultraremotelogs-cl.md) | [Garrison ULTRA Remote Logs](../connectors/garrisonultraremotelogs.md) | - |
 
 ## Release Notes
 
@@ -42,4 +31,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|--------------------------------------------------------------------|
 | 3.0.0       | 22-11-2024                     | Initial Solution Release   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

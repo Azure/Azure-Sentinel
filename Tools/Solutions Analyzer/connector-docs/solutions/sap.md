@@ -14,6 +14,47 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
+## Tables Reference
+
+This solution queries **1 table(s)** from its content items:
+
+| Table | Used By Content |
+|-------|----------------|
+| [`SAPConnectorHealth`](../tables/sapconnectorhealth.md) | Playbooks |
+
+## Content Items
+
+This solution includes **10 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Playbooks | 10 |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [Basic-SAPLockUser-STD](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/Basic-SAPLockUser-STD/azuredeploy.json) | - | - |
+| [SAPCollectorRemediate-STD](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/SAPCollectorRemediate-STD/azuredeploy.json) | - | - |
+| [azureconnectordeploy](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/Basic-SAPLockUser-STD/azureconnectordeploy.json) | - | - |
+| [azureconnectordeploy](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/SAPCollectorRemediate-STD/azureconnectordeploy.json) | - | - |
+| [connections](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/Basic-SAPLockUser-STD/connections.json) | - | - |
+| [connections](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/SAPCollectorRemediate-STD/connections.json) | - | - |
+| [workflow](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/Basic-SAPLockUser-STD/workflow.json) | - | [`SAPConnectorHealth`](../tables/sapconnectorhealth.md) *(read)* |
+| [workflow](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/SAPCollectorRemediate-STD/workflow.json) | - | [`SAPConnectorHealth`](../tables/sapconnectorhealth.md) *(read)* |
+| [workflowparameters](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/Basic-SAPLockUser-STD/workflowparameters.json) | - | - |
+| [workflowparameters](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/Playbooks/SAPCollectorRemediate-STD/workflowparameters.json) | - | - |
+
+## Additional Documentation
+
+> 📄 *Source: [SAP/README.md](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP/README.md)*
+
+# Microsoft Azure Sentinel SAP Continuous Threat Monitoring - Preview
+
+Please visit: [https://docs.microsoft.com/azure/sentinel/sap-deploy-solution](https://docs.microsoft.com/azure/sentinel/sap-deploy-solution)
+
+See our playbooks built on Logic Apps (Standard) [here](./Playbooks/README.md).
+
 ## Release Notes
 
 # Solution Releases
@@ -31,4 +72,10 @@ This solution may contain other components such as analytics rules, workbooks, h
 | 11/07/2024 | 3.1.13 | Handle the "Unknown function" error on queries using multiple parsers. <br>  Disable incident creation for low severity data collection health alerts. <br> Excluded SAPJAVAFilesLogs from being queried in SAPSystems and SAPUsers* parsers by default. <br> Updated "Audit Controls" workbook to support solution versions 3.X. <br> Updated workbooks to default to local workspace even when workspace is a fresh one. 
 | 12/02/2024 | 3.2.02 | Added two new detections: SAP - (Preview) Dormant users detected, SAP - (Preview) Developer key assigned in a production system (Preview). Switched SAPAuditLog to be based on standard table ABAPAuditLog. Added support for SAP version 7.31 through 7.4 to reflect dialog users IP address using TableDataLog (DBTABLOG). Enable table logging for SAP table USR41 to enable this feature
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

@@ -12,30 +12,45 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SailPoint IdentityNow](../connectors/sailpointidentitynow.md)
-
-**Publisher:** SailPoint
-
-The [SailPoint](https://www.sailpoint.com/) IdentityNow data connector provides the capability to ingest [SailPoint IdentityNow] search events into Microsoft Sentinel through the REST API. The connector provides customers the ability to extract audit information from their IdentityNow tenant. It is intended to make it even easier to bring IdentityNow user activity and governance events into Microsoft Sentinel to improve insights from your security incident and event monitoring solution.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SailPointIDN_Events_CL` |
-| | `SailPointIDN_Triggers_CL` |
-| **Connector Definition Files** | [SailPoint_IdentityNow_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Data%20Connectors/SailPoint_IdentityNow_FunctionApp.json) |
-
-[→ View full connector details](../connectors/sailpointidentitynow.md)
+- [SailPoint IdentityNow](../connectors/sailpointidentitynow.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **3 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SailPointIDN_Events_CL` | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) |
-| `SailPointIDN_Triggers_CL` | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SailPointIDN_Events_CL`](../tables/sailpointidn-events-cl.md) | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) | Analytics |
+| [`SailPointIDN_Triggers_CL`](../tables/sailpointidn-triggers-cl.md) | [SailPoint IdentityNow](../connectors/sailpointidentitynow.md) | Analytics |
+| [`declare`](../tables/declare.md) | - | Analytics |
+
+## Content Items
+
+This solution includes **7 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 6 |
+| Playbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [SailPointIdentityNowAlertForTriggers](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowAlertsForTriggers.yaml) | Informational | InitialAccess, Collection | [`SailPointIDN_Triggers_CL`](../tables/sailpointidn-triggers-cl.md)<br>[`declare`](../tables/declare.md) |
+| [SailPointIdentityNowEventType](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowEventType.yaml) | High | InitialAccess | [`SailPointIDN_Events_CL`](../tables/sailpointidn-events-cl.md)<br>[`declare`](../tables/declare.md) |
+| [SailPointIdentityNowEventTypeTechnicalName](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowEventTypeTechnicalName.yaml) | High | InitialAccess | [`SailPointIDN_Events_CL`](../tables/sailpointidn-events-cl.md)<br>[`declare`](../tables/declare.md) |
+| [SailPointIdentityNowFailedEvents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowFailedEvents.yaml) | High | InitialAccess | [`SailPointIDN_Events_CL`](../tables/sailpointidn-events-cl.md)<br>[`declare`](../tables/declare.md) |
+| [SailPointIdentityNowFailedEventsBasedOnTime](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowFailedEventsBasedOnTime.yaml) | High | InitialAccess | [`SailPointIDN_Events_CL`](../tables/sailpointidn-events-cl.md)<br>[`declare`](../tables/declare.md) |
+| [SailPointIdentityNowUserWithFailedEvent](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Analytic%20Rules/SailPointIdentityNowUserWithFailedEvents.yaml) | High | InitialAccess | [`SailPointIDN_Events_CL`](../tables/sailpointidn-events-cl.md)<br>[`declare`](../tables/declare.md) |
+
+### Playbooks
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SailPointIdentityNow-swagger](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SailPointIdentityNow/Playbooks/Custom%20Connector/SailPointIdentityNow-swagger.json) | - | - |
 
 ## Release Notes
 
@@ -43,4 +58,10 @@ This solution ingests data into **2 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 28-08-2024                     | **Data Connector** instruction updated      |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

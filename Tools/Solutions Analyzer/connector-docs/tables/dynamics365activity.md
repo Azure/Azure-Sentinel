@@ -2,14 +2,8 @@
 
 | Attribute | Value |
 |:----------|:------|
-| **Table Name** | `Dynamics365Activity` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
+| **Supports Transformations** | ✓ Yes |
 | **Ingestion API Supported** | ✗ No |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
 
 ## Solutions (1)
 
@@ -22,6 +16,8 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Dynamics 365](../connectors/dynamics365.md)
+
+---
 
 ---
 

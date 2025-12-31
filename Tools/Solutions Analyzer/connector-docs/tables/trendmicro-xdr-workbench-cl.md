@@ -1,15 +1,5 @@
 # TrendMicro_XDR_WORKBENCH_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `TrendMicro_XDR_WORKBENCH_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,20 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Trend Vision One](../connectors/trendmicroxdr.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (1)
+
+**In solution [Trend Micro Vision One](../solutions/trend-micro-vision-one.md):**
+- [Create Incident for XDR Alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Vision%20One/Analytic%20Rules/Create%20Incident%20for%20XDR%20Alerts.yaml)
+
+### Workbooks (1)
+
+**In solution [Trend Micro Vision One](../solutions/trend-micro-vision-one.md):**
+- [TrendMicroXDROverview](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Trend%20Micro%20Vision%20One/Workbooks/TrendMicroXDROverview.json)
 
 ---
 

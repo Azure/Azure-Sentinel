@@ -13,28 +13,38 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [SaaS Security](../connectors/valencesecurity.md)
-
-**Publisher:** Valence Security
-
-Connects the Valence SaaS security platform Azure Log Analytics via the REST API interface.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ValenceAlert_CL` |
-| **Connector Definition Files** | [ValenceSecurity.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Valence%20Security/Data%20Connectors/ValenceSecurity.json) |
-
-[→ View full connector details](../connectors/valencesecurity.md)
+- [SaaS Security](../connectors/valencesecurity.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ValenceAlert_CL` | [SaaS Security](../connectors/valencesecurity.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ValenceAlert_CL`](../tables/valencealert-cl.md) | [SaaS Security](../connectors/valencesecurity.md) | Analytics, Workbooks |
+
+## Content Items
+
+This solution includes **2 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 1 |
+| Workbooks | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Valence Security Alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Valence%20Security/Analytic%20Rules/ValenceAlerts.yaml) | High | - | [`ValenceAlert_CL`](../tables/valencealert-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [ValenceAlertsWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Valence%20Security/Workbooks/ValenceAlertsWorkbook.json) | [`ValenceAlert_CL`](../tables/valencealert-cl.md) |
 
 ## Release Notes
 
@@ -42,4 +52,10 @@ This solution ingests data into **1 table(s)**:
 |-------------|--------------------------------|-----------------------------------|
 |  3.0.0      |  27-11-2023                    |  Initial Solution Release         |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

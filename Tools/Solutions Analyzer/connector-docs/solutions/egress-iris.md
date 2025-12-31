@@ -13,30 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Egress Iris Connector](../connectors/egresssiempolling.md)
-
-**Publisher:** Egress Software Technologies
-
-The Egress Iris connector will allow you to ingest Egress data into Sentinel.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `DefendAuditData` |
-| | `EgressEvents_CL` |
-| **Connector Definition Files** | [EgressDataConnector.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Iris/Data%20Connectors/EgressDataConnector.json) |
-
-[→ View full connector details](../connectors/egresssiempolling.md)
+- [Egress Iris Connector](../connectors/egresssiempolling.md)
 
 ## Tables Reference
 
-This solution ingests data into **2 table(s)**:
+This solution uses **2 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `DefendAuditData` | [Egress Iris Connector](../connectors/egresssiempolling.md) |
-| `EgressEvents_CL` | [Egress Iris Connector](../connectors/egresssiempolling.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`DefendAuditData`](../tables/defendauditdata.md) | [Egress Iris Connector](../connectors/egresssiempolling.md) | - |
+| [`EgressEvents_CL`](../tables/egressevents-cl.md) | [Egress Iris Connector](../connectors/egresssiempolling.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [PreventWorkbook](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Egress%20Iris/Workbooks/PreventWorkbook.json) | [`EgressEvents_CL`](../tables/egressevents-cl.md) |
 
 ## Release Notes
 
@@ -44,4 +46,10 @@ This solution ingests data into **2 table(s)**:
 |-------------|--------------------------------|---------------------------------------------|
 | 3.0.0       | 17-04-2024                     | Initial Solution Release                    |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

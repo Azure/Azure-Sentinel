@@ -13,28 +13,17 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **1 data connector(s)**:
 
-### [Ermes Browser Security Events](../connectors/ermesbrowsersecurityevents.md)
-
-**Publisher:** Ermes Cyber Security S.p.A.
-
-Ermes Browser Security Events
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `ErmesBrowserSecurityEvents_CL` |
-| **Connector Definition Files** | [ErmesBrowserSecurityEvents_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ermes%20Browser%20Security/Data%20Connectors/ErmesBrowserSecurityEvents_CCF/ErmesBrowserSecurityEvents_ConnectorDefinition.json) |
-
-[→ View full connector details](../connectors/ermesbrowsersecurityevents.md)
+- [Ermes Browser Security Events](../connectors/ermesbrowsersecurityevents.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `ErmesBrowserSecurityEvents_CL` | [Ermes Browser Security Events](../connectors/ermesbrowsersecurityevents.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`ErmesBrowserSecurityEvents_CL`](../tables/ermesbrowsersecurityevents-cl.md) | [Ermes Browser Security Events](../connectors/ermesbrowsersecurityevents.md) | - |
 
 ## Release Notes
 
@@ -46,4 +35,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 28-11-2023                     | Updated **CCP Data Connector**                     |
 | 3.0.0       | 29-09-2023                     | Initial Solution Release                           |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

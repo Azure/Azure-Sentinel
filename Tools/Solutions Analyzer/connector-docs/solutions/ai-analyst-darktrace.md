@@ -13,41 +13,32 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [[Deprecated] AI Analyst Darktrace via Legacy Agent](../connectors/darktrace.md)
-
-**Publisher:** Darktrace
-
-The Darktrace connector lets users connect Darktrace Model Breaches in real-time with Microsoft Sentinel, allowing creation of custom Dashboards, Workbooks, Notebooks and Custom Alerts to improve investigation.  Microsoft Sentinel's enhanced visibility into Darktrace logs enables monitoring and mitigation of security threats.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [AIA-Darktrace.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AI%20Analyst%20Darktrace/Data%20Connectors/AIA-Darktrace.json) |
-
-[→ View full connector details](../connectors/darktrace.md)
-
-### [[Deprecated] AI Analyst Darktrace via AMA](../connectors/darktraceama.md)
-
-**Publisher:** Darktrace
-
-The Darktrace connector lets users connect Darktrace Model Breaches in real-time with Microsoft Sentinel, allowing creation of custom Dashboards, Workbooks, Notebooks and Custom Alerts to improve investigation.  Microsoft Sentinel's enhanced visibility into Darktrace logs enables monitoring and mitigation of security threats.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `CommonSecurityLog` |
-| **Connector Definition Files** | [template_AIA-DarktraceAMA.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AI%20Analyst%20Darktrace/Data%20Connectors/template_AIA-DarktraceAMA.json) |
-
-[→ View full connector details](../connectors/darktraceama.md)
+- [[Deprecated] AI Analyst Darktrace via Legacy Agent](../connectors/darktrace.md)
+- [[Deprecated] AI Analyst Darktrace via AMA](../connectors/darktraceama.md)
 
 ## Tables Reference
 
-This solution ingests data into **1 table(s)**:
+This solution uses **1 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `CommonSecurityLog` | [[Deprecated] AI Analyst Darktrace via AMA](../connectors/darktraceama.md), [[Deprecated] AI Analyst Darktrace via Legacy Agent](../connectors/darktrace.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`CommonSecurityLog`](../tables/commonsecuritylog.md) | [[Deprecated] AI Analyst Darktrace via AMA](../connectors/darktraceama.md), [[Deprecated] AI Analyst Darktrace via Legacy Agent](../connectors/darktrace.md) | Workbooks |
+
+## Content Items
+
+This solution includes **1 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Workbooks | 1 |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [AIA-Darktrace](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AI%20Analyst%20Darktrace/Workbooks/AIA-Darktrace.json) | [`CommonSecurityLog`](../tables/commonsecuritylog.md) |
 
 ## Release Notes
 
@@ -56,4 +47,10 @@ This solution ingests data into **1 table(s)**:
 | 3.0.1       | 11-07-2024                     |    Deprecating data connectors                                     |
 | 3.0.0       | 18-09-2023                     |	Addition of new AI Analyst Darktrace AMA **Data Connector**     |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

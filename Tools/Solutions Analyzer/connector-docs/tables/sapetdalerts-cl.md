@@ -1,15 +1,5 @@
 # SAPETDAlerts_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `SAPETDAlerts_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,16 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [SAP Enterprise Threat Detection, cloud edition](../connectors/sapetdalerts.md)
+
+---
+
+## Content Items Using This Table (2)
+
+### Analytic Rules (2)
+
+**In solution [SAP ETD Cloud](../solutions/sap-etd-cloud.md):**
+- [SAP ETD - Login from unexpected network](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-LoginFromUnexpectedNetwork.yaml)
+- [SAP ETD - Synch alerts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SAP%20ETD%20Cloud/Analytic%20Rules/SAPETD-SynchAlerts.yaml)
 
 ---
 

@@ -13,50 +13,77 @@
 
 ## Data Connectors
 
-This solution provides **2 data connector(s)**.
+This solution provides **2 data connector(s)**:
 
-### [SentinelOne](../connectors/sentinelone.md)
-
-**Publisher:** SentinelOne
-
-The [SentinelOne](https://www.sentinelone.com/) data connector provides the capability to ingest common SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API. Refer to API documentation: `https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview` for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SentinelOne_CL` |
-| **Connector Definition Files** | [SentinelOne_API_FunctionApp.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Data%20Connectors/SentinelOne_API_FunctionApp.json) |
-
-[→ View full connector details](../connectors/sentinelone.md)
-
-### [SentinelOne](../connectors/sentineloneccp.md)
-
-**Publisher:** Microsoft
-
-The [SentinelOne](https://usea1-nessat.sentinelone.net/api-doc/overview) data connector allows ingesting logs from the SentinelOne API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SentinelOne API to fetch logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table so that queries don't need to parse it again, thus resulting in better performance.
-
-| Attribute | Value |
-|:-------------------------|:---|
-| **Tables Ingested** | `SentinelOneActivities_CL` |
-| | `SentinelOneAgents_CL` |
-| | `SentinelOneAlerts_CL` |
-| | `SentinelOneGroups_CL` |
-| | `SentinelOneThreats_CL` |
-| **Connector Definition Files** | [connectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Data%20Connectors/SentinelOne_ccp/connectorDefinition.json) |
-
-[→ View full connector details](../connectors/sentineloneccp.md)
+- [SentinelOne](../connectors/sentinelone.md)
+- [SentinelOne](../connectors/sentineloneccp.md)
 
 ## Tables Reference
 
-This solution ingests data into **6 table(s)**:
+This solution uses **6 table(s)**:
 
-| Table | Used By Connectors |
-|-------|-------------------|
-| `SentinelOneActivities_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
-| `SentinelOneAgents_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
-| `SentinelOneAlerts_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
-| `SentinelOneGroups_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
-| `SentinelOneThreats_CL` | [SentinelOne](../connectors/sentineloneccp.md) |
-| `SentinelOne_CL` | [SentinelOne](../connectors/sentinelone.md) |
+| Table | Used By Connectors | Used By Content |
+|-------|-------------------|----------------|
+| [`SentinelOneActivities_CL`](../tables/sentineloneactivities-cl.md) | [SentinelOne](../connectors/sentineloneccp.md) | - |
+| [`SentinelOneAgents_CL`](../tables/sentineloneagents-cl.md) | [SentinelOne](../connectors/sentineloneccp.md) | - |
+| [`SentinelOneAlerts_CL`](../tables/sentinelonealerts-cl.md) | [SentinelOne](../connectors/sentineloneccp.md) | - |
+| [`SentinelOneGroups_CL`](../tables/sentinelonegroups-cl.md) | [SentinelOne](../connectors/sentineloneccp.md) | - |
+| [`SentinelOneThreats_CL`](../tables/sentinelonethreats-cl.md) | [SentinelOne](../connectors/sentineloneccp.md) | - |
+| [`SentinelOne_CL`](../tables/sentinelone-cl.md) | [SentinelOne](../connectors/sentinelone.md) | Analytics, Hunting, Workbooks |
+
+## Content Items
+
+This solution includes **23 content item(s)**:
+
+| Content Type | Count |
+|:-------------|:------|
+| Analytic Rules | 11 |
+| Hunting Queries | 10 |
+| Workbooks | 1 |
+| Parsers | 1 |
+
+### Analytic Rules
+
+| Name | Severity | Tactics | Tables Used |
+|:-----|:---------|:--------|:------------|
+| [Sentinel One - Admin login from new location](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneAdminLoginNewIP.yaml) | High | InitialAccess, PrivilegeEscalation | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Agent uninstalled from multiple hosts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneAgentUninstalled.yaml) | High | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Alert from custom rule](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneAlertFromCustomRule.yaml) | High | InitialAccess | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Blacklist hash deleted](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneBlacklistHashDeleted.yaml) | Medium | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Exclusion added](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneExclusionAdded.yaml) | Medium | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Multiple alerts on host](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneMultipleAlertsOnHost.yaml) | High | InitialAccess | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - New admin created](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneNewAdmin.yaml) | Medium | PrivilegeEscalation | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Rule deleted](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneRuleDeleted.yaml) | Medium | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Rule disabled](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneRuleDisabled.yaml) | Medium | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Same custom rule triggered on different hosts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneSameCustomRuleHitOnDiffHosts.yaml) | High | InitialAccess, LateralMovement | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - User viewed agent's passphrase](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Analytic%20Rules/SentinelOneViewAgentPassphrase.yaml) | Medium | CredentialAccess | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+
+### Hunting Queries
+
+| Name | Tactics | Tables Used |
+|:-----|:--------|:------------|
+| [Sentinel One - Agent not updated](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneAgentNotUpdated.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Agent status](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneAgentStatus.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Alert triggers (files, processes, strings)](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneAlertTriggers.yaml) | InitialAccess | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Deleted rules](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneRulesDeleted.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Hosts not scanned recently](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneHostNotScanned.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - New rules](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneNewRules.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Scanned hosts](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneScannedHosts.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Sources by alert count](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneSourcesByAlertCount.yaml) | InitialAccess | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Uninstalled agents](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneUninstalledAgents.yaml) | DefenseEvasion | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+| [Sentinel One - Users by alert count](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Hunting%20Queries/SentinelOneUsersByAlertCount.yaml) | InitialAccess | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+
+### Workbooks
+
+| Name | Tables Used |
+|:-----|:------------|
+| [SentinelOne](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Workbooks/SentinelOne.json) | [`SentinelOne_CL`](../tables/sentinelone-cl.md) |
+
+### Parsers
+
+| Name | Description | Tables Used |
+|:-----|:------------|:------------|
+| [SentinelOne](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelOne/Parsers/SentinelOne.yaml) | - | - |
 
 ## Release Notes
 
@@ -70,4 +97,10 @@ This solution ingests data into **6 table(s)**:
 | 3.0.1       | 03-05-2024                     | Repackaged for **Parser** issue fix             |
 | 3.0.0       | 28-07-2023                     | Bug fixes in API version.                   |
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

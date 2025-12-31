@@ -7,10 +7,27 @@
 Generates browsable markdown documentation from the CSV data produced by `map_solutions_connectors_tables.py` and `collect_table_info.py`. The documentation includes:
 
 - Three index pages (solutions, connectors, tables)
-- Individual pages for each solution with connector details
+- Individual pages for each solution with connector details and **content item tables**
 - Individual pages for each connector with table transformation and ingestion API support information
 - Individual pages for ALL tables with enriched metadata from Azure Monitor documentation
 - **AI-rendered setup instructions** extracted from connector UI definitions
+
+### Content Item Tables
+
+Solution pages display tables extracted from content items (analytics rules, hunting queries, playbooks, workbooks, etc.):
+
+- Tables are grouped by content item type
+- Each table links to its detailed documentation page
+- **Playbook tables show usage indicators**: `(read)`, `(write)`, or `(read/write)` to show whether the playbook reads from, writes to, or both reads and writes to each table
+
+### Table Index
+
+The tables index includes:
+- All tables ingested by connectors
+- All tables referenced by content items
+- **All tables from Azure Monitor reference** (`tables_reference.csv`), even if not used by any solution
+
+This ensures complete coverage of known Microsoft Sentinel tables, even those that exist in Azure Monitor but aren't directly used by any solution in the repository.
 
 ## Output
 

@@ -14,4 +14,10 @@
 
 This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.
 
-[← Back to Solutions Index](../solutions-index.md)
+---
+
+**Browse:**
+
+- [← Back to Solutions Index](../solutions-index.md)
+- [Connectors Index](../connectors-index.md)
+- [Tables Index](../tables-index.md)

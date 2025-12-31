@@ -1,15 +1,5 @@
 # BitwardenEventLogs_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `BitwardenEventLogs_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,17 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Bitwarden Event Logs](../connectors/bitwardeneventlogs.md)
+
+---
+
+## Content Items Using This Table (3)
+
+### Workbooks (3)
+
+**In solution [Bitwarden](../solutions/bitwarden.md):**
+- [BitwardenEventLogsAuthentication](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Workbooks/BitwardenEventLogsAuthentication.json)
+- [BitwardenEventLogsOrganization](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Workbooks/BitwardenEventLogsOrganization.json)
+- [BitwardenEventLogsVaultItems](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Bitwarden/Workbooks/BitwardenEventLogsVaultItems.json)
 
 ---
 

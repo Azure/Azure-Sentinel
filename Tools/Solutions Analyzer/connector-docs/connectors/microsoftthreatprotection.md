@@ -34,28 +34,28 @@ This connector ingests data into the following tables:
 
 | Table | Supports Transformations | Ingestion API Supported |
 |-------|:------------------------:|:-----------------------:|
-| [`AlertEvidence`](../tables/alertevidence.md) | — | ✗ |
-| [`CloudAppEvents`](../tables/cloudappevents.md) | — | ✗ |
-| [`DeviceEvents`](../tables/deviceevents.md) | — | ✗ |
-| [`DeviceFileCertificateInfo`](../tables/devicefilecertificateinfo.md) | — | ✗ |
-| [`DeviceFileEvents`](../tables/devicefileevents.md) | — | ✗ |
-| [`DeviceImageLoadEvents`](../tables/deviceimageloadevents.md) | — | ✗ |
-| [`DeviceInfo`](../tables/deviceinfo.md) | — | ✗ |
-| [`DeviceLogonEvents`](../tables/devicelogonevents.md) | — | ✗ |
-| [`DeviceNetworkEvents`](../tables/devicenetworkevents.md) | — | ✗ |
-| [`DeviceNetworkInfo`](../tables/devicenetworkinfo.md) | — | ✗ |
-| [`DeviceProcessEvents`](../tables/deviceprocessevents.md) | — | ✗ |
-| [`DeviceRegistryEvents`](../tables/deviceregistryevents.md) | — | ✗ |
-| [`EmailAttachmentInfo`](../tables/emailattachmentinfo.md) | — | ✗ |
-| [`EmailEvents`](../tables/emailevents.md) | — | ✗ |
-| [`EmailPostDeliveryEvents`](../tables/emailpostdeliveryevents.md) | — | ✗ |
-| [`EmailUrlInfo`](../tables/emailurlinfo.md) | — | ✗ |
-| [`IdentityDirectoryEvents`](../tables/identitydirectoryevents.md) | — | ✗ |
-| [`IdentityLogonEvents`](../tables/identitylogonevents.md) | — | ✗ |
-| [`IdentityQueryEvents`](../tables/identityqueryevents.md) | — | ✗ |
-| [`SecurityAlert`](../tables/securityalert.md) | — | ✗ |
-| [`SecurityIncident`](../tables/securityincident.md) | — | ✗ |
-| [`UrlClickEvents`](../tables/urlclickevents.md) | — | ✗ |
+| [`AlertEvidence`](../tables/alertevidence.md) | ✓ | ✗ |
+| [`CloudAppEvents`](../tables/cloudappevents.md) | ✓ | ✗ |
+| [`DeviceEvents`](../tables/deviceevents.md) | ✓ | ✗ |
+| [`DeviceFileCertificateInfo`](../tables/devicefilecertificateinfo.md) | ✓ | ✗ |
+| [`DeviceFileEvents`](../tables/devicefileevents.md) | ✓ | ✗ |
+| [`DeviceImageLoadEvents`](../tables/deviceimageloadevents.md) | ✓ | ✗ |
+| [`DeviceInfo`](../tables/deviceinfo.md) | ✓ | ✗ |
+| [`DeviceLogonEvents`](../tables/devicelogonevents.md) | ✓ | ✗ |
+| [`DeviceNetworkEvents`](../tables/devicenetworkevents.md) | ✓ | ✗ |
+| [`DeviceNetworkInfo`](../tables/devicenetworkinfo.md) | ✓ | ✗ |
+| [`DeviceProcessEvents`](../tables/deviceprocessevents.md) | ✓ | ✗ |
+| [`DeviceRegistryEvents`](../tables/deviceregistryevents.md) | ✓ | ✗ |
+| [`EmailAttachmentInfo`](../tables/emailattachmentinfo.md) | ✓ | ✗ |
+| [`EmailEvents`](../tables/emailevents.md) | ✓ | ✗ |
+| [`EmailPostDeliveryEvents`](../tables/emailpostdeliveryevents.md) | ✓ | ✗ |
+| [`EmailUrlInfo`](../tables/emailurlinfo.md) | ✓ | ✗ |
+| [`IdentityDirectoryEvents`](../tables/identitydirectoryevents.md) | ✓ | ✗ |
+| [`IdentityLogonEvents`](../tables/identitylogonevents.md) | ✓ | ✗ |
+| [`IdentityQueryEvents`](../tables/identityqueryevents.md) | ✓ | ✗ |
+| [`SecurityAlert`](../tables/securityalert.md) | ✓ | ✗ |
+| [`SecurityIncident`](../tables/securityincident.md) | ✓ | ✗ |
+| [`UrlClickEvents`](../tables/urlclickevents.md) | ✓ | ✗ |
 
 ## Permissions
 

@@ -1,15 +1,5 @@
 # RedCanaryDetections_CL
 
-| Attribute | Value |
-|:----------|:------|
-| **Table Name** | `RedCanaryDetections_CL` |
-| **Solutions Using Table** | 1 |
-| **Connectors Ingesting** | 1 |
-
-⚠️ **Note:** This table name is unique to specific connectors.
-
----
-
 ## Solutions (1)
 
 This table is used by the following solutions:
@@ -21,6 +11,15 @@ This table is used by the following solutions:
 This table is ingested by the following connectors:
 
 - [Red Canary Threat Detection](../connectors/redcanarydataconnector.md)
+
+---
+
+## Content Items Using This Table (1)
+
+### Analytic Rules (1)
+
+**In solution [Red Canary](../solutions/red-canary.md):**
+- [Red Canary Threat Detection](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Red%20Canary/Analytic%20Rules/RedCanaryThreatDetection.yaml)
 
 ---
 
