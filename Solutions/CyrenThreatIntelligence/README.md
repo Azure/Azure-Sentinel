@@ -32,7 +32,7 @@ Before deploying this solution, ensure you have:
 2. **Cyren API Credentials**
    - JWT Token for IP Reputation feed
    - JWT Token for Malware URLs feed
-   - Obtain these from [Cyren Portal](https://www.cyren.com/)
+   - Obtain these from [Cyren Portal](https://www.data443.com/cyren/)
 
 3. **Azure Permissions**
    - Contributor role on the resource group
@@ -324,7 +324,7 @@ The solution creates a User-Assigned Managed Identity with:
 
 ## Additional Resources
 
-- [Cyren Threat Intelligence Platform](https://www.cyren.com/)
+- [Cyren Threat Intelligence Platform](https://www.data443.com/cyren/)
 - [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel/)
 - [CCF Data Connector Reference](https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference)
 
@@ -343,6 +343,6 @@ This solution is provided by Cyren. Please refer to Cyren's licensing terms.
 
 ## Additional Resources
 
-- [Cyren Threat Intelligence Platform](https://www.cyren.com/)
+- [Cyren Threat Intelligence Platform](https://www.data443.com/cyren/)
 - [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel/)
 - [CCF Data Connector Reference](https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference)
