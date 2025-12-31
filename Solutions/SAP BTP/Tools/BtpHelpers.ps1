@@ -499,7 +499,13 @@ function Get-BtpServiceKeyCredentials {
 function New-BtpConnectionRequestBody {
     param(
         [Parameter(Mandatory=$true)]
-        [object]$BtpCredentials
+        [object]$BtpCredentials,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$PollingFrequencyMinutes = 1,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$IngestDelayMinutes = 20
     )
     
     try {
@@ -525,8 +531,8 @@ function New-BtpConnectionRequestBody {
                 request = @{
                     apiEndpoint = $apiEndpoint
                     httpMethod = "Get"
-                    queryWindowInMin = 1
-                    queryWindowDelayInMin = 20
+                    queryWindowInMin = $PollingFrequencyMinutes
+                    queryWindowDelayInMin = $IngestDelayMinutes
                     queryTimeFormat = "yyyy-MM-ddTHH:mm:ss.fff"
                     retryCount = 3
                     timeoutInSeconds = 120
@@ -763,6 +769,10 @@ function New-SentinelBtpConnection {
         [Parameter(Mandatory=$true)]
         [string]$SubaccountId,
         [Parameter(Mandatory=$false)]
+        [int]$PollingFrequencyMinutes = 1,
+        [Parameter(Mandatory=$false)]
+        [int]$IngestDelayMinutes = 20,
+        [Parameter(Mandatory=$false)]
         [string]$ApiVersion = "2025-07-01-preview"
     )
     
@@ -791,7 +801,7 @@ function New-SentinelBtpConnection {
         }
         
         # Build request body
-        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials
+        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -PollingFrequencyMinutes $PollingFrequencyMinutes -IngestDelayMinutes $IngestDelayMinutes
         if ($null -eq $bodyObject) {
             return $false
         }
@@ -799,7 +809,7 @@ function New-SentinelBtpConnection {
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
         # Construct ARM API URI
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($SubaccountId)?api-version=$ApiVersion"
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($ConnectionName)?api-version=$ApiVersion"
         
         # Create headers
         $headers = @{

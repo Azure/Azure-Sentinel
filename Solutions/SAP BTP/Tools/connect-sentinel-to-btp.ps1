@@ -47,6 +47,12 @@ param(
     [SecureString]$CfPassword,
     
     [Parameter(Mandatory=$false)]
+    [int]$PollingFrequencyMinutes = 1,
+    
+    [Parameter(Mandatory=$false)]
+    [int]$IngestDelayMinutes = 20,
+    
+    [Parameter(Mandatory=$false)]
     [string]$ApiVersion = "2025-09-01"
 )
 
@@ -183,6 +189,8 @@ foreach ($subaccount in $subaccounts) {
         -ConnectionName $connectionName `
         -BtpCredentials $btpCredentials `
         -SubaccountId $subaccountId `
+        -PollingFrequencyMinutes $PollingFrequencyMinutes `
+        -IngestDelayMinutes $IngestDelayMinutes `
         -ApiVersion $ApiVersion
     
     if ($connectionCreated) {
