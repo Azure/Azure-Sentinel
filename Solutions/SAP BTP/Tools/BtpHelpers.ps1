@@ -814,8 +814,11 @@ function New-SentinelBtpConnection {
         
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
+        # URL-encode the connection name to handle spaces and special characters
+        $encodedConnectionName = [System.Uri]::EscapeDataString($ConnectionName)
+        
         # Construct ARM API URI
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($ConnectionName)?api-version=$ApiVersion"
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($encodedConnectionName)?api-version=$ApiVersion"
         
         # Create headers
         $headers = @{
