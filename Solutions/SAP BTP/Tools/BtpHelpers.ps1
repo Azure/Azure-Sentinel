@@ -500,6 +500,9 @@ function New-BtpConnectionRequestBody {
     param(
         [Parameter(Mandatory=$true)]
         [object]$BtpCredentials,
+
+        [Parameter(Mandatory=$false)]
+        [string]$SubaccountName = "Unknown",
         
         [Parameter(Mandatory=$false)]
         [int]$PollingFrequencyMinutes = 1,
@@ -518,6 +521,9 @@ function New-BtpConnectionRequestBody {
             properties = @{
                 connectorDefinitionName = "SAPBTPAuditEvents"
                 dataType = "SAPBTPAuditLog_CL"
+                addOnAttributes = @{
+                    SubaccountName = if ([string]::IsNullOrWhiteSpace($SubaccountName)) { "Unknown" } else { $SubaccountName }
+                }
                 auth = @{
                     type = "OAuth2"
                     ClientId = $BtpCredentials.ClientId
@@ -801,7 +807,7 @@ function New-SentinelBtpConnection {
         }
         
         # Build request body
-        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -PollingFrequencyMinutes $PollingFrequencyMinutes -IngestDelayMinutes $IngestDelayMinutes
+        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -SubaccountName $ConnectionName -PollingFrequencyMinutes $PollingFrequencyMinutes -IngestDelayMinutes $IngestDelayMinutes
         if ($null -eq $bodyObject) {
             return $false
         }
