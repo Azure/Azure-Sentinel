@@ -12,16 +12,16 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **480 solutions**, of which **335** include data connectors, providing access to **462 unique connectors** and **740 unique tables**.
+This documentation covers **484 solutions**, of which **340** include data connectors, providing access to **470 unique connectors** and **750 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 480 |
-| Solutions with Connectors | 335 (69%) |
-| Unique Connectors | 462 |
-| Unique Tables | 740 |
+| Total Solutions | 484 |
+| Solutions with Connectors | 340 (70%) |
+| Unique Connectors | 470 |
+| Unique Tables | 750 |
 
 ## How This Documentation is Organized\n\nEach solution has its own page containing:
 
@@ -200,6 +200,7 @@ Browse solutions alphabetically:
 | [Darktrace](solutions/darktrace.md) | 2022-05-02 | Darktrace |
 | [Datalake2Sentinel](solutions/datalake2sentinel.md) | 2024-01-15 | Orange Cyberdefense |
 | [Dataminr Pulse](solutions/dataminr-pulse.md) | 2023-04-12 | Dataminr Support |
+| [Datawiza](solutions/datawiza.md) | 2025-11-10 | Datawiza Technology Inc. |
 | [Delinea Secret Server](solutions/delinea-secret-server.md) | 2022-05-06 | Delinea |
 | [Dev 0270 Detection and Hunting](solutions/dev-0270-detection-and-hunting.md) | 2022-11-29 | Microsoft Corporation |
 | [Digital Guardian Data Loss Prevention](solutions/digital-guardian-data-loss-prevention.md) | 2021-07-23 | Microsoft Corporation |
@@ -297,6 +298,7 @@ Browse solutions alphabetically:
 | [HIPAA Compliance](solutions/hipaa-compliance.md) | 2025-10-08 | Microsoft Corporation |
 | [HYAS](solutions/hyas.md) | 2021-10-20 | HYAS |
 | [HYAS Protect](solutions/hyas-protect.md) | 2023-09-26 | HYAS |
+| [Halcyon](solutions/halcyon.md) | 2025-12-22 | Halcyon |
 | [HolmSecurity](solutions/holmsecurity.md) | 2022-07-18 | Holm Security |
 | [HoneyTokens](solutions/honeytokens.md) |  |  |
 
@@ -395,6 +397,7 @@ Browse solutions alphabetically:
 | [MimecastTIRegional](solutions/mimecasttiregional.md) | 2023-08-23 | Mimecast |
 | [MimecastTTP](solutions/mimecastttp.md) | 2022-02-24 | Mimecast |
 | [Minemeld](solutions/minemeld.md) | 2022-10-11 | Microsoft Corporation |
+| [Miro](solutions/miro.md) |  | Miro |
 | [MongoDBAtlas](solutions/mongodbatlas.md) | 2025-08-22 | MongoDB |
 | [MongoDBAudit](solutions/mongodbaudit.md) | 2022-06-01 | Microsoft Corporation |
 | [Morphisec](solutions/morphisec.md) | 2022-05-05 | Morphisec |
@@ -578,6 +581,7 @@ Browse solutions alphabetically:
 | [Trend Micro Deep Security](solutions/trend-micro-deep-security.md) | 2022-05-10 | Trend Micro |
 | [Trend Micro TippingPoint](solutions/trend-micro-tippingpoint.md) | 2022-05-02 | Trend Micro |
 | [Trend Micro Vision One](solutions/trend-micro-vision-one.md) | 2022-05-11 | Trend Micro |
+| [Tropico](solutions/tropico.md) | 2025-12-02 | TROPICO Security |
 
 ### U
 

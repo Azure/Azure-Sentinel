@@ -19,7 +19,7 @@ This solution provides **1 data connector(s)**.
 
 **Publisher:** Microsoft
 
-The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
+The [SOC Prime Audit Logs](https://tdm.socprime.com/login) data connector allows ingesting logs from the SOC Prime Platform API into Microsoft Sentinel. The data connector is built on Microsoft Sentinel Codeless Connector Platform. It uses the SOC Prime Platform API to fetch SOC Prime platform audit logs and it supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security data into a custom table, thus resulting in better performance.
 
 **Permissions:**
 
@@ -31,7 +31,7 @@ The [SOC Prime Audit Logs](https://help.socprime.com/en/articles/6265791-api) da
 > ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.
 
 #### Configuration steps for the SOC Prime Platform API 
- Follow the instructions to obtain the credentials. you can also follow this [guide](https://help.socprime.com/en/articles/6265791-api#h_8a0d20b204) to generate personal API key.
+ Follow the instructions to obtain the credentials. you can also follow this [guide](https://tdm.socprime.com/login) to generate personal API key.
 #### Retrieve API Key
    1. Log in to the SOC Prime Platform
  2. Click [**Account**] icon -> [**Platform Settings**] -> [**API**] 
