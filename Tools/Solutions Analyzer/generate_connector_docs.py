@@ -442,6 +442,42 @@ def get_single_connector_readme(solution_name: str, solutions_dir: Path) -> Tupl
     return None, None
 
 
+def get_playbook_readme_content(solution_folder: str, content_readme_file: str, 
+                                solutions_dir: Path) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Read README.md content for a playbook.
+    
+    Args:
+        solution_folder: Name of the solution folder
+        content_readme_file: Relative path to the README file within Playbooks folder
+        solutions_dir: Path to the Solutions directory
+    
+    Returns:
+        Tuple of (readme_content, readme_github_url) or (None, None) if not found
+    """
+    if not solution_folder or not content_readme_file or not solutions_dir:
+        return None, None
+    
+    solution_path = solutions_dir / solution_folder
+    if not solution_path.exists():
+        return None, None
+    
+    # The content_readme_file is relative to the Playbooks folder
+    readme_path = solution_path / "Playbooks" / content_readme_file
+    
+    if readme_path.exists():
+        try:
+            content = readme_path.read_text(encoding='utf-8')
+            # Build the GitHub URL
+            readme_github_path = f"Solutions/{quote(solution_folder, safe='')}/Playbooks/{quote(content_readme_file, safe='/')}"
+            github_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/{readme_github_path}"
+            return content, github_url
+        except Exception as e:
+            print(f"  Warning: Could not read {readme_path}: {e}")
+    
+    return None, None
+
+
 def format_instruction_steps(instruction_steps: str) -> str:
     """
     Parse and format instruction steps from CSV field.
@@ -1155,9 +1191,12 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
             content_type = item.get('content_type', 'unknown')
             content_description = item.get('content_description', '')
             content_file = item.get('content_file', '')
+            content_readme_file = item.get('content_readme_file', '')
             content_severity = item.get('content_severity', '')
             content_status = item.get('content_status', '')
             content_kind = item.get('content_kind', '')
+            content_event_vendor = item.get('content_event_vendor', '')
+            content_event_product = item.get('content_event_product', '')
             content_tactics = item.get('content_tactics', '')
             content_techniques = item.get('content_techniques', '')
             content_required_connectors = item.get('content_required_connectors', '')
@@ -1232,6 +1271,12 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                     connectors_formatted = ', '.join(connector_links)
                     f.write(f"| **Required Connectors** | {connectors_formatted} |\n")
                 
+                # Event Vendor/Product (from query analysis)
+                if content_event_vendor:
+                    f.write(f"| **Event Vendor** | {content_event_vendor.replace(';', ', ')} |\n")
+                if content_event_product:
+                    f.write(f"| **Event Product** | {content_event_product.replace(';', ', ')} |\n")
+                
                 if github_url:
                     f.write(f"| **Source** | [View on GitHub]({github_url}) |\n")
                 
@@ -1262,6 +1307,30 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                             table_link = format_table_link(table, "../tables/")
                             f.write(f"- {table_link}\n")
                         f.write("\n")
+                
+                # Additional Documentation section for playbooks (embedded README content)
+                if content_type == 'playbook' and content_readme_file and solution_folder and solutions_dir:
+                    readme_content, readme_github_url = get_playbook_readme_content(
+                        solution_folder, content_readme_file, solutions_dir
+                    )
+                    if readme_content:
+                        f.write("## Additional Documentation\n\n")
+                        # Clean up README content - remove the title if it matches playbook name
+                        lines = readme_content.strip().split('\n')
+                        # Skip first line if it's a title that matches the playbook name
+                        if lines and lines[0].strip().startswith('#'):
+                            first_title = lines[0].strip().lstrip('#').strip()
+                            if first_title.lower() == content_name.lower() or content_name.lower() in first_title.lower():
+                                lines = lines[1:]
+                        
+                        # Include the README content (limit to reasonable size)
+                        readme_text = '\n'.join(lines).strip()
+                        if len(readme_text) > 5000:
+                            readme_text = readme_text[:5000].rsplit('\n', 1)[0] + '\n\n*[Content truncated...]*'
+                        
+                        f.write(f"> 📄 *Source: [{content_readme_file}]({readme_github_url})*\n\n")
+                        f.write(readme_text)
+                        f.write("\n\n")
                 
                 # Navigation footer - link to type-specific index
                 type_plural = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
@@ -1298,7 +1367,10 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
     
     # Content index files go in the content/ folder
     content_dir = output_dir / "content"
-    page_path = content_dir / f"{type_slug}-{letter.lower()}.md"
+    content_dir.mkdir(parents=True, exist_ok=True)
+    # Use 'other' for filename when letter is '#' (non-alphabetic items)
+    file_letter = 'other' if letter == '#' else letter.lower()
+    page_path = content_dir / f"{type_slug}-{file_letter}.md"
     
     with page_path.open("w", encoding="utf-8") as f:
         f.write(f"# {type_name} - {letter}\n\n")
@@ -1317,10 +1389,11 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
         f.write("**Jump to letter:** ")
         letter_links = []
         for l in all_letters:
+            link_letter = 'other' if l == '#' else l.lower()
             if l == letter:
                 letter_links.append(f"**{l}**")
             else:
-                letter_links.append(f"[{l}]({type_slug}-{l.lower()}.md)")
+                letter_links.append(f"[{l}]({type_slug}-{link_letter}.md)")
         f.write(" | ".join(letter_links))
         f.write("\n\n")
         
@@ -1414,7 +1487,11 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
         # Letter navigation
         f.write("**Jump to:** ")
         if use_letter_pages:
-            f.write(" | ".join(f"[{letter}]({type_slug}-{letter.lower()}.md)" for letter in letters))
+            letter_links = []
+            for letter in letters:
+                link_letter = 'other' if letter == '#' else letter.lower()
+                letter_links.append(f"[{letter}]({type_slug}-{link_letter}.md)")
+            f.write(" | ".join(letter_links))
         else:
             f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
         f.write("\n\n")
@@ -1424,8 +1501,9 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
             f.write("| Letter | Count |\n")
             f.write("|:-------|------:|\n")
             for letter in letters:
+                link_letter = 'other' if letter == '#' else letter.lower()
                 count = len(by_letter[letter])
-                f.write(f"| [{letter}]({type_slug}-{letter.lower()}.md) | {count} |\n")
+                f.write(f"| [{letter}]({type_slug}-{link_letter}.md) | {count} |\n")
             f.write("\n")
         else:
             # Full listing with separate tables per letter
@@ -1578,6 +1656,29 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
         f.write(f"| Solutions with Content | {solutions_with_content} |\n")
         f.write("\n")
         
+        # Content Items by Type table (moved from solutions-index)
+        content_type_names = {
+            'analytic_rule': 'Analytic Rules',
+            'hunting_query': 'Hunting Queries',
+            'workbook': 'Workbooks',
+            'playbook': 'Playbooks',
+            'parser': 'Parsers',
+            'watchlist': 'Watchlists',
+        }
+        
+        f.write("### Content by Type\n\n")
+        f.write("| Content Type | Count |\n")
+        f.write("|:-------------|------:|\n")
+        
+        # Sort by count descending
+        for content_type, items in sorted(content_by_type.items(), key=lambda x: -len(x[1])):
+            type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
+            type_slug = get_content_type_slug(content_type)
+            f.write(f"| [{type_name}]({type_slug}.md) | {len(items)} |\n")
+        
+        f.write(f"| **Total** | **{total_items}** |\n")
+        f.write("\n")
+        
         # Navigation footer
         f.write("---\n\n")
         f.write("**Browse:**\n\n")
@@ -1670,42 +1771,6 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write(f"| Solutions with Connectors | {solutions_with_connectors} ({100*solutions_with_connectors//len(solutions)}%) |\n")
         f.write(f"| Unique Connectors | {len(all_connector_ids)} |\n")
         f.write(f"| Unique Tables | {len(all_tables)} |\n\n")
-        
-        # Content Items Statistics
-        if content_items_by_solution:
-            # Count content items by type
-            content_by_type: Dict[str, int] = defaultdict(int)
-            solutions_with_content = 0
-            total_content_items = 0
-            
-            for solution_name_iter, items in content_items_by_solution.items():
-                if items:
-                    solutions_with_content += 1
-                    for item in items:
-                        content_type = item.get('content_type', 'unknown')
-                        content_by_type[content_type] += 1
-                        total_content_items += 1
-            
-            content_type_names = {
-                'analytic_rule': 'Analytic Rules',
-                'hunting_query': 'Hunting Queries',
-                'workbook': 'Workbooks',
-                'playbook': 'Playbooks',
-                'parser': 'Parsers',
-                'watchlist': 'Watchlists',
-            }
-            
-            f.write("### Content Items Statistics\n\n")
-            f.write("| Content Type | Count |\n")
-            f.write("|:-------------|:------|\n")
-            
-            # Sort by count descending
-            for content_type, count in sorted(content_by_type.items(), key=lambda x: -x[1]):
-                type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
-                f.write(f"| {type_name} | {count} |\n")
-            
-            f.write(f"| **Total** | **{total_content_items}** |\n\n")
-            f.write(f"*Content items found in {solutions_with_content} of {len(solutions)} solutions ({100*solutions_with_content//len(solutions)}%)*\n\n")
         
         # Build collection method summary
         # Collect all unique connectors with their metadata
@@ -2156,7 +2221,8 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
 
 
 def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]],
-                         content_tables_by_table: Dict[str, List[Dict[str, str]]] = None) -> None:
+                         content_tables_by_table: Dict[str, List[Dict[str, str]]] = None,
+                         connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate individual table documentation pages for ALL tables.
     
     Args:
@@ -2164,9 +2230,12 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         output_dir: Output directory for documentation
         tables_reference: Dictionary of table metadata from reference CSV
         content_tables_by_table: Dictionary of table name to list of content items using that table
+        connectors_reference: Dictionary of connector metadata from connectors CSV (includes event_vendor/event_product)
     """
     if content_tables_by_table is None:
         content_tables_by_table = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     
     table_dir = output_dir / "tables"
     table_dir.mkdir(parents=True, exist_ok=True)
@@ -2278,6 +2347,51 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 for cid, title in sorted(info['connectors']):
                     f.write(f"- [{title}](../connectors/{sanitize_filename(cid)}.md)\n")
                 f.write("\n")
+            
+            # Vendor/Product section for CommonSecurityLog and ASim* tables
+            is_vendor_product_table = (table == 'CommonSecurityLog' or 
+                                       table.startswith('ASim') or 
+                                       table.startswith('_ASim') or
+                                       table.startswith('_Im_'))
+            if is_vendor_product_table and info['connectors'] and connectors_reference:
+                # Collect vendor/product pairs from all connectors for this table
+                vendor_products = []  # List of (vendor, product, connector_id, connector_title)
+                for cid, title in info['connectors']:
+                    if cid in connectors_reference:
+                        conn_ref = connectors_reference[cid]
+                        vendors = conn_ref.get('event_vendor', '')
+                        products = conn_ref.get('event_product', '')
+                        
+                        # Parse semicolon-separated values
+                        vendor_list = [v.strip() for v in vendors.split(';') if v.strip()] if vendors else []
+                        product_list = [p.strip() for p in products.split(';') if p.strip()] if products else []
+                        
+                        if vendor_list or product_list:
+                            for vendor in vendor_list or ['']:
+                                for product in product_list or ['']:
+                                    if vendor or product:
+                                        vendor_products.append((vendor, product, cid, title))
+                
+                if vendor_products:
+                    # Group by vendor/product, collect connectors
+                    vp_to_connectors: Dict[tuple, List[tuple]] = defaultdict(list)
+                    for vendor, product, cid, title in vendor_products:
+                        vp_to_connectors[(vendor, product)].append((cid, title))
+                    
+                    f.write(f"## Vendors and Products ({len(vp_to_connectors)})\n\n")
+                    if table == 'CommonSecurityLog':
+                        f.write("The following DeviceVendor/DeviceProduct values are used by connectors ingesting this table:\n\n")
+                    else:
+                        f.write("The following EventVendor/EventProduct values are used by connectors ingesting this table:\n\n")
+                    
+                    f.write("| Vendor | Product | Connectors |\n")
+                    f.write("|:-------|:--------|:-----------|\n")
+                    for (vendor, product), connectors_list in sorted(vp_to_connectors.items()):
+                        vendor_display = vendor if vendor else '*'
+                        product_display = product if product else '*'
+                        connector_links = ', '.join([f"[{title}](../connectors/{sanitize_filename(cid)}.md)" for cid, title in sorted(set(connectors_list))])
+                        f.write(f"| {vendor_display} | {product_display} | {connector_links} |\n")
+                    f.write("\n")
             
             f.write("---\n\n")
             
@@ -2421,13 +2535,13 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             if collection_method:
                 f.write(f"| **Collection Method** | {collection_method} |\n")
             
-            # Device Vendor/Product (for CEF/Syslog and ASIM connectors)
-            device_vendor = first_entry.get('device_vendor', '')
-            device_product = first_entry.get('device_product', '')
-            if device_vendor:
-                f.write(f"| **Device Vendor** | {device_vendor.replace(';', ', ')} |\n")
-            if device_product:
-                f.write(f"| **Device Product** | {device_product.replace(';', ', ')} |\n")
+            # Event Vendor/Product (for CEF/Syslog and ASIM connectors)
+            event_vendor = first_entry.get('event_vendor', '')
+            event_product = first_entry.get('event_product', '')
+            if event_vendor:
+                f.write(f"| **Event Vendor** | {event_vendor.replace(';', ', ')} |\n")
+            if event_product:
+                f.write(f"| **Event Product** | {event_product.replace(';', ', ')} |\n")
             
             # Connector files
             connector_files = first_entry.get('connector_files', '')
@@ -2445,13 +2559,30 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 description = description.replace('<br>', '\n\n')
                 f.write(f"{description}\n\n")
             
-            # Tables Ingested Section - Enhanced with transformation and ingestion API info
+            # Tables Ingested Section - Enhanced with transformation, ingestion API info, and vendor/product
             tables = sorted([t for t in data['tables'] if t])
             if tables:
+                # Parse the per-table vendor/product JSON
+                vp_by_table_str = first_entry.get('event_vendor_product_by_table', '')
+                vp_by_table = {}
+                if vp_by_table_str:
+                    try:
+                        vp_by_table = json.loads(vp_by_table_str)
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Check if we have any vendor/product data for these tables
+                has_vp_data = any(table in vp_by_table for table in tables)
+                
                 f.write("## Tables Ingested\n\n")
                 f.write("This connector ingests data into the following tables:\n\n")
-                f.write("| Table | Supports Transformations | Ingestion API Supported |\n")
-                f.write("|-------|:------------------------:|:-----------------------:|\n")
+                
+                if has_vp_data:
+                    f.write("| Table | Event Vendor | Event Product | Transformations | Ingestion API |\n")
+                    f.write("|-------|:-------------|:--------------|:---------------:|:-------------:|\n")
+                else:
+                    f.write("| Table | Supports Transformations | Ingestion API Supported |\n")
+                    f.write("|-------|:------------------------:|:-----------------------:|\n")
                 
                 for table in tables:
                     table_ref = tables_reference.get(table, {})
@@ -2463,7 +2594,15 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
                     
                     table_link = f"[`{table}`](../tables/{sanitize_filename(table)}.md)"
-                    f.write(f"| {table_link} | {transforms_cell} | {ingestion_cell} |\n")
+                    
+                    if has_vp_data:
+                        # Get vendor/product for this table
+                        table_vp = vp_by_table.get(table, {})
+                        vendors = ', '.join(table_vp.get('vendor', [])) if table_vp.get('vendor') else '—'
+                        products = ', '.join(table_vp.get('product', [])) if table_vp.get('product') else '—'
+                        f.write(f"| {table_link} | {vendors} | {products} | {transforms_cell} | {ingestion_cell} |\n")
+                    else:
+                        f.write(f"| {table_link} | {transforms_cell} | {ingestion_cell} |\n")
                 
                 f.write("\n")
                 
@@ -2931,6 +3070,102 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     print(f"Generated solution page: {solution_path}")
 
 
+def generate_docs_readme(
+    output_dir: Path,
+    solutions_count: int,
+    connectors_count: int,
+    tables_count: int,
+    content_count: int,
+    content_items_by_solution: Dict[str, List[Dict[str, str]]]
+) -> None:
+    """
+    Generate the README.md file for the documentation folder with current statistics
+    and relative links that work both locally and on GitHub.
+    """
+    from datetime import datetime
+    
+    # Count content items by type
+    content_by_type: Dict[str, int] = {}
+    for items in content_items_by_solution.values():
+        for item in items:
+            content_type = item.get('content_type', 'unknown')
+            content_by_type[content_type] = content_by_type.get(content_type, 0) + 1
+    
+    # Format content type counts for display
+    content_type_display = {
+        'analytic_rule': 'Analytic Rules',
+        'hunting_query': 'Hunting Queries',
+        'playbook': 'Playbooks',
+        'workbook': 'Workbooks',
+        'parser': 'Parsers',
+        'watchlist': 'Watchlists',
+    }
+    
+    readme_path = output_dir / "readme.md"
+    
+    with readme_path.open("w", encoding="utf-8") as f:
+        f.write("# Microsoft Sentinel Solutions Documentation\n\n")
+        f.write("This documentation provides comprehensive information about Microsoft Sentinel Solutions, ")
+        f.write("including data connectors, log tables, and content items.\n\n")
+        
+        f.write("## Quick Links\n\n")
+        f.write("| Documentation | Description |\n")
+        f.write("|:--------------|:------------|\n")
+        f.write(f"| [Solutions Index](solutions-index.md) | Browse all {solutions_count} solutions |\n")
+        f.write(f"| [Connectors Index](connectors-index.md) | Browse all {connectors_count} data connectors |\n")
+        f.write(f"| [Tables Index](tables-index.md) | Browse all {tables_count} log tables |\n")
+        f.write(f"| [Content Index](content/content-index.md) | Browse all {content_count} content items |\n")
+        f.write("\n")
+        
+        f.write("## Documentation Statistics\n\n")
+        f.write("| Category | Count |\n")
+        f.write("|:---------|------:|\n")
+        f.write(f"| Solutions | {solutions_count:,} |\n")
+        f.write(f"| Data Connectors | {connectors_count:,} |\n")
+        f.write(f"| Log Tables | {tables_count:,} |\n")
+        f.write(f"| Content Items | {content_count:,} |\n")
+        f.write("\n")
+        
+        f.write("### Content Items by Type\n\n")
+        f.write("| Type | Count |\n")
+        f.write("|:-----|------:|\n")
+        for content_type in ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist']:
+            count = content_by_type.get(content_type, 0)
+            display_name = content_type_display.get(content_type, content_type.replace('_', ' ').title())
+            f.write(f"| {display_name} | {count:,} |\n")
+        f.write("\n")
+        
+        f.write("## Directory Structure\n\n")
+        f.write("```\n")
+        f.write("├── solutions-index.md      # Main solutions listing\n")
+        f.write("├── connectors-index.md     # Data connectors listing\n")
+        f.write("├── tables-index.md         # Log tables listing\n")
+        f.write("├── solutions/              # Individual solution pages\n")
+        f.write("├── connectors/             # Individual connector pages\n")
+        f.write("├── tables/                 # Individual table pages\n")
+        f.write("└── content/                # Content item pages\n")
+        f.write("    ├── content-index.md    # Content items listing\n")
+        f.write("    └── *.md                # Individual content pages\n")
+        f.write("```\n\n")
+        
+        f.write("## Source\n\n")
+        f.write("This documentation is generated from the [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) repository ")
+        f.write("using the Solutions Analyzer tool.\n\n")
+        
+        f.write("### Generating Documentation\n\n")
+        f.write("To regenerate this documentation:\n\n")
+        f.write("```bash\n")
+        f.write("cd \"Tools/Solutions Analyzer\"\n")
+        f.write("python map_solutions_connectors_tables.py  # Generate CSVs\n")
+        f.write("python generate_connector_docs.py          # Generate docs\n")
+        f.write("```\n\n")
+        
+        f.write("---\n\n")
+        f.write(f"*Generated by Solutions Analyzer v5.0 - {datetime.now().strftime('%B %Y')}*\n")
+    
+    print(f"Generated readme: {readme_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate Microsoft Learn-style connector documentation from CSV"
@@ -3158,8 +3393,9 @@ def main() -> None:
         if connector_id and connector_id in connectors_reference:
             row['collection_method'] = connectors_reference[connector_id].get('collection_method', '')
             row['collection_method_reason'] = connectors_reference[connector_id].get('collection_method_reason', '')
-            row['device_vendor'] = connectors_reference[connector_id].get('device_vendor', '')
-            row['device_product'] = connectors_reference[connector_id].get('device_product', '')
+            row['event_vendor'] = connectors_reference[connector_id].get('event_vendor', '')
+            row['event_product'] = connectors_reference[connector_id].get('event_product', '')
+            row['event_vendor_product_by_table'] = connectors_reference[connector_id].get('event_vendor_product_by_table', '')
     
     print(f"Loaded {len(rows)} rows")
     
@@ -3203,7 +3439,7 @@ def main() -> None:
         generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types)
     
     # Generate individual table pages with content item references
-    generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table)
+    generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
     content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir)
@@ -3219,6 +3455,16 @@ def main() -> None:
     # Count table pages created - now counts all tables with pages
     table_pages_count = len(tables_map)
     
+    # Generate the README.md for the docs folder
+    generate_docs_readme(
+        output_dir=args.output_dir,
+        solutions_count=len(by_solution),
+        connectors_count=len(all_connector_ids),
+        tables_count=table_pages_count,
+        content_count=content_pages_count,
+        content_items_by_solution=content_items_by_solution
+    )
+
     print(f"\nDocumentation generated successfully in: {args.output_dir}")
     print(f"  - Solutions index: {args.output_dir / 'solutions-index.md'}")
     print(f"  - Connectors index: {args.output_dir / 'connectors-index.md'}")

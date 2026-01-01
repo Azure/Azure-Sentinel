@@ -32,9 +32,9 @@ FIELD_GENERATING_PATTERN = re.compile(
 )
 
 # Patterns for extracting vendor/product from queries
-# Matches patterns like: DeviceVendor == "value" or DeviceVendor =~ "value"
+# Matches patterns like: DeviceVendor == "value", DeviceVendor =~ "value", DeviceVendor = "value"
 VENDOR_PRODUCT_PATTERN = re.compile(
-    r'\b(DeviceVendor|DeviceProduct|EventVendor|EventProduct)\s*=~?\s*["\']([^"\']+)["\']',
+    r'\b(DeviceVendor|DeviceProduct|EventVendor|EventProduct)\s*==?~?\s*["\']([^"\']+)["\']',
     re.IGNORECASE
 )
 
@@ -146,6 +146,47 @@ def get_connector_vendor_product(data: Any) -> Dict[str, Set[str]]:
         vp = extract_vendor_product_from_query(query)
         result['vendor'].update(vp['vendor'])
         result['product'].update(vp['product'])
+    
+    return result
+
+
+def get_connector_vendor_product_by_table(data: Any) -> Dict[str, Dict[str, Set[str]]]:
+    """
+    Extract vendor/product values from a connector's queries, grouped by table name.
+    
+    Args:
+        data: The parsed connector JSON data
+    
+    Returns:
+        Dictionary mapping table names to their vendor/product values.
+        Example: {'CommonSecurityLog': {'vendor': {'Cisco'}, 'product': {'ASA'}}}
+    """
+    result: Dict[str, Dict[str, Set[str]]] = {}
+    
+    queries = extract_all_queries_from_connector(data)
+    
+    # Pattern to extract table name from query (first table-like identifier after FROM or at the start)
+    # This handles: "TableName | where ...", "TableName\n| where ...", etc.
+    table_pattern = re.compile(r'^\s*(\w+)\s*[\|\n]', re.MULTILINE)
+    
+    for query in queries:
+        # Try to extract the table name from the query
+        table_match = table_pattern.search(query)
+        if table_match:
+            table_name = table_match.group(1)
+            
+            # Skip if it looks like a KQL keyword
+            if table_name.lower() in ('let', 'union', 'print', 'range', 'datatable'):
+                continue
+            
+            # Extract vendor/product from this query
+            vp = extract_vendor_product_from_query(query)
+            
+            if vp['vendor'] or vp['product']:
+                if table_name not in result:
+                    result[table_name] = {'vendor': set(), 'product': set()}
+                result[table_name]['vendor'].update(vp['vendor'])
+                result[table_name]['product'].update(vp['product'])
     
     return result
 
@@ -663,6 +704,71 @@ NON_TABLE_TOKENS = {
     "string",
     "guid",
     "decimal",
+    
+    # Common workbook/query variable names (false positives)
+    "records",
+    "totalrecords",
+    "queryresult",
+    "queryresults",
+    "result",
+    "results",
+    "filtereddata",
+    "filtereddns",
+    "filteredrdp",
+    "filteredvpn",
+    "filtered",
+    "aggregationrecords",
+    "topsubjects",
+    "nxdomainresponses",
+    "unusualqtypes",
+    "unencryptedconnection",
+    "vpncount",
+    "filter_record",
+    "ssl",  # Too generic - likely column alias
+    "x509",  # Too generic - likely column alias
+    "dns",  # Too generic without prefix
+    "http",  # Too generic without prefix
+    "rdp",  # Too generic without prefix
+    "vpn",  # Too generic without prefix
+    "ftp",  # Too generic without prefix
+    "ssh",  # Too generic without prefix
+    "smtp",  # Too generic without prefix
+    "conn",  # Too generic without prefix
+    "files",  # Too generic without prefix
+    
+    # More generic variable patterns
+    "count",
+    "counts",
+    "summary",
+    "details",
+    "info",
+    "items",
+    "list",
+    "logs",
+    "entries",
+    "rows",
+    "events",
+    "metrics",
+    "stats",
+    "statistics",
+    "aggregated",
+    "grouped",
+    "merged",
+    "combined",
+    "joined",
+    "parsed",
+    "extracted",
+    "processed",
+    "raw",
+    "temp",
+    "tmp",
+    "base",
+    "source",
+    "target",
+    "input",
+    "output",
+    "final",
+    "initial",
 }
 PIPE_BLOCK_COMMANDS = {
     "project",
@@ -731,6 +837,41 @@ def is_valid_table_candidate(token: Optional[str], *, allow_parser_names: bool =
         return False
     if lowered.endswith("_parser") and not allow_parser_names:
         return False
+    
+    # Pattern-based detection for common variable naming patterns
+    # These patterns suggest the name is a KQL let statement variable, not a table
+    
+    # Reject names that look like variables (camelCase with common suffixes)
+    variable_suffixes = ('count', 'data', 'result', 'results', 'records', 'list', 'items', 
+                         'entries', 'rows', 'logs', 'events', 'info', 'details', 'summary',
+                         'aggregation', 'aggregations', 'stats', 'statistics', 'metrics')
+    for suffix in variable_suffixes:
+        # Check if name ends with suffix (case insensitive) and is camelCase
+        if lowered.endswith(suffix) and len(lowered) > len(suffix):
+            prefix = cleaned[:-len(suffix)]
+            # If the prefix part has no underscore and isn't all lowercase, it's likely a variable
+            if '_' not in prefix and not prefix.islower():
+                return False
+    
+    # Reject names that start with common variable prefixes (case insensitive)
+    variable_prefixes = ('filtered', 'aggregated', 'grouped', 'merged', 'combined', 
+                         'processed', 'parsed', 'extracted', 'all', 'total', 'top', 
+                         'raw', 'temp', 'tmp', 'base', 'source', 'target', 'my')
+    for prefix in variable_prefixes:
+        if lowered.startswith(prefix) and len(lowered) > len(prefix):
+            # If followed by uppercase letter (camelCase), likely a variable
+            rest = cleaned[len(prefix):]
+            if rest and rest[0].isupper():
+                return False
+    
+    # Very short names without underscore or _CL suffix are likely variables
+    # Real Sentinel tables typically have underscores or are known built-in names
+    if len(cleaned) <= 6 and '_' not in cleaned and not lowered.endswith('_cl'):
+        # Allow known short built-in table names
+        known_short_tables = {'syslog', 'usage', 'update', 'event', 'alert', 'anomalies'}
+        if lowered not in known_short_tables:
+            return False
+    
     return True
 
 
@@ -1373,6 +1514,33 @@ def find_connector_objects(data: Any) -> List[Dict[str, Any]]:
     return connectors
 
 
+def find_connector_readme(solution_dir: Path) -> str:
+    """
+    Find README.md file in Data Connectors folder for a solution.
+    Returns relative path within Data Connectors folder, or empty string if not found.
+    
+    Args:
+        solution_dir: Path to the solution directory
+    
+    Returns:
+        Relative path to README file within Data Connectors folder, or empty string
+    """
+    for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
+        dc_dir = solution_dir / dc_folder_name
+        if not dc_dir.exists():
+            continue
+        # Look for README.md or any .md file directly in Data Connectors folder
+        md_files = [f for f in dc_dir.glob('*.md') if f.is_file()]
+        if md_files:
+            # Prefer README.md if it exists
+            for md_file in md_files:
+                if md_file.stem.lower() == 'readme':
+                    return f"{dc_folder_name}/{md_file.name}"
+            # Otherwise use the first .md file
+            return f"{dc_folder_name}/{md_files[0].name}"
+    return ""
+
+
 def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
     metadata_path = solution_dir / "SolutionMetadata.json"
     metadata = read_json(metadata_path) if metadata_path.exists() else {}
@@ -1397,6 +1565,14 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
     else:
         categories_str = ""
     
+    # Find README file for the solution (at solution root level)
+    solution_readme_file = ""
+    for readme_name in ["README.md", "readme.md", "Readme.md", "README.MD"]:
+        readme_path = solution_dir / readme_name
+        if readme_path.exists():
+            solution_readme_file = readme_name
+            break
+    
     return {
         "solution_name": solution_dir.name,
         "solution_folder": solution_dir.name,
@@ -1410,6 +1586,7 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
         "solution_support_link": support.get("link", ""),
         "solution_author_name": author.get("name", ""),
         "solution_categories": categories_str,
+        "solution_readme_file": solution_readme_file,
     }
 
 
@@ -2152,6 +2329,7 @@ def extract_content_item_from_yaml(
         "content_type": content_type,
         "content_description": description[:500] if description else "",  # Truncate long descriptions
         "content_file": yaml_path.name,
+        "content_readme_file": "",  # YAML content items don't typically have README files
         "content_severity": severity,
         "content_status": status,
         "content_kind": kind,
@@ -2160,8 +2338,8 @@ def extract_content_item_from_yaml(
         "content_required_connectors": ",".join(required_connectors),
         "content_query": query,
         "content_query_status": query_status,
-        "content_device_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
-        "content_device_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
+        "content_event_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
+        "content_event_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
         "solution_name": solution_name,
         "solution_folder": solution_folder,
     }
@@ -2201,6 +2379,7 @@ def extract_content_item_from_workbook(
         "content_type": "workbook",
         "content_description": "",  # Description not used for workbooks
         "content_file": json_path.name,
+        "content_readme_file": "",  # Workbooks don't typically have README files
         "content_severity": "",
         "content_status": "",
         "content_kind": "",
@@ -2209,8 +2388,8 @@ def extract_content_item_from_workbook(
         "content_required_connectors": "",
         "content_query": combined_query,
         "content_query_status": "has_query" if combined_query else "no_query",
-        "content_device_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
-        "content_device_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
+        "content_event_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
+        "content_event_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
         "solution_name": solution_name,
         "solution_folder": solution_folder,
     }
@@ -2282,19 +2461,31 @@ def extract_content_item_from_playbook(
     if not isinstance(data, dict):
         return None
     
-    # Skip linked deployment templates (they deploy multiple playbooks)
+    # Check if this is a valid Logic App (playbook)
+    # Valid playbooks must have a Microsoft.Logic/workflows resource (ARM template format)
+    # or a definition with triggers/actions (Logic App definition format)
+    is_logic_app = False
+    
     if "resources" in data:
         resources = data.get("resources", [])
         if isinstance(resources, list):
             for resource in resources:
                 if isinstance(resource, dict):
                     res_type = resource.get("type", "")
-                    # Skip if this is a linked deployment template
-                    if res_type == "Microsoft.Resources/deployments":
-                        return None
-                    # Skip if this is a custom API connector (not a playbook)
-                    if res_type == "Microsoft.Web/customApis":
-                        return None
+                    # Check if this is a Logic App workflow
+                    if res_type == "Microsoft.Logic/workflows":
+                        is_logic_app = True
+                        break
+    
+    # Check for Logic App definition format (non-ARM)
+    if not is_logic_app and "definition" in data:
+        definition = data.get("definition", {})
+        if isinstance(definition, dict) and ("triggers" in definition or "actions" in definition):
+            is_logic_app = True
+    
+    # If this is not a Logic App, skip it
+    if not is_logic_app:
+        return None
     
     name = None
     description = ""
@@ -2328,6 +2519,65 @@ def extract_content_item_from_playbook(
     if description:
         description = " ".join(description.split())
     
+    # Always look for README.md file in the playbook folder
+    readme_file = ""
+    playbook_folder = json_path.parent
+    
+    # Look for README files in the playbook folder
+    for readme_name in ["readme.md", "README.md", "Readme.md", "readme.MD", "README.MD"]:
+        candidate = playbook_folder / readme_name
+        if candidate.exists():
+            # Store the relative path to the README file (will be updated by caller)
+            readme_file = readme_name
+            
+            # If no description from metadata, extract from README
+            if not description:
+                try:
+                    with candidate.open("r", encoding="utf-8", errors="ignore") as f:
+                        readme_content = f.read()
+                    
+                    # Extract description from README
+                    # Skip the title (first # line) and get the first paragraph
+                    lines = readme_content.split('\n')
+                    content_lines = []
+                    in_content = False
+                    
+                    for line in lines:
+                        stripped = line.strip()
+                        # Skip title lines (start with #)
+                        if stripped.startswith('#'):
+                            if in_content:
+                                break  # Stop at next header
+                            continue
+                        # Skip empty lines at the beginning
+                        if not stripped and not in_content:
+                            continue
+                        # Skip image links and badges
+                        if stripped.startswith('![') or stripped.startswith('[!['):
+                            continue
+                        # Skip HTML comments
+                        if stripped.startswith('<!--'):
+                            continue
+                        # Start collecting content
+                        if stripped:
+                            in_content = True
+                            content_lines.append(stripped)
+                        elif in_content:
+                            # Empty line after content - stop at first paragraph
+                            break
+                    
+                    if content_lines:
+                        description = " ".join(content_lines)
+                        # Clean up markdown formatting
+                        description = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', description)  # Remove links
+                        description = re.sub(r'\*\*([^*]+)\*\*', r'\1', description)  # Remove bold
+                        description = re.sub(r'\*([^*]+)\*', r'\1', description)  # Remove italic
+                        description = re.sub(r'`([^`]+)`', r'\1', description)  # Remove code
+                        description = " ".join(description.split())  # Normalize whitespace
+                except Exception:
+                    pass  # Ignore errors reading README
+            break
+    
     # content_file will be overwritten by the caller with the full relative path
     content_file = json_path.name
     
@@ -2349,6 +2599,7 @@ def extract_content_item_from_playbook(
         "content_type": "playbook",
         "content_description": description[:500] if description else "",
         "content_file": content_file,
+        "content_readme_file": readme_file,  # New field for README file path
         "content_severity": "",
         "content_status": "",
         "content_kind": "",
@@ -2357,8 +2608,8 @@ def extract_content_item_from_playbook(
         "content_required_connectors": "",
         "content_query": combined_query,
         "content_query_status": "has_query" if combined_query else "no_query",
-        "content_device_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
-        "content_device_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
+        "content_event_vendor": ";".join(sorted(vp['vendor'])) if vp['vendor'] else "",
+        "content_event_product": ";".join(sorted(vp['product'])) if vp['product'] else "",
         "content_write_tables": write_tables_str,
         "solution_name": solution_name,
         "solution_folder": solution_folder,
@@ -2407,6 +2658,11 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                         try:
                             rel_path = json_path.relative_to(content_dir)
                             item["content_file"] = str(rel_path).replace("\\", "/")
+                            # Update readme file path to include the folder
+                            if item.get("content_readme_file"):
+                                readme_rel_path = json_path.parent / item["content_readme_file"]
+                                readme_rel = readme_rel_path.relative_to(content_dir)
+                                item["content_readme_file"] = str(readme_rel).replace("\\", "/")
                         except ValueError:
                             pass
                         content_items.append(item)
@@ -2425,6 +2681,7 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             "content_type": "watchlist",
                             "content_description": "",
                             "content_file": json_path.name,
+                            "content_readme_file": "",  # Watchlists don't have README files
                             "content_severity": "",
                             "content_status": "",
                             "content_kind": "",
@@ -2433,8 +2690,8 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             "content_required_connectors": "",
                             "content_query": "",
                             "content_query_status": "no_query",  # Watchlists don't have queries
-                            "content_device_vendor": "",
-                            "content_device_product": "",
+                            "content_event_vendor": "",
+                            "content_event_product": "",
                             "solution_name": solution_name,
                             "solution_folder": solution_folder,
                         })
@@ -3073,12 +3330,14 @@ def main() -> None:
                 'connector_id_generated': "true" if row_key[18] else "false",
                 'connector_files': ";".join(github_urls),
                 'solution_name': row_key[0],  # First solution name (can be multiple)
+                'solution_folder': row_key[1],  # Solution folder for README lookup
             }
 
     # Now analyze collection methods for all connectors
     # We need to read JSON files again to get content for analysis
     # Also extract vendor/product information from connector queries
     connector_vendor_product: Dict[str, Dict[str, Set[str]]] = {}  # connector_id -> {'vendor': set, 'product': set}
+    connector_vendor_product_by_table: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {'vendor': set, 'product': set}}
     
     for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
         for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
@@ -3101,13 +3360,23 @@ def main() -> None:
                         if conn_id:
                             if conn_id not in connector_json_content:
                                 connector_json_content[conn_id] = (content, json_path.name)
-                            # Extract vendor/product from connector queries
+                            # Extract vendor/product from connector queries (aggregated)
                             vp = get_connector_vendor_product(data)
                             if vp['vendor'] or vp['product']:
                                 if conn_id not in connector_vendor_product:
                                     connector_vendor_product[conn_id] = {'vendor': set(), 'product': set()}
                                 connector_vendor_product[conn_id]['vendor'].update(vp['vendor'])
                                 connector_vendor_product[conn_id]['product'].update(vp['product'])
+                            # Extract vendor/product per table
+                            vp_by_table = get_connector_vendor_product_by_table(data)
+                            if vp_by_table:
+                                if conn_id not in connector_vendor_product_by_table:
+                                    connector_vendor_product_by_table[conn_id] = {}
+                                for table_name, table_vp in vp_by_table.items():
+                                    if table_name not in connector_vendor_product_by_table[conn_id]:
+                                        connector_vendor_product_by_table[conn_id][table_name] = {'vendor': set(), 'product': set()}
+                                    connector_vendor_product_by_table[conn_id][table_name]['vendor'].update(table_vp['vendor'])
+                                    connector_vendor_product_by_table[conn_id][table_name]['product'].update(table_vp['product'])
                 except Exception:
                     continue
     
@@ -3143,6 +3412,25 @@ def main() -> None:
         # Get vendor/product info for this connector
         vp_info = connector_vendor_product.get(connector_id, {'vendor': set(), 'product': set()})
         
+        # Get per-table vendor/product info - serialize as JSON
+        vp_by_table = connector_vendor_product_by_table.get(connector_id, {})
+        # Convert sets to lists for JSON serialization
+        vp_by_table_serialized = {}
+        for table_name, table_vp in vp_by_table.items():
+            vp_by_table_serialized[table_name] = {
+                'vendor': sorted(table_vp['vendor']),
+                'product': sorted(table_vp['product'])
+            }
+        
+        # Find connector README file
+        solution_folder = info.get('solution_folder', '')
+        connector_readme_file = ''
+        if solution_folder:
+            solution_dir = solutions_dir / solution_folder
+            readme_rel_path = find_connector_readme(solution_dir)
+            if readme_rel_path:
+                connector_readme_file = f"Solutions/{quote(solution_folder)}/{readme_rel_path}"
+        
         connectors_data.append({
             'connector_id': info['connector_id'],
             'connector_publisher': info['connector_publisher'],
@@ -3152,15 +3440,24 @@ def main() -> None:
             'connector_permissions': info['connector_permissions'],
             'connector_id_generated': info['connector_id_generated'],
             'connector_files': info['connector_files'],
+            'connector_readme_file': connector_readme_file,
             'collection_method': collection_method,
             'collection_method_reason': detection_reason,
-            'device_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
-            'device_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
+            'event_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
+            'event_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
+            'event_vendor_product_by_table': json.dumps(vp_by_table_serialized) if vp_by_table_serialized else '',
         })
     
     # Build solutions data
     solutions_data: List[Dict[str, str]] = []
     for solution_name, info in sorted(all_solutions_info.items()):
+        # Build full path to README if it exists
+        readme_file = info.get('solution_readme_file', '')
+        if readme_file:
+            readme_full_path = f"Solutions/{quote(info['solution_folder'])}/{readme_file}"
+        else:
+            readme_full_path = ""
+        
         solutions_data.append({
             'solution_name': info['solution_name'],
             'solution_folder': f"{GITHUB_REPO_URL}/Solutions/{quote(info['solution_folder'])}",
@@ -3174,6 +3471,7 @@ def main() -> None:
             'solution_support_link': info['solution_support_link'],
             'solution_author_name': info['solution_author_name'],
             'solution_categories': info['solution_categories'],
+            'solution_readme_file': readme_full_path,
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
         })
     
@@ -3349,10 +3647,12 @@ def main() -> None:
         'connector_permissions',
         'connector_id_generated',
         'connector_files',
+        'connector_readme_file',
         'collection_method',
         'collection_method_reason',
-        'device_vendor',
-        'device_product',
+        'event_vendor',
+        'event_product',
+        'event_vendor_product_by_table',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -3374,6 +3674,7 @@ def main() -> None:
         'solution_support_link',
         'solution_author_name',
         'solution_categories',
+        'solution_readme_file',
         'has_connectors',
     ]
     solutions_path = args.solutions_csv.resolve()
@@ -3419,6 +3720,7 @@ def main() -> None:
         'content_type',
         'content_description',
         'content_file',
+        'content_readme_file',
         'content_severity',
         'content_status',
         'content_kind',
@@ -3426,8 +3728,8 @@ def main() -> None:
         'content_techniques',
         'content_required_connectors',
         'content_query_status',
-        'content_device_vendor',
-        'content_device_product',
+        'content_event_vendor',
+        'content_event_product',
         'solution_name',
         'solution_folder',
     ]
