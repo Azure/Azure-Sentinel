@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
-| 3.0.11      | 29-12-2025                     |Add queryWindowDelayInMin for SAP log delays, add SAP CIS analytic rules|
+| 3.0.11      | 29-12-2025                     |Added queryWindowDelayInMin for SAP log delays and included the SAP CIS analytic rules.|
 | 3.0.10      | 03-10-2025                     |Resolves data connector duplicate handle pagination errors|
 | 3.0.9       | 02-09-2025                     |Connector UI fix|
 | 3.0.8       | 03-12-2024                     |Removal of Function App data connector|
