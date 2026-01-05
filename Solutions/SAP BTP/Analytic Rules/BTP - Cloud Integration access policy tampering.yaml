@@ -1,0 +1,98 @@
+id: 9e6f4b2c-0d3e-5a8f-c9b7-2f5d8a1e4c6b
+kind: Scheduled
+name: BTP - Cloud Integration access policy tampering
+description: |
+  Identifies changes to access policies in SAP Cloud Integration. Access policies control
+  authorization for integration artifacts, defining which users and roles can access specific
+  integration flows and related content.
+  
+  Unauthorized access policy manipulation could indicate:
+  - Attacker granting themselves access to sensitive integration artifacts
+  - Removal of security controls to enable further malicious activity
+  - Defense evasion by modifying artifact references to hide unauthorized access
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1548
+  - T1222
+query: |
+  let accessPolicyTypes = dynamic(["Access Policy", "Artifact Reference"]);
+  let monitoredActions = dynamic(["Create", "Change", "Delete"]);
+  SAPBTPAuditLog_CL
+  | where Category == "audit.security-events"
+  | extend data_s = tostring(Message.data),
+           ipAddress = tostring(Message.ip)
+  | extend parsedData = parse_json(data_s)
+  | extend action = tostring(parsedData.action),
+           objectType = tostring(parsedData.objectType),
+           objectId = tostring(parsedData.objectId),
+           policyMessage = tostring(parsedData.attributes.message)
+  | where objectType in (accessPolicyTypes)
+  | where action in (monitoredActions)
+  | extend normalizedAction = case(
+      action == "Create", "created",
+      action == "Change", "modified",
+      action == "Delete", "deleted",
+      action
+  )
+  | extend MessageText = case(
+      objectType == "Access Policy", strcat("Access policy '", objectId, "' was ", normalizedAction),
+      objectType == "Artifact Reference", strcat("Artifact reference '", objectId, "' was ", normalizedAction),
+      strcat(objectType, " '", objectId, "' was ", normalizedAction)
+  )
+  | project
+      UpdatedOn,
+      UserName,
+      MessageText,
+      ObjectType = objectType,
+      ObjectId = objectId,
+      Action = action,
+      PolicyMessage = policyMessage,
+      Tenant,
+      ipAddress,
+      CloudApp = "SAP Cloud Integration"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP Cloud Integration: {{MessageText}}'
+  alertDescriptionFormat: |
+    {{MessageText}} by {{UserName}} from IP {{ipAddress}}.
+    
+    This could indicate:
+    - Legitimate access policy administration
+    - Unauthorized privilege escalation attempt
+    - Attacker modifying security controls to access sensitive integrations
+customDetails:
+  ObjectType: ObjectType
+  ObjectId: ObjectId
+  Action: Action
+  PolicyMessage: PolicyMessage
+  SourceIP: ipAddress
+version: 1.0.0
