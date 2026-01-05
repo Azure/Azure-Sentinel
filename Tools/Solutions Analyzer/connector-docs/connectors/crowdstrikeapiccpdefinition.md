@@ -21,7 +21,7 @@ The [CrowdStrike Data Connector](https://www.crowdstrike.com/) allows ingesting 
 
 **1. Configuration steps for the CrowdStrike API**
 
-Follow the instructions below to obtain your CrowdStrike API credentials.
+Follow the instructions below to obtain your CrowdStrike API credentials. Click [here](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdStrikeAPI_ccp#crowdstrike-falcon--api-data-connector-ccp-framework) for full details.
 #### 1. Retrieve API URL
 Log in to your CrowdStrike Console and navigate to the API section to copy your Base API URL.
 #### 2. Retrieve Client Credentials
