@@ -1,0 +1,133 @@
+{
+    "id": "ZeroFoxAlertsFunctionsDataConnector",
+    "title": "ZeroFox Enterprise - Alerts (Function App)",
+    "publisher": "ZeroFox",
+    "descriptionMarkdown": "The ZeroFox Alerts data connector provides the capability to ingest [ZeroFox Alerts](https://www.zerofox.com/platform/) into Microsoft Sentinel using an Azure Function App. This connector uses the Azure Monitor Logs Ingestion API with Managed Identity authentication.",
+    "graphQueries": [
+        {
+            "metricName": "ZeroFox Alerts Logs",
+            "legend": "ZeroFoxAlertPoller_CL",
+            "baseQuery": "ZeroFoxAlertPoller_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "ZeroFox Alerts - All Alerts",
+            "query": "ZeroFoxAlertPoller_CL\n | sort by TimeGenerated desc"
+        },
+        {
+            "description": "ZeroFox Alerts - By Severity",
+            "query": "ZeroFoxAlertPoller_CL\n | summarize count() by severity\n | sort by count_ desc"
+        },
+        {
+            "description": "ZeroFox Alerts - Recent High Severity",
+            "query": "ZeroFoxAlertPoller_CL\n | where severity == \"high\"\n | sort by TimeGenerated desc\n | take 100"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "ZeroFoxAlertPoller_CL",
+            "lastDataReceivedQuery": "ZeroFoxAlertPoller_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "ZeroFoxAlertPoller_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(1d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.Insights/dataCollectionRules",
+                "permissionsDisplayText": "permissions to create Data Collection Rules and Data Collection Endpoints are required.",
+                "providerDisplayName": "Data Collection Rules",
+                "scope": "ResourceGroup",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.Insights/dataCollectionEndpoints",
+                "permissionsDisplayText": "permissions to create Data Collection Endpoints are required.",
+                "providerDisplayName": "Data Collection Endpoints",
+                "scope": "ResourceGroup",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Microsoft.Web/sites permissions",
+                "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
+            },
+            {
+                "name": "ZeroFox API Token",
+                "description": "A **ZeroFox API Token** is required to authenticate to the ZeroFox Alerts API."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses Azure Functions to connect to the ZeroFox Alerts REST API to pull logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
+        },
+        {
+            "title": "",
+            "description": ">**NOTE:** This connector uses the new **Azure Monitor Logs Ingestion API** with Managed Identity authentication. The deployment automatically creates the required Data Collection Endpoint (DCE) and Data Collection Rule (DCR), and assigns the necessary permissions to the Function App's Managed Identity."
+        },
+        {
+            "title": "",
+            "description": ">**(Optional Step)** Securely store the ZeroFox API token in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
+        },
+        {
+            "title": "",
+            "description": "**STEP 1 - Retrieval of ZeroFox API Token:**\n\n Follow these instructions to obtain your API token:\n1. [Log into ZeroFox's website](https://cloud.zerofox.com/login) using your username and password.\n2. Navigate to **Settings** > **Data Connectors**.\n3. Select the **API DATA FEEDS** tab.\n4. Copy your API Token, or click **Reset** to generate a new one."
+        },
+        {
+            "title": "",
+            "description": "**STEP 2 - Get your Log Analytics Workspace Resource ID:**\n\nYou will need the **full ARM Resource ID** of your Log Analytics workspace (this is NOT the Workspace ID GUID shown below).\n\nTo find it:\n1. Navigate to your **Log Analytics workspace** in the Azure Portal.\n2. Go to **Settings** > **Properties**.\n3. Copy the **Resource ID** value.\n\nThe Resource ID looks like this:\n```\n/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/your-resource-group/providers/Microsoft.OperationalInsights/workspaces/your-workspace-name\n```\n\n>**IMPORTANT:** Do NOT use the Workspace ID (GUID) below. You must use the full Resource ID path from the Properties blade.",
+            "instructions": [
+                {
+                    "parameters": {
+                        "fillWith": [
+                            "WorkspaceId"
+                        ],
+                        "label": "Workspace ID (NOT what you need - for reference only)"
+                    },
+                    "type": "CopyableLabel"
+                }
+            ]
+        },
+        {
+            "title": "Deploy the Azure Function App",
+            "description": "1. Click the **Deploy to Azure** button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-zerofox-azuredeploy)\n2. Select the preferred **Subscription**, **Resource Group**, and **Location**.\n3. Enter the **ZeroFox API Token** and **Workspace Resource ID**.\n4. Click **Review + Create** to deploy.\n\n>**NOTE:** The deployment will automatically:\n>- Create a Data Collection Endpoint (DCE)\n>- Create a Data Collection Rule (DCR) with the ZeroFox alerts schema\n>- Deploy the Function App with System-Assigned Managed Identity\n>- Assign the 'Monitoring Metrics Publisher' role to the Function App's Managed Identity on the DCR"
+        },
+        {
+            "title": "Verify Deployment",
+            "description": "After deployment completes:\n1. Navigate to your **Function App** in the Azure Portal.\n2. Go to **Settings** > **Configuration** > **Application settings**.\n3. Verify that the following settings are configured:\n   - `DCE_ENDPOINT` - Data Collection Endpoint URI\n   - `DCR_IMMUTABLE_ID` - Data Collection Rule Immutable ID\n   - `STREAM_NAME` - Should be `Custom-ZeroFoxAlertPoller_CL`\n   - `ZeroFoxApiToken` - Your ZeroFox API token\n4. Go to **Functions** and verify the `alerts_connector` function is enabled.\n5. Check **Monitor** > **Logs** for any errors after the first execution."
+        }
+    ]
+}
