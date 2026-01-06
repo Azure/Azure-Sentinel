@@ -82,13 +82,24 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
             logging.info('Call to get AWS SSM Inventory successful.')
 
-            # Return the results
-            logging.info(f'Results: {results}')
+            # # Return the results
+            # logging.info(f'Results: {results}')
+            # return func.HttpResponse(
+            #     json.dumps(results),
+            #     headers = {"Content-Type": "application/json"},
+            #     status_code = 200
+            # )
+
+            response = {
+                "value": results.get("Entities", []),
+                "nextLink": results.get("NextToken")
+            }   
+
             return func.HttpResponse(
-                json.dumps(results),
-                headers = {"Content-Type": "application/json"},
-                status_code = 200
-            )
+                json.dumps(response),
+                headers={"Content-Type": "application/json"},
+                status_code=200
+            )                     
             
         except ssm_client.exceptions.InternalServerError as ex:
             logging.error(f"Internal Server Exception: {str(ex)}")
