@@ -56,17 +56,15 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     # Set parameter dictionary based on the request parameters
     kwargs = {}
     if filters:
-        kwargs['Filters'] = filters  
+        kwargs['Name'] = filters
     if aggregators:
-        kwargs['Aggregators'] = aggregators 
+        kwargs['VersionName'] = aggregators
     if result_attributes:
-        kwargs['ResultAttributes'] = result_attributes  
+        kwargs['DocumentVersion'] = result_attributes
     if next_token:
-        kwargs['NextToken'] = next_token  
+        kwargs['DocumentFormat'] = next_token
     if max_results:
-        kwargs['MaxResults'] = int(max_results)
-    
-    logging.info(f'Final kwargs for AWS API: {kwargs}')
+        kwargs['MaxResults'] = max_results
 
     try:
         logging.info('Creating Boto3 SSM Client.')
@@ -83,28 +81,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             results = ssm_client.get_inventory(**kwargs)
 
             logging.info('Call to get AWS SSM Inventory successful.')
-            logging.info(f'Raw AWS Results: {results}')
-            
-            # Transform AWS response to Azure-compatible paginated format
-            entities = results.get("Entities", []) if isinstance(results, dict) else []
-            next_token = results.get("NextToken") if isinstance(results, dict) else None
-            
-            logging.info(f'Extracted Entities count: {len(entities) if entities else 0}')
-            logging.info(f'Extracted NextToken: {next_token}')
-            
-            azure_response = {
-                "value": entities
-            }
-            
-            # Add nextLink for pagination if NextToken exists
-            if next_token:
-                azure_response["nextLink"] = next_token
 
-            logging.info(f'Final Azure Response: {azure_response}')
-
-            # Return the results in Azure-compatible format
+            # Return the results
+            logging.info(f'Results: {results}')
             return func.HttpResponse(
-                json.dumps(azure_response),
+                json.dumps(results),
                 headers = {"Content-Type": "application/json"},
                 status_code = 200
             )
