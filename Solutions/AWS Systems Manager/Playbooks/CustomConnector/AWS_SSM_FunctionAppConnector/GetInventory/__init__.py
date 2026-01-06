@@ -90,16 +90,34 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             #     status_code = 200
             # )
 
+            # response = {
+            #     "value": results.get("Entities", []),
+            #     "nextLink": results.get("NextToken")
+            # }   
+
+            # return func.HttpResponse(
+            #     json.dumps(response),
+            #     headers={"Content-Type": "application/json"},
+            #     status_code=200
+            # )
+            results = ssm_client.get_inventory(**kwargs)
+
+            base_url = req.url.split('?')[0]
+
             response = {
                 "value": results.get("Entities", []),
-                "nextLink": results.get("NextToken")
-            }   
+                "nextLink": (
+                    f"{base_url}?NextToken={results['NextToken']}"
+                    if results.get("NextToken")
+                    else None
+                )
+            }
 
             return func.HttpResponse(
                 json.dumps(response),
                 headers={"Content-Type": "application/json"},
                 status_code=200
-            )                     
+            )                                 
             
         except ssm_client.exceptions.InternalServerError as ex:
             logging.error(f"Internal Server Exception: {str(ex)}")
