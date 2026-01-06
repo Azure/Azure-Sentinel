@@ -78,9 +78,21 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
             logging.info('Call to get AWS SSM Inventory successful.')
             logging.info(f'Results: {results}')
-            # Return the results
+            
+            # Transform AWS response to Azure-compatible paginated format
+            azure_response = {
+                "value": results.get("Entities", [])
+            }
+            
+            # Add nextLink for pagination if NextToken exists
+            if "NextToken" in results and results["NextToken"]:
+                azure_response["nextLink"] = results["NextToken"]
+
+            logging.info(f'Transformed Azure Response: {azure_response}')
+
+            # Return the results in Azure-compatible format
             return func.HttpResponse(
-                json.dumps(results),
+                json.dumps(azure_response),
                 headers = {"Content-Type": "application/json"},
                 status_code = 200
             )
