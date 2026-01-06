@@ -73,11 +73,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         try:
             logging.info('Calling function to get AWS SSM Inventory.')
-
+            logging.info(f'Parameters: {kwargs}')
             results = ssm_client.get_inventory(**kwargs)
 
             logging.info('Call to get AWS SSM Inventory successful.')
-
+            logging.info(f'Results: {results}')
             # Return the results
             return func.HttpResponse(
                 json.dumps(results),
