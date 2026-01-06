@@ -24,6 +24,82 @@ DEFAULT_SOLUTIONS_DIR = Path(__file__).parent.parent.parent / "Solutions"
 # Internal tables are written AND read by the same solution for internal data storage
 INTERNAL_TABLES: Set[str] = set()
 
+# Global dict for documentation overrides (additional_information, etc.)
+# Structure: {entity_type: {pattern: {field: value}}}
+DOC_OVERRIDES: Dict[str, Dict[str, Dict[str, str]]] = {
+    'table': {},
+    'connector': {},
+    'solution': {},
+}
+
+
+def load_doc_overrides(overrides_path: Path) -> None:
+    """Load documentation-only overrides from CSV file.
+    
+    CSV format: Entity,Pattern,Field,Value
+    Currently used for: additional_information
+    
+    Populates the global DOC_OVERRIDES dict.
+    """
+    global DOC_OVERRIDES
+    
+    if not overrides_path.exists():
+        return
+    
+    try:
+        with overrides_path.open("r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                entity = row.get("Entity", "").strip().lower()
+                pattern = row.get("Pattern", "").strip()
+                field = row.get("Field", "").strip()
+                value = row.get("Value", "")
+                
+                # Only load doc-specific fields
+                if field != "additional_information":
+                    continue
+                
+                if not entity or not pattern or not field:
+                    continue
+                
+                if entity not in DOC_OVERRIDES:
+                    continue
+                
+                if pattern not in DOC_OVERRIDES[entity]:
+                    DOC_OVERRIDES[entity][pattern] = {}
+                
+                DOC_OVERRIDES[entity][pattern][field] = value
+    except Exception as e:
+        print(f"Warning: Could not load doc overrides from {overrides_path}: {e}")
+
+
+def get_doc_override(entity_type: str, key: str, field: str) -> Optional[str]:
+    """Get a documentation override value for an entity.
+    
+    Args:
+        entity_type: 'table', 'connector', or 'solution'
+        key: The entity key (table name, connector id, solution name)
+        field: The field to get (e.g., 'additional_information')
+    
+    Returns:
+        Override value or None if not found
+    """
+    entity_overrides = DOC_OVERRIDES.get(entity_type.lower(), {})
+    
+    for pattern, fields in entity_overrides.items():
+        try:
+            # Full match, case insensitive
+            if re.fullmatch(pattern, key, re.IGNORECASE):
+                if field in fields:
+                    return fields[field]
+        except re.error:
+            # Invalid regex pattern, try exact match
+            if pattern.lower() == key.lower():
+                if field in fields:
+                    return fields[field]
+    
+    return None
+
 
 def sanitize_anchor(text: str) -> str:
     """Convert text to URL-safe anchor."""
@@ -36,6 +112,77 @@ def sanitize_filename(text: str) -> str:
     # URL-encode parentheses to avoid breaking Markdown link syntax
     result = result.replace("(", "%28").replace(")", "%29")
     return result
+
+
+def convert_relative_images_to_github(content: str, github_base_url: str) -> str:
+    """
+    Convert relative image paths in markdown content to absolute GitHub URLs.
+    
+    This handles common patterns like:
+    - ![alt](./image.png)
+    - ![alt](images/screenshot.png)
+    - ![alt](../images/image.png)
+    - <img src="./image.png" ...>
+    - <img src="images/screenshot.png" ...>
+    
+    Args:
+        content: Markdown content with potential relative image paths
+        github_base_url: Base GitHub URL for the directory containing the markdown file
+                        e.g., "https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AbuseIPDB/Playbooks/PlaybookName"
+    
+    Returns:
+        Content with image paths converted to absolute GitHub URLs
+    """
+    if not content or not github_base_url:
+        return content
+    
+    # Ensure base URL doesn't end with slash
+    base_url = github_base_url.rstrip('/')
+    
+    # Pattern for markdown images: ![alt](path)
+    # Match relative paths (not starting with http://, https://, or /)
+    def replace_md_image(match):
+        alt_text = match.group(1)
+        img_path = match.group(2)
+        
+        # Skip if already absolute URL
+        if img_path.startswith(('http://', 'https://', '/')):
+            return match.group(0)
+        
+        # Handle ./ prefix
+        if img_path.startswith('./'):
+            img_path = img_path[2:]
+        
+        # URL encode the path but keep forward slashes
+        encoded_path = quote(img_path, safe='/')
+        return f"![{alt_text}]({base_url}/{encoded_path})"
+    
+    # Pattern for HTML img tags: <img src="path" ...>
+    def replace_html_image(match):
+        prefix = match.group(1)  # <img ... src=
+        quote_char = match.group(2)  # " or '
+        img_path = match.group(3)
+        suffix = match.group(4)  # rest of the tag
+        
+        # Skip if already absolute URL
+        if img_path.startswith(('http://', 'https://', '/')):
+            return match.group(0)
+        
+        # Handle ./ prefix
+        if img_path.startswith('./'):
+            img_path = img_path[2:]
+        
+        # URL encode the path but keep forward slashes
+        encoded_path = quote(img_path, safe='/')
+        return f'{prefix}{quote_char}{base_url}/{encoded_path}{quote_char}{suffix}'
+    
+    # Apply markdown image replacement
+    content = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', replace_md_image, content)
+    
+    # Apply HTML img replacement
+    content = re.sub(r'(<img[^>]*\ssrc=)(["\'])([^"\']+)\2([^>]*>)', replace_html_image, content, flags=re.IGNORECASE)
+    
+    return content
 
 
 def get_content_key(content_id: str, content_name: str, solution_name: str) -> str:
@@ -262,7 +409,11 @@ def get_solution_readme(solution_name: str, solutions_dir: Path) -> Tuple[Option
         if readme_path.exists():
             try:
                 content = readme_path.read_text(encoding='utf-8')
-                github_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}/{readme_name}"
+                github_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{quote(solution_name, safe='')}/{readme_name}"
+                # Build base URL for the solution directory (for image conversion)
+                dir_base_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{quote(solution_name, safe='')}"
+                # Convert relative image paths to absolute GitHub URLs
+                content = convert_relative_images_to_github(content, dir_base_url)
                 return content, github_url
             except Exception as e:
                 print(f"  Warning: Could not read {readme_path}: {e}")
@@ -376,6 +527,10 @@ def get_connector_readme(solution_name: str, connector_id: str, connector_files:
                     try:
                         content = readme_file.read_text(encoding='utf-8')
                         rel_path = str(readme_file.relative_to(solutions_dir))
+                        # Build base URL for image conversion (directory containing the README)
+                        readme_dir = str(readme_file.parent.relative_to(solutions_dir))
+                        dir_base_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{quote(readme_dir, safe='/')}"
+                        content = convert_relative_images_to_github(content, dir_base_url)
                         return content, rel_path
                     except Exception:
                         pass
@@ -392,6 +547,10 @@ def get_connector_readme(solution_name: str, connector_id: str, connector_files:
                 try:
                     content = md_file.read_text(encoding='utf-8')
                     rel_path = str(md_file.relative_to(solutions_dir))
+                    # Build base URL for image conversion (directory containing the README)
+                    readme_dir = str(md_file.parent.relative_to(solutions_dir))
+                    dir_base_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{quote(readme_dir, safe='/')}"
+                    content = convert_relative_images_to_github(content, dir_base_url)
                     return content, rel_path
                 except Exception:
                     pass
@@ -435,6 +594,10 @@ def get_single_connector_readme(solution_name: str, solutions_dir: Path) -> Tupl
                 try:
                     content = readme_file.read_text(encoding='utf-8')
                     rel_path = str(readme_file.relative_to(solutions_dir))
+                    # Build base URL for image conversion (directory containing the README)
+                    readme_dir = str(readme_file.parent.relative_to(solutions_dir))
+                    dir_base_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{quote(readme_dir, safe='/')}"
+                    content = convert_relative_images_to_github(content, dir_base_url)
                     return content, rel_path
                 except Exception:
                     pass
@@ -468,9 +631,21 @@ def get_playbook_readme_content(solution_folder: str, content_readme_file: str,
     if readme_path.exists():
         try:
             content = readme_path.read_text(encoding='utf-8')
-            # Build the GitHub URL
+            # Build the GitHub URL for the README file
             readme_github_path = f"Solutions/{quote(solution_folder, safe='')}/Playbooks/{quote(content_readme_file, safe='/')}"
             github_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/{readme_github_path}"
+            
+            # Build base URL for the directory containing the README (for image conversion)
+            readme_dir = str(Path(content_readme_file).parent)
+            if readme_dir and readme_dir != '.':
+                dir_github_path = f"Solutions/{quote(solution_folder, safe='')}/Playbooks/{quote(readme_dir, safe='/')}"
+            else:
+                dir_github_path = f"Solutions/{quote(solution_folder, safe='')}/Playbooks"
+            dir_base_url = f"https://github.com/Azure/Azure-Sentinel/blob/master/{dir_github_path}"
+            
+            # Convert relative image paths to absolute GitHub URLs
+            content = convert_relative_images_to_github(content, dir_base_url)
+            
             return content, github_url
         except Exception as e:
             print(f"  Warning: Could not read {readme_path}: {e}")
@@ -2332,6 +2507,12 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     f.write(f"| **{attr_name}** | {attr_value} |\n")
                 f.write("\n")
             
+            # Additional Information section from overrides
+            additional_info = get_doc_override('table', table, 'additional_information')
+            if additional_info:
+                f.write("## Additional Information\n\n")
+                f.write(f"{additional_info}\n\n")
+            
             # Solutions using this table - bullet list
             if info['solutions']:
                 f.write(f"## Solutions ({len(info['solutions'])})\n\n")
@@ -2628,6 +2809,12 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 f.write("> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.\n\n")
                 formatted_instructions = format_instruction_steps(instruction_steps)
                 f.write(f"{formatted_instructions}\n\n")
+            
+            # Additional Information section (from overrides)
+            additional_info = get_doc_override('connector', connector_id, 'additional_information')
+            if additional_info:
+                f.write("## Additional Information\n\n")
+                f.write(f"{additional_info}\n\n")
             
             # Additional Documentation section (from README.md files)
             if solutions_dir:
@@ -3032,6 +3219,12 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             f.write(f"| {name_display} | {desc} | {tables_str} |\n")
                         f.write("\n")
         
+        # Additional Information section (from overrides)
+        additional_info = get_doc_override('solution', solution_name, 'additional_information')
+        if additional_info:
+            f.write("## Additional Information\n\n")
+            f.write(f"{additional_info}\n\n")
+        
         # Additional Documentation section (from README.md files) - similar to connector docs
         if readme_content:
             f.write("## Additional Documentation\n\n")
@@ -3224,6 +3417,12 @@ def main() -> None:
         help="Path to content-to-tables mapping CSV file (default: content_tables_mapping.csv)",
     )
     parser.add_argument(
+        "--overrides-csv",
+        type=Path,
+        default=Path(__file__).parent / "solution_analyzer_overrides.csv",
+        help="Path to overrides CSV file for additional_information and other doc-only fields (default: solution_analyzer_overrides.csv)",
+    )
+    parser.add_argument(
         "--skip-input-generation",
         action="store_true",
         help="Skip running input CSV generation scripts",
@@ -3304,6 +3503,16 @@ def main() -> None:
         print(f"Loaded overrides ({len(INTERNAL_TABLES)} internal tables)")
     else:
         print(f"Warning: Tables overrides CSV not found: {args.tables_overrides_csv}")
+    
+    # Load documentation overrides (additional_information, etc.)
+    if args.overrides_csv.exists():
+        print(f"Reading {args.overrides_csv} for documentation overrides...")
+        load_doc_overrides(args.overrides_csv)
+        # Count loaded overrides
+        total_overrides = sum(len(patterns) for patterns in DOC_OVERRIDES.values())
+        print(f"Loaded {total_overrides} documentation overrides")
+    else:
+        print(f"Warning: Overrides CSV not found: {args.overrides_csv}")
     
     # Load connectors CSV for collection method info
     connectors_reference: Dict[str, Dict[str, str]] = {}

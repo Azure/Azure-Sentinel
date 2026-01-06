@@ -178,6 +178,13 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 
 ## Version History
 
+### v5.1 - Documentation Overrides and Additional Information
+
+**Documentation-Only Overrides:**
+- Added support for `additional_information` field in override CSV for curated documentation links
+- Tables, connectors, and solution pages now display Additional Information sections with links to Microsoft Learn documentation
+- DOC_OVERRIDES dictionary supports table, connector, and solution entity types with regex pattern matching
+
 ### v5.0
 
 **Content Item Documentation:**

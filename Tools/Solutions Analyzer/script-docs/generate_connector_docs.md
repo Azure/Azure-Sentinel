@@ -91,6 +91,7 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--output-dir` | `connector-docs/` | Output directory for documentation |
 | `--solutions-dir` | `../../Solutions` | Path to Solutions directory for reading ReleaseNotes.md and connector documentation files |
 | `--solutions` | All | Generate docs only for specific solutions |
+| `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for additional_information and other doc-only fields |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
 ## Output Structure
@@ -234,6 +235,43 @@ The script attempts to find and include markdown documentation associated with e
 The documentation content is included in an "Additional Documentation" section with a link to the source file in GitHub.
 
 > **Note**: The generator searches for all markdown files (`.md`) in the `Data Connectors` folder and its subfolders, following various naming conventions used across solutions.
+
+## Documentation Overrides and Additional Information
+
+The `--overrides-csv` option allows you to add curated documentation links to table, connector, and solution pages through an "Additional Information" section.
+
+### Override File Format
+
+The override CSV uses the same format as the main override system (see [main README](../README.md)):
+
+```csv
+Entity,Pattern,Field,Value
+table,CommonSecurityLog,additional_information,"[CEF Field Mapping Reference](https://learn.microsoft.com/en-us/azure/sentinel/cef-syslog-ama-overview#cef-field-mapping)"
+connector,CEF,additional_information,"[Get CEF-formatted logs from your device](https://learn.microsoft.com/en-us/azure/sentinel/connect-cef-ama)"
+```
+
+### Supported Entities
+
+- **table**: Adds Additional Information section to table pages (after the attributes table)
+- **connector**: Adds Additional Information section to connector pages (before Additional Documentation)
+- **solution**: Adds Additional Information section to solution pages (before Additional Documentation)
+
+### Field Format
+
+The `additional_information` field value should be valid markdown, typically links to Microsoft Learn documentation:
+
+```csv
+table,SecurityEvent,additional_information,"[Windows Security Event ID Reference](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/appendix-l--events-to-monitor)"
+```
+
+The pattern field supports regex matching (case-insensitive), allowing wildcards like `SecurityEvent|WindowsEvent|Event` to apply the same override to multiple entities.
+
+### Default Overrides
+
+The default `solution_analyzer_overrides.csv` includes 21 curated documentation links for key tables and connectors:
+
+- **Tables**: CommonSecurityLog, Syslog, SecurityAlert, SecurityEvent, WindowsEvent, Event, ASimDnsActivityLogs, DnsEvents, MicrosoftPurviewInformationProtection, SigninLogs, AuditLogs, OfficeActivity
+- **Connectors**: CEF, CefAma, Syslog, SyslogAma, SecurityEvents, WindowsSecurityEvents, DNS, AzureActiveDirectory, Office365
 
 ## Usage in Pipeline
 
