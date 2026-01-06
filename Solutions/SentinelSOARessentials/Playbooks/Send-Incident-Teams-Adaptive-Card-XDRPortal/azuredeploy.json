@@ -1,0 +1,1179 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Send incident Teams Adaptive Card with XDR Portal links",
+        "description":  "This playbook will send a Teams adaptive card with incident and entity information with all links pointing to the security.microsoft.com portal",
+        "prerequisites":  "A Teams account to be used to send Teams adaptive card notification (The user account will be used in Teams connector and must be a member of the channel you wish to send messages to.",
+        "postDeployment":  [ "**1.Configure connections**\nEdit the Logic App or go to Logic app designer.\nFrom the toolbar click *Connections* and Expand *Microsoft Teams*.\nCreate a new connection or click the link to edit the existing connection and signin.\nNote:  Cards sent with this playbook will use the account that creates connection.\nRun the PowerShell script found in detailed instructions to Grant API Permissions.\n**Attach the playbook**\nAttach the playbook\n[Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)\n[click here for detailed insturctions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Send-Incident-Teams-Adaptive-Card-XDRPortal/readme.md)" ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "2025-12-12T00:00:00.000Z",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Brian Delaney"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Send incident Teams Adaptive Card with XDR Portal links",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Send-Incident-TeamsCard-XDR",
+            "type":  "string"
+        },
+        "GRAPH_ENDPOINT":  {
+            "defaultValue": "https://graph.microsoft.com",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for the Microsoft Graph Endpoint"
+            }
+        },
+        "PORTAL_ENDPOINT":  {
+            "defaultValue": "https://security.microsoft.com",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for the XDR Portal Endpoint"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName":  "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "GRAPH_ENDPOINT":  {
+                            "defaultValue":  "[parameters('GRAPH_ENDPOINT')]",
+                            "type":  "String"
+                        },
+                        "PORTAL_ENDPOINT":  {
+                            "defaultValue":  "[parameters('PORTAL_ENDPOINT')]",
+                            "type":  "String"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body":  {
+                                    "callback_url":  "@listCallbackUrl()"
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "HTTP":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "uri":  "@{parameters('GRAPH_ENDPOINT')}/v1.0/security/incidents/@{triggerBody()?['object']?['properties']?['providerIncidentId']}?$expand=alerts",
+                                "method":  "GET",
+                                "authentication":  {
+                                    "type":  "ManagedServiceIdentity",
+                                    "audience":  "@{parameters('GRAPH_ENDPOINT')}"
+                                }
+                            },
+                            "runtimeConfiguration":  {
+                                "contentTransfer":  {
+                                    "transferMode":  "Chunked"
+                                },
+                                "staticResult":  {
+                                    "staticResultOptions":  "Disabled",
+                                    "name":  "HTTP0"
+                                }
+                            }
+                        },
+                        "Switch":  {
+                            "runAfter":  {
+                                "Initialize_variables":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases":  {
+                                "high":  {
+                                    "case":  "high",
+                                    "actions":  {
+                                        "Set_icon_high":  {
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "Icon",
+                                                "value":  "🚨"
+                                            }
+                                        },
+                                        "Set_header_bg_high":  {
+                                            "runAfter":  {
+                                                "Set_icon_high":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "HeaderBackgroundColor",
+                                                "value":  "attention"
+                                            }
+                                        },
+                                        "Set_badge_high":  {
+                                            "runAfter":  {
+                                                "Set_header_bg_high":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "BadgeText",
+                                                "value":  "High Priority"
+                                            }
+                                        }
+                                    }
+                                },
+                                "medium":  {
+                                    "case":  "medium",
+                                    "actions":  {
+                                        "Set_icon_medium":  {
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "Icon",
+                                                "value":  "⚠️"
+                                            }
+                                        },
+                                        "Set_header_bg_medium":  {
+                                            "runAfter":  {
+                                                "Set_icon_medium":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "HeaderBackgroundColor",
+                                                "value":  "warning"
+                                            }
+                                        },
+                                        "Set_badge_medium":  {
+                                            "runAfter":  {
+                                                "Set_header_bg_medium":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "BadgeText",
+                                                "value":  "Medium Priority"
+                                            }
+                                        }
+                                    }
+                                },
+                                "low":  {
+                                    "case":  "low",
+                                    "actions":  {
+                                        "Set_icon_low":  {
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "Icon",
+                                                "value":  "🟡"
+                                            }
+                                        },
+                                        "Set_header_bg_low":  {
+                                            "runAfter":  {
+                                                "Set_icon_low":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "HeaderBackgroundColor",
+                                                "value":  "warning"
+                                            }
+                                        },
+                                        "Set_badge_low":  {
+                                            "runAfter":  {
+                                                "Set_header_bg_low":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "BadgeText",
+                                                "value":  "Low Priority"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default":  {
+                                "actions":  {
+                                    "Set_icon_info":  {
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "Icon",
+                                            "value":  "ℹ️"
+                                        }
+                                    },
+                                    "Set_header_bg_info":  {
+                                        "runAfter":  {
+                                            "Set_icon_info":  [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "HeaderBackgroundColor",
+                                            "value":  "accent"
+                                        }
+                                    },
+                                    "Set_badge_info":  {
+                                        "runAfter":  {
+                                            "Set_header_bg_info":  [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "BadgeText",
+                                            "value":  "Informational"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  "@body('HTTP')?['severity']",
+                            "type":  "Switch"
+                        },
+                        "For_each_alert":  {
+                            "foreach":  "@take(body('HTTP')?['alerts'], 10)",
+                            "actions":  {
+                                "For_each_evidence":  {
+                                    "foreach":  "@item()?['evidence']",
+                                    "actions":  {
+                                        "Switch_evidence_type":  {
+                                            "cases":  {
+                                                "Case_user":  {
+                                                    "case":  "#microsoft.graph.security.userEvidence",
+                                                    "actions":  {
+                                                        "Condition":  {
+                                                            "actions":  {
+                                                                "Compose_user":  {
+                                                                    "type":  "Compose",
+                                                                    "inputs":  "@coalesce(item()?['userAccount']?['userPrincipalName'],item()?['userAccount']?['accountName'],item()?['userAccount']?['displayName'])"
+                                                                },
+                                                                "Append_to_users_string":  {
+                                                                    "runAfter":  {
+                                                                        "Compose_user":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "UsersString",
+                                                                        "value":  "\u003cli\u003e@{if(empty(item()?['userAccount']?['azureAdUserId']), outputs('Compose_user'), concat('\u003ca href=\"', parameters('PORTAL_ENDPOINT'), '/user?aad=', item()?['userAccount']?['azureAdUserId'], '\u0026tid=', body('HTTP')?['tenantId'], '\"\u003e', outputs('Compose_user'), '\u003c/a\u003e'))}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_user_to_userscard":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_users_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "UsersCard",
+                                                                        "value":  {
+                                                                            "type":  "TextBlock",
+                                                                            "text":  "• @{if(empty(item()?['userAccount']?['azureAdUserId']), outputs('Compose_user'), concat('[', outputs('Compose_user'), '](', parameters('PORTAL_ENDPOINT'), '/user?aad=', item()?['userAccount']?['azureAdUserId'], '\u0026tid=', body('HTTP')?['tenantId'], ')'))}",
+                                                                            "size":  "Small",
+                                                                            "spacing":  "Small"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('UsersString')",
+                                                                                "@coalesce(item()?['userAccount']?['userPrincipalName'],item()?['userAccount']?['accountName'],item()?['userAccount']?['displayName'])"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_device":  {
+                                                    "case":  "#microsoft.graph.security.deviceEvidence",
+                                                    "actions":  {
+                                                        "Condition_1":  {
+                                                            "actions":  {
+                                                                "Append_to_devices_string":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "DevicesString",
+                                                                        "value":  "\u003cli\u003e@{if(empty(item()?['mdeDeviceId']), coalesce(item()?['deviceDnsName'],item()?['hostName']), concat('\u003ca href=\"', parameters('PORTAL_ENDPOINT'), '/machines/v2/', item()?['mdeDeviceId'], '?tid=', body('HTTP')?['tenantId'], '\"\u003e', coalesce(item()?['deviceDnsName'],item()?['hostName']), '\u003c/a\u003e'))}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_device_to_devicecard":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_devices_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "DeviceCard",
+                                                                        "value":  {
+                                                                            "type":  "TextBlock",
+                                                                            "text":  "• @{if(empty(item()?['mdeDeviceId']), coalesce(item()?['deviceDnsName'],item()?['hostName']), concat('[', coalesce(item()?['deviceDnsName'],item()?['hostName']), '](', parameters('PORTAL_ENDPOINT'), '/machines/v2/', item()?['mdeDeviceId'], '?tid=', body('HTTP')?['tenantId'], ')'))}",
+                                                                            "size":  "Small",
+                                                                            "spacing":  "Small"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('DevicesString')",
+                                                                                "@coalesce(item()?['deviceDnsName'],item()?['hostName'])"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_ip":  {
+                                                    "case":  "#microsoft.graph.security.ipEvidence",
+                                                    "actions":  {
+                                                        "Condition_2":  {
+                                                            "actions":  {
+                                                                "Append_to_ip_string":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "IPsString",
+                                                                        "value":  "\u003cli\u003e@{item()['ipAddress']}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_ip_to_ipcard":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_ip_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "IPCard",
+                                                                        "value":  {
+                                                                            "type":  "TextBlock",
+                                                                            "text":  "• @{item()['ipAddress']}",
+                                                                            "size":  "Small",
+                                                                            "spacing":  "Small"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('IPsString')",
+                                                                                "@item()['ipAddress']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_mail":  {
+                                                    "case":  "#microsoft.graph.security.analyzedMessageEvidence",
+                                                    "actions":  {
+                                                        "Condition_3":  {
+                                                            "actions":  {
+                                                                "Append_to_mail_string":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "MailString",
+                                                                        "value":  "\u003cli\u003e@{if(empty(item()?['receivedDateTime']), coalesce(item()?['subject'],item()?['networkMessageId']), concat('\u003ca href=\"', parameters('PORTAL_ENDPOINT'), '/emailentityV2?f=summary\u0026id=', item()?['networkMessageId'], '\u0026recipient=', encodeUriComponent(item()?['recipientEmailAddress']), '\u0026startTime=', encodeUriComponent(item()?['receivedDateTime']), '\u0026endTime=', encodeUriComponent(item()?['receivedDateTime']),'\u0026tid=', body('HTTP')?['tenantId'], '\"\u003e', coalesce(item()?['subject'],item()?['networkMessageId']), '\u003c/a\u003e'))}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_mail_to_MailCard":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_mail_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "MailCard",
+                                                                        "value":  {
+                                                                            "type":  "TextBlock",
+                                                                            "text":  "• @{if(empty(item()?['receivedDateTime']), coalesce(item()?['subject'],item()?['networkMessageId']), concat('[', coalesce(item()?['subject'],item()?['networkMessageId']), '](', parameters('PORTAL_ENDPOINT'), '/emailentityV2?f=summary\u0026id=', item()?['networkMessageId'], '\u0026recipient=', encodeUriComponent(item()?['recipientEmailAddress']), '\u0026startTime=', encodeUriComponent(item()?['receivedDateTime']), '\u0026endTime=', encodeUriComponent(item()?['receivedDateTime']),'\u0026tid=', body('HTTP')?['tenantId'], ')'))}",
+                                                                            "size":  "Small",
+                                                                            "spacing":  "Small"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('MailString')",
+                                                                                "@item()?['networkMessageId']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_url":  {
+                                                    "case":  "#microsoft.graph.security.urlEvidence",
+                                                    "actions":  {
+                                                        "Condition_5":  {
+                                                            "actions":  {
+                                                                "Append_to_string_variable":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "URLString",
+                                                                        "value":  "\u003cli\u003e@{item()?['url']}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_url_to_urlcard":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_string_variable":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "URLCard",
+                                                                        "value":  {
+                                                                            "type":  "TextBlock",
+                                                                            "text":  "• @{item()?['url']}",
+                                                                            "size":  "Small",
+                                                                            "spacing":  "Small"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('URLString')",
+                                                                                "@item()?['url']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default":  {
+                                                "actions":  {
+                                                    "Condition_4":  {
+                                                        "actions":  {
+                                                            "Append_to_otherEvidenceType_string":  {
+                                                                "type":  "AppendToStringVariable",
+                                                                "inputs":  {
+                                                                    "name":  "otherEvidenceTypeString",
+                                                                    "value":  "\u003cli\u003e@{last(split(item()?['@odata.type'], '.'))}\u003c/li\u003e"
+                                                                }
+                                                            },
+                                                            "Append_to_otherEvidence_array":  {
+                                                                "runAfter":  {
+                                                                    "Append_to_otherEvidenceType_string":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type":  "AppendToArrayVariable",
+                                                                "inputs":  {
+                                                                    "name":  "OtherCard",
+                                                                    "value":  {
+                                                                        "type":  "TextBlock",
+                                                                        "text":  "• @{last(split(item()?['@odata.type'], '.'))}",
+                                                                        "size":  "Small",
+                                                                        "spacing":  "Small"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "else":  {
+                                                            "actions":  {
+                                                            }
+                                                        },
+                                                        "expression":  {
+                                                            "and":  [
+                                                                {
+                                                                    "not":  {
+                                                                        "contains":  [
+                                                                            "@variables('otherEvidenceTypeString')",
+                                                                            "@last(split(item()?['@odata.type'], '.'))"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type":  "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression":  "@item()?['@odata.type']",
+                                            "type":  "Switch"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Append_alerts_to_alertscard":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach",
+                                    "runtimeConfiguration":  {
+                                        "concurrency":  {
+                                            "repetitions":  1
+                                        }
+                                    }
+                                },
+                                "Append_alerts_to_alertscard":  {
+                                    "type":  "AppendToArrayVariable",
+                                    "inputs":  {
+                                        "name":  "AlertsCard",
+                                        "value":  {
+                                            "type":  "Container",
+                                            "style":  "emphasis",
+                                            "items":  [
+                                                {
+                                                    "type":  "TextBlock",
+                                                    "text":  "@{item()?['title']}",
+                                                    "size":  "Small",
+                                                    "spacing":  "None"
+                                                },
+                                                {
+                                                    "type":  "FactSet",
+                                                    "facts":  [
+                                                        {
+                                                            "title":  "Product",
+                                                            "value":  "@{item()?['productName']}"
+                                                        },
+                                                        {
+                                                            "title":  "Severity",
+                                                            "value":  "@{item()?['severity']}"
+                                                        },
+                                                        {
+                                                            "title":  "Description",
+                                                            "value":  "@{item()?['description']}"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Append_to_alertscard":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach",
+                            "runtimeConfiguration":  {
+                                "concurrency":  {
+                                    "repetitions":  1
+                                }
+                            }
+                        },
+                        "Initialize_variables":  {
+                            "runAfter":  {
+                                "HTTP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Icon",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "HeaderBackgroundColor",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "BadgeText",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "Severity",
+                                        "type":  "string",
+                                        "value":  "@{concat(toUpper(substring(body('HTTP')?['severity'], 0, 1)), substring(body('HTTP')?['severity'], 1))}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_evidence_variables":  {
+                            "runAfter":  {
+                                "Switch":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "UsersString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "DevicesString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "IPsString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "MailString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "URLString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "OtherEvidence",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "otherEvidenceTypeString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "AlertsCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "UsersCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "UsersCardHeader",
+                                        "type":  "object"
+                                    },
+                                    {
+                                        "name":  "IPCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "IPCardHeader",
+                                        "type":  "object"
+                                    },
+                                    {
+                                        "name":  "DeviceCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "DeviceCardHeader",
+                                        "type":  "object"
+                                    },
+                                    {
+                                        "name":  "URLCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "URLCardHeader",
+                                        "type":  "object"
+                                    },
+                                    {
+                                        "name":  "MailCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "MailCardHeader",
+                                        "type":  "object"
+                                    },
+                                    {
+                                        "name":  "OtherCard",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "OtherCardHeader",
+                                        "type":  "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Compose_Card":  {
+                            "runAfter":  {
+                                "Set_OtherCardHeader":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Compose",
+                            "inputs":  {
+                                "$schema":  "https://adaptivecards.io/schemas/adaptive-card.json",
+                                "type":  "AdaptiveCard",
+                                "version":  "1.5",
+                                "body":  [
+                                    {
+                                        "type":  "Container",
+                                        "style":  "@{variables('HeaderBackgroundColor')}",
+                                        "items":  [
+                                            {
+                                                "type":  "ColumnSet",
+                                                "columns":  [
+                                                    {
+                                                        "type":  "Column",
+                                                        "width":  "auto",
+                                                        "items":  [
+                                                            {
+                                                                "type":  "TextBlock",
+                                                                "text":  "@{variables('Icon')}",
+                                                                "size":  "ExtraLarge",
+                                                                "weight":  "Bolder",
+                                                                "color":  "Light"
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "type":  "Column",
+                                                        "width":  "stretch",
+                                                        "items":  [
+                                                            {
+                                                                "type":  "TextBlock",
+                                                                "text":  "Security Incident Alert",
+                                                                "size":  "Large",
+                                                                "weight":  "Bolder",
+                                                                "color":  "Dark"
+                                                            },
+                                                            {
+                                                                "type":  "TextBlock",
+                                                                "text":  "@{variables('Severity')}",
+                                                                "size":  "Small",
+                                                                "weight":  "Bolder",
+                                                                "color":  "Default",
+                                                                "spacing":  "None"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "type":  "TextBlock",
+                                                "text":  "**Incident Details**",
+                                                "size":  "Medium",
+                                                "weight":  "Bolder",
+                                                "color":  "Dark",
+                                                "spacing":  "Large"
+                                            },
+                                            {
+                                                "type":  "FactSet",
+                                                "facts":  [
+                                                    {
+                                                        "title":  "Incident Title:",
+                                                        "value":  "[@{body('HTTP')?['displayName']}](@{body('HTTP')?['incidentWebUrl']})"
+                                                    },
+                                                    {
+                                                        "title":  "Incident Number:",
+                                                        "value":  "@{triggerBody()?['object']?['properties']?['providerIncidentId']}"
+                                                    },
+                                                    {
+                                                        "title":  "Detection Time:",
+                                                        "value":  "@{body('HTTP')?['createdDateTime']}"
+                                                    },
+                                                    {
+                                                        "title":  "Severity Level:",
+                                                        "value":  "**@{variables('Severity')}**"
+                                                    }
+                                                ]
+                                            }
+                                        ],
+                                        "bleed":  true
+                                    },
+                                    {
+                                        "type":  "Container",
+                                        "items":  "@variables('AlertsCard')"
+                                    },
+                                    {
+                                        "type":  "Container",
+                                        "items":  [
+                                            {
+                                                "type":  "TextBlock",
+                                                "text":  "**Impact Details**",
+                                                "size":  "Medium",
+                                                "weight":  "Bolder",
+                                                "spacing":  "Medium"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "emphasis",
+                                                "isVisible":  "@if(empty(variables('UsersCard')), false, true)",
+                                                "items":  "@union(createArray(variables('UsersCardHeader')), variables('UsersCard'))"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "emphasis",
+                                                "isVisible":  "@if(empty(variables('DeviceCard')), false, true)",
+                                                "items":  "@union(createArray(variables('DeviceCardHeader')), variables('DeviceCard'))"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "emphasis",
+                                                "isVisible":  "@if(empty(variables('IPCard')), false, true)",
+                                                "items":  "@union(createArray(variables('IPCardHeader')), variables('IPCard'))"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "emphasis",
+                                                "isVisible":  "@if(empty(variables('MailCard')), false, true)",
+                                                "items":  "@union(createArray(variables('MailCardHeader')), variables('MailCard'))"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "emphasis",
+                                                "isVisible":  "@if(empty(variables('URLCard')), false, true)",
+                                                "items":  "@union(createArray(variables('URLCardHeader')), variables('URLCard'))"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "emphasis",
+                                                "isVisible":  "@if(empty(variables('OtherCard')), false, true)",
+                                                "items":  "@union(createArray(variables('OtherCardHeader')), variables('OtherCard'))"
+                                            },
+                                            {
+                                                "type":  "Container",
+                                                "style":  "default",
+                                                "isVisible":  false,
+                                                "items":  [
+                                                    {
+                                                        "type":  "TextBlock",
+                                                        "text":  "",
+                                                        "size":  "Small",
+                                                        "isSubtle":  true
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "type":  "Container",
+                                        "style":  "default",
+                                        "items":  [
+                                            {
+                                                "type":  "TextBlock",
+                                                "text":  "This alert was generated automatically on @{utcNow()}",
+                                                "size":  "Small",
+                                                "isSubtle":  true
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "actions":  [
+                                    {
+                                        "type":  "Action.OpenUrl",
+                                        "title":  "View Incident",
+                                        "url":  "@{body('HTTP')?['incidentWebUrl']}",
+                                        "style":  "positive"
+                                    }
+                                ]
+                            }
+                        },
+                        "Post_card_in_a_chat_or_channel":  {
+                            "runAfter":  {
+                                "Compose_Card":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "body":  {
+                                    "messageBody":  "@{outputs('Compose_Card')}"
+                                },
+                                "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                            }
+                        },
+                        "Append_to_alertscard":  {
+                            "runAfter":  {
+                                "Initialize_evidence_variables":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "AppendToArrayVariable",
+                            "inputs":  {
+                                "name":  "AlertsCard",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "**Related Alerts (@{length(body('HTTP')?['alerts'])})**",
+                                    "size":  "Medium",
+                                    "weight":  "Bolder",
+                                    "spacing":  "Medium"
+                                }
+                            }
+                        },
+                        "Set_UserCardHeader":  {
+                            "runAfter":  {
+                                "For_each_alert":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "UsersCardHeader",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "👤 **Impacted Users (@{length(variables('UsersCard'))})**",
+                                    "size":  "Small",
+                                    "weight":  "Bolder"
+                                }
+                            }
+                        },
+                        "Set_IPCardHeader":  {
+                            "runAfter":  {
+                                "Set_UserCardHeader":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "IPCardHeader",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "🌐 **Impacted IPs (@{length(variables('IPCard'))})**",
+                                    "size":  "Small",
+                                    "weight":  "Bolder"
+                                }
+                            }
+                        },
+                        "Set_DeviceCardHeader":  {
+                            "runAfter":  {
+                                "Set_IPCardHeader":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "DeviceCardHeader",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "💻 **Impacted Devices (@{length(variables('DeviceCard'))})**",
+                                    "size":  "Small",
+                                    "weight":  "Bolder"
+                                }
+                            }
+                        },
+                        "Set_URLCardHeader":  {
+                            "runAfter":  {
+                                "Set_MailCardHeader":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "URLCardHeader",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "🔗 **Impacted URLs (@{length(variables('URLCard'))})**",
+                                    "size":  "Small",
+                                    "weight":  "Bolder"
+                                }
+                            }
+                        },
+                        "Set_MailCardHeader":  {
+                            "runAfter":  {
+                                "Set_DeviceCardHeader":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "MailCardHeader",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "✉️ **Impacted Mail Messages (@{length(variables('MailCard'))})**",
+                                    "size":  "Small",
+                                    "weight":  "Bolder"
+                                }
+                            }
+                        },
+                        "Set_OtherCardHeader":  {
+                            "runAfter":  {
+                                "Set_URLCardHeader":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "OtherCardHeader",
+                                "value":  {
+                                    "type":  "TextBlock",
+                                    "text":  "🏷️ **Other Entity Types (@{length(variables('OtherCard'))})**",
+                                    "size":  "Small",
+                                    "weight":  "Bolder"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "teams":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName":  "[variables('TeamsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]",
+                                "connectionProperties":  {
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Send-Incident-TeamsCard-XDR",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('TeamsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('TeamsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}
