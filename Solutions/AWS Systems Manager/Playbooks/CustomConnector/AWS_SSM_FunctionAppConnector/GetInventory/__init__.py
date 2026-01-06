@@ -39,15 +39,19 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (filters and aggregators and result_attributes and next_token and max_results):
         try:
-            req_body = json.loads(req.get_json())
+            # req_body = json.loads(req.get_json())
+            req_body = req.get_json()
         except ValueError:
             pass
+            logging.error('Error parsing JSON body.')
         else:
             filters = req_body.get('Filters')
             aggregators = req_body.get('Aggregators')
             result_attributes = req_body.get('ResultAttributes')
             next_token = req_body.get('NextToken')
             max_results = req_body.get('MaxResults')
+    
+
     logging.info(f'Parsed Parameters - Filters: {filters}, Aggregators: {aggregators}, ResultAttributes: {result_attributes}, NextToken: {next_token}, MaxResults: {max_results}')
     # Set parameter dictionary based on the request parameters
     kwargs = {}
@@ -77,22 +81,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             results = ssm_client.get_inventory(**kwargs)
 
             logging.info('Call to get AWS SSM Inventory successful.')
+
+            # Return the results
             logging.info(f'Results: {results}')
-            
-            # Transform AWS response to Azure-compatible paginated format
-            azure_response = {
-                "value": results.get("Entities", [])
-            }
-            
-            # Add nextLink for pagination if NextToken exists
-            if "NextToken" in results and results["NextToken"]:
-                azure_response["nextLink"] = results["NextToken"]
-
-            logging.info(f'Transformed Azure Response: {azure_response}')
-
-            # Return the results in Azure-compatible format
             return func.HttpResponse(
-                json.dumps(azure_response),
+                json.dumps(results),
                 headers = {"Content-Type": "application/json"},
                 status_code = 200
             )
