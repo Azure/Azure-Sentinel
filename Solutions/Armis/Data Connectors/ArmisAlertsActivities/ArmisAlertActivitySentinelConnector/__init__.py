@@ -2,16 +2,15 @@
 
 import datetime
 import logging
+import os
 import azure.functions as func
-import json
-from .sentinel import AzureSentinel
 from .exports_store import ExportsTableStore
 from Exceptions.ArmisExceptions import ArmisException, ArmisDataNotFoundException, ArmisTimeOutException
 from .utils import Utils
 from . import consts
 import inspect
 import time
-
+from .sentinel import send_data_to_sentinel 
 
 class ArmisAlertsActivities(Utils):
     """This class will process the Alert Activity data and post it into the Microsoft sentinel."""
@@ -21,7 +20,6 @@ class ArmisAlertsActivities(Utils):
         super().__init__()
         self.start_time = start_time
         self.data_alert_from = 0
-        self.azuresentinel = AzureSentinel()
         self.total_alerts_posted = 0
         self.total_activities_posted = 0
 
@@ -49,12 +47,14 @@ class ArmisAlertsActivities(Utils):
                 data = results["data"]["results"]
                 for i in data:
                     i["armis_alert_time"] = i["time"]
+                    i["alert_type"] = i["type"]
+                    i["alert_title"] = i["title"]
 
                 logging.info(
                     consts.LOG_FORMAT.format(__method_name, "Alerts From {} length 1000".format(self.data_alert_from))
                 )
                 self.data_alert_from = results["data"]["next"]
-                alert_time = self.get_formatted_time(data[-1]["time"][:19])
+                alert_time = self.get_formatted_time(data[-1]["armis_alert_time"][:19])
 
                 return data, alert_time, count_per_frame_data
             else:
@@ -109,6 +109,8 @@ class ArmisAlertsActivities(Utils):
                 data = results["data"]["results"]
                 for i in data:
                     i["armis_activity_time"] = i["time"]
+                    i["activity_type"] = i["type"]
+                    i["activity_title"] = i["title"]
                 return data
             else:
                 logging.error(consts.LOG_FORMAT.format(__method_name, "There are no proper keys in activity data."))
@@ -140,18 +142,14 @@ class ArmisAlertsActivities(Utils):
                 if activity_uuid_list:
                     logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching activities data."))
                     activity_data = self.get_activity_data(activity_uuid_list)
-                    self.azuresentinel.post_data(
-                        json.dumps(activity_data, indent=2), consts.ARMIS_ACTIVITIES_TABLE, "armis_activity_time"
-                    )
+                    send_data_to_sentinel(activity_data, consts.ARMIS_ACTIVITIES_TABLE)
                     self.total_activities_posted += len(activity_data)
                     logging.info(
                         consts.LOG_FORMAT.format(
                             __method_name, "Posted Activities count : {}.".format(len(activity_data))
                         )
                     )
-                self.azuresentinel.post_data(
-                    json.dumps(alerts_data_to_post, indent=2), consts.ARMIS_ALERTS_TABLE, "armis_alert_time"
-                )
+                send_data_to_sentinel(alerts_data_to_post, consts.ARMIS_ALERTS_TABLE)
                 self.total_alerts_posted += len(alerts_data_to_post)
                 logging.info(
                     consts.LOG_FORMAT.format(
@@ -189,11 +187,7 @@ class ArmisAlertsActivities(Utils):
                     raise ArmisTimeOutException()
                 chunk_of_activity_uuids = activity_uuids[index: index + consts.CHUNK_SIZE]
                 activity_data = self.get_activity_data(chunk_of_activity_uuids)
-                self.azuresentinel.post_data(
-                    json.dumps(activity_data, indent=2),
-                    consts.ARMIS_ACTIVITIES_TABLE,
-                    "armis_activity_time",
-                )
+                send_data_to_sentinel(activity_data, consts.ARMIS_ACTIVITIES_TABLE)
                 self.total_activities_posted += len(activity_data)
                 logging.info(
                     consts.LOG_FORMAT.format(
@@ -241,9 +235,7 @@ class ArmisAlertsActivities(Utils):
                         self.process_large_chunks_of_activity_data(
                             activity_uuids
                         )
-                        self.azuresentinel.post_data(
-                            json.dumps([alert], indent=2), consts.ARMIS_ALERTS_TABLE, "armis_alert_time"
-                        )
+                        send_data_to_sentinel([alert], consts.ARMIS_ALERTS_TABLE)
                         logging.info(consts.LOG_FORMAT.format(__method_name, "Posted Alerts count : 1."))
                         self.total_alerts_posted += 1
                         offset_to_post += 1
