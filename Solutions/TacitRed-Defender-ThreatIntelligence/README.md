@@ -40,5 +40,5 @@ The TacitRed Defender Threat Intelligence solution integrates TacitRed's threat 
 ## Learn More
 
 - [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel/)
-- [TacitRed Platform](https://www.data443.com/tacitred/)
+- [TacitRed Platform](https://data443.com/tacitred-attack-surface-intelligence/)
 - [Microsoft Defender Threat Intelligence](https://learn.microsoft.com/microsoft-365/security/defender/)
