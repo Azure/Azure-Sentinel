@@ -45,5 +45,5 @@ The TacitRed SentinelOne IOC Automation solution provides playbooks that demonst
 ## Learn More
 
 - [Microsoft Sentinel Documentation](https://learn.microsoft.com/azure/sentinel/)
-- [TacitRed Platform](https://www.data443.com/)
+- [TacitRed Platform](https://data443.com/tacitred-attack-surface-intelligence/)
 - [SentinelOne Documentation](https://www.sentinelone.com/docs/)
