@@ -45,7 +45,7 @@ try {
     
     # Check if user is logged in to BTP CLI
     Write-Log "Checking BTP CLI login status..."
-    $loginCheck = btp list accounts/global-account 2>&1
+    $loginCheck = btp get accounts/global-account 2>&1
     
     if ($LASTEXITCODE -ne 0) {
         Write-Log "Not logged in to BTP CLI. Attempting to login..." -Level "WARNING"
@@ -102,6 +102,7 @@ try {
         
         # Create subaccount entry with default space placeholder
         $subaccountEntry = [PSCustomObject]@{
+            SubaccountName = $subaccountName
             SubaccountId = $subaccountId
             DisplayName = $subaccountName
             "cf-api-endpoint" = $cfDetails.ApiEndpoint
