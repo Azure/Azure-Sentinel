@@ -82,24 +82,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
             logging.info('Call to get AWS SSM Inventory successful.')
 
-            # # Return the results
-            # logging.info(f'Results: {results}')
-            # return func.HttpResponse(
-            #     json.dumps(results),
-            #     headers = {"Content-Type": "application/json"},
-            #     status_code = 200
-            # )
-
-            # response = {
-            #     "value": results.get("Entities", []),
-            #     "nextLink": results.get("NextToken")
-            # }   
-
-            # return func.HttpResponse(
-            #     json.dumps(response),
-            #     headers={"Content-Type": "application/json"},
-            #     status_code=200
-            # )
             results = ssm_client.get_inventory(**kwargs)
 
             base_url = req.url.split('?')[0]
@@ -113,6 +95,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 )
             }
 
+            logging.info(f'Response:{response}')
             return func.HttpResponse(
                 json.dumps(response),
                 headers={"Content-Type": "application/json"},
