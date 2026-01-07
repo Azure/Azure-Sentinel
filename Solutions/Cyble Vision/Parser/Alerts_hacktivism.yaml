@@ -1,0 +1,186 @@
+id: 856E5D88-CFF6-4081-B0A2-EB0994F9919E
+Function:
+    Title: Parser to extract Hacktivism alerts from Cyble Vision Alerts
+    Version: '1.0.0'
+    LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_hacktivism
+FunctionAlias: Alerts_hacktivism
+FunctionQuery: |
+    CybleVisionAlerts_CL
+    | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+    | extend AlertID = ID
+    | where Service == "hacktivism"
+    | extend Data = parse_json(Data)
+    // Common parsed fields (root level)
+    | extend
+        HK_ChannelName        = tostring(Channel_Name),
+        HK_Source             = tostring(Source),
+        HK_Type               = tostring(Type),
+        HK_ContentAddedOn     = tostring(Content_Added_On),
+        HK_BucketName         = tostring(BucketName),
+        HK_Marketplace        = tostring(marketplace) // if present in other records
+    // Variant A: Telegram / feed style fields inside data
+    | extend
+        HK_ChannelLink        = tostring(Data.channel_link),
+        HK_Data_ChannelName   = tostring(Data.channel_name),
+        HK_Countries          = Data.countries,
+        HK_CountryCodes       = Data.country_codes,
+        HK_PostData           = tostring(Data.post_data),
+        HK_PostDomains        = Data.post_domains,
+        HK_PostFiles          = Data.post_files,
+        HK_PostID             = tostring(Data.post_id),
+        HK_PostLinks          = Data.post_links,
+        HK_PostPhotos         = Data.post_photos,
+        HK_PostURL            = tostring(Data.post_url),
+        HK_PostVideos         = Data.post_videos,
+        HK_PostedAt           = tostring(Data.posted_at),
+        HK_SourceType         = tostring(Data.source),
+        HK_UpdatedAt_Data     = tostring(Data.updated_at)
+    // Variant B: defacedWebsite / domainbased fields inside data
+    | extend
+        HK_Attacker           = tostring(Data.attacker),
+        HK_AttackerTeam       = tostring(Data.team),
+        HK_Domain             = tostring(Data.domain),
+        HK_IP                 = tostring(Data.ip),
+        HK_Server             = tostring(Data.server),
+        HK_SourceWebsite      = tostring(Data.source_website),
+        HK_Mirror             = tostring(Data.mirror),
+        HK_Timestamp_Raw      = tostring(Data.timestamp),
+        HK_WebsiteURL         = tostring(Data.website_url),
+        HK_CountryName        = tostring(Data.country_name),
+        HK_CountryCode        = tostring(Data.country_code)
+    // Normalize lists: ensure arrays for links/domains/photos
+    | extend
+        HK_PostLinksArray     = iif(isnull(HK_PostLinks) or HK_PostLinks == "", dynamic([]), todynamic(HK_PostLinks)),
+        HK_PostDomainsArray   = iif(isnull(HK_PostDomains) or HK_PostDomains == "", dynamic([]), todynamic(HK_PostDomains)),
+        HK_PostPhotosArray    = iif(isnull(HK_PostPhotos) or HK_PostPhotos == "", dynamic([]), todynamic(HK_PostPhotos))
+    // If links were supplied as a single string or CSV (defensive parsing)
+    | extend HK_PostLinksArray = case(
+        isnull(HK_PostLinksArray) or isempty(tostring(HK_PostLinksArray)), 
+            split(tostring(Data.post_links), ","),
+            HK_PostLinksArray)
+    // Extract URLs from post text as well (adds any missed links)
+    | extend HK_Urls_In_Text = extract_all(@"(https?://[^\s,]+)", HK_PostData)
+    // Combine arrays (array_concat exists in Kusto)
+    | extend HK_CombinedUrls = array_concat(HK_PostLinksArray, HK_Urls_In_Text)
+    // mvapply to dedupe and create HK_All_URLs per original row
+    | mv-apply url = HK_CombinedUrls on (
+        where isnotempty(tostring(url))
+        | summarize HK_All_URLs = make_set(tostring(url))
+    )
+    // Extract domains from HK_All_URLs using mvapply (works per row) 
+    | mv-apply url = HK_All_URLs on (
+        where isnotempty(tostring(url))
+        | extend host = tostring(parse_url(tostring(url)).Host)
+        | where isnotempty(host)
+        | summarize HK_All_Domains = make_set(host)
+    )
+    // Extract phone numbers & emails from post text (helpful for forum posts)
+    | extend
+        HK_Phones = extract_all(@"(\+?\d[\d\-\s]{6,}\)d)", HK_PostData),
+        HK_Emails = extract_all(@"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})", HK_PostData)
+    // Tags to string
+    | extend HK_Tags = tostring(Tags)
+    // Final projection: keep original table columns + parsed HK_* columns
+    | project
+        // Original base columns (kept for context)
+        TimeGenerated,
+        Created_At,
+        Updated_At,
+        Deleted_At,
+        AlertID,
+        Service,
+        Status,
+        DataID,
+        EntityID,
+        KeywordName,
+        EntityType,
+        CompanyID,
+        Description,
+        AssigneeID,
+        AssignmentDate,
+        ArchiveDate,
+        Severity,
+        UpdatedBy,
+        CreatedBy,
+        UserSeverity,
+        BucketID,
+        Filename,
+        RepositoryName,
+        OwnerName,
+        BucketName,
+        TruePositive,
+        LLMProcessed,
+        LLMExplanation,
+        Tags,
+        ID,
+        Asset,
+        Last_Detected_At,
+        Extension,
+        Compromised_Date,
+        Article_Name,
+        Breach_Source,
+        Breach_Date,
+        Channel_Name,
+        Server_Name,
+        Content_Updated_On,
+        Discussion_Date,
+        Discussion_By,
+        Source_Name,
+        Topic_Name,
+        Source,
+        Alert_Type,
+        Content_Added_On,
+        IOC,
+        First_Seen_On,
+        Last_Seen_On,
+        Old_Risk_Score,
+        New_Risk_Score,
+        IP,
+        Host,
+        Port,
+        Application_Name,
+        Market_Source,
+        Uploaded_At,
+        CVE,
+        Subdomain,
+        Domain,
+        Chat_Title,
+        Username,
+        Search_Engine,
+        Category,
+        Sentiment,
+        Data,
+        TenantId,
+        _ResourceId,
+        // Parsed hacktivism fields
+        HK_ChannelName,
+        HK_ChannelLink,
+        HK_Data_ChannelName,
+        HK_Countries,
+        HK_CountryCodes,
+        HK_PostData,
+        HK_PostID,
+        HK_PostedAt,
+        HK_PostLinksArray,
+        HK_PostDomainsArray,
+        HK_PostPhotosArray,
+        HK_All_URLs,
+        HK_All_Domains,
+        HK_Urls_In_Text,
+        HK_Phones,
+        HK_Emails,
+        HK_Attacker,
+        HK_AttackerTeam,
+        HK_Domain,
+        HK_IP,
+        HK_Server,
+        HK_SourceWebsite,
+        HK_WebsiteURL,
+        HK_Mirror,
+        HK_Timestamp_Raw,
+        HK_CountryName,
+        HK_CountryCode,
+        HK_UpdatedAt_Data,
+        HK_Tags
