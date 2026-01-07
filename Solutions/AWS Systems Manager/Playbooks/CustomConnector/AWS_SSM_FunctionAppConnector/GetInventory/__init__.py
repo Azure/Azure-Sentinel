@@ -39,10 +39,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (filters and aggregators and result_attributes and next_token and max_results):
         try:
-            req_body = req.get_json(silent=True) or {}
+            req_body = req.get_json() 
         except ValueError:
             pass
-            logging.error('Error parsing JSON body.')
         else:
             filters = req_body.get('Filters')
             aggregators = req_body.get('Aggregators')
