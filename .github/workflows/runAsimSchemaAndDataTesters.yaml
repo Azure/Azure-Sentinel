@@ -189,9 +189,92 @@ jobs:
               log('warning', 'Comment posting failed, but continuing workflow...');
             }
 
+  validate-no-symlinks:
+    name: Validate no symlinks or suspicious files
+    needs: security-gate
+    if: needs.security-gate.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
+        with:
+            ref: ${{github.event.pull_request.head.sha}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false
+            fetch-depth: 0
+      
+      - name: Check for symlinks and dangerous files
+        run: |
+          echo "🔐 Checking for symlinks and dangerous files..."
+          
+          # Check for symlinks
+          symlinks=$(find . -type l 2>/dev/null | grep -v ".git" || true)
+          if [ -n "$symlinks" ]; then
+            echo "❌ SECURITY VIOLATION: Symlinks detected:"
+            echo "$symlinks"
+            exit 1
+          fi
+          
+          # Check for executable files that shouldn't be executable
+          dangerous_patterns=('\\.exe$' '\\.bat$' '\\.cmd$' '\\.com$' '\\.msi$' '\\.dll$' '\\.so$' '\\.o$' '\\.a$')
+          found_dangerous=0
+          
+          for pattern in "${dangerous_patterns[@]}"; do
+            matches=$(find . -type f -iregex ".*$pattern" 2>/dev/null | grep -v ".git" || true)
+            if [ -n "$matches" ]; then
+              echo "❌ SECURITY VIOLATION: Dangerous executable files found:"
+              echo "$matches"
+              found_dangerous=1
+            fi
+          done
+          
+          # For fork PRs, check for suspicious script injections in the .script/tests directory
+          if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            echo "ℹ️ Additional validation for fork PR..."
+            
+            # Only allow specific files in .script/tests directory
+            allowed_test_patterns=('asimParsersTest/VerifyASimParserTemplate.py$' 'asimParsersTest/ingestASimSampleData.py$' 'asimParsersTest/runAsimTesters.ps1$' 'asimParsersTest/convertYamlToObject.ps1$' 'asimParsersTest/ASimFilteringTest.py$')
+            
+            # Check if any files in .script/tests were added/modified
+            modified_test_files=$(git diff --name-only origin/master HEAD -- '.script/tests/' 2>/dev/null || true)
+            
+            if [ -n "$modified_test_files" ]; then
+              echo "⚠️ Modified files detected in .script/tests/ directory:"
+              echo "$modified_test_files"
+              
+              # Verify each modified file matches allowed patterns
+              while IFS= read -r file; do
+                [ -z "$file" ] && continue
+                
+                is_allowed=0
+                for pattern in "${allowed_test_patterns[@]}"; do
+                  if [[ "$file" =~ $pattern ]]; then
+                    is_allowed=1
+                    break
+                  fi
+                done
+                
+                if [ $is_allowed -eq 0 ]; then
+                  echo "❌ SECURITY VIOLATION: Unauthorized modification to .script/tests/ detected:"
+                  echo "   File: $file"
+                  echo "   Only the following files can be modified in fork PRs:"
+                  printf '   - %s\n' "${allowed_test_patterns[@]}"
+                  found_dangerous=1
+                fi
+              done <<< "$modified_test_files"
+            fi
+          fi
+          
+          if [ $found_dangerous -eq 1 ]; then
+            exit 1
+          fi
+          
+          echo "✅ Symlink and file validation passed"
+
   Run-ASim-TemplateValidation:
     name: Run ASim Template Validation tests
-    needs: security-gate
+    needs: [security-gate, validate-no-symlinks]
     if: needs.security-gate.outputs.approved == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -236,10 +319,23 @@ jobs:
               # Download the file
               echo "Downloading script from the master: $url"
               curl -o "$filePath" "$url"
+              
+              # Verify the file is not a symlink
+              if [ -L "$filePath" ]; then
+                echo "❌ SECURITY ERROR: Downloaded file is a symlink"
+                exit 1
+              fi
+              
+              # Verify file is a valid Python file
+              if ! file "$filePath" | grep -q "Python script\|ASCII text"; then
+                echo "❌ SECURITY ERROR: Downloaded file is not a valid Python script"
+                exit 1
+              fi
+              
               # Execute the script
               python "$filePath" 
   Run-ASim-Sample-Data-Ingest:
-    needs: Run-ASim-TemplateValidation
+    needs: [validate-no-symlinks, Run-ASim-TemplateValidation]
     name: Run ASim Sample Data Ingestion
     runs-on: ubuntu-latest
     permissions:
@@ -296,6 +392,19 @@ jobs:
               # Download the file
               echo "Downloading script from the master: $url"
               curl -o "$filePath" "$url"
+              
+              # Verify the file is not a symlink
+              if [ -L "$filePath" ]; then
+                echo "❌ SECURITY ERROR: Downloaded file is a symlink"
+                exit 1
+              fi
+              
+              # Verify file is a valid Python file
+              if ! file "$filePath" | grep -q "Python script\|ASCII text"; then
+                echo "❌ SECURITY ERROR: Downloaded file is not a valid Python script"
+                exit 1
+              fi
+              
               chmod +x "$filePath"
               # Execute the script
               python "$filePath" "${{ github.event.pull_request.number }}"
@@ -350,6 +459,21 @@ jobs:
             # Download the runAsimTesters file
             Write-Host "Downloading script from the master: $url"
             Invoke-WebRequest -Uri $url -OutFile $filePath
+            
+            # Verify the file is not a symlink
+            $item = Get-Item $filePath -Force
+            if ($item.LinkType -eq 'SymbolicLink') {
+              Write-Host "❌ SECURITY ERROR: Downloaded file is a symlink"
+              exit 1
+            }
+            
+            # Verify file is a valid PowerShell script
+            $content = Get-Content $filePath -Raw -ErrorAction SilentlyContinue
+            if ($null -eq $content -or $content -notmatch '\.ps1|param\(|function|Write-Host') {
+              Write-Host "❌ SECURITY ERROR: Downloaded file is not a valid PowerShell script"
+              exit 1
+            }
+            
             # download the convertYamlToObject.ps1 script form master
             $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
             $url_convert_yaml = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/convertYamlToObject.ps1"
@@ -360,6 +484,21 @@ jobs:
             # Download the convertYamlToObject file
             Write-Host "Downloading script from the master: $url_convert_yaml"
             Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml 
+            
+            # Verify the file is not a symlink
+            $item_yaml = Get-Item $filePath_convert_yaml -Force
+            if ($item_yaml.LinkType -eq 'SymbolicLink') {
+              Write-Host "❌ SECURITY ERROR: Downloaded file is a symlink"
+              exit 1
+            }
+            
+            # Verify file is a valid PowerShell script
+            $content_yaml = Get-Content $filePath_convert_yaml -Raw -ErrorAction SilentlyContinue
+            if ($null -eq $content_yaml -or $content_yaml -notmatch '\.ps1|param\(|function|Write-Host') {
+              Write-Host "❌ SECURITY ERROR: Downloaded file is not a valid PowerShell script"
+              exit 1
+            }
+            
             # Execute the script
             & $filePath
           azPSVersion: "latest"
@@ -418,5 +557,18 @@ jobs:
           # Download the file
           echo "Downloading script from the master: $url"
           curl -o "$filePath" "$url"
+          
+          # Verify the file is not a symlink
+          if [ -L "$filePath" ]; then
+            echo "❌ SECURITY ERROR: Downloaded file is a symlink"
+            exit 1
+          fi
+          
+          # Verify file is a valid Python file
+          if ! file "$filePath" | grep -q "Python script\|ASCII text"; then
+            echo "❌ SECURITY ERROR: Downloaded file is not a valid Python script"
+            exit 1
+          fi
+          
           # Execute the script
           python "$filePath"
