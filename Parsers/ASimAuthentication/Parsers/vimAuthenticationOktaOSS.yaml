@@ -80,7 +80,7 @@ ParserQuery: |
         "Mobile", "Mobile Device",
         "Tablet", "Mobile Device"
     ];
-    let ActorUserTypeLookup = datatable(OriginalActorUserType: string, ActorUserType: string)
+    let ActorUserTypeLookup = datatable(ActorOriginalUserType: string, ActorUserType: string)
     [
         "User", "Regular",
         "SystemPrincipal", "System"
@@ -95,7 +95,7 @@ ParserQuery: |
           | extend 
               outcome_result_s=column_ifexists('outcome_result_s', ""),
               eventType_s=column_ifexists('eventType_s', ""),
-              legacyEventType_s=column_ifexists('legacyEventType_s', ""),
+              EventOriginalSubType=column_ifexists('legacyEventType_s', ""),
               client_geographicalContext_geolocation_lat_d = column_ifexists('client_geographicalContext_geolocation_lat_d', ""),
               client_geographicalContext_geolocation_lon_d = column_ifexists('client_geographicalContext_geolocation_lon_d', ""),
               actor_alternateId_s = column_ifexists('actor_alternateId_s', ""),
@@ -133,8 +133,6 @@ ParserQuery: |
               ,
               EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
               ,
-              EventOriginalSubType=legacyEventType_s
-              ,
               EventMessage=column_ifexists('displayMessage_s', "")
               ,
               EventOriginalResultDetails=column_ifexists('outcome_reason_s', "")
@@ -145,7 +143,7 @@ ParserQuery: |
               ,
               TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s', "")
               ,
-              OriginalActorUserType=column_ifexists('actor_type_s', "")
+              ActorOriginalUserType=column_ifexists('actor_type_s', "")
               ,
               TargetUserId=column_ifexists('actor_id_s', "")
               ,
@@ -177,19 +175,8 @@ ParserQuery: |
               SrcGeoPostalCode = column_ifexists('client_geographicalContext_postalCode_s', "")
               ,
               SrcGeoRegion = column_ifexists('client_geographicalContext_state_s', "")
-          | extend
-            ActorUserId = TargetUserId,
-            ActorUsername = TargetUsername,
-            ActorUserIdType = TargetUserIdType
-          | lookup ActorUserTypeLookup on OriginalActorUserType
-          | extend
-            TargetUserType = ActorUserType,
-            TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
-            ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
           | lookup OutcomeReasonLookup on outcome_reason_s
           | extend EventResultDetails = iif(outcome_result_s in (OktaFailedOutcome), coalesce(EventResultDetails, "Other"), "")
-          | lookup SrcDeviceTypeLookup on client_device_s
-          | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
           // Filtering on 'eventresult' and 'eventtype_in' and 'eventresultdetails_in'
           | where (eventresult == "*" or (EventResult == eventresult))
               and ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
@@ -205,6 +192,17 @@ ParserQuery: |
                                       "TargetUsername",
                                       "No match"
                                   )
+          | extend
+            ActorUserId = TargetUserId,
+            ActorUsername = TargetUsername,
+            ActorUserIdType = TargetUserIdType
+          | lookup ActorUserTypeLookup on ActorOriginalUserType
+          | extend
+            TargetUserType = ActorUserType,
+            TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+            ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+          | lookup SrcDeviceTypeLookup on client_device_s
+          | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
           // ** Aliases
           | extend 
               User=TargetUsername
@@ -212,7 +210,7 @@ ParserQuery: |
               Dvc=EventVendor
               ,
               IpAddr=SrcIpAddr
-          | project-away OriginalActorUserType, temp_isMatchTargetUsername, *_s, *_d, *_b, *_g, *_t;
+          | project-away temp_isMatchTargetUsername, *_s, *_d, *_b, *_g, *_t;
       OktaV1
   };
   OktaSignin (
