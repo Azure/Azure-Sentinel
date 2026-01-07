@@ -59,12 +59,6 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 | **Tables Index** | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
 | **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content-index.md) |
 
-The documentation includes:
-- **485 Solutions** with connector and content item details
-- **524 Connectors** with collection methods and table mappings
-- **1,927 Tables** with schema from Azure Monitor documentation
-- **4,930+ Content Items** (analytic rules, hunting queries, playbooks, workbooks, parsers, watchlists)
-
 You can also generate documentation locally using the `--output-dir` parameter (see below).
 
 The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
@@ -177,6 +171,13 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 ---
 
 ## Version History
+
+### v5.2 - Bug Fixes and Improvements
+
+- Fixed `sanitize_filename()` to handle Windows-invalid characters (`: * ? " < > |`), enabling ~20 previously-missing content files
+- Fixed content item filename collisions by including solution name and adding collision detection
+- Fixed table page case-insensitive filename collisions on Windows
+- Improved index page statistics with accurate table counts and content item metrics
 
 ### v5.1 - Documentation Overrides and Additional Information
 

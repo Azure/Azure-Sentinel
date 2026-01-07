@@ -104,15 +104,24 @@ connector-docs/
 ├── solutions-index.md           # Alphabetical list of all solutions
 ├── connectors-index.md          # Alphabetical list of all connectors
 ├── tables-index.md              # Alphabetical list of all tables with transformation/API support
-├── solutions/                   # Individual solution pages (~480 files)
+├── content/                     # Content item documentation
+│   ├── content-index.md         # Main content index
+│   ├── analytic-rules.md        # Analytics rules index with letter sub-pages
+│   ├── hunting-queries.md       # Hunting queries index
+│   ├── playbooks.md             # Playbooks index
+│   ├── workbooks.md             # Workbooks index
+│   ├── parsers.md               # Parsers index
+│   ├── watchlists.md            # Watchlists index
+│   └── *.md                     # Individual content item pages
+├── solutions/                   # Individual solution pages
 │   ├── 1password.md
 │   ├── aws-cloudfront.md
 │   └── ...
-├── connectors/                  # Individual connector pages (~520 files)
+├── connectors/                  # Individual connector pages
 │   ├── 1passwordeventreporter.md
 │   ├── awscloudfront.md
 │   └── ...
-└── tables/                      # Individual table pages (~825 files)
+└── tables/                      # Individual table pages
     ├── securityevent.md
     ├── syslog.md
     └── ...

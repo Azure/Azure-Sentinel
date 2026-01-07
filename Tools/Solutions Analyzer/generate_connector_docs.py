@@ -109,6 +109,9 @@ def sanitize_anchor(text: str) -> str:
 def sanitize_filename(text: str) -> str:
     """Convert text to URL-safe filename, encoding special characters that break Markdown links."""
     result = text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+    # Remove or replace characters invalid in Windows filenames: \ / : * ? " < > |
+    result = result.replace(":", "-").replace("*", "-").replace("?", "-")
+    result = result.replace('"', "-").replace("<", "-").replace(">", "-").replace("|", "-")
     # URL-encode parentheses to avoid breaking Markdown link syntax
     result = result.replace("(", "%28").replace(")", "%29")
     return result
@@ -1308,15 +1311,19 @@ def get_content_type_slug(content_type: str) -> str:
 def get_content_item_filename(content_id: str, content_name: str, solution_name: str) -> str:
     """
     Generate a unique filename for a content item page.
-    Uses content_id if available (sanitized), otherwise uses name + solution hash.
+    Always includes solution name AND content name to avoid collisions.
+    Some solutions reuse the same content_id for multiple different content items.
     """
+    sanitized_solution = sanitize_filename(solution_name)
+    sanitized_name = sanitize_filename(content_name)
+    
     if content_id:
-        # Use content_id as the primary identifier
-        return sanitize_filename(content_id)
+        sanitized_id = sanitize_filename(content_id)
+        # Include both name and id for uniqueness within same solution
+        return f"{sanitized_solution}-{sanitized_name}-{sanitized_id}"
     else:
-        # For items without ID (workbooks, some playbooks), use name + solution hash
-        composite = f"{content_name}-{solution_name}"
-        return sanitize_filename(composite)
+        # For items without ID (workbooks, some playbooks), use name + solution
+        return f"{sanitized_solution}-{sanitized_name}"
 
 
 def get_content_item_link(item: Dict[str, str], relative_path: str = "../content/") -> str:
@@ -1359,6 +1366,9 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
     
     pages_created = 0
     
+    # Track generated filenames to handle collisions
+    generated_filenames: Dict[str, int] = {}  # filename -> count of times used
+    
     for solution_name, items in content_items_by_solution.items():
         for item in items:
             content_id = item.get('content_id', '')
@@ -1378,8 +1388,16 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
             content_query_status = item.get('content_query_status', '')
             solution_folder = item.get('solution_folder', '')
             
-            # Generate filename
-            filename = get_content_item_filename(content_id, content_name, solution_name)
+            # Generate filename and handle collisions
+            base_filename = get_content_item_filename(content_id, content_name, solution_name)
+            if base_filename in generated_filenames:
+                # Add counter suffix for collision
+                generated_filenames[base_filename] += 1
+                filename = f"{base_filename}-{generated_filenames[base_filename]}"
+            else:
+                generated_filenames[base_filename] = 1
+                filename = base_filename
+            
             page_path = content_dir / f"{filename}.md"
             
             # Get content type display name
@@ -1865,13 +1883,17 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
 
 
 def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path,
-                       content_items_by_solution: Dict[str, List[Dict[str, str]]] = None) -> None:
+                       content_items_by_solution: Dict[str, List[Dict[str, str]]] = None,
+                       tables_count: int = None,
+                       tables_in_solutions: int = None) -> None:
     """Generate the main index page with table of all solutions.
     
     Args:
         solutions: Dictionary mapping solution name to list of connector entries
         output_dir: Output directory for documentation
         content_items_by_solution: Dictionary mapping solution name to list of content items
+        tables_count: Total number of tables (from tables_map)
+        tables_in_solutions: Number of tables linked to solutions via connectors
     """
     if content_items_by_solution is None:
         content_items_by_solution = {}
@@ -1927,16 +1949,22 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 if connector_id:
                     all_connector_ids.add(connector_id)
         
-        # Count unique tables across all solutions
-        all_tables = set()
-        for connectors in solutions.values():
-            for conn in connectors:
-                table = conn.get('Table', '')
-                if table:
-                    all_tables.add(table)
+        # Count unique tables across all solutions (fallback if not provided)
+        if tables_in_solutions is None:
+            all_tables = set()
+            for connectors in solutions.values():
+                for conn in connectors:
+                    table = conn.get('Table', '')
+                    if table:
+                        all_tables.add(table)
+            tables_in_solutions = len(all_tables)
         
         f.write(f"providing access to **{len(all_connector_ids)} unique connectors** ")
-        f.write(f"and **{len(all_tables)} unique tables**.\n\n")
+        f.write(f"and **{tables_in_solutions} tables**.\n\n")
+        
+        # Count total content items
+        total_content_items = sum(len(items) for items in content_items_by_solution.values())
+        solutions_with_content = len([s for s in content_items_by_solution if content_items_by_solution[s]])
         
         # Statistics section
         f.write("### Quick Statistics\n\n")
@@ -1945,7 +1973,12 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write(f"| Total Solutions | {len(solutions)} |\n")
         f.write(f"| Solutions with Connectors | {solutions_with_connectors} ({100*solutions_with_connectors//len(solutions)}%) |\n")
         f.write(f"| Unique Connectors | {len(all_connector_ids)} |\n")
-        f.write(f"| Unique Tables | {len(all_tables)} |\n\n")
+        f.write(f"| Tables Used by Solutions | {tables_in_solutions} |\n")
+        f.write(f"| Content Items | {total_content_items} |\n")
+        f.write(f"| Solutions with Content | {solutions_with_content} ({100*solutions_with_content//max(len(solutions), 1)}%) |\n")
+        if tables_count and tables_count > tables_in_solutions:
+            f.write(f"\n*Note: {tables_count} total tables are documented, including {tables_count - tables_in_solutions} additional tables referenced by content items or from the Azure Monitor reference.*\n")
+        f.write("\n")
         
         # Build collection method summary
         # Collect all unique connectors with their metadata
@@ -2416,6 +2449,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
     table_dir.mkdir(parents=True, exist_ok=True)
     
     pages_created = 0
+    generated_files: Set[str] = set()  # Track generated filenames to avoid case-insensitive collisions
     
     for table, info in sorted(tables_map.items()):
         num_solutions = len(info['solutions'])
@@ -2423,7 +2457,13 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         
         # Generate page for ALL tables now (removed condition that required multiple solutions/connectors)
         
-        table_path = table_dir / f"{sanitize_anchor(table)}.md"
+        filename = sanitize_anchor(table)
+        # Skip if we've already generated a file with this name (case collision)
+        if filename in generated_files:
+            continue
+        generated_files.add(filename)
+        
+        table_path = table_dir / f"{filename}.md"
         
         # Get reference data from tables_reference CSV
         table_ref = tables_reference.get(table, {})
@@ -3632,10 +3672,15 @@ def main() -> None:
     else:
         print(f"Warning: Solutions directory not found: {args.solutions_dir} - skipping ReleaseNotes and README enrichment")
     
-    # Generate index pages
-    generate_index_page(by_solution, args.output_dir, content_items_by_solution)
+    # Generate index pages - generate tables_index first to get accurate count
     generate_connectors_index(by_solution, args.output_dir)
     tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference, solution_table_content_types)
+    
+    # Count tables that are linked to solutions via connectors (vs all documented tables)
+    tables_in_solutions = sum(1 for info in tables_map.values() if info['connectors'])
+    
+    generate_index_page(by_solution, args.output_dir, content_items_by_solution, 
+                       tables_count=len(tables_map), tables_in_solutions=tables_in_solutions)
     generate_content_index(content_items_by_solution, args.output_dir)
     
     # Generate individual connector pages

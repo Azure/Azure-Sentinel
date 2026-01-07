@@ -193,583 +193,45 @@ def get_connector_vendor_product_by_table(data: Any) -> Dict[str, Dict[str, Set[
 
 # Token validation sets
 PARSER_NAME_KEYS = {"functionname", "functionalias"}
-NON_TABLE_TOKENS = {
-    # KQL keywords and statements
-    "let",
-    "union",
-    "view",
-    "database",
-    "cluster",
-    "external_table",
-    "materialize",
-    "datatable",
-    "externaldata",
-    "range",
-    "print",
-    "evaluate",
-    
-    # KQL operators
-    "where",
-    "summarize",
-    "extend",
-    "project",
-    "sort",
-    "order",
-    "take",
-    "limit",
-    "top",
-    "count",
-    "distinct",
-    "sample",
-    "join",
-    "lookup",
-    "as",
-    "on",
-    "kind",
-    "mv-expand",
-    "mv-apply",
-    "make-series",
-    "parse",
-    "serialize",
-    "invoke",
-    "render",
-    "search",
-    "find",
-    "facet",
-    "partition",
-    "scan",
-    "fork",
-    "reduce",
-    "consume",
-    "getschema",
-    
-    # KQL scalar functions - Binary
-    "binary_and",
-    "binary_not",
-    "binary_or",
-    "binary_shift_left",
-    "binary_shift_right",
-    "binary_xor",
-    "bitset_count_ones",
-    
-    # KQL scalar functions - Conversion
-    "tobool",
-    "todatetime",
-    "todecimal",
-    "todouble",
-    "toguid",
-    "toint",
-    "tolong",
-    "tostring",
-    "totimespan",
-    "toreal",
-    "tohex",
-    
-    # KQL scalar functions - DateTime/timespan
-    "ago",
-    "datetime_add",
-    "datetime_diff",
-    "datetime_local_to_utc",
-    "datetime_part",
-    "datetime_utc_to_local",
-    "dayofmonth",
-    "dayofweek",
-    "dayofyear",
-    "endofday",
-    "endofmonth",
-    "endofweek",
-    "endofyear",
-    "format_datetime",
-    "format_timespan",
-    "getyear",
-    "hourofday",
-    "make_datetime",
-    "make_timespan",
-    "monthofyear",
-    "now",
-    "startofday",
-    "startofmonth",
-    "startofweek",
-    "startofyear",
-    "unixtime_microseconds_todatetime",
-    "unixtime_milliseconds_todatetime",
-    "unixtime_nanoseconds_todatetime",
-    "unixtime_seconds_todatetime",
-    "weekofyear",
-    
-    # KQL scalar functions - Dynamic/array
-    "array_concat",
-    "array_iff",
-    "array_iif",
-    "array_index_of",
-    "array_length",
-    "array_reverse",
-    "array_rotate_left",
-    "array_rotate_right",
-    "array_shift_left",
-    "array_shift_right",
-    "array_slice",
-    "array_sort_asc",
-    "array_sort_desc",
-    "array_split",
-    "array_sum",
-    "bag_has_key",
-    "bag_keys",
-    "bag_merge",
-    "bag_pack",
-    "bag_pack_columns",
-    "bag_remove_keys",
-    "bag_set_key",
-    "jaccard_index",
-    "pack",
-    "pack_all",
-    "pack_array",
-    "repeat",
-    "set_difference",
-    "set_has_element",
-    "set_intersect",
-    "set_union",
-    "treepath",
-    "zip",
-    "dynamic",
-    
-    # KQL scalar functions - Window
-    "next",
-    "prev",
-    "row_cumsum",
-    "row_number",
-    "row_rank_dense",
-    "row_rank_min",
-    
-    # KQL scalar functions - Flow control
-    "toscalar",
-    
-    # KQL scalar functions - Mathematical
-    "abs",
-    "acos",
-    "asin",
-    "atan",
-    "atan2",
-    "beta_cdf",
-    "beta_inv",
-    "beta_pdf",
-    "cos",
-    "cot",
-    "degrees",
-    "erf",
-    "erfc",
-    "exp",
-    "exp10",
-    "exp2",
-    "gamma",
-    "isfinite",
-    "isinf",
-    "isnan",
-    "log",
-    "log10",
-    "log2",
-    "loggamma",
-    "not",
-    "pi",
-    "pow",
-    "radians",
-    "rand",
-    "round",
-    "sign",
-    "sin",
-    "sqrt",
-    "tan",
-    "welch_test",
-    
-    # KQL scalar functions - Metadata
-    "column_ifexists",
-    "columnifexists",
-    "current_cluster_endpoint",
-    "current_database",
-    "current_principal",
-    "current_principal_details",
-    "current_principal_is_member_of",
-    "cursor_after",
-    "estimate_data_size",
-    "extent_id",
-    "extent_tags",
-    "ingestion_time",
-    
-    # KQL scalar functions - Rounding
-    "bin",
-    "bin_at",
-    "ceiling",
-    "floor",
-    
-    # KQL scalar functions - Conditional
-    "case",
-    "coalesce",
-    "iff",
-    "iif",
-    "max_of",
-    "min_of",
-    
-    # KQL scalar functions - String
-    "base64_encode_tostring",
-    "base64_encode_fromguid",
-    "base64_decode_tostring",
-    "base64_decode_toarray",
-    "base64_decode_toguid",
-    "countof",
-    "extract",
-    "extract_all",
-    "extract_json",
-    "has_any_index",
-    "indexof",
-    "isempty",
-    "isnotempty",
-    "isnotnull",
-    "isnull",
-    "parse_command_line",
-    "parse_csv",
-    "parse_ipv4",
-    "parse_ipv4_mask",
-    "parse_ipv6",
-    "parse_ipv6_mask",
-    "parse_json",
-    "parse_url",
-    "parse_urlquery",
-    "parse_version",
-    "replace_regex",
-    "replace_string",
-    "replace_strings",
-    "punycode_from_string",
-    "punycode_to_string",
-    "reverse",
-    "split",
-    "strcat",
-    "strcat_delim",
-    "strcmp",
-    "strlen",
-    "strrep",
-    "substring",
-    "tolower",
-    "toupper",
-    "translate",
-    "trim",
-    "trim_end",
-    "trim_start",
-    "url_decode",
-    "url_encode",
-    
-    # KQL scalar functions - IPv4/IPv6
-    "ipv4_compare",
-    "ipv4_is_in_range",
-    "ipv4_is_in_any_range",
-    "ipv4_is_match",
-    "ipv4_is_private",
-    "ipv4_netmask_suffix",
-    "ipv4_range_to_cidr_list",
-    "ipv6_compare",
-    "ipv6_is_match",
-    "format_ipv4",
-    "format_ipv4_mask",
-    "ipv6_is_in_range",
-    "ipv6_is_in_any_range",
-    "geo_info_from_ip_address",
-    "has_ipv4",
-    "has_ipv4_prefix",
-    "has_any_ipv4",
-    "has_any_ipv4_prefix",
-    
-    # KQL scalar functions - Type
-    "gettype",
-    
-    # KQL scalar functions - Aggregation (scalar versions)
-    "dcount_hll",
-    "hll_merge",
-    "percentile_tdigest",
-    "percentile_array_tdigest",
-    "percentrank_tdigest",
-    "rank_tdigest",
-    "merge_tdigest",
-    
-    # KQL scalar functions - Hash
-    "hash",
-    "hash_combine",
-    "hash_many",
-    "hash_md5",
-    "hash_sha1",
-    "hash_sha256",
-    "hash_xxhash64",
-    
-    # KQL aggregation functions
-    "any",
-    "arg_max",
-    "arg_min",
-    "avg",
-    "avgif",
-    "count",
-    "countif",
-    "dcount",
-    "dcountif",
-    "make_bag",
-    "make_bag_if",
-    "make_list",
-    "make_list_if",
-    "make_list_with_nulls",
-    "make_set",
-    "make_set_if",
-    "max",
-    "maxif",
-    "min",
-    "minif",
-    "percentile",
-    "percentiles",
-    "percentiles_array",
-    "stdev",
-    "stdevif",
-    "stdevp",
-    "sum",
-    "sumif",
-    "variance",
-    "varianceif",
-    "variancep",
-    "hll",
-    "hll_if",
-    "tdigest",
-    "tdigest_merge",
-    
-    # KQL series functions
-    "series_abs",
-    "series_acos",
-    "series_add",
-    "series_asin",
-    "series_atan",
-    "series_ceiling",
-    "series_cos",
-    "series_divide",
-    "series_equals",
-    "series_exp",
-    "series_floor",
-    "series_greater",
-    "series_greater_equals",
-    "series_less",
-    "series_less_equals",
-    "series_log",
-    "series_multiply",
-    "series_not_equals",
-    "series_pow",
-    "series_sign",
-    "series_sin",
-    "series_subtract",
-    "series_tan",
-    "series_cosine_similarity",
-    "series_decompose",
-    "series_decompose_anomalies",
-    "series_decompose_forecast",
-    "series_dot_product",
-    "series_fill_backward",
-    "series_fill_const",
-    "series_fill_forward",
-    "series_fill_linear",
-    "series_fft",
-    "series_fir",
-    "series_fit_2lines",
-    "series_fit_2lines_dynamic",
-    "series_fit_line",
-    "series_fit_line_dynamic",
-    "series_fit_poly",
-    "series_ifft",
-    "series_iir",
-    "series_magnitude",
-    "series_outliers",
-    "series_pearson_correlation",
-    "series_periods_detect",
-    "series_periods_validate",
-    "series_product",
-    "series_seasonal",
-    "series_stats",
-    "series_stats_dynamic",
-    "series_sum",
-    
-    # KQL geo functions
-    "geo_angle",
-    "geo_azimuth",
-    "geo_closest_point_on_line",
-    "geo_closest_point_on_polygon",
-    "geo_distance_2points",
-    "geo_distance_point_to_line",
-    "geo_distance_point_to_polygon",
-    "geo_from_wkt",
-    "geo_intersects_2lines",
-    "geo_intersects_2polygons",
-    "geo_intersects_line_with_polygon",
-    "geo_intersection_2lines",
-    "geo_intersection_2polygons",
-    "geo_intersection_line_with_polygon",
-    "geo_point_buffer",
-    "geo_point_in_circle",
-    "geo_point_in_polygon",
-    "geo_point_to_geohash",
-    "geo_point_to_s2cell",
-    "geo_point_to_h3cell",
-    "geo_line_buffer",
-    "geo_line_centroid",
-    "geo_line_densify",
-    "geo_line_interpolate_point",
-    "geo_line_length",
-    "geo_line_locate_point",
-    "geo_line_simplify",
-    "geo_line_to_s2cells",
-    "geo_polygon_area",
-    "geo_polygon_buffer",
-    "geo_polygon_centroid",
-    "geo_polygon_densify",
-    "geo_polygon_perimeter",
-    "geo_polygon_simplify",
-    "geo_polygon_to_s2cells",
-    "geo_polygon_to_h3cells",
-    "geo_geohash_to_central_point",
-    "geo_geohash_neighbors",
-    "geo_geohash_to_polygon",
-    "geo_s2cell_to_central_point",
-    "geo_s2cell_neighbors",
-    "geo_s2cell_to_polygon",
-    "geo_h3cell_to_central_point",
-    "geo_h3cell_neighbors",
-    "geo_h3cell_to_polygon",
-    "geo_h3cell_parent",
-    "geo_h3cell_children",
-    "geo_h3cell_level",
-    "geo_h3cell_rings",
-    "geo_simplify_polygons_array",
-    "geo_union_lines_array",
-    "geo_union_polygons_array",
-    
-    # Common false positives from workbook queries
-    "data",
-    "resources",
-    "alertentities",
-    "alerts",
-    
-    # Common variable names used in queries
-    "alldata",
-    "prefiltereddata",
-    "outputs",
-    
-    # Common field names that appear in project-away or other contexts
-    "subscriptionid",
-    "resourceid",
-    "tenantid",
-    
+
+# Minimal blocklist - only tokens that could cause specific issues
+# Most validation is now done via whitelist (tables_reference.csv) + _CL suffix check
+BLOCKED_TOKENS = {
+    # Incomplete or invalid _CL patterns
+    "_cl",
+    "_indicators_cl",
     # Template placeholders
     "{{graphqueriestablename}}",
-    
-    # Common ASIM/KQL field names that are not tables
-    "timegenerated",
-    "timestamp",
-    "url",
-    "srchostname",
-    "dsthostname",
-    "srcipaddr",
-    "dstipaddr",
-    "srcportnumber",
-    "dstportnumber",
-    "eventproduct",
-    "eventvendor",
-    "eventtype",
-    "eventresult",
-    "eventcount",
-    "httpreferrer",
-    "httpuseragent",
-    "httpmethod",
-    "threatfield",
-    "score",
-    "name",
-    "type",
-    "version",
-    "total",
-    "average",
-    
-    # Common let variable names and temporary table names
-    "hourlycount",
-    "webdata",
-    "potentialbeaconingtraffic",
-    "requestedfilename",
-    
-    # Time and type literals
-    "time",
-    "datetime",
-    "timespan",
-    "bool",
-    "int",
-    "long",
-    "real",
-    "string",
-    "guid",
-    "decimal",
-    
-    # Common workbook/query variable names (false positives)
-    "records",
-    "totalrecords",
-    "queryresult",
-    "queryresults",
-    "result",
-    "results",
-    "filtereddata",
-    "filtereddns",
-    "filteredrdp",
-    "filteredvpn",
-    "filtered",
-    "aggregationrecords",
-    "topsubjects",
-    "nxdomainresponses",
-    "unusualqtypes",
-    "unencryptedconnection",
-    "vpncount",
-    "filter_record",
-    "ssl",  # Too generic - likely column alias
-    "x509",  # Too generic - likely column alias
-    "dns",  # Too generic without prefix
-    "http",  # Too generic without prefix
-    "rdp",  # Too generic without prefix
-    "vpn",  # Too generic without prefix
-    "ftp",  # Too generic without prefix
-    "ssh",  # Too generic without prefix
-    "smtp",  # Too generic without prefix
-    "conn",  # Too generic without prefix
-    "files",  # Too generic without prefix
-    
-    # More generic variable patterns
-    "count",
-    "counts",
-    "summary",
-    "details",
-    "info",
-    "items",
-    "list",
-    "logs",
-    "entries",
-    "rows",
-    "events",
-    "metrics",
-    "stats",
-    "statistics",
-    "aggregated",
-    "grouped",
-    "merged",
-    "combined",
-    "joined",
-    "parsed",
-    "extracted",
-    "processed",
-    "raw",
-    "temp",
-    "tmp",
-    "base",
-    "source",
-    "target",
-    "input",
-    "output",
-    "final",
-    "initial",
 }
+
+# Known tables from tables_reference.csv - loaded at runtime
+KNOWN_TABLES_LOWER: Set[str] = set()
+
+
+def load_known_tables(script_dir: Path) -> Set[str]:
+    """
+    Load known table names from tables_reference.csv.
+    
+    Args:
+        script_dir: Path to the directory containing tables_reference.csv
+    
+    Returns:
+        Set of lowercase table names
+    """
+    tables_file = script_dir / "tables_reference.csv"
+    known_tables: Set[str] = set()
+    
+    if tables_file.exists():
+        with open(tables_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                table_name = row.get("table_name", "").strip()
+                if table_name:
+                    known_tables.add(table_name.lower())
+    
+    return known_tables
+
+
 PIPE_BLOCK_COMMANDS = {
     "project",
     "project-away",
@@ -786,39 +248,64 @@ PIPE_BLOCK_COMMANDS = {
 
 
 def is_valid_table_candidate(token: Optional[str], *, allow_parser_names: bool = False) -> bool:
+    """
+    Check if a token is a valid table candidate.
+    
+    Uses tables_reference.csv as the authoritative source for known Azure Monitor tables,
+    plus allows custom log tables (ending with _CL) and ASIM parser functions.
+    
+    Args:
+        token: The token to validate
+        allow_parser_names: If True, also allow names ending with _parser
+    
+    Returns:
+        True if the token is a valid table candidate, False otherwise
+    """
     if not isinstance(token, str):
         return False
     cleaned = token.strip()
     if not cleaned:
         return False
     lowered = cleaned.lower()
-    if lowered in NON_TABLE_TOKENS:
+    
+    # Reject tokens in the minimal blocklist
+    if lowered in BLOCKED_TOKENS:
         return False
+    
+    # Reject numeric values and time spans
     if lowered.isdigit():
         return False
     if re.fullmatch(r"\d+[smhd]", lowered):
         return False
     if cleaned[0].isdigit():
         return False
+    
     # Filter out ARM template expressions (e.g., @{if(...), variables('...'), parameters('...'))
     if '@{' in cleaned or '@(' in cleaned:
         return False
     if cleaned.startswith("@") or cleaned.startswith("variables(") or cleaned.startswith("parameters("):
         return False
+    
     # Filter out bracket expressions and ARM parameter references
     if cleaned.startswith("[") or "parameters(" in lowered or "variables(" in lowered:
         return False
+    
     # Filter out Logic App expressions
     if "triggerbody()" in lowered or "body(" in lowered:
         return False
-    # Filter names that start with dot or are just _CL (incomplete table names)
+    
+    # Filter names that start with dot
     if cleaned.startswith("."):
         return False
-    if lowered == "_cl" or lowered == "_indicators_cl":
+    
+    # Filter names that are too short (less than 3 chars)
+    if len(cleaned) < 3:
         return False
-    # Filter names that are too short (less than 3 chars) unless they end in _CL
-    if len(cleaned) < 3 and not lowered.endswith("_cl"):
-        return False
+    
+    # Allow custom log tables (ending with _CL)
+    if lowered.endswith("_cl"):
+        return True
+    
     # Allow ASIM view functions that start with _Im_ or _ASim_ (e.g., _Im_Dns, _ASim_NetworkSession)
     # But exclude ASIM helper functions like _ASIM_GetUsernameType, _ASIM_LookupDnsQueryType
     # Also exclude ASIM empty parsers like _Im_WebSession_Empty, _Im_Dns_Empty
@@ -833,46 +320,32 @@ def is_valid_table_candidate(token: Optional[str], *, allow_parser_names: bool =
         if any(after_prefix.startswith(verb) for verb in helper_verbs):
             return False  # This is a helper function, not a table/view
         return True
-    if lowered.startswith("_") and not cleaned.upper().endswith("_CL"):
+    
+    # Reject other names starting with underscore (except _CL which was handled above)
+    if lowered.startswith("_"):
         return False
+    
+    # Reject parser function names unless explicitly allowed
     if lowered.endswith("_parser") and not allow_parser_names:
         return False
     
-    # Pattern-based detection for common variable naming patterns
-    # These patterns suggest the name is a KQL let statement variable, not a table
+    # Check if the table is in the known tables reference list
+    if KNOWN_TABLES_LOWER and lowered in KNOWN_TABLES_LOWER:
+        return True
     
-    # Reject names that look like variables (camelCase with common suffixes)
-    variable_suffixes = ('count', 'data', 'result', 'results', 'records', 'list', 'items', 
-                         'entries', 'rows', 'logs', 'events', 'info', 'details', 'summary',
-                         'aggregation', 'aggregations', 'stats', 'statistics', 'metrics')
-    for suffix in variable_suffixes:
-        # Check if name ends with suffix (case insensitive) and is camelCase
-        if lowered.endswith(suffix) and len(lowered) > len(suffix):
-            prefix = cleaned[:-len(suffix)]
-            # If the prefix part has no underscore and isn't all lowercase, it's likely a variable
-            if '_' not in prefix and not prefix.islower():
+    # If KNOWN_TABLES_LOWER is not loaded yet (e.g., during module import),
+    # fall back to allowing names that don't look like obvious variables
+    if not KNOWN_TABLES_LOWER:
+        # Basic heuristic: reject obvious KQL variable patterns
+        # This is only used as fallback when tables_reference.csv hasn't been loaded
+        obvious_variable_prefixes = ('filtered', 'aggregated', 'temp', 'tmp', 'my')
+        for prefix in obvious_variable_prefixes:
+            if lowered.startswith(prefix):
                 return False
+        return True
     
-    # Reject names that start with common variable prefixes (case insensitive)
-    variable_prefixes = ('filtered', 'aggregated', 'grouped', 'merged', 'combined', 
-                         'processed', 'parsed', 'extracted', 'all', 'total', 'top', 
-                         'raw', 'temp', 'tmp', 'base', 'source', 'target', 'my')
-    for prefix in variable_prefixes:
-        if lowered.startswith(prefix) and len(lowered) > len(prefix):
-            # If followed by uppercase letter (camelCase), likely a variable
-            rest = cleaned[len(prefix):]
-            if rest and rest[0].isupper():
-                return False
-    
-    # Very short names without underscore or _CL suffix are likely variables
-    # Real Sentinel tables typically have underscores or are known built-in names
-    if len(cleaned) <= 6 and '_' not in cleaned and not lowered.endswith('_cl'):
-        # Allow known short built-in table names
-        known_short_tables = {'syslog', 'usage', 'update', 'event', 'alert', 'anomalies'}
-        if lowered not in known_short_tables:
-            return False
-    
-    return True
+    # Table not in known tables list - reject it
+    return False
 
 
 def is_true_table_name(value: Optional[str]) -> bool:
@@ -2068,6 +1541,15 @@ def determine_collection_method(
         'Azure Function' not in connector_description):
         all_matches.append(("MMA", "Uses workspace ID/key pattern"))
     
+    # MMA-specific patterns: OmsSolutions and InstallAgentOn* instructions
+    # These are MMA-era patterns that indicate the connector uses the legacy agent
+    if '"solutionName"' in content and 'OmsSolutions' in content:
+        all_matches.append(("MMA", "Uses OmsSolutions (MMA-era technology)"))
+    if '"linkType":' in content and ('InstallAgentOnVirtualMachine' in content or 
+                                      'InstallAgentOnNonAzure' in content or
+                                      'InstallAgentOnLinuxNonAzure' in content):
+        all_matches.append(("MMA", "Uses InstallAgent patterns (MMA-era)"))
+    
     # === PRIORITY 9: REST API patterns ===
     if 'REST API' in connector_title or 'REST API' in connector_description:
         all_matches.append(("REST API", "Title/description mentions REST API"))
@@ -2102,7 +1584,8 @@ def determine_collection_method(
     # Determine final method based on priority
     # Priority order reflects detection order - higher = selected first
     # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST API
-    priority_order = ["Azure Diagnostics", "CCF", "Azure Function", "Native", "AMA", "MMA", "REST API", "Unknown (Custom Log)", "Unknown"]
+    # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
+    priority_order = ["Azure Diagnostics", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -2813,9 +2296,16 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
 
 
 def main() -> None:
+    global KNOWN_TABLES_LOWER
     # Script is in Tools/Solutions Analyzer, repo root is 2 levels up
     repo_root = Path(__file__).resolve().parents[2]
+    script_dir = Path(__file__).resolve().parent
     args = parse_args(repo_root)
+
+    # Load known tables from tables_reference.csv for whitelist-based table validation
+    KNOWN_TABLES_LOWER = load_known_tables(script_dir)
+    if KNOWN_TABLES_LOWER:
+        print(f"Loaded {len(KNOWN_TABLES_LOWER)} known table names from tables_reference.csv")
 
     solutions_dir = args.solutions_dir.resolve()
     if not solutions_dir.exists() or not solutions_dir.is_dir():
