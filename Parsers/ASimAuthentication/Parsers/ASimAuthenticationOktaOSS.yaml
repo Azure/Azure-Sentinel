@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM parser for Okta
-  Version: '0.3.0'
-  LastUpdated: May 20, 2024
+  Version: '0.4.0'
+  LastUpdated: Jan 07, 2026
 Product:
   Name: Okta
 Normalization:
   Schema: Authentication
-  Version: '0.1.3'
+  Version: '0.1.4'
 References:
   - Title: ASIM Authentication Schema
     Link: https://aka.ms/ASimAuthenticationDoc
@@ -25,6 +25,29 @@ ParserQuery: |
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
     let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED', 'DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
+    let OutcomeReasonLookup = datatable(outcome_reason_s: string, EventResultDetails: string)
+    [
+        "LOCKED_OUT", "User locked",
+        "INVALID_CREDENTIALS", "Incorrect password",
+        "UNKNOWN_USER", "No such user",
+        "VERIFICATION_ERROR", "Incorrect key",
+        "SSO_AUTHENTICATION_FAILURE", "Logon violates policy",
+        "PASSWORD_EXPIRED", "Password expired",
+        "USER_ACCOUNT_EXPIRED", "Account expired",
+        "DEL_AUTH_TIMEOUT", "Session expired",
+        "PASSWORD_BASED_LOGIN_DISALLOWED", "Logon violates policy"
+    ];
+    let SrcDeviceTypeLookup = datatable(client_device_s: string, SrcDeviceType: string)
+    [
+        "Computer", "Computer",
+        "Mobile", "Mobile Device",
+        "Tablet", "Mobile Device"
+    ];
+    let ActorUserTypeLookup = datatable(OriginalActorUserType: string, ActorUserType: string)
+    [
+        "User", "Regular",
+        "SystemPrincipal", "System"
+    ];
     let emptyOctV1Table = datatable(TimeGenerated:datetime)[];
       // https://developer.okta.com/docs/reference/api/event-types/#catalog
       let OktaV1 = union isfuzzy=true emptyOctV1Table, Okta_CL 
@@ -49,7 +72,7 @@ ParserQuery: |
               ,
               EventCount=int(1)
               ,
-              EventSchemaVersion='0.1.0'
+              EventSchemaVersion='0.1.4'
               ,
               EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success', outcome_result_s in (OktaFailedOutcome), 'Failure', 'Partial')
               ,
@@ -59,7 +82,7 @@ ParserQuery: |
               ,
               EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
               ,
-              EventSubType=legacyEventType_s
+              EventOriginalSubType=legacyEventType_s
               ,
               EventMessage=column_ifexists('displayMessage_s', "")
               ,
@@ -71,13 +94,13 @@ ParserQuery: |
               ,
               TargetUsernameType='UPN'
               ,
-              TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s', "")
-              ,
               TargetUserId=column_ifexists('actor_id_s', "")
               ,
               TargetUsername=column_ifexists('actor_alternateId_s', "")
               ,
-              TargetUserType=column_ifexists('actor_type_s', "")
+              TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s', "")
+              ,
+              OriginalActorUserType=column_ifexists('actor_type_s', "")
               ,
               SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d)
               ,
@@ -100,6 +123,24 @@ ParserQuery: |
               LogonMethod=column_ifexists('authenticationContext_credentialType_s', "")
               ,
               HttpUserAgent=column_ifexists('client_userAgent_rawUserAgent_s', "")
+              ,
+              SrcGeoPostalCode = column_ifexists('client_geographicalContext_postalCode_s', "")
+              ,
+              SrcGeoRegion = column_ifexists('client_geographicalContext_state_s', "")
+          | extend
+            ActorUserId = TargetUserId,
+            ActorUsername = TargetUsername,
+            ActorUserIdType = TargetUserIdType,
+            TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
+          | lookup ActorUserTypeLookup on OriginalActorUserType
+          | extend ActorUserType = coalesce(ActorUserType, "Other")
+          | extend
+            TargetUserType = ActorUserType,
+            ActorUsernameType = TargetUsernameType
+          | lookup OutcomeReasonLookup on outcome_reason_s
+          | extend EventResultDetails = iif(outcome_result_s in (OktaFailedOutcome), coalesce(EventResultDetails, "Other"), "")
+          | lookup SrcDeviceTypeLookup on client_device_s
+          | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
           // ** Aliases
           | extend 
               User=TargetUsername
@@ -107,7 +148,7 @@ ParserQuery: |
               Dvc=EventVendor
               ,
               IpAddr=SrcIpAddr
-          | project-away *_s, *_d, *_b, *_g, *_t;
+          | project-away OriginalActorUserType, *_s, *_d, *_b, *_g, *_t;
       OktaV1
   };
   parser(disabled = disabled)
