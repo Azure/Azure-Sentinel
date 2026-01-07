@@ -1,7 +1,8 @@
 """This file is used for accessing keyvault to get or set secrets."""
+
 import logging
 from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from azure.core.exceptions import ResourceNotFoundError
 from . import consts
 
@@ -12,7 +13,12 @@ class KeyVaultSecretManager:
     def __init__(self) -> None:
         """Intialize instance variables for class."""
         self.keyvault_name = consts.KEYVAULT_NAME
-        self.keyvault_uri = "https://{}.vault.azure.net/".format(self.keyvault_name)
+        if ".us" in consts.SCOPE:
+            self.keyvault_uri = "https://{}.vault.usgovcloudapi.net/".format(
+                self.keyvault_name
+            )
+        else:
+            self.keyvault_uri = "https://{}.vault.azure.net/".format(self.keyvault_name)
         self.client = self.get_client()
 
     def get_client(self):
@@ -21,7 +27,7 @@ class KeyVaultSecretManager:
         Returns:
             SecretClient: returns client object for accessing AzureKeyVault.
         """
-        credential = DefaultAzureCredential()            # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
+        credential = ManagedIdentityCredential()
         client = SecretClient(vault_url=self.keyvault_uri, credential=credential)
         return client
 
@@ -32,7 +38,9 @@ class KeyVaultSecretManager:
             secret_name (str): secret name to get its value.
         """
         try:
-            logging.info("Retrieving secret {} from {}.".format(secret_name, self.keyvault_name))
+            logging.info(
+                "Retrieving secret {} from {}.".format(secret_name, self.keyvault_name)
+            )
             retrieved_secret = self.client.get_secret(secret_name)
             logging.info("Retrieved secret value for {}.".format(retrieved_secret.name))
             return retrieved_secret.value
@@ -60,5 +68,7 @@ class KeyVaultSecretManager:
             list: _description_
         """
         secret_properties = self.client.list_properties_of_secrets()
-        properties_list = [secret_property.name for secret_property in secret_properties]
+        properties_list = [
+            secret_property.name for secret_property in secret_properties
+        ]
         return properties_list

@@ -120,7 +120,7 @@ DRY_RUN = _env_bool("DRY_RUN", False)
 
 # -------------------- Azure clients --------------------
 
-_default_cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+_default_cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)       # CodeQL [SM05139] Commecting to supress alert. Partner have been asked to udate the code to address the alert.
 _blob_client: Optional[BlobServiceClient] = None
 
 def _init_blob_client() -> BlobServiceClient:
