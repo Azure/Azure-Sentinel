@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                     |
 |-------------|--------------------------------|------------------------------------------------------------------------|
+| 3.0.6       | 04-01-2026                     | Remove broken VMware ESXi link                                         |
 | 3.0.5       | 03-11-2025                     | Added new **Analytic Rule** (VMware ESXi - Root change password) and (VMware ESXi - Multiple Failed SSH Login)      |
 | 3.0.4       | 09-10-2025                     | Added new **Analytic Rule** (VMware ESXi - SSH Enable on ESXi Host)    |
 | 3.0.3       | 02-12-2024                     | Removed Deprecated **Data connectors**                                 |
