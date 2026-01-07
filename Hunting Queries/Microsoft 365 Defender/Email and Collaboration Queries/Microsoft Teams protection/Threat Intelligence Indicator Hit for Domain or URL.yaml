@@ -1,0 +1,47 @@
+id: 2e7cda70-c3cd-4173-945e-6b5c14b05817
+name: Teams Threat Intelligence Indicator Hit for Domain or URL
+description: |
+  This rule detects and alerts on known threats in Teams messages when a contained domain or URL matches a Microsoft Defender Threat Intelligence indicator (of type 'Domain' or 'URL')
+description-detailed: |
+  This rule detects when a domain or URL observed in Teams Messages matches a known threat intelligence indicator from Microsoft Defender Threat Intelligence. It specifically looks for hits against 'Domain' and 'URL' type indicators.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageUrlInfo
+  - MessageEvents
+  - ThreatIntelIndicators
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  //This Query uses MessageUrlInfo, MessageEvents and UrlClickEvents to find external Teams messages with low reputation URL doamins (.xyz) and identify the top 10 users clicking on them. 
+  // Extract IOC details from ThreatIntelIndicators export
+  let IOC = ThreatIntelIndicators
+  | where SourceSystem == "Microsoft Defender Threat Intelligence"
+  | extend IOCType = case(
+      ObservableKey has "ipv4" or ObservableKey has "network-traffic", "IP Address",
+      ObservableKey has "domain", "Domain",
+      ObservableKey has "url", "URL",
+      ObservableKey has "file", "File Hash",
+      ObservableKey has "email", "Email Address",
+      "Other")
+  | extend IOCValue = ObservableValue
+  | extend Pattern = tostring(split(Pattern, "=")[1]) // Extract value from STIX pattern if needed
+  | extend Description = tostring(parse_json(Data).description)
+  | extend IndicatorTypes = tostring(parse_json(Data).indicator_types)
+  | extend ValidFrom = todatetime(parse_json(Data).valid_from)
+  | extend ValidUntil = todatetime(parse_json(Data).valid_until)
+  | project TimeGenerated, IOCType, IOCValue, Pattern, Description, IndicatorTypes, ValidFrom, ValidUntil, Confidence
+  | order by TimeGenerated desc;
+  let IOCDomain = IOC
+  | where IOCType == "Domain";
+  let IOCUrl = IOC
+  | where IOCType == "URL";
+  let URLHits = MessageUrlInfo
+  | join IOCUrl on $left.Url == $right.IOCValue;
+  let DomainHits = MessageUrlInfo
+  | join IOCDomain on $left.UrlDomain == $right.IOCValue;
+  URLHits
+  | union DomainHits
+  | join kind=inner MessageEvents on TeamsMessageId

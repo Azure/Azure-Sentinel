@@ -1,0 +1,48 @@
+id: 4d61bb9a-7f6d-45b1-ac0e-517e2a92f6fd
+name: Palo Alto - possible nmap scan on with top 100 option
+description: |
+  'Detect possible execution of Nmap top 100 option. This detection will detect scanning of 90% of Top 100 port of NMAP in less than 2 minutes. Unusual port only access through a scan are present in this list which is a good indicator of reconnaissance tactics. Whitelisting of Company scanners is required with implementation of the rule. Ref : https://nmap.org/book/performance-port-selection.html'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Reconnaissance
+relevantTechniques:
+  - T1595
+query: |
+ CommonSecurityLog
+ | where ipv4_is_private(SourceIP)
+ | where DestinationPort in (7, 9, 13, 21, 22, 23, 25, 26, 37, 79, 81, 88, 106, 110, 111, 119, 135, 139, 143, 144, 179, 199, 389, 427, 444, 445, 465, 513, 514, 515, 543, 544, 548, 554, 587, 631, 646, 873, 990, 993, 995, 1025, 1026, 1027, 1028, 1029, 1110, 1433, 1720, 1723, 1755, 1900, 2000, 2001, 2049, 2121, 2717, 3000, 3128, 3306, 3389, 3986, 4899, 5000, 5009, 5051, 5060, 5101, 5190, 5357, 5432, 5631, 5666, 5800, 5900, 6000, 6001, 6646, 7070, 8000, 8008, 8009, 8080, 8081, 8443, 8888, 9100, 9999, 10000, 32768, 49152, 49153, 49154, 49155, 49156, 49157)
+ | summarize
+     dcount(DestinationPort),
+     make_set(DestinationPort),
+     make_set(ApplicationProtocol),
+     make_set(Activity),
+     make_set(SourcePort),
+     StartTime = min(TimeGenerated),
+     EndTime = max(TimeGenerated)
+     by SourceIP, DestinationIP, Computer, bin(TimeGenerated, 2m)
+ | where dcount_DestinationPort > 90
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0
+kind: Scheduled
