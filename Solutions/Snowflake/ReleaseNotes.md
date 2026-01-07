@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.8       | 22-12-2025                     | Added a 120‑minute ingestion delay for the **Snowflake connector** and updated the parser KQL to surface accurate start/end timestamps.|
 | 3.0.7       | 10-12-2025                     | Resolved bug in **CCF Data Connector** related to Output stream for Snowflake tables.    |
 | 3.0.6       | 20-11-2025                     | Resolved bug in **CCF Data Connector** related to SQL queries      |
 | 3.0.5       | 13-10-2025                     | Updated Parser to support function app table                       |

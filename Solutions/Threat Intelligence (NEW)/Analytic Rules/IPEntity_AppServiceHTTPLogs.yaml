@@ -33,15 +33,14 @@ query: |
     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
     // Filter out indicators without relevant IP address fields
     | where TimeGenerated >= ago(ioc_lookBack)
-    | where TimeGenerated >= ago(ioc_lookBack)
     // Filtering out rows where the Confidence Score is less than 50 as they would not have an Alert Priority label. 
     | where Confidence > 50
     // Select the IP entity based on availability of different IP fields
     | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
     | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
-    // Determine AlertPriority based on ConfidenceScore
-    | extend AlertPriority = case(Confidence > 82, "High",
+    // Determine Severity based on ConfidenceScore
+    | extend Severity = case(Confidence > 82, "High",
                                   Confidence > 74, "Medium",
                                   "Low")
     // Exclude local addresses using the ipv4_is_private operator and filtering out specific address prefixes
@@ -50,7 +49,7 @@ query: |
     | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
     // Perform a join between IP indicators and AppServiceHTTPLogs to identify potential malicious activity
   IP_Indicators
-  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity, AlertPriority
+  | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity, Severity
     // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation
     | join kind=innerunique (
       AppServiceHTTPLogs | where TimeGenerated >= ago(dt_lookBack)
@@ -66,7 +65,7 @@ query: |
     // Select the desired output fields
     | extend Description = tostring(parse_json(Data).description)
     | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-    | project AppService_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, CsUsername, WebApp = split(_ResourceId, '/')[8], CIp, CsHost, NetworkSourceIP, _ResourceId, Type, Url, AlertPriority
+    | project AppService_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, CsUsername, WebApp = split(_ResourceId, '/')[8], CIp, CsHost, NetworkSourceIP, _ResourceId, Type, Url, Severity
     // Extract hostname and DNS domain from the CsHost field
     | extend HostName = tostring(split(CsHost, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(CsHost, '.'), 1, -1), '.'))
     // Rename the timestamp field
@@ -95,7 +94,7 @@ entityMappings:
       - identifier: ResourceId
         columnName: _ResourceId
 alertDetailsOverride:
-  alertSeverityColumnName: AlertPriority
-version: 1.5.7
+  alertSeverityColumnName: Severity
+version: 1.5.8
 kind: Scheduled
  
