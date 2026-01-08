@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from ..utility.utils import (
     EnvironmentConfig,
     AzureConfig,
-    load_environment_configs
+    load_environment_configs,
+    get_azure_batch_size
 )
 from ..utility.bloodhound_manager import BloodhoundManager
 
@@ -28,7 +29,7 @@ def send_finding_trends_to_azure_monitor(
     domains_data: List[Dict[str, Any]]
 ) -> Tuple[int, int]:
     """
-    Sends finding trends data to Azure Monitor.
+    Sends finding trends data to Azure Monitor in batches of 100.
 
     Args:
         findings: List of finding trends to send (dictionaries)
@@ -47,42 +48,72 @@ def send_finding_trends_to_azure_monitor(
         logging.info("No finding trends to send to Azure Monitor for this environment")
         return successful_submissions, failed_submissions
 
-    # Convert dictionaries to FindingTrend objects
-    finding_trends = [
-        FindingTrend(
-            finding=item["finding"],
-            period=item["period"],
-            environment_id=item["environment_id"],
-            start_date=item["start_date"],
-            end_date=item["end_date"]
-        ) 
-        for item in findings
-    ]
-
-    logging.info(f"Sending {len(finding_trends)} collected finding trends to Azure Monitor.")
-    for idx, item in enumerate(finding_trends, 1):
-        logging.info(f"Processing finding trends log entry {idx}/{len(finding_trends)}: {item.finding.get('finding')} in environment ID {item.environment_id}")
+    batch_size = get_azure_batch_size()
+    logging.info(f"Sending {len(findings)} collected finding trends to Azure Monitor in batches of {batch_size}.")
+    
+    # Process in batches
+    for batch_start in range(0, len(findings), batch_size):
+        batch_end = min(batch_start + batch_size, len(findings))
+        batch = findings[batch_start:batch_end]
         
-        result = bloodhound_manager.send_finding_trends_logs(
-            item.finding, 
-            azure_monitor_token, 
-            current_tenant_domain, 
-            domains_data,
-            environment_id=item.environment_id,
-            start_date=item.start_date,
-            end_date=item.end_date,
-            period=item.period
+        # Transform batch entries to the expected schema for Azure Monitor
+        log_entries = []
+        for item in batch:
+            env_id = item.get("environment_id", "")
+            domain_name = (
+                next(
+                    (
+                        domain["name"]
+                        for domain in domains_data
+                        if domain.get("id") == env_id
+                    ),
+                    None,
+                )
+                if domains_data
+                else None
+            )
+            
+            finding_data = item.get("finding", {})
+            log_entry = {
+                "composite_risk": str(round(float(finding_data.get("composite_risk", "")), 2)),
+                "display_title": str(finding_data.get("display_title", "")),
+                "display_type": str(finding_data.get("display_type", "")),
+                "environment_id": env_id,
+                "exposure_count": int(finding_data.get("exposure_count", 0)),
+                "finding": str(finding_data.get("finding", "")),
+                "finding_count_decrease": int(finding_data.get("finding_count_decrease", 0)),
+                "finding_count_end": int(finding_data.get("finding_count_end", 0)),
+                "finding_count_increase": int(finding_data.get("finding_count_increase", 0)),
+                "finding_count_start": int(finding_data.get("finding_count_start", 0)),
+                "impact_count": int(finding_data.get("impact_count", 0)),
+                "tenant_url": current_tenant_domain,
+                "domain_name": domain_name,
+                "start_date": item.get("start_date", ""),
+                "end_date": item.get("end_date", ""),
+                "period": item.get("period", ""),
+            }
+            log_entries.append(log_entry)
+        
+        logging.info(f"Sending batch {batch_start//batch_size + 1} ({len(log_entries)} entries): Findings {[log.get('finding', 'unknown') for log in log_entries[:5]]}...")
+        
+        # Send batch to Azure Monitor
+        result = bloodhound_manager._send_to_azure_monitor(
+            log_entries,
+            azure_monitor_token,
+            bloodhound_manager.dce_uri,
+            bloodhound_manager.dcr_immutable_id,
+            bloodhound_manager.table_name
         )
-
-        if result and result.get("status") == "success":
-            successful_submissions += 1
-            logging.info(f"Successfully sent finding trends for '{item.finding.get('finding')}'")
-        else:
-            failed_submissions += 1
-            error_msg = result.get("message", "Unknown error") if result else "No response"
-            logging.error(f"Failed to send finding trends for '{item.finding.get('finding')}': {error_msg}")
         
-        time.sleep(0.1)  # Rate limiting between requests
+        if result and result.get("status") == "success":
+            entries_sent = result.get("entries_sent", len(log_entries))
+            successful_submissions += entries_sent
+            logging.info(f"Successfully sent batch of {entries_sent} finding trends")
+        else:
+            failed_submissions += len(log_entries)
+            logging.error(f"Failed to send batch: {result.get('message', 'Unknown error') if result else 'No response'}")
+        
+        # Rate limiting is handled automatically by azure_monitor_rate_limiter in _send_to_azure_monitor()
 
     logging.info(
         f"Finding trends processing for '{current_tenant_domain}' complete. Successful: {successful_submissions}, Failed: {failed_submissions}."
