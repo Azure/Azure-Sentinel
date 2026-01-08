@@ -48,105 +48,125 @@ ParserQuery: |
         "User", "Regular",
         "SystemPrincipal", "System"
     ];
-    let emptyOctV1Table = datatable(TimeGenerated:datetime)[];
-      // https://developer.okta.com/docs/reference/api/event-types/#catalog
-      let OktaV1 = union isfuzzy=true emptyOctV1Table, Okta_CL 
-          | where not(disabled)
-          | extend
-              outcome_result_s=column_ifexists('outcome_result_s', "")
-              ,
-              eventType_s=column_ifexists('eventType_s', "")
-              ,
-              EventOriginalSubType=column_ifexists('legacyEventType_s', "")
-              ,
-              client_geographicalContext_geolocation_lat_d=column_ifexists('client_geographicalContext_geolocation_lat_d', "")
-              ,
-              client_geographicalContext_geolocation_lon_d=column_ifexists('client_geographicalContext_geolocation_lon_d', "")
-          | where eventType_s in (OktaSigninEvents)
-          | extend 
-              EventProduct='Okta'
-              ,
-              EventVendor='Okta'
-              ,
-              EventSchema = 'Authentication'
-              ,
-              EventCount=int(1)
-              ,
-              EventSchemaVersion='0.1.3'
-              ,
-              EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success', outcome_result_s in (OktaFailedOutcome), 'Failure', 'Partial')
-              ,
-              EventStartTime=TimeGenerated
-              ,
-              EventEndTime=TimeGenerated
-              ,
-              EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
-              ,
-              EventMessage=column_ifexists('displayMessage_s', "")
-              ,
-              EventOriginalResultDetails=column_ifexists('outcome_reason_s', "")
-              ,
-              EventOriginalUid = column_ifexists('uuid_g', "")
-              ,
-              TargetUserIdType='OktaId'
-              ,
-              TargetUsernameType='UPN'
-              ,
-              TargetUserId=column_ifexists('actor_id_s', "")
-              ,
-              TargetUsername=column_ifexists('actor_alternateId_s', "")
-              ,
-              TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s', "")
-              ,
-              ActorOriginalUserType=column_ifexists('actor_type_s', "")
-              ,
-              SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d)
-              ,
-              SrcGeoLongitude=toreal(client_geographicalContext_geolocation_lon_d)
-              ,
-              SrcDvcOs=column_ifexists('client_userAgent_os_s', "")
-              ,
-              SrcIsp=column_ifexists('securityContext_isp_s', "")
-              ,
-              SrcGeoCity=column_ifexists('client_geographicalContext_city_s', "")
-              ,
-              SrcGeoCountry=column_ifexists('client_geographicalContext_country_s', "")
-              ,
-              SrcIpAddr = column_ifexists('client_ipAddress_s', "")
-              ,
-              ActingAppName=column_ifexists('client_userAgent_browser_s', "")
-              ,
-              ActingAppType="Browser"
-              ,
-              LogonMethod=column_ifexists('authenticationContext_credentialType_s', "")
-              ,
-              HttpUserAgent=column_ifexists('client_userAgent_rawUserAgent_s', "")
-              ,
-              SrcGeoPostalCode = column_ifexists('client_geographicalContext_postalCode_s', "")
-              ,
-              SrcGeoRegion = column_ifexists('client_geographicalContext_state_s', "")
-          | extend
-            ActorUserId = TargetUserId,
-            ActorUsername = TargetUsername,
-            ActorUserIdType = TargetUserIdType,
-            TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
-          | lookup ActorUserTypeLookup on ActorOriginalUserType
-          | extend ActorUserType = coalesce(ActorUserType, "Other")
-          | extend
-            TargetUserType = ActorUserType,
-            ActorUsernameType = TargetUsernameType
-          | lookup OutcomeReasonLookup on outcome_reason_s
-          | extend EventResultDetails = iif(outcome_result_s in (OktaFailedOutcome), coalesce(EventResultDetails, "Other"), "")
-          | lookup SrcDeviceTypeLookup on client_device_s
-          | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
-          // ** Aliases
-          | extend 
-              User=TargetUsername
-              ,
-              Dvc=EventVendor
-              ,
-              IpAddr=SrcIpAddr
-          | project-away *_s, *_d, *_b, *_g, *_t;
-      OktaV1
+    let emptyOktaTable = datatable(
+        TimeGenerated: datetime,
+        outcome_result_s: string,
+        eventType_s: string,
+        legacyEventType_s: string,
+        client_geographicalContext_geolocation_lat_d: double,
+        client_geographicalContext_geolocation_lon_d: double,
+        displayMessage_s: string,
+        outcome_reason_s: string,
+        uuid_g: string,
+        actor_id_s: string,
+        actor_alternateId_s: string,
+        authenticationContext_externalSessionId_s: string,
+        actor_type_s: string,
+        client_userAgent_os_s: string,
+        securityContext_isp_s: string,
+        client_geographicalContext_city_s: string,
+        client_geographicalContext_country_s: string,
+        client_ipAddress_s: string,
+        client_userAgent_browser_s: string,
+        authenticationContext_credentialType_s: string,
+        client_userAgent_rawUserAgent_s: string,
+        client_geographicalContext_state_s: string,
+        client_device_s: string
+    )[];
+    let OktaTable = union isfuzzy=true emptyOktaTable, Okta_CL;
+    OktaTable
+    | where not(disabled)
+    | lookup OutcomeReasonLookup on outcome_reason_s
+    | extend EventResultDetails = iif(outcome_result_s in (OktaFailedOutcome), coalesce(EventResultDetails, "Other"), "")
+    | extend
+        Type = "Okta_CL",
+        EventProduct='Okta',
+        EventVendor='Okta',
+        EventSchema = 'Authentication',
+        EventCount=int(1),
+        EventSchemaVersion='0.1.3',
+        EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success', outcome_result_s in (OktaFailedOutcome), 'Failure', 'Partial'),
+        EventStartTime=TimeGenerated,
+        EventEndTime=TimeGenerated,
+        EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff'),
+        EventOriginalSubType=legacyEventType_s,
+        EventMessage=displayMessage_s,
+        EventOriginalResultDetails=outcome_reason_s,
+        EventOriginalUid=coalesce(uuid_g, ""),
+        TargetUserIdType = "OktaId",
+        TargetUserId = actor_id_s,
+        TargetUsername = actor_alternateId_s,
+        TargetSessionId = authenticationContext_externalSessionId_s,
+        ActorOriginalUserType = actor_type_s,
+        SrcGeoLatitude = client_geographicalContext_geolocation_lat_d,
+        SrcGeoLongitude = client_geographicalContext_geolocation_lon_d,
+        SrcDvcOs = client_userAgent_os_s,
+        SrcIsp = securityContext_isp_s,
+        SrcGeoCity = client_geographicalContext_city_s,
+        SrcGeoCountry = client_geographicalContext_country_s,
+        SrcIpAddr = client_ipAddress_s,
+        ActingAppName = client_userAgent_browser_s,
+        ActingAppType = "Browser",
+        LogonMethod = authenticationContext_credentialType_s,
+        HttpUserAgent = client_userAgent_rawUserAgent_s,
+        SrcGeoRegion = client_geographicalContext_state_s
+    | extend
+        ActorUserId = TargetUserId,
+        ActorUsername = TargetUsername,
+        ActorUserIdType = TargetUserIdType
+    | lookup ActorUserTypeLookup on ActorOriginalUserType
+    | extend
+        TargetUserType = ActorUserType,
+        TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+    | lookup SrcDeviceTypeLookup on client_device_s
+    | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
+    | extend 
+        User=TargetUsername,
+        Dvc=EventVendor,
+        IpAddr=SrcIpAddr
+    | project
+        TimeGenerated,
+        Type,
+        EventResultDetails,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventCount,
+        EventSchemaVersion,
+        EventResult,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventOriginalSubType,
+        EventMessage,
+        EventOriginalResultDetails,
+        EventOriginalUid,
+        TargetUserIdType,
+        TargetUserId,
+        TargetUsername,
+        TargetSessionId,
+        ActorOriginalUserType,
+        SrcGeoLatitude,
+        SrcGeoLongitude,
+        SrcDvcOs,
+        SrcIsp,
+        SrcGeoCity,
+        SrcGeoCountry,
+        SrcIpAddr,
+        ActingAppType,
+        LogonMethod,
+        HttpUserAgent,
+        ActorUserId,
+        ActorUsername,
+        ActorUserIdType,
+        ActorUserType,
+        TargetUserType,
+        TargetUsernameType,
+        ActorUsernameType,
+        SrcDeviceType,
+        User,
+        Dvc,
+        IpAddr
   };
   parser(disabled = disabled)
