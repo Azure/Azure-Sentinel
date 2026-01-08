@@ -43,6 +43,13 @@ VENDOR_PRODUCT_TABLES = {
     'commonsecuritylog': ('DeviceVendor', 'DeviceProduct'),
 }
 
+# Folders in the Solutions directory that should be excluded (not actual solutions)
+EXCLUDED_SOLUTION_FOLDERS = {
+    'images',       # Contains logo images only
+    'templates',    # Contains solution templates
+    'training',     # Training materials
+}
+
 # ASim tables use EventVendor/EventProduct
 ASIM_TABLE_PREFIXES = ('asim', '_asim', '_im_')
 
@@ -998,6 +1005,55 @@ def find_connector_readme(solution_dir: Path) -> str:
     Returns:
         Relative path to README file within Data Connectors folder, or empty string
     """
+
+
+def find_solution_json(solution_dir: Path) -> Optional[Dict[str, Any]]:
+    """
+    Find and read the Solution_*.json file from the Data folder.
+    
+    The Solution JSON contains metadata like Name, Logo, Author, Version, Description,
+    and lists of content items. This is more accurate than SolutionMetadata.json for
+    some fields.
+    
+    Args:
+        solution_dir: Path to the solution directory
+    
+    Returns:
+        Parsed JSON content or None if not found
+    """
+    # Check both "Data" and "data" folders (case-insensitive)
+    for data_folder_name in ["Data", "data"]:
+        data_dir = solution_dir / data_folder_name
+        if not data_dir.exists():
+            continue
+        
+        # Find Solution_*.json file
+        for json_path in data_dir.glob("Solution_*.json"):
+            data = read_json(json_path)
+            if data and isinstance(data, dict):
+                return data
+    
+    return None
+
+
+def extract_logo_url(logo_html: str) -> str:
+    """
+    Extract the URL from an HTML img tag.
+    
+    Args:
+        logo_html: HTML img tag like '<img src="https://..." width="75px" height="75px">'
+    
+    Returns:
+        The src URL or empty string if not found
+    """
+    if not logo_html:
+        return ""
+    
+    # Match src="..." or src='...'
+    match = re.search(r'src\s*=\s*["\']([^"\']+)["\']', logo_html, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return ""
     for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
         dc_dir = solution_dir / dc_folder_name
         if not dc_dir.exists():
@@ -1015,17 +1071,39 @@ def find_connector_readme(solution_dir: Path) -> str:
 
 
 def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
+    """
+    Collect solution metadata from both SolutionMetadata.json and Solution_*.json files.
+    
+    The Solution JSON (in Data folder) provides:
+    - Name (official name, may differ from folder name)
+    - Logo (HTML img tag with URL)
+    - Author
+    - Version  
+    - Description
+    
+    The SolutionMetadata.json provides:
+    - publisherId, offerId
+    - firstPublishDate, lastPublishDate
+    - support information
+    - categories
+    """
+    # Read SolutionMetadata.json for publishing metadata
     metadata_path = solution_dir / "SolutionMetadata.json"
     metadata = read_json(metadata_path) if metadata_path.exists() else {}
     if not isinstance(metadata, dict):
         metadata = {}
     
-    # Flatten support object
+    # Read Solution_*.json from Data folder for richer metadata
+    solution_json = find_solution_json(solution_dir)
+    if solution_json is None:
+        solution_json = {}
+    
+    # Flatten support object from SolutionMetadata.json
     support = metadata.get("support", {})
     if not isinstance(support, dict):
         support = {}
     
-    # Flatten author object
+    # Flatten author object from SolutionMetadata.json (legacy)
     author = metadata.get("author", {})
     if not isinstance(author, dict):
         author = {}
@@ -1046,20 +1124,46 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
             solution_readme_file = readme_name
             break
     
+    # Get name from Solution JSON (preferred) or fall back to folder name
+    solution_name = solution_json.get("Name", "") or solution_dir.name
+    
+    # Extract logo URL from HTML img tag
+    logo_html = solution_json.get("Logo", "")
+    logo_url = extract_logo_url(logo_html)
+    
+    # Get author from Solution JSON (preferred) or SolutionMetadata.json
+    solution_author = solution_json.get("Author", "") or author.get("name", "")
+    
+    # Get version from Solution JSON (preferred) or SolutionMetadata.json
+    solution_version = solution_json.get("Version", "") or metadata.get("version", "")
+    
+    # Get description from Solution JSON (strip HTML/markdown for CSV)
+    description = solution_json.get("Description", "")
+    
+    # Get dependencies from Solution JSON
+    dependencies = solution_json.get("dependentDomainSolutionIds", [])
+    if isinstance(dependencies, list):
+        dependencies_str = ";".join(str(d) for d in dependencies if d)
+    else:
+        dependencies_str = ""
+    
     return {
-        "solution_name": solution_dir.name,
+        "solution_name": solution_name,
         "solution_folder": solution_dir.name,
         "solution_publisher_id": metadata.get("publisherId", ""),
         "solution_offer_id": metadata.get("offerId", ""),
         "solution_first_publish_date": metadata.get("firstPublishDate", ""),
         "solution_last_publish_date": metadata.get("lastPublishDate", ""),
-        "solution_version": metadata.get("version", ""),
+        "solution_version": solution_version,
         "solution_support_name": support.get("name", ""),
         "solution_support_tier": support.get("tier", ""),
         "solution_support_link": support.get("link", ""),
-        "solution_author_name": author.get("name", ""),
+        "solution_author_name": solution_author,
         "solution_categories": categories_str,
         "solution_readme_file": solution_readme_file,
+        "solution_logo_url": logo_url,
+        "solution_description": description,
+        "solution_dependencies": dependencies_str,
     }
 
 
@@ -1638,7 +1742,57 @@ CONTENT_TYPE_FOLDERS: Dict[str, List[str]] = {
     "playbook": ["Playbooks", "Playbook"],
     "parser": ["Parsers", "Parser"],
     "watchlist": ["Watchlists"],
+    "summary_rule": ["Summary Rules", "Summary rules"],
 }
+
+# Mapping from Solution JSON keys to our internal content types
+# Some Solution JSONs use alternate key names (e.g., "AnalyticsRules" vs "Analytic Rules")
+# so we support multiple keys per content type (case-insensitive matching applied at runtime)
+SOLUTION_JSON_CONTENT_KEYS: Dict[str, List[str]] = {
+    "analytic_rule": ["Analytic Rules", "AnalyticsRules", "Analytics Rules", "analyticRules"],
+    "hunting_query": ["Hunting Queries", "HuntingQueries", "huntingQueries"],
+    "workbook": ["Workbooks", "WorkBooks", "workbooks"],
+    "playbook": ["Playbooks", "playbooks"],
+    "parser": ["Parsers", "parsers"],
+    "watchlist": ["Watchlists", "watchlists"],
+    "data_connector": ["Data Connectors", "DataConnectors", "dataConnectors"],
+    "summary_rule": ["SummaryRules", "Summary Rules", "summaryRules"],
+}
+
+def get_content_items_from_solution_json(solution_json: Optional[Dict[str, Any]]) -> Dict[str, Set[str]]:
+    """
+    Extract the list of content items from a Solution JSON file.
+    
+    The Solution JSON contains lists of content files for each content type.
+    This function extracts and normalizes these file paths for comparison.
+    
+    Args:
+        solution_json: Parsed Solution JSON data, or None if not found
+    
+    Returns:
+        Dictionary mapping content type to set of normalized basenames (lowercase)
+    """
+    if not solution_json:
+        return {}
+    
+    result: Dict[str, Set[str]] = {}
+    
+    for content_type, json_keys in SOLUTION_JSON_CONTENT_KEYS.items():
+        basenames: Set[str] = set()
+        # Try each possible key name for this content type
+        for json_key in json_keys:
+            items = solution_json.get(json_key, [])
+            if items and isinstance(items, list):
+                for item_path in items:
+                    if isinstance(item_path, str) and item_path.strip():
+                        # Normalize: extract basename and lowercase for comparison
+                        basename = os.path.basename(item_path.strip()).lower()
+                        if basename:
+                            basenames.add(basename)
+        if basenames:
+            result[content_type] = basenames
+    
+    return result
 
 
 def read_yaml_safe(path: Path) -> Optional[Dict[str, Any]]:
@@ -2099,17 +2253,44 @@ def extract_content_item_from_playbook(
     }
 
 
-def collect_content_items(solution_dir: Path, solution_name: str, solution_folder: str) -> List[Dict[str, Any]]:
-    """Collect all content items from a solution directory."""
+def collect_content_items(
+    solution_dir: Path,
+    solution_name: str,
+    solution_folder: str,
+    solution_json: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Collect all content items from a solution directory.
+    
+    Uses file system scanning as the primary discovery method, then checks each
+    discovered item against the Solution JSON to determine if it's documented.
+    Also adds placeholder items for items listed in Solution JSON but not found
+    by file scanning.
+    
+    Args:
+        solution_dir: Path to the solution directory
+        solution_name: Display name of the solution
+        solution_folder: Folder name of the solution
+        solution_json: Optional parsed Solution JSON data for checking documentation status
+    
+    Returns:
+        List of content item dictionaries with 'not_in_solution_json' field indicating items found by scanning but not in Solution JSON
+    """
     content_items: List[Dict[str, Any]] = []
     
+    # Get the set of items listed in Solution JSON for comparison
+    json_items = get_content_items_from_solution_json(solution_json)
+    
     for content_type, folder_names in CONTENT_TYPE_FOLDERS.items():
+        # Get the set of basenames for this content type from Solution JSON
+        json_basenames = json_items.get(content_type, set())
+        
         for folder_name in folder_names:
             content_dir = solution_dir / folder_name
             if not content_dir.exists():
                 continue
             
-            if content_type in ["analytic_rule", "hunting_query", "parser"]:
+            if content_type in ["analytic_rule", "hunting_query", "parser", "summary_rule"]:
                 # YAML-based content
                 for yaml_path in list(content_dir.rglob("*.yaml")) + list(content_dir.rglob("*.yml")):
                     item = extract_content_item_from_yaml(yaml_path, content_type, solution_name, solution_folder)
@@ -2120,6 +2301,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             item["content_file"] = str(rel_path).replace("\\", "/")
                         except ValueError:
                             pass
+                        # Check if item is in Solution JSON
+                        basename_lower = yaml_path.name.lower()
+                        item["not_in_solution_json"] = "true" if basename_lower not in json_basenames else "false"
                         content_items.append(item)
                         
             elif content_type == "workbook":
@@ -2130,6 +2314,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                         continue
                     item = extract_content_item_from_workbook(json_path, solution_name, solution_folder)
                     if item:
+                        # Check if item is in Solution JSON
+                        basename_lower = json_path.name.lower()
+                        item["not_in_solution_json"] = "true" if basename_lower not in json_basenames else "false"
                         content_items.append(item)
                         
             elif content_type == "playbook":
@@ -2148,6 +2335,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                                 item["content_readme_file"] = str(readme_rel).replace("\\", "/")
                         except ValueError:
                             pass
+                        # Check if item is in Solution JSON
+                        basename_lower = json_path.name.lower()
+                        item["not_in_solution_json"] = "true" if basename_lower not in json_basenames else "false"
                         content_items.append(item)
                         
             elif content_type == "watchlist":
@@ -2158,6 +2348,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                         name = json_path.stem
                         if isinstance(data, dict):
                             name = data.get("name", name) or data.get("displayName", name)
+                        # Check if item is in Solution JSON
+                        basename_lower = json_path.name.lower()
+                        not_in_json = "true" if basename_lower not in json_basenames else "false"
                         content_items.append({
                             "content_id": "",
                             "content_name": name,
@@ -2175,6 +2368,7 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             "content_query_status": "no_query",  # Watchlists don't have queries
                             "content_event_vendor": "",
                             "content_event_product": "",
+                            "not_in_solution_json": not_in_json,
                             "solution_name": solution_name,
                             "solution_folder": solution_folder,
                         })
@@ -2354,11 +2548,14 @@ def main() -> None:
     all_content_items: List[Dict[str, Any]] = []
     content_table_mappings: List[Dict[str, str]] = []
     
+    # Track connector documentation status (filename -> not_in_solution_json)
+    connector_not_in_solution_json: Dict[str, str] = {}
+    
     # Track all solutions and identify those without any connectors
     all_solutions_info: Dict[str, Dict[str, str]] = {}
     solutions_without_connectors: Set[str] = set()
 
-    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
+    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
         solution_info = collect_solution_info(solution_dir.resolve())
         
         # Store all solution info for later processing
@@ -2374,11 +2571,15 @@ def main() -> None:
         # Normalize parser names for lookups (handles underscore prefix variations)
         parser_names_lower = {normalize_parser_name(name) for name in parser_names if name}
         
+        # Read Solution JSON for content item comparison
+        solution_json = find_solution_json(solution_dir.resolve())
+        
         # Collect content items for this solution
         solution_content_items = collect_content_items(
             solution_dir.resolve(),
             solution_info["solution_name"],
             solution_info["solution_folder"],
+            solution_json=solution_json,
         )
         
         # Extract tables from content queries and build mappings
@@ -2428,6 +2629,9 @@ def main() -> None:
             item_for_csv = {k: v for k, v in item.items() if k not in ("content_query", "content_write_tables")}
             all_content_items.append(item_for_csv)
         
+        # Get connector files listed in Solution JSON for comparison
+        json_connector_basenames = get_content_items_from_solution_json(solution_json).get("data_connector", set())
+        
         # Support "Data Connectors" (preferred), "DataConnectors", and "Data Connector" (singular) folder naming
         data_connectors_dirs = [
             solution_dir / "Data Connectors",
@@ -2442,6 +2646,13 @@ def main() -> None:
                 continue
             has_data_connectors_dir = True
             for json_path in sorted(data_connectors_dir.rglob("*.json")):
+                # Track connector documentation status
+                basename_lower = json_path.name.lower()
+                not_in_json = "true" if basename_lower not in json_connector_basenames else "false"
+                # Build a unique key using solution folder and relative path
+                connector_file_key = f"{solution_info['solution_folder']}:{json_path.name}"
+                connector_not_in_solution_json[connector_file_key] = not_in_json
+                
                 data = read_json(json_path)
                 if data is None:
                     # Log JSON parsing failure as an issue
@@ -2810,6 +3021,20 @@ def main() -> None:
         # Track connector info for connectors.csv
         connector_id = row_key[12]
         if connector_id and connector_id not in connector_info_map:
+            # Check if any connector file is documented in Solution JSON
+            # Extract filenames from the GitHub URLs and check against our tracking
+            solution_folder = row_key[1]
+            connector_files_list = github_urls
+            is_documented = False
+            for github_url in connector_files_list:
+                # Extract filename from GitHub URL
+                filename = github_url.split('/')[-1] if github_url else ""
+                connector_file_key = f"{solution_folder}:{filename}"
+                if connector_not_in_solution_json.get(connector_file_key) == "false":
+                    is_documented = True
+                    break
+            not_in_json = "false" if is_documented else "true"
+            
             connector_info_map[connector_id] = {
                 'connector_id': connector_id,
                 'connector_publisher': row_key[13],
@@ -2821,6 +3046,7 @@ def main() -> None:
                 'connector_files': ";".join(github_urls),
                 'solution_name': row_key[0],  # First solution name (can be multiple)
                 'solution_folder': row_key[1],  # Solution folder for README lookup
+                'not_in_solution_json': not_in_json,
             }
 
     # Now analyze collection methods for all connectors
@@ -2829,7 +3055,7 @@ def main() -> None:
     connector_vendor_product: Dict[str, Dict[str, Set[str]]] = {}  # connector_id -> {'vendor': set, 'product': set}
     connector_vendor_product_by_table: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {'vendor': set, 'product': set}}
     
-    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
+    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
         for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
             data_connectors_dir = solution_dir / dc_folder_name
             if not data_connectors_dir.exists():
@@ -2936,6 +3162,7 @@ def main() -> None:
             'event_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
             'event_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
             'event_vendor_product_by_table': json.dumps(vp_by_table_serialized) if vp_by_table_serialized else '',
+            'not_in_solution_json': info.get('not_in_solution_json', 'false'),
         })
     
     # Build solutions data
@@ -2962,6 +3189,9 @@ def main() -> None:
             'solution_author_name': info['solution_author_name'],
             'solution_categories': info['solution_categories'],
             'solution_readme_file': readme_full_path,
+            'solution_logo_url': info.get('solution_logo_url', ''),
+            'solution_description': info.get('solution_description', ''),
+            'solution_dependencies': info.get('solution_dependencies', ''),
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
         })
     
@@ -3143,6 +3373,7 @@ def main() -> None:
         'event_vendor',
         'event_product',
         'event_vendor_product_by_table',
+        'not_in_solution_json',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -3165,6 +3396,9 @@ def main() -> None:
         'solution_author_name',
         'solution_categories',
         'solution_readme_file',
+        'solution_logo_url',
+        'solution_description',
+        'solution_dependencies',
         'has_connectors',
     ]
     solutions_path = args.solutions_csv.resolve()
@@ -3220,6 +3454,7 @@ def main() -> None:
         'content_query_status',
         'content_event_vendor',
         'content_event_product',
+        'not_in_solution_json',
         'solution_name',
         'solution_folder',
     ]

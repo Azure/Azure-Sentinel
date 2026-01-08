@@ -5,11 +5,21 @@ Upload Solutions Analyzer CSV files to Azure Data Explorer (Kusto) cluster.
 This script drops existing tables and re-uploads CSV data to the specified Kusto database.
 Uses streaming ingestion for fast uploads (same method as ADX "Get Data" UI).
 
+Uploads the following CSV files:
+    - tables_reference.csv -> solution_analyzer_table_reference_lookup
+    - connectors.csv -> solution_analyzer_connectors_lookup
+    - tables.csv -> solution_analyzer_tables_lookup
+    - solutions.csv -> solution_analyzer_solutions_lookup
+    - content_items.csv -> solution_analyzer_content_items_lookup
+    - solutions_connectors_tables_mapping_simplified.csv -> solution_analyzer_mapping
+    - solutions_connectors_tables_mapping.csv -> solution_analyzer_full_mapping
+    - content_tables_mapping.csv -> solution_analyzer_content_tables_mapping
+
 Usage:
-    python upload_to_kusto.py --cluster <cluster_url> --database <database_name>
+    python solution_analyzer_upload_to_kusto.py --cluster <cluster_url> --database <database_name>
     
 Example:
-    python upload_to_kusto.py --cluster "https://mycluster.westus.kusto.windows.net" --database "MyDatabase"
+    python solution_analyzer_upload_to_kusto.py --cluster "https://mycluster.westus.kusto.windows.net" --database "MyDatabase"
 
 Prerequisites:
     pip install azure-kusto-data azure-kusto-ingest azure-identity pandas
@@ -17,6 +27,7 @@ Prerequisites:
 
 import argparse
 import csv
+import subprocess
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -25,24 +36,63 @@ try:
     from azure.kusto.data import KustoClient, KustoConnectionStringBuilder, DataFormat
     from azure.kusto.data.exceptions import KustoServiceError
     from azure.kusto.ingest import (
-        ManagedStreamingIngestClient,
+        QueuedIngestClient,
         IngestionProperties,
     )
-    from azure.identity import DefaultAzureCredential
 except ImportError as e:
     print(f"Error: Missing required package: {e}")
     print("Install required packages with: pip install azure-kusto-data azure-kusto-ingest azure-identity")
     sys.exit(1)
 
 
+def get_azure_cli_token(resource: str = "https://kusto.kusto.windows.net") -> str:
+    """Get access token from Azure CLI with longer timeout."""
+    import json
+    import shutil
+    
+    # Find az executable
+    az_path = shutil.which("az")
+    if not az_path:
+        # Try common Windows locations
+        for path in [
+            r"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
+            r"C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
+        ]:
+            if Path(path).exists():
+                az_path = path
+                break
+    
+    if not az_path:
+        raise RuntimeError("Azure CLI not found. Please install it or add it to PATH.")
+    
+    cmd = [az_path, "account", "get-access-token", "--resource", resource, "--output", "json"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60, shell=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Azure CLI error: {result.stderr}")
+        token_info = json.loads(result.stdout)
+        return token_info["accessToken"]
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Azure CLI timed out getting token. Check your VPN connection.")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Failed to parse Azure CLI output: {result.stdout}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to get Azure CLI token: {e}")
+
+
 # Mapping of CSV files to Kusto table names
+# Files are listed in order of dependency (lookup tables first, then mappings)
 TABLE_MAPPINGS: List[Tuple[str, str]] = [
+    # Reference/lookup tables
     ("tables_reference.csv", "solution_analyzer_table_reference_lookup"),
     ("connectors.csv", "solution_analyzer_connectors_lookup"),
     ("tables.csv", "solution_analyzer_tables_lookup"),
     ("solutions.csv", "solution_analyzer_solutions_lookup"),
+    ("content_items.csv", "solution_analyzer_content_items_lookup"),
+    # Mapping tables
     ("solutions_connectors_tables_mapping_simplified.csv", "solution_analyzer_mapping"),
-    ("solutions_connectors_tables_mapping.csv", "solutions_connectors_tables_mapping"),
+    ("solutions_connectors_tables_mapping.csv", "solution_analyzer_full_mapping"),
+    ("content_tables_mapping.csv", "solution_analyzer_content_tables_mapping"),
 ]
 
 
@@ -89,15 +139,13 @@ def create_table_and_mapping(client: KustoClient, database: str, table_name: str
 
 def upload_csv_to_kusto(
     mgmt_client: KustoClient,
-    ingest_client: ManagedStreamingIngestClient,
+    ingest_client: QueuedIngestClient,
     database: str,
     csv_path: Path,
     table_name: str
 ) -> bool:
     """
-    Upload a CSV file to Kusto using managed streaming ingestion.
-    
-    This is fast - similar to the ADX "Get Data" UI approach.
+    Upload a CSV file to Kusto using queued ingestion.
     """
     print(f"\nProcessing: {csv_path.name} -> {table_name}")
     
@@ -120,21 +168,20 @@ def upload_csv_to_kusto(
     if not create_table_and_mapping(mgmt_client, database, table_name, columns):
         return False
     
-    # Ingest the CSV file using streaming ingestion
+    # Ingest the CSV file using queued ingestion
     mapping_name = f"{table_name}_csv_mapping"
     ingestion_props = IngestionProperties(
         database=database,
         table=table_name,
         data_format=DataFormat.CSV,
         ingestion_mapping_reference=mapping_name,
-        flush_immediately=True,  # Don't wait for batching
     )
     
-    print(f"  Uploading data (streaming)...")
+    print(f"  Uploading data...")
     try:
-        # Use ingest_from_file for streaming ingestion
+        # Use ingest_from_file for queued ingestion
         result = ingest_client.ingest_from_file(str(csv_path), ingestion_properties=ingestion_props)
-        print(f"  Successfully ingested {csv_path.name}")
+        print(f"  Ingestion queued for {csv_path.name}")
         return True
     except Exception as e:
         print(f"  Error during ingestion: {e}")
@@ -143,7 +190,7 @@ def upload_csv_to_kusto(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Upload Solutions Analyzer CSV files to Kusto cluster (fast streaming ingestion)"
+        description="Upload Solutions Analyzer CSV files to Kusto cluster"
     )
     parser.add_argument(
         "--cluster", "-c",
@@ -203,22 +250,27 @@ def main():
         print("\nRun without --dry-run to execute the upload.")
         return
     
-    # Create Kusto clients using DefaultAzureCredential
-    print("Authenticating with Azure...")
+    # Get Azure CLI token once with longer timeout
+    print("Authenticating with Azure CLI...")
     try:
-        credential = DefaultAzureCredential()
+        token = get_azure_cli_token()
+        
+        # Create a token callback that returns the cached token
+        def token_provider():
+            return token
         
         # Management client for DDL operations
-        mgmt_kcsb = KustoConnectionStringBuilder.with_azure_token_credential(
-            cluster_url, credential
+        mgmt_kcsb = KustoConnectionStringBuilder.with_aad_application_token_authentication(
+            cluster_url, token
         )
         mgmt_client = KustoClient(mgmt_kcsb)
         
-        # Managed streaming ingest client (auto_correct_endpoint=True derives ingest URL automatically)
-        ingest_kcsb = KustoConnectionStringBuilder.with_azure_token_credential(
-            cluster_url, credential
+        # Queued ingest client - derive ingest URL from cluster URL
+        ingest_url = cluster_url.replace("https://", "https://ingest-")
+        ingest_kcsb = KustoConnectionStringBuilder.with_aad_application_token_authentication(
+            ingest_url, token
         )
-        ingest_client = ManagedStreamingIngestClient(ingest_kcsb)
+        ingest_client = QueuedIngestClient(ingest_kcsb)
         
         print("Authentication successful.\n")
     except Exception as e:
@@ -239,6 +291,9 @@ def main():
     
     print("\n" + "=" * 50)
     print(f"Upload complete: {success_count} succeeded, {fail_count} failed")
+    if success_count > 0:
+        print("\nNote: Queued ingestion may take a few minutes to complete.")
+        print("You can check ingestion status with: .show ingestion failures")
 
 
 if __name__ == "__main__":

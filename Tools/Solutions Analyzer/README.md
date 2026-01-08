@@ -1,11 +1,12 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains five complementary tools for analyzing Microsoft Sentinel Solutions:
 
 1. **[`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md)** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
 2. **[`collect_table_info.py`](script-docs/collect_table_info.md)** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
 3. **[`generate_connector_docs.py`](script-docs/generate_connector_docs.md)** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
-4. **[`solution_analyzer_upload_to_kusto.py`](script-docs/upload_to_kusto.md)** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
+4. **[`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md)** - Generates summary reports of solutions with connectors in markdown and CSV formats
+5. **[`solution_analyzer_upload_to_kusto.py`](script-docs/upload_to_kusto.md)** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
 
 ## Prerequisites
 
@@ -57,7 +58,7 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 | **Solutions Index** | [View Solutions](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/solutions-index.md) |
 | **Connectors Index** | [View Connectors](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
 | **Tables Index** | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
-| **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content-index.md) |
+| **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content/content-index.md) |
 
 You can also generate documentation locally using the `--output-dir` parameter (see below).
 
@@ -101,8 +102,9 @@ python generate_connector_docs.py --output-dir "path/to/output"
 | Script | Purpose | Key Output |
 |--------|---------|------------|
 | [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_tables_mapping.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv` |
 | [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory |
+| [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
 | [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSVs to Kusto | Kusto tables |
 
 ## Data Flow
@@ -171,6 +173,28 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 ---
 
 ## Version History
+
+### v6.0 - Solution Logos, Descriptions, and Enhanced Metadata
+
+**The solution documentation now includes information from the `Data/Solution_*.json` files in addition to `SolutionMetadata.json`:**
+- **Solution logos** now appear on solution pages and in the solutions index for visual identification
+- **Solution descriptions**, **Dependencies** and **Author Information** are included in each solution page.
+- **Official solution names** from Solution JSON are used (may differ from folder names)
+- **Summary rules** now supported as a new content type
+
+Items found by scanning but not listed in Solution JSON are marked with ⚠️ in documentation
+
+**New CSV Fields in solutions.csv:**
+- `solution_logo_url`: URL to the solution's logo image
+- `solution_description`: Full solution description
+- `solution_version`: Version from Solution JSON
+- `solution_author_name`: Author name from Solution JSON
+- `solution_dependencies`: Semicolon-separated list of dependent solution IDs 
+
+**Bug Fixes:**
+- Content item filenames use hash-based uniqueness to prevent collisions
+- Fixed Solution JSON key variant handling (e.g., `AnalyticsRules` vs `Analytic Rules`)
+- Excluded Images, Templates, and Training folders from content scanning
 
 ### v5.2 - Bug Fixes and Improvements
 

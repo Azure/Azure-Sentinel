@@ -107,13 +107,18 @@ def sanitize_anchor(text: str) -> str:
 
 
 def sanitize_filename(text: str) -> str:
-    """Convert text to URL-safe filename, encoding special characters that break Markdown links."""
+    """Convert text to safe filename, removing special characters that break file systems or Markdown links."""
     result = text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
     # Remove or replace characters invalid in Windows filenames: \ / : * ? " < > |
     result = result.replace(":", "-").replace("*", "-").replace("?", "-")
     result = result.replace('"', "-").replace("<", "-").replace(">", "-").replace("|", "-")
-    # URL-encode parentheses to avoid breaking Markdown link syntax
-    result = result.replace("(", "%28").replace(")", "%29")
+    # Remove parentheses and percent signs (these break file systems or cause issues)
+    result = result.replace("(", "-").replace(")", "-").replace("%", "-")
+    # Clean up multiple consecutive hyphens
+    while "--" in result:
+        result = result.replace("--", "-")
+    # Remove leading/trailing hyphens
+    result = result.strip("-")
     return result
 
 
@@ -1290,6 +1295,7 @@ CONTENT_TYPE_PLURAL_NAMES = {
     'playbook': 'Playbooks',
     'parser': 'Parsers',
     'watchlist': 'Watchlists',
+    'summary_rule': 'Summary Rules',
 }
 
 # URL-safe slugs for content type index files
@@ -1300,6 +1306,7 @@ CONTENT_TYPE_SLUGS = {
     'playbook': 'playbooks',
     'parser': 'parsers',
     'watchlist': 'watchlists',
+    'summary_rule': 'summary-rules',
 }
 
 
@@ -1308,31 +1315,76 @@ def get_content_type_slug(content_type: str) -> str:
     return CONTENT_TYPE_SLUGS.get(content_type, content_type.replace('_', '-') + 's')
 
 
-def get_content_item_filename(content_id: str, content_name: str, solution_name: str) -> str:
+def get_content_item_filename(content_id: str, content_name: str, solution_name: str, 
+                              content_file: str = '', content_type: str = '') -> str:
     """
     Generate a unique filename for a content item page.
     Always includes solution name AND content name to avoid collisions.
-    Some solutions reuse the same content_id for multiple different content items.
+    Some solutions reuse the same content_id for multiple different content items
+    (e.g., same YAML file generates both analytic_rule and hunting_query, or
+    duplicate items across different folders with the same ID).
+    
+    Truncates long filenames to stay within Windows MAX_PATH limits while
+    preserving uniqueness by keeping the content_id (or a hash) at the end.
+    
+    Args:
+        content_id: Unique ID of the content item (often a GUID)
+        content_name: Display name of the content item
+        solution_name: Name of the solution containing the item
+        content_file: Path to the content file (used for uniqueness hash)
+        content_type: Type of content (analytic_rule, hunting_query, etc.)
     """
+    import hashlib
+    
     sanitized_solution = sanitize_filename(solution_name)
     sanitized_name = sanitize_filename(content_name)
     
+    # Windows MAX_PATH is 260, but we need room for directory path + .md extension
+    # Keep filename under 150 characters for safety (path can be ~100 chars)
+    MAX_FILENAME_LENGTH = 150
+    
+    # Always generate a uniqueness hash from all identifying fields
+    # This handles: same ID different type, same ID different file, no ID at all
+    hash_input = f"{solution_name}|{content_name}|{content_id}|{content_file}|{content_type}".encode('utf-8')
+    uniqueness_hash = hashlib.md5(hash_input).hexdigest()[:8]
+    
     if content_id:
         sanitized_id = sanitize_filename(content_id)
-        # Include both name and id for uniqueness within same solution
-        return f"{sanitized_solution}-{sanitized_name}-{sanitized_id}"
+        # Include name, id, and uniqueness hash
+        filename = f"{sanitized_solution}-{sanitized_name}-{sanitized_id}-{uniqueness_hash}"
     else:
-        # For items without ID (workbooks, some playbooks), use name + solution
-        return f"{sanitized_solution}-{sanitized_name}"
+        # For items without ID, use name and uniqueness hash
+        filename = f"{sanitized_solution}-{sanitized_name}-{uniqueness_hash}"
+    
+    # Truncate if too long, preserving the unique suffix at the end
+    if len(filename) > MAX_FILENAME_LENGTH:
+        if content_id:
+            # Keep the ID + hash part 
+            id_part = f"-{sanitized_id}-{uniqueness_hash}"
+            available = MAX_FILENAME_LENGTH - len(id_part)
+            if available > 20:  # Ensure we keep some meaningful prefix
+                filename = filename[:available] + id_part
+            else:
+                # ID is too long, use full hash instead
+                full_hash = hashlib.md5(filename.encode('utf-8')).hexdigest()[:16]
+                filename = filename[:MAX_FILENAME_LENGTH - 17] + f"-{full_hash}"
+        else:
+            # Hash is already included, just truncate preserving the hash
+            hash_part = f"-{uniqueness_hash}"
+            available = MAX_FILENAME_LENGTH - len(hash_part)
+            filename = filename[:available] + hash_part
+    
+    return filename
 
 
-def get_content_item_link(item: Dict[str, str], relative_path: str = "../content/") -> str:
+def get_content_item_link(item: Dict[str, str], relative_path: str = "../content/", show_not_in_json: bool = False) -> str:
     """
     Generate a markdown link to a content item's documentation page.
     
     Args:
-        item: Content item dictionary with content_id, content_name, solution_name
+        item: Content item dictionary with content_id, content_name, solution_name, content_file, content_type
         relative_path: Relative path to content directory
+        show_not_in_json: If True, show indicator for items not in Solution JSON
     
     Returns:
         Markdown formatted link like [Content Name](../content/filename.md)
@@ -1340,8 +1392,15 @@ def get_content_item_link(item: Dict[str, str], relative_path: str = "../content
     content_id = item.get('content_id', '')
     content_name = item.get('content_name', 'Unknown')
     solution_name = item.get('solution_name', '')
+    content_file = item.get('content_file', '')
+    content_type = item.get('content_type', '')
+    not_in_solution_json = item.get('not_in_solution_json', 'false')
     
-    filename = get_content_item_filename(content_id, content_name, solution_name)
+    filename = get_content_item_filename(content_id, content_name, solution_name, content_file, content_type)
+    
+    # Add indicator if item was found by scanning but not in Solution JSON
+    if show_not_in_json and not_in_solution_json == 'true':
+        return f"[{content_name}]({relative_path}{filename}.md) ⚠️"
     return f"[{content_name}]({relative_path}{filename}.md)"
 
 
@@ -1389,11 +1448,12 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
             solution_folder = item.get('solution_folder', '')
             
             # Generate filename and handle collisions
-            base_filename = get_content_item_filename(content_id, content_name, solution_name)
+            base_filename = get_content_item_filename(content_id, content_name, solution_name, content_file, content_type)
             if base_filename in generated_filenames:
-                # Add counter suffix for collision
+                # Add counter suffix for collision - this shouldn't happen often with hash-based filenames
                 generated_filenames[base_filename] += 1
                 filename = f"{base_filename}-{generated_filenames[base_filename]}"
+                print(f"  Warning: Filename collision for '{content_name}' ({content_type}) in {solution_name}, using suffix -{generated_filenames[base_filename]}")
             else:
                 generated_filenames[base_filename] = 1
                 filename = base_filename
@@ -1474,6 +1534,11 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                     f.write(f"| **Source** | [View on GitHub]({github_url}) |\n")
                 
                 f.write("\n")
+                
+                # Add footnote explaining "Not listed" status for items discovered by file scanning only
+                not_in_solution_json = item.get('not_in_solution_json', 'false')
+                if not_in_solution_json == 'true':
+                    f.write("> ⚠️ **Not listed in Solution JSON:** This content item was discovered by scanning the solution folder but is not included in the official Solution JSON file. It may be a legacy item, under development, or excluded from the official solution package.\n\n")
                 
                 # Tables section
                 if tables_with_usage:
@@ -1606,7 +1671,7 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
             solution_name = item.get('solution_name', 'Unknown')
             
             # Generate link to content page (content pages are in the same folder)
-            content_link = get_content_item_link(item, "")
+            content_link = get_content_item_link(item, "", show_not_in_json=True)
             solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
             
             if content_type == 'analytic_rule':
@@ -1619,6 +1684,11 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
                 f.write(f"| {content_link} | {solution_link} |\n")
         
         f.write("\n")
+        
+        # Add footnote if any items have status flags
+        has_unlisted = any(item.get('not_in_solution_json', 'false') == 'true' for item in items)
+        if has_unlisted:
+            f.write("> ⚠️ Items marked with ⚠️ are not listed in their Solution JSON file. They were discovered by scanning solution folders.\n\n")
         
         # Navigation footer
         f.write("---\n\n")
@@ -1669,14 +1739,6 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
         f.write(f"# {type_name}\n\n")
         f.write(f"**{len(items)} {type_name.lower()}** across all Microsoft Sentinel solutions.\n\n")
         
-        # Navigation
-        f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](../solutions-index.md)\n")
-        f.write("- [Connectors](../connectors-index.md)\n")
-        f.write("- [Tables](../tables-index.md)\n")
-        f.write("- [Content](content-index.md)\n\n")
-        f.write("---\n\n")
-        
         # Letter navigation
         f.write("**Jump to:** ")
         if use_letter_pages:
@@ -1719,7 +1781,7 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
                     solution_name = item.get('solution_name', 'Unknown')
                     
                     # Generate link to content page (content pages are in the same folder)
-                    content_link = get_content_item_link(item, "")
+                    content_link = get_content_item_link(item, "", show_not_in_json=True)
                     solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
                     
                     if content_type == 'analytic_rule':
@@ -1732,6 +1794,11 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
                         f.write(f"| {content_link} | {solution_link} |\n")
                 
                 f.write("\n")
+            
+            # Add footnote if any items have status flags
+            has_unlisted = any(item.get('not_in_solution_json', 'false') == 'true' for item in items)
+            if has_unlisted:
+                f.write("> ⚠️ Items marked with ⚠️ are not listed in their Solution JSON file. They were discovered by scanning solution folders.\n\n")
         
         # Navigation footer
         f.write("---\n\n")
@@ -1777,7 +1844,7 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
     total_items = sum(len(items) for items in content_by_type.values())
     
     # Generate type-specific index pages
-    type_order = ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist']
+    type_order = ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist', 'summary_rule']
     
     for content_type in type_order:
         items = content_by_type.get(content_type, [])
@@ -1818,6 +1885,7 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
             'workbook': 'Interactive dashboards and reports',
             'parser': 'Data normalization and transformation functions',
             'watchlist': 'Reference data lists for enrichment and filtering',
+            'summary_rule': 'Rules for aggregating and summarizing data',
         }
         
         for content_type in type_order:
@@ -1835,41 +1903,6 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
                 count = len(content_by_type[content_type])
                 f.write(f"| {type_name} | {count} | |\n")
         
-        f.write("\n")
-        
-        # Quick stats section
-        f.write("## Statistics\n\n")
-        f.write("| Metric | Value |\n")
-        f.write("|:-------|------:|\n")
-        f.write(f"| Total Content Items | {total_items} |\n")
-        f.write(f"| Content Types | {len(content_by_type)} |\n")
-        
-        # Count solutions with content
-        solutions_with_content = len([s for s in content_items_by_solution if content_items_by_solution[s]])
-        f.write(f"| Solutions with Content | {solutions_with_content} |\n")
-        f.write("\n")
-        
-        # Content Items by Type table (moved from solutions-index)
-        content_type_names = {
-            'analytic_rule': 'Analytic Rules',
-            'hunting_query': 'Hunting Queries',
-            'workbook': 'Workbooks',
-            'playbook': 'Playbooks',
-            'parser': 'Parsers',
-            'watchlist': 'Watchlists',
-        }
-        
-        f.write("### Content by Type\n\n")
-        f.write("| Content Type | Count |\n")
-        f.write("|:-------------|------:|\n")
-        
-        # Sort by count descending
-        for content_type, items in sorted(content_by_type.items(), key=lambda x: -len(x[1])):
-            type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
-            type_slug = get_content_type_slug(content_type)
-            f.write(f"| [{type_name}]({type_slug}.md) | {len(items)} |\n")
-        
-        f.write(f"| **Total** | **{total_items}** |\n")
         f.write("\n")
         
         # Navigation footer
@@ -1921,18 +1954,23 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         
         f.write("## Overview\n\n")
         
-        # Count solutions with connectors (solutions that have at least one row with non-empty connector_id)
+        # Count solutions with connectors (solutions that have at least one REAL connector - not discovered)
+        # A "real" connector is one that is in the Solution JSON, not just discovered in the folder
         solutions_with_connectors = 0
         for connectors in solutions.values():
-            # A solution has a connector if at least one of its rows has a non-empty connector_id
-            has_connector = False
+            # A solution has a real connector if at least one of its rows has a non-empty connector_id
+            # AND that connector is NOT discovered (not_in_solution_json != 'true')
+            has_real_connector = False
             for conn in connectors:
                 connector_id = conn.get('connector_id', '')
+                not_in_json = conn.get('not_in_solution_json', 'false')
                 # Handle both empty strings and 'nan' string values
                 if connector_id and str(connector_id).strip() and str(connector_id).strip().lower() != 'nan':
-                    has_connector = True
-                    break
-            if has_connector:
+                    # Only count as real connector if it's in the Solution JSON
+                    if not_in_json != 'true':
+                        has_real_connector = True
+                        break
+            if has_real_connector:
                 solutions_with_connectors += 1
         
         f.write(f"This documentation covers **{len(solutions)} solutions**, ")
@@ -1941,13 +1979,18 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         else:
             f.write(f"of which **{solutions_with_connectors}** include data connectors, ")
         
-        # Count unique connectors across all solutions
+        # Count unique REAL connectors across all solutions (not discovered)
         all_connector_ids = set()
+        all_discovered_connector_ids = set()
         for connectors in solutions.values():
             for conn in connectors:
                 connector_id = conn.get('connector_id', '')
                 if connector_id:
-                    all_connector_ids.add(connector_id)
+                    not_in_json = conn.get('not_in_solution_json', 'false')
+                    if not_in_json == 'true':
+                        all_discovered_connector_ids.add(connector_id)
+                    else:
+                        all_connector_ids.add(connector_id)
         
         # Count unique tables across all solutions (fallback if not provided)
         if tables_in_solutions is None:
@@ -1961,129 +2004,6 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         
         f.write(f"providing access to **{len(all_connector_ids)} unique connectors** ")
         f.write(f"and **{tables_in_solutions} tables**.\n\n")
-        
-        # Count total content items
-        total_content_items = sum(len(items) for items in content_items_by_solution.values())
-        solutions_with_content = len([s for s in content_items_by_solution if content_items_by_solution[s]])
-        
-        # Statistics section
-        f.write("### Quick Statistics\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|--------|-------|\n")
-        f.write(f"| Total Solutions | {len(solutions)} |\n")
-        f.write(f"| Solutions with Connectors | {solutions_with_connectors} ({100*solutions_with_connectors//len(solutions)}%) |\n")
-        f.write(f"| Unique Connectors | {len(all_connector_ids)} |\n")
-        f.write(f"| Tables Used by Solutions | {tables_in_solutions} |\n")
-        f.write(f"| Content Items | {total_content_items} |\n")
-        f.write(f"| Solutions with Content | {solutions_with_content} ({100*solutions_with_content//max(len(solutions), 1)}%) |\n")
-        if tables_count and tables_count > tables_in_solutions:
-            f.write(f"\n*Note: {tables_count} total tables are documented, including {tables_count - tables_in_solutions} additional tables referenced by content items or from the Azure Monitor reference.*\n")
-        f.write("\n")
-        
-        # Build collection method summary
-        # Collect all unique connectors with their metadata
-        # Track all solutions per connector (some connectors appear in multiple solutions)
-        connectors_map: Dict[str, Dict[str, any]] = {}
-        connector_solutions: Dict[str, Set[str]] = defaultdict(set)  # connector_id -> set of solution names
-        
-        for solution_name_iter, connectors in solutions.items():
-            for conn in connectors:
-                connector_id = conn.get('connector_id', '')
-                if not connector_id:
-                    continue
-                
-                # Track all solutions this connector belongs to
-                connector_solutions[connector_id].add(solution_name_iter)
-                
-                if connector_id in connectors_map:
-                    continue
-                
-                connector_title = conn.get('connector_title', connector_id)
-                connectors_map[connector_id] = {
-                    'title': connector_title,
-                    'collection_method': conn.get('collection_method', ''),
-                }
-        
-        # Separate deprecated and active connectors
-        deprecated_connectors = {}
-        active_connectors_map = {}
-        
-        for connector_id, info in connectors_map.items():
-            title = info['title']
-            if '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]'):
-                deprecated_connectors[connector_id] = info
-            else:
-                active_connectors_map[connector_id] = info
-        
-        # Build solutions_all_connectors using the complete mapping
-        solutions_all_connectors: Dict[str, List[str]] = defaultdict(list)
-        for connector_id, solution_names in connector_solutions.items():
-            for solution_name_iter in solution_names:
-                solutions_all_connectors[solution_name_iter].append(connector_id)
-        
-        # Identify deprecated solutions
-        deprecated_solutions: Set[str] = set()
-        for solution_name_iter, connector_ids in solutions_all_connectors.items():
-            if '[DEPRECATED]' in solution_name_iter.upper() or solution_name_iter.startswith('[Deprecated]'):
-                deprecated_solutions.add(solution_name_iter)
-            elif all(cid in deprecated_connectors for cid in connector_ids):
-                deprecated_solutions.add(solution_name_iter)
-        
-        # Build collection method stats - count all solutions each connector belongs to
-        collection_method_stats: Dict[str, Dict[str, any]] = defaultdict(lambda: {
-            'total_connectors': 0,
-            'active_connectors': 0,
-            'total_solutions': set(),
-            'active_solutions': set(),
-        })
-        
-        for connector_id, info in connectors_map.items():
-            method = info.get('collection_method', 'Unknown') or 'Unknown'
-            is_deprecated_connector = connector_id in deprecated_connectors
-            
-            collection_method_stats[method]['total_connectors'] += 1
-            
-            if not is_deprecated_connector:
-                collection_method_stats[method]['active_connectors'] += 1
-            
-            # Add ALL solutions this connector belongs to
-            for solution_name_iter in connector_solutions[connector_id]:
-                collection_method_stats[method]['total_solutions'].add(solution_name_iter)
-                if solution_name_iter not in deprecated_solutions:
-                    collection_method_stats[method]['active_solutions'].add(solution_name_iter)
-        
-        # Write collection method summary table
-        f.write("### Collection Methods\n\n")
-        f.write("| Collection Method | Total Connectors | Active Connectors* | Total Solutions | Active Solutions* |\n")
-        f.write("|:-----------------|:----------------:|:-----------------:|:---------------:|:----------------:|\n")
-        
-        sorted_methods = sorted(
-            collection_method_stats.items(),
-            key=lambda x: x[1]['total_connectors'],
-            reverse=True
-        )
-        
-        total_all_connectors = 0
-        total_active_connectors = 0
-        all_solutions_set: Set[str] = set()
-        all_active_solutions_set: Set[str] = set()
-        
-        for method, stats in sorted_methods:
-            total_connectors_count = stats['total_connectors']
-            active_connectors_count = stats['active_connectors']
-            total_solutions_count = len(stats['total_solutions'])
-            active_solutions_count = len(stats['active_solutions'])
-            
-            total_all_connectors += total_connectors_count
-            total_active_connectors += active_connectors_count
-            all_solutions_set.update(stats['total_solutions'])
-            all_active_solutions_set.update(stats['active_solutions'])
-            
-            f.write(f"| {method} | {total_connectors_count} | {active_connectors_count} | {total_solutions_count} | {active_solutions_count} |\n")
-        
-        f.write(f"| **Total** | **{total_all_connectors}** | **{total_active_connectors}** | **{len(all_solutions_set)}** | **{len(all_active_solutions_set)}** |\n")
-        f.write("\n")
-        f.write("*\\*Active excludes connectors and solutions marked as deprecated.*\n\n")
         
         # Organization section
         f.write("## How This Documentation is Organized\n\n")
@@ -2115,8 +2035,8 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         # Generate sections by letter
         for letter in letters:
             f.write(f"### {letter}\n\n")
-            f.write("| Solution | First Published | Publisher |\n")
-            f.write("|----------|----------------|----------|\n")
+            f.write("| | Solution | First Published | Publisher |\n")
+            f.write("|:--:|----------|----------------|----------|\n")
             
             for solution_name in sorted(by_letter[letter]):
                 connectors = solutions[solution_name]
@@ -2125,8 +2045,15 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 support_name = connectors[0].get('solution_support_name', 'N/A')
                 first_published = connectors[0].get('solution_first_publish_date', 'N/A')
                 
+                # Add logo column
+                logo_url = connectors[0].get('solution_logo_url', '')
+                if logo_url:
+                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                else:
+                    logo_cell = ''
+                
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
-                f.write(f"| {solution_link} | {first_published} | {support_name} |\n")
+                f.write(f"| {logo_cell} | {solution_link} | {first_published} | {support_name} |\n")
             
             f.write("\n")
     
@@ -2170,12 +2097,6 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write("# Microsoft Sentinel Connectors Index\n\n")
         f.write("Browse all data connectors available in Microsoft Sentinel Solutions.\n\n")
         
-        # Add coverage note
-        f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
-        f.write("GitHub repository. A small number of connectors (such as Microsoft Dataverse, ")
-        f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
-        f.write("are not managed via Solutions and are therefore not included here.\n\n")
-        
         # Add navigation
         f.write("**Browse by:**\n\n")
         f.write("- [Solutions](solutions-index.md)\n")
@@ -2183,6 +2104,12 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write("- [Tables](tables-index.md)\n")
         f.write("- [Content](content/content-index.md)\n\n")
         f.write("---\n\n")
+        
+        # Add coverage note
+        f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
+        f.write("GitHub repository. A small number of connectors (such as Microsoft Dataverse, ")
+        f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
+        f.write("are not managed via Solutions and are therefore not included here.\n\n")
         
         f.write(f"## Overview\n\n")
         f.write(f"This page lists **{len(connectors_map)} unique connectors** across all solutions.\n\n")
@@ -2212,74 +2139,54 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write("**Jump to:** ")
         letters = sorted(by_letter.keys())
         f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
+        if deprecated_connectors:
+            f.write(" | [Deprecated](#deprecated-connectors)")
         f.write("\n\n")
         
-        # Generate sections by letter
+        # Generate sections by letter with table format
         for letter in letters:
             f.write(f"## {letter}\n\n")
+            f.write("| Connector | Publisher | Collection Method | Tables | Solution |\n")
+            f.write("|:----------|:----------|:------------------|:------:|:---------|\n")
             
-            for connector_id in sorted(by_letter[letter], key=lambda cid: connectors_map[cid]['title']):
+            for connector_id in sorted(by_letter[letter], key=lambda cid: connectors_map[cid]['title'].lower()):
                 info = connectors_map[connector_id]
                 title = info['title']
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
-                collection_method = info.get('collection_method', '')
+                collection_method = info.get('collection_method', '') or '—'
                 
-                f.write(f"### [{title}](connectors/{sanitize_filename(connector_id)}.md)\n\n")
-                f.write(f"**Publisher:** {publisher}\n\n")
-                f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_filename(solution_name)}.md)\n\n")
+                connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md)"
+                solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
+                tables_count = str(len(tables)) if tables else '—'
                 
-                if collection_method:
-                    f.write(f"**Collection Method:** {collection_method}\n\n")
-                
-                if tables:
-                    f.write(f"**Tables ({len(tables)}):** ")
-                    f.write(", ".join(f"`{table}`" for table in tables))
-                    f.write("\n\n")
-                
-                description = info['description']
-                if description:
-                    # Replace <br> with newline but preserve markdown links
-                    description = description.replace('<br>', '\n')
-                    f.write(f"{description}\n\n")
-                
-                f.write(f"[→ View full connector details](connectors/{sanitize_filename(connector_id)}.md)\n\n")
-                f.write("---\n\n")
+                f.write(f"| {connector_link} | {publisher} | {collection_method} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
         
         # Add deprecated connectors section at the end
         if deprecated_connectors:
             f.write("## Deprecated Connectors\n\n")
             f.write(f"The following **{len(deprecated_connectors)} connector(s)** are deprecated:\n\n")
+            f.write("| Connector | Publisher | Collection Method | Tables | Solution |\n")
+            f.write("|:----------|:----------|:------------------|:------:|:---------|\n")
             
-            for connector_id in sorted(deprecated_connectors.keys(), key=lambda cid: deprecated_connectors[cid]['title']):
+            for connector_id in sorted(deprecated_connectors.keys(), key=lambda cid: deprecated_connectors[cid]['title'].lower()):
                 info = deprecated_connectors[connector_id]
                 title = info['title']
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
-                collection_method = info.get('collection_method', '')
+                collection_method = info.get('collection_method', '') or '—'
                 
-                f.write(f"### [{title}](connectors/{sanitize_filename(connector_id)}.md)\n\n")
-                f.write(f"**Publisher:** {publisher}\n\n")
-                f.write(f"**Solution:** [{solution_name}](solutions/{sanitize_filename(solution_name)}.md)\n\n")
+                connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md)"
+                solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
+                tables_count = str(len(tables)) if tables else '—'
                 
-                if collection_method:
-                    f.write(f"**Collection Method:** {collection_method}\n\n")
-                
-                if tables:
-                    f.write(f"**Tables ({len(tables)}):** ")
-                    f.write(", ".join(f"`{table}`" for table in tables))
-                    f.write("\n\n")
-                
-                description = info['description']
-                if description:
-                    # Replace <br> with newline but preserve markdown links
-                    description = description.replace('<br>', '\n')
-                    f.write(f"{description}\n\n")
-                
-                f.write(f"[→ View full connector details](connectors/{sanitize_filename(connector_id)}.md)\n\n")
-                f.write("---\n\n")
+                f.write(f"| {connector_link} | {publisher} | {collection_method} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
     
     print(f"Generated connectors index: {index_path}")
 
@@ -2299,6 +2206,11 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     
     index_path = output_dir / "tables-index.md"
     
+    # Helper function to check if table should be skipped (ASIM parsers/functions)
+    def is_asim_parser_table(table_name: str) -> bool:
+        """Check if table is an ASIM parser/function (starts with underscore)."""
+        return table_name.startswith('_')
+    
     # Collect all unique tables with their usage
     tables_map: Dict[str, Dict[str, any]] = defaultdict(lambda: {
         'solutions': set(),
@@ -2311,7 +2223,7 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     for solution_name, connectors in solutions.items():
         for conn in connectors:
             table = conn.get('Table', '')
-            if not table:
+            if not table or is_asim_parser_table(table):
                 continue
             
             connector_id = conn.get('connector_id', '')
@@ -2329,14 +2241,14 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     # Add tables from content items (analytics rules, hunting queries, etc.)
     for solution_name, tables_info in content_table_info.items():
         for table_name, info in tables_info.items():
-            if table_name:  # Skip empty table names
+            if table_name and not is_asim_parser_table(table_name):  # Skip empty and ASIM parser tables
                 tables_map[table_name]['solutions'].add(solution_name)
                 tables_map[table_name]['content_types'].update(info.get('types', set()))
     
     # Add tables from tables_reference that aren't already in the map
     # These are reference tables that may not be actively used by solutions
     for table_name in tables_reference.keys():
-        if table_name and table_name not in tables_map:
+        if table_name and table_name not in tables_map and not is_asim_parser_table(table_name):
             tables_map[table_name]  # Initialize with defaults from defaultdict
     
     with index_path.open("w", encoding="utf-8") as f:
@@ -2656,9 +2568,14 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                         f.write(f"**In solution [{solution_name}](../solutions/{solution_filename}):**\n")
                         for item in sorted(sol_items, key=lambda x: x.get('content_name', '')):
                             # Link to content item page
-                            content_link = get_content_item_link(item, "../content/")
+                            content_link = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"- {content_link}\n")
                         f.write("\n")
+                
+                # Add footnote if any content items have status flags
+                has_unlisted = any(item.get('not_in_solution_json', 'false') == 'true' for item in table_content_items)
+                if has_unlisted:
+                    f.write("> ⚠️ Items marked with ⚠️ are not listed in their Solution JSON file. They were discovered by scanning solution folders.\n\n")
             
             # Additional reference information
             resource_types = table_ref.get('resource_types', '')
@@ -2697,7 +2614,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
 
 def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, 
                             tables_reference: Dict[str, Dict[str, str]],
-                            solutions_dir: Path = None) -> None:
+                            solutions_dir: Path = None,
+                            connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate individual connector documentation pages.
     
     Args:
@@ -2705,7 +2623,10 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
         output_dir: Output directory for documentation
         tables_reference: Dictionary of table metadata
         solutions_dir: Path to Solutions directory for reading additional markdown files
+        connectors_reference: Dictionary of connector metadata from connectors.csv (includes not_in_solution_json)
     """
+    if connectors_reference is None:
+        connectors_reference = {}
     
     connector_dir = output_dir / "connectors"
     connector_dir.mkdir(parents=True, exist_ok=True)
@@ -2732,6 +2653,9 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
         connector_path = connector_dir / f"{sanitize_anchor(connector_id)}.md"
         entries = data['entries']
         first_entry = entries[0]
+        
+        # Get additional connector info from connectors_reference (includes not_in_solution_json)
+        connector_ref = connectors_reference.get(connector_id, {})
         
         connector_title = first_entry.get('connector_title', connector_id)
         
@@ -2773,6 +2697,11 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     f.write(f"| **Connector Definition Files** | {files_list} |\n")
             
             f.write("\n")
+            
+            # Add footnote explaining "Not listed" status for connectors discovered by file scanning only
+            not_in_json = connector_ref.get('not_in_solution_json', 'false')
+            if not_in_json == 'true':
+                f.write("> ⚠️ **Not listed in Solution JSON:** This connector was discovered by scanning the solution folder but is not included in the official Solution JSON file. It may be a legacy item, under development, or excluded from the official solution package.\n\n")
             
             # Description
             description = first_entry.get('connector_description', '')
@@ -2927,8 +2856,14 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     # Get solution-level metadata from first connector entry
     metadata = connectors[0]
     
-    # Check if this solution has any connectors (connector_id will be empty for all entries if not)
-    has_connectors = any(bool(conn.get('connector_id', '').strip()) for conn in connectors)
+    # Check if this solution has any REAL connectors (not just discovered ones)
+    # A "real" connector is in the Solution JSON (not_in_solution_json != 'true')
+    has_real_connectors = any(
+        bool(conn.get('connector_id', '').strip()) and conn.get('not_in_solution_json', 'false') != 'true'
+        for conn in connectors
+    )
+    # Also check if there are any connectors at all (real or discovered)
+    has_any_connectors = any(bool(conn.get('connector_id', '').strip()) for conn in connectors)
     
     # Get release notes if available
     release_notes = None
@@ -2937,6 +2872,17 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     
     with solution_path.open("w", encoding="utf-8") as f:
         f.write(f"# {solution_name}\n\n")
+        
+        # Add logo if available
+        logo_url = metadata.get('solution_logo_url', '')
+        if logo_url:
+            f.write(f'<img src="{logo_url}" alt="{solution_name} Logo" width="75" height="75">\n\n')
+        
+        # Add description if available
+        description = metadata.get('solution_description', '')
+        if description:
+            # Description may contain markdown/HTML, write as-is
+            f.write(f"{description}\n\n")
         
         # Solution metadata section
         f.write("## Solution Information\n\n")
@@ -2973,6 +2919,15 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         if solution_folder:
             f.write(f"| **Solution Folder** | [{solution_folder}]({solution_folder}) |\n")
         
+        # Show dependencies if any
+        dependencies = metadata.get('solution_dependencies', '')
+        if dependencies:
+            # Format dependencies as a list
+            dep_list = [d.strip() for d in dependencies.split(';') if d.strip()]
+            if dep_list:
+                deps_formatted = ', '.join(dep_list)
+                f.write(f"| **Dependencies** | {deps_formatted} |\n")
+        
         f.write("\n")
         
         # Load README content for later use (added at the end like connector docs)
@@ -2981,8 +2936,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         if solutions_dir:
             readme_content, readme_github_url = get_solution_readme(solution_name, solutions_dir)
         
-        # Only include connectors section if solution has connectors
-        if not has_connectors:
+        # Only include connectors section if solution has any connectors
+        if not has_any_connectors:
             f.write("## Data Connectors\n\n")
             f.write("**This solution does not include data connectors.**\n\n")
             f.write("This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.\n\n")
@@ -3046,16 +3001,33 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 if connector_id.strip():  # Only include non-empty connector_ids
                     by_connector[connector_id].append(conn)
             
+            # Count real vs discovered connectors
+            real_connector_count = sum(1 for cid in by_connector if by_connector[cid][0].get('not_in_solution_json', 'false') != 'true')
+            discovered_connector_count = len(by_connector) - real_connector_count
+            
             # Connectors section - simple list with links to connector pages
             f.write("## Data Connectors\n\n")
-            f.write(f"This solution provides **{len(by_connector)} data connector(s)**:\n\n")
+            if real_connector_count > 0:
+                f.write(f"This solution provides **{real_connector_count} data connector(s)**")
+                if discovered_connector_count > 0:
+                    f.write(f" (plus {discovered_connector_count} discovered⚠️)")
+                f.write(":\n\n")
+            else:
+                # All connectors are discovered
+                f.write(f"This solution has **{discovered_connector_count} discovered data connector(s)⚠️** (not in Solution definition):\n\n")
             
             for connector_id in sorted(by_connector.keys()):
                 conn_entries = by_connector[connector_id]
                 first_conn = conn_entries[0]
                 connector_title = first_conn.get('connector_title', connector_id)
                 connector_link = f"[{connector_title}](../connectors/{sanitize_filename(connector_id)}.md)"
-                f.write(f"- {connector_link}\n")
+                not_in_json = first_conn.get('not_in_solution_json', 'false')
+                warning = " ⚠️" if not_in_json == 'true' else ""
+                f.write(f"- {connector_link}{warning}\n")
+            
+            # Add footnote if there are any discovered connectors
+            if discovered_connector_count > 0:
+                f.write(f"\n*⚠️ Discovered connector - found in solution folder but not listed in Solution JSON definition.*\n")
             
             f.write("\n")
         
@@ -3184,7 +3156,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
                             # Link to content item page
-                            name_display = get_content_item_link(item, "../content/")
+                            name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"| {name_display} | {severity} | {tactics} | {tables_str} |\n")
                         f.write("\n")
                     
@@ -3198,7 +3170,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             status_display = status.replace('_', ' ').title()
                             desc = item.get('content_description', '')[:150] + '...' if len(item.get('content_description', '')) > 150 else item.get('content_description', '') or '-'
                             # Link to content item page
-                            name_display = get_content_item_link(item, "../content/")
+                            name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"| {name_display} | {status_display} | {desc} |\n")
                         f.write("\n")
                         
@@ -3213,7 +3185,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
                             # Link to content item page
-                            name_display = get_content_item_link(item, "../content/")
+                            name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"| {name_display} | {tactics} | {tables_str} |\n")
                         f.write("\n")
                     
@@ -3227,7 +3199,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             status_display = status.replace('_', ' ').title()
                             desc = item.get('content_description', '')[:150] + '...' if len(item.get('content_description', '')) > 150 else item.get('content_description', '') or '-'
                             # Link to content item page
-                            name_display = get_content_item_link(item, "../content/")
+                            name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"| {name_display} | {status_display} | {desc} |\n")
                         f.write("\n")
                 else:
@@ -3242,7 +3214,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
                             # Link to content item page
-                            name_display = get_content_item_link(item, "../content/")
+                            name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"| {name_display} | {tables_str} |\n")
                         f.write("\n")
                     else:
@@ -3255,9 +3227,15 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_with_usage(tables_with_usage)
                             # Link to content item page
-                            name_display = get_content_item_link(item, "../content/")
+                            name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
                             f.write(f"| {name_display} | {desc} | {tables_str} |\n")
                         f.write("\n")
+            
+            # Add footnotes if any content items have status flags
+            has_unlisted_items = any(item.get('not_in_solution_json', 'false') == 'true' for item in content_items)
+            
+            if has_unlisted_items:
+                f.write("> ⚠️ Items marked with ⚠️ are not listed in the Solution JSON file. They were discovered by scanning the solution folder and may be legacy items, under development, or excluded from the official solution package.\n\n")
         
         # Additional Information section (from overrides)
         additional_info = get_doc_override('solution', solution_name, 'additional_information')
@@ -3309,13 +3287,18 @@ def generate_docs_readme(
     connectors_count: int,
     tables_count: int,
     content_count: int,
-    content_items_by_solution: Dict[str, List[Dict[str, str]]]
+    content_items_by_solution: Dict[str, List[Dict[str, str]]],
+    solutions: Dict[str, List[Dict[str, str]]] = None,
+    tables_in_solutions: int = None
 ) -> None:
     """
     Generate the README.md file for the documentation folder with current statistics
     and relative links that work both locally and on GitHub.
     """
     from datetime import datetime
+    
+    if solutions is None:
+        solutions = {}
     
     # Count content items by type
     content_by_type: Dict[str, int] = {}
@@ -3332,7 +3315,86 @@ def generate_docs_readme(
         'workbook': 'Workbooks',
         'parser': 'Parsers',
         'watchlist': 'Watchlists',
+        'summary_rule': 'Summary Rules',
     }
+    
+    # Compute solution and connector statistics
+    solutions_with_connectors = 0
+    all_connector_ids: Set[str] = set()
+    all_discovered_connector_ids: Set[str] = set()
+    connectors_map: Dict[str, Dict[str, any]] = {}
+    connector_solutions: Dict[str, Set[str]] = defaultdict(set)
+    
+    for solution_name, connectors in solutions.items():
+        has_connectors = False
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if connector_id:
+                has_connectors = True
+                not_in_json = conn.get('not_in_solution_json', 'false')
+                if not_in_json == 'true':
+                    all_discovered_connector_ids.add(connector_id)
+                else:
+                    all_connector_ids.add(connector_id)
+                
+                # Track solutions per connector
+                connector_solutions[connector_id].add(solution_name)
+                
+                if connector_id not in connectors_map:
+                    connectors_map[connector_id] = {
+                        'title': conn.get('connector_title', connector_id),
+                        'collection_method': conn.get('collection_method', ''),
+                    }
+        if has_connectors:
+            solutions_with_connectors += 1
+    
+    # Count solutions with content
+    solutions_with_content = len([s for s in content_items_by_solution if content_items_by_solution[s]])
+    
+    # Separate deprecated and active connectors
+    deprecated_connectors = {}
+    active_connectors_map = {}
+    for connector_id, info in connectors_map.items():
+        title = info['title']
+        if '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]'):
+            deprecated_connectors[connector_id] = info
+        else:
+            active_connectors_map[connector_id] = info
+    
+    # Identify deprecated solutions
+    solutions_all_connectors: Dict[str, List[str]] = defaultdict(list)
+    for connector_id, solution_names in connector_solutions.items():
+        for sol_name in solution_names:
+            solutions_all_connectors[sol_name].append(connector_id)
+    
+    deprecated_solutions: Set[str] = set()
+    for sol_name, connector_ids in solutions_all_connectors.items():
+        if '[DEPRECATED]' in sol_name.upper() or sol_name.startswith('[Deprecated]'):
+            deprecated_solutions.add(sol_name)
+        elif all(cid in deprecated_connectors for cid in connector_ids):
+            deprecated_solutions.add(sol_name)
+    
+    # Build collection method stats
+    collection_method_stats: Dict[str, Dict[str, any]] = defaultdict(lambda: {
+        'total_connectors': 0,
+        'active_connectors': 0,
+        'total_solutions': set(),
+        'active_solutions': set(),
+    })
+    
+    for connector_id, info in connectors_map.items():
+        method = info.get('collection_method', 'Unknown') or 'Unknown'
+        is_deprecated_connector = connector_id in deprecated_connectors
+        
+        collection_method_stats[method]['total_connectors'] += 1
+        
+        if not is_deprecated_connector:
+            collection_method_stats[method]['active_connectors'] += 1
+        
+        for sol_name in connector_solutions[connector_id]:
+            collection_method_stats[method]['total_solutions'].add(sol_name)
+            if sol_name not in deprecated_solutions:
+                collection_method_stats[method]['active_solutions'].add(sol_name)
     
     readme_path = output_dir / "readme.md"
     
@@ -3350,22 +3412,71 @@ def generate_docs_readme(
         f.write(f"| [Content Index](content/content-index.md) | Browse all {content_count} content items |\n")
         f.write("\n")
         
-        f.write("## Documentation Statistics\n\n")
-        f.write("| Category | Count |\n")
-        f.write("|:---------|------:|\n")
-        f.write(f"| Solutions | {solutions_count:,} |\n")
-        f.write(f"| Data Connectors | {connectors_count:,} |\n")
-        f.write(f"| Log Tables | {tables_count:,} |\n")
-        f.write(f"| Content Items | {content_count:,} |\n")
+        # Quick Statistics table (moved from solutions-index)
+        f.write("## Quick Statistics\n\n")
+        f.write("| Metric | Count |\n")
+        f.write("|--------|-------|\n")
+        f.write(f"| Total Solutions | {len(solutions)} |\n")
+        if solutions_with_connectors > 0:
+            f.write(f"| Solutions with Connectors | {solutions_with_connectors} ({100*solutions_with_connectors//len(solutions)}%) |\n")
+        f.write(f"| Unique Connectors | {len(all_connector_ids)} |\n")
+        if all_discovered_connector_ids:
+            f.write(f"| Discovered Connectors⚠️ | {len(all_discovered_connector_ids)} |\n")
+        if tables_in_solutions:
+            f.write(f"| Tables Used by Solutions | {tables_in_solutions} |\n")
+        else:
+            f.write(f"| Total Tables | {tables_count} |\n")
+        f.write(f"| Content Items | {content_count} |\n")
+        f.write(f"| Solutions with Content | {solutions_with_content} ({100*solutions_with_content//max(len(solutions), 1)}%) |\n")
+        if tables_in_solutions and tables_count > tables_in_solutions:
+            f.write(f"\n*Note: {tables_count} total tables are documented, including {tables_count - tables_in_solutions} additional tables referenced by content items or from the Azure Monitor reference.*\n")
+        if all_discovered_connector_ids:
+            f.write(f"\n*⚠️ Discovered connectors are found in solution folders but not listed in Solution JSON definitions.*\n")
         f.write("\n")
         
-        f.write("### Content Items by Type\n\n")
+        # Collection Methods table (moved from solutions-index)
+        if collection_method_stats:
+            f.write("## Collection Methods\n\n")
+            f.write("| Collection Method | Total Connectors | Active Connectors* | Total Solutions | Active Solutions* |\n")
+            f.write("|:-----------------|:----------------:|:-----------------:|:---------------:|:----------------:|\n")
+            
+            sorted_methods = sorted(
+                collection_method_stats.items(),
+                key=lambda x: x[1]['total_connectors'],
+                reverse=True
+            )
+            
+            total_all_connectors = 0
+            total_active_connectors = 0
+            all_solutions_set: Set[str] = set()
+            all_active_solutions_set: Set[str] = set()
+            
+            for method, stats in sorted_methods:
+                total_connectors_count = stats['total_connectors']
+                active_connectors_count = stats['active_connectors']
+                total_solutions_count = len(stats['total_solutions'])
+                active_solutions_count = len(stats['active_solutions'])
+                
+                total_all_connectors += total_connectors_count
+                total_active_connectors += active_connectors_count
+                all_solutions_set.update(stats['total_solutions'])
+                all_active_solutions_set.update(stats['active_solutions'])
+                
+                f.write(f"| {method} | {total_connectors_count} | {active_connectors_count} | {total_solutions_count} | {active_solutions_count} |\n")
+            
+            f.write(f"| **Total** | **{total_all_connectors}** | **{total_active_connectors}** | **{len(all_solutions_set)}** | **{len(all_active_solutions_set)}** |\n")
+            f.write("\n")
+            f.write("*\\*Active excludes connectors and solutions marked as deprecated.*\n\n")
+        
+        # Content Items by Type
+        f.write("## Content Items by Type\n\n")
         f.write("| Type | Count |\n")
         f.write("|:-----|------:|\n")
-        for content_type in ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist']:
+        for content_type in ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist', 'summary_rule']:
             count = content_by_type.get(content_type, 0)
-            display_name = content_type_display.get(content_type, content_type.replace('_', ' ').title())
-            f.write(f"| {display_name} | {count:,} |\n")
+            if count > 0:
+                display_name = content_type_display.get(content_type, content_type.replace('_', ' ').title())
+                f.write(f"| {display_name} | {count:,} |\n")
         f.write("\n")
         
         f.write("## Directory Structure\n\n")
@@ -3383,7 +3494,7 @@ def generate_docs_readme(
         
         f.write("## Source\n\n")
         f.write("This documentation is generated from the [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) repository ")
-        f.write("using the Solutions Analyzer tool.\n\n")
+        f.write("using the [Solutions Analyzer](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Solutions%20Analyzer) tool.\n\n")
         
         f.write("### Generating Documentation\n\n")
         f.write("To regenerate this documentation:\n\n")
@@ -3394,7 +3505,7 @@ def generate_docs_readme(
         f.write("```\n\n")
         
         f.write("---\n\n")
-        f.write(f"*Generated by Solutions Analyzer v5.0 - {datetime.now().strftime('%B %Y')}*\n")
+        f.write(f"*Generated by Solutions Analyzer v6.0 - {datetime.now().strftime('%B %Y')}*\n")
     
     print(f"Generated readme: {readme_path}")
 
@@ -3455,6 +3566,12 @@ def main() -> None:
         type=Path,
         default=Path(__file__).parent / "content_tables_mapping.csv",
         help="Path to content-to-tables mapping CSV file (default: content_tables_mapping.csv)",
+    )
+    parser.add_argument(
+        "--solutions-csv",
+        type=Path,
+        default=Path(__file__).parent / "solutions.csv",
+        help="Path to solutions CSV file with logo/description (default: solutions.csv)",
     )
     parser.add_argument(
         "--overrides-csv",
@@ -3554,6 +3671,20 @@ def main() -> None:
     else:
         print(f"Warning: Overrides CSV not found: {args.overrides_csv}")
     
+    # Load solutions CSV for logo, description, author, version info
+    solutions_reference: Dict[str, Dict[str, str]] = {}
+    if args.solutions_csv.exists():
+        print(f"Reading {args.solutions_csv}...")
+        with args.solutions_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                solution_name = row.get('solution_name', '')
+                if solution_name:
+                    solutions_reference[solution_name] = row
+        print(f"Loaded {len(solutions_reference)} solutions from solutions CSV")
+    else:
+        print(f"Warning: Solutions CSV not found: {args.solutions_csv}")
+    
     # Load connectors CSV for collection method info
     connectors_reference: Dict[str, Dict[str, str]] = {}
     if args.connectors_csv.exists():
@@ -3645,6 +3776,18 @@ def main() -> None:
             row['event_vendor'] = connectors_reference[connector_id].get('event_vendor', '')
             row['event_product'] = connectors_reference[connector_id].get('event_product', '')
             row['event_vendor_product_by_table'] = connectors_reference[connector_id].get('event_vendor_product_by_table', '')
+            row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
+    
+    # Enrich rows with logo/description/author/version/dependencies from solutions CSV
+    for row in rows:
+        solution_name = row.get('solution_name', '')
+        if solution_name and solution_name in solutions_reference:
+            sol_info = solutions_reference[solution_name]
+            row['solution_logo_url'] = sol_info.get('solution_logo_url', '')
+            row['solution_description'] = sol_info.get('solution_description', '')
+            row['solution_author_name'] = sol_info.get('solution_author_name', '')
+            row['solution_version'] = sol_info.get('solution_version', '')
+            row['solution_dependencies'] = sol_info.get('solution_dependencies', '')
     
     print(f"Loaded {len(rows)} rows")
     
@@ -3684,7 +3827,7 @@ def main() -> None:
     generate_content_index(content_items_by_solution, args.output_dir)
     
     # Generate individual connector pages
-    generate_connector_pages(by_solution, args.output_dir, tables_reference, solutions_dir)
+    generate_connector_pages(by_solution, args.output_dir, tables_reference, solutions_dir, connectors_reference)
     
     # Generate individual solution pages
     for solution_name, connectors in sorted(by_solution.items()):
@@ -3716,7 +3859,9 @@ def main() -> None:
         connectors_count=len(all_connector_ids),
         tables_count=table_pages_count,
         content_count=content_pages_count,
-        content_items_by_solution=content_items_by_solution
+        content_items_by_solution=content_items_by_solution,
+        solutions=by_solution,
+        tables_in_solutions=tables_in_solutions
     )
 
     print(f"\nDocumentation generated successfully in: {args.output_dir}")
