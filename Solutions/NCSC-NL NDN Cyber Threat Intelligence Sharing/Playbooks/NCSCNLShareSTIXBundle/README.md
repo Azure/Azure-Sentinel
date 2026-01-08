@@ -25,14 +25,14 @@ This playbook is inspired on the previous *ACSC* codecase and is enhanced with a
     * TAXII Server Url
     * TAXII Server API Key
     * Collection ID
-    * Orgnization (ID)
-    * Organization STIX Identity
+    * Organization Name
+    * Organization ID (UUID)
     * Microsoft Sentinel Workspace
     * Tag for indicators to be exported
     * Tag for indicators after export completion
     * Default TLP Label
 3. Optional you can set the following parameters:
-    * Include Sighting Object (default is true)
+    * Include Sighting Object (default is yes)
     * TAXII Server Username (default is using API Key)
     * TAXII Server Password (default is using API Key)
 
