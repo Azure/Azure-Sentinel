@@ -2703,6 +2703,12 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             if not_in_json == 'true':
                 f.write("> ⚠️ **Not listed in Solution JSON:** This connector was discovered by scanning the solution folder but is not included in the official Solution JSON file. It may be a legacy item, under development, or excluded from the official solution package.\n\n")
             
+            # Additional Information section (from overrides) - placed early for visibility
+            additional_info = get_doc_override('connector', connector_id, 'additional_information')
+            if additional_info:
+                f.write("## Additional Information\n\n")
+                f.write(f"{additional_info}\n\n")
+            
             # Description
             description = first_entry.get('connector_description', '')
             if description:
@@ -2778,12 +2784,6 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 f.write("> ⚠️ **Note**: These instructions were automatically generated from the connector's user interface definition file using AI and may not be fully accurate. Please verify all configuration steps in the Microsoft Sentinel portal.\n\n")
                 formatted_instructions = format_instruction_steps(instruction_steps)
                 f.write(f"{formatted_instructions}\n\n")
-            
-            # Additional Information section (from overrides)
-            additional_info = get_doc_override('connector', connector_id, 'additional_information')
-            if additional_info:
-                f.write("## Additional Information\n\n")
-                f.write(f"{additional_info}\n\n")
             
             # Additional Documentation section (from README.md files)
             if solutions_dir:
@@ -2929,6 +2929,12 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 f.write(f"| **Dependencies** | {deps_formatted} |\n")
         
         f.write("\n")
+        
+        # Additional Information section (from overrides) - placed early for visibility
+        additional_info = get_doc_override('solution', solution_name, 'additional_information')
+        if additional_info:
+            f.write("## Additional Information\n\n")
+            f.write(f"{additional_info}\n\n")
         
         # Load README content for later use (added at the end like connector docs)
         readme_content = None
@@ -3236,12 +3242,6 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             
             if has_unlisted_items:
                 f.write("> ⚠️ Items marked with ⚠️ are not listed in the Solution JSON file. They were discovered by scanning the solution folder and may be legacy items, under development, or excluded from the official solution package.\n\n")
-        
-        # Additional Information section (from overrides)
-        additional_info = get_doc_override('solution', solution_name, 'additional_information')
-        if additional_info:
-            f.write("## Additional Information\n\n")
-            f.write(f"{additional_info}\n\n")
         
         # Additional Documentation section (from README.md files) - similar to connector docs
         if readme_content:
