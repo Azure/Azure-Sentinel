@@ -1,7 +1,7 @@
 # RiskIQ-Base
 
 ## Overview
-This playbook creates a shared API Connection for all RiskIQ playbooks to leverage. This eases the configuration process for a user during deployment of the RiskIQ solution. In time, this base playbook may be extended to set more functionality. You will need your API credentials (email/secret) when configuring this playbook. Those can be found on your [account settings](https://community.riskiq.com/settings) page. For enterprise customers, it's preferred to use the "organization" credential pair, not the user. If you have trouble accessing your account or your credentials contact your account representative (support[@]riskiq.com).
+This playbook creates a shared API Connection for all RiskIQ playbooks to leverage. This eases the configuration process for a user during deployment of the RiskIQ solution. In time, this base playbook may be extended to set more functionality. You will need your API credentials (email/secret) when configuring this playbook. Those can be found on your account settings page. For enterprise customers, it's preferred to use the "organization" credential pair, not the user. If you have trouble accessing your account or your credentials contact your account representative (support[@]riskiq.com).
 
 ## Deployment
 
