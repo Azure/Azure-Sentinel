@@ -49,7 +49,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             next_token = req_body.get('NextToken')
             max_results = req_body.get('MaxResults')
     
-
     logging.info(f'Parsed Parameters - Filters: {filters}, Aggregators: {aggregators}, ResultAttributes: {result_attributes}, NextToken: {next_token}, MaxResults: {max_results}')
     # Set parameter dictionary based on the request parameters
     kwargs = {}
