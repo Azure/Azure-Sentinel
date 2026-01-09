@@ -1,5 +1,7 @@
 # Microsoft Defender for Office 365 Detection Details Report – Configuration Guide 
 
+> ⚠️ **ARCHIVED**: This solution is no longer actively maintained. Please refer to the current Microsoft Defender for Office 365 tools in the parent directory for up-to-date solutions.
+
 ## Contents
 
 [Overview](#overview)<br/>
@@ -11,6 +13,15 @@
 ## Overview
 
 These templates will give you an example how to build a Microsoft Defender for Office 365 custom report using Power BI. This way you can visualize Microsoft Defender for Office 365 (MDO) data based on your organization needs. 
+
+## Template Files
+
+This archived solution includes the following Power BI template files:
+
+| Template File | Description |
+|---------------|-------------|
+| `MDO Detection Details Report - v1.22 (Sentinel,LogAnalytics).pbit` | Template for Log Analytics/Sentinel data source |
+| `MDO Detection Details Report v2.3.1(legacy).pbit` | Template for M365D Hunting API data source (legacy API) |
 
 Sentinel/Log Analytics version:
 * Requires the Defender XDR connector in Sentinel for the EmailEvents, EmailPostDeliveryEvents, EmailUrlInfo, UrlClickEvents and CloudAppEvents tables as described here: [Connect data from Microsoft Defender XDR to Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender?tabs=MDO#connect-events) or a custom solution to push the data into a Log Analytics workspace
