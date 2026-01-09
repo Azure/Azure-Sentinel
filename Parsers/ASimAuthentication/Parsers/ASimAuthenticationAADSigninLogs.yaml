@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM parser for Microsoft Entra ID interactive sign-in logs
-  Version: '0.3.2'
-  LastUpdated: 19 Mar 2024
+  Version: '0.4.0'
+  LastUpdated: Jan 08, 2026
 Product:
   Name: Microsoft Entra ID
 Normalization:
   Schema: Authentication
-  Version: '0.1.0'
+  Version: '0.1.3'
 References:
 - Title: Using functions
   Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
@@ -56,56 +56,108 @@ ParserQuery: |
     'Member', 'Regular',
     '',''
   ];
-  let parser=(disabled:bool=false){
-  SigninLogs 
-  | where not(disabled)
-  | extend
-      EventCount                 = int(1),
-      EventEndTime               = TimeGenerated,
-      EventOriginalResultDetails = coalesce(ResultDescription, ResultType),
-      EventProduct               = 'Entra ID',
-      EventResult                = iff (ResultType ==0, 'Success', 'Failure'),
-      EventSchemaVersion         = '0.1.0',
-      EventStartTime             = TimeGenerated,
-      EventSubType               = 'Interactive',
-      EventType                  = 'Logon',
-      EventVendor                = 'Microsoft',
-      Location                   = todynamic(LocationDetails),
-      SrcHostname             = tostring(DeviceDetail.displayName),
-      SrcDvcId                   = tostring(DeviceDetail.deviceId),
-      SrcIpAddr                  = IPAddress,
-      SrcDvcOs                   = tostring(DeviceDetail.operatingSystem),
-      TargetUserIdType           = 'EntraID',
-      TargetUsernameType         = 'UPN'
-  | extend
-      SrcGeoCity        = tostring(Location.city),
-      SrcGeoCountry     = tostring(Location.countryOrRegion),
-      SrcGeoLatitude    = toreal(Location.geoCoordinates.latitude),
-      SrcGeoLongitude   = toreal(Location.geoCoordinates.longitude)
-   | lookup FailedReason on ResultType
-   | project-rename
-       EventOriginalUid = Id,
-       EventUid         = _ItemId,
-       HttpUserAgent    = UserAgent,
-       LogonMethod      = AuthenticationRequirement,
-       TargetAppId      = ResourceIdentity,
-       TargetAppName    = ResourceDisplayName,
-       TargetSessionId  = CorrelationId,
-       TargetUserId     = UserId,
-       TargetUsername   = UserPrincipalName
-    //
+  let TargetAppType = datatable (TargetOriginalAppType: string, TargetAppType: string) [
+    'Mobile Apps and Desktop clients', 'Process',
+    'Browser', 'Service',
+    'Authenticated STMP', 'CSP',
+    'Exchange Active Sync', 'CSP',
+    'Other', 'Other',
+    'Unknown', 'Other'
+  ];
+  let parser=(disabled:bool=false) {
+    SigninLogs
+    | where not(disabled)
+    | extend
+        EventCount = int(1),
+        EventEndTime = TimeGenerated,
+        EventOriginalResultDetails = coalesce(ResultDescription, ResultType),
+        EventProduct = 'Entra ID',
+        EventResult = iff (ResultType == 0, 'Success', 'Failure'),
+        EventSchema = 'Authentication',
+        EventSchemaVersion = '0.1.3',
+        EventStartTime = TimeGenerated,
+        EventSubType = 'Interactive',
+        EventType = 'Logon',
+        EventVendor = 'Microsoft',
+        Type = 'SigninLogs',
+        Location = todynamic(LocationDetails),
+        SrcHostname = tostring(DeviceDetail.displayName),
+        SrcDvcId = tostring(DeviceDetail.deviceId),
+        SrcDvcIdType = "",
+        SrcIpAddr = IPAddress,
+        SrcDvcOs = tostring(DeviceDetail.operatingSystem),
+        TargetUserIdType = 'AADID',
+        TargetUsernameType = 'UPN',
+        LogonMethod = coalesce(AuthenticationMethodsUsed, AuthenticationRequirement)
+    | extend
+        SrcDvcIdType = iif(isempty(SrcDvcId), "", "MDEId"),
+        SrcGeoCity = tostring(Location.city),
+        SrcGeoCountry = tostring(Location.countryOrRegion),
+        SrcGeoLatitude = toreal(Location.geoCoordinates.latitude),
+        SrcGeoLongitude = toreal(Location.geoCoordinates.longitude)
+    | lookup FailedReason on ResultType
+    | project-rename
+        EventOriginalUid = Id,
+        HttpUserAgent    = UserAgent,
+        TargetAppId      = AppId,
+        TargetAppName    = AppDisplayName,
+        TargetSessionId  = CorrelationId,
+        TargetUserId     = UserId,
+        TargetUsername   = UserPrincipalName,
+        TargetOriginalAppType = ClientAppUsed
+    | lookup TargetAppType on TargetOriginalAppType
+    | extend EventUid = column_ifexists("_ItemId", "")
     | lookup UserTypeLookup on UserType
-    | project-away UserType
     // ** Aliases
     | extend 
+        Application     = TargetAppName,
+        IpAddr          = SrcIpAddr,
         Dvc             = EventVendor,
         LogonTarget     = TargetAppName,
-        User            = TargetUsername,
-      // -- Entity identifier explicit aliases
-        TargetUserAadId = TargetUserId,
-        TargetUserUpn   = TargetUsername
-    };
-    parser  
-    (
-        disabled = disabled
-    )
+        User            = TargetUsername
+    | project
+      TimeGenerated,
+      EventSchema,
+      Type,
+      EventVendor,
+      EventProduct,
+      EventCount,
+      EventSchemaVersion,
+      EventResult,
+      EventOriginalResultDetails,
+      EventStartTime,
+      EventEndTime,
+      EventType,
+      Application,
+      IpAddr,
+      SrcDvcId,
+      SrcDvcIdType,
+      SrcHostname,
+      SrcDvcOs,
+      TargetUsernameType,
+      TargetUserIdType,
+      SrcIpAddr,
+      LogonMethod,
+      SrcGeoCity,
+      SrcGeoCountry,
+      SrcGeoLatitude,
+      SrcGeoLongitude,
+      EventOriginalUid,
+      EventUid,
+      HttpUserAgent,
+      TargetSessionId,
+      TargetUserId,
+      TargetUsername,
+      TargetAppId,
+      TargetAppName,
+      TargetAppType,
+      TargetOriginalAppType,
+      TargetUserType,
+      User,
+      LogonTarget,
+      Dvc
+  };
+  parser  
+  (
+      disabled = disabled
+  )
