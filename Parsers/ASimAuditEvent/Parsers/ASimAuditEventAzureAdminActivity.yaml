@@ -1,12 +1,12 @@
 Parser:
   Title: Audit Event ASIM parser for Azure administrative activity
-  Version: '0.2'
-  LastUpdated: Feb 19 2022
+  Version: '0.3.0'
+  LastUpdated: Jan 09, 2026
 Product:
   Name: Microsoft Azure
 Normalization:
   Schema: AuditEvent
-  Version: '0.1.0'
+  Version: '0.1.2'
 References:
 - Title: ASIM Audit Event Schema
   Link: https://aka.ms/ASimAuditEventDoc
@@ -22,7 +22,7 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser=(disabled:bool=false){
-     let AzureActivityOperationLookup = datatable (op:string, EventType:string) 
+    let AzureActivityOperationLookup = datatable (op:string, AzureEventType:string) 
     [
       'ACTION', 'Execute',
       'WRITE', 'Set',
@@ -74,10 +74,9 @@ ParserQuery: |
         "Failed","Unauthorized","Failure","Unauthorized",
         "Cancel","","Failure","Cancelled"
     ];
-    AzureActivity 
+    AzureActivity
     | where not(disabled)
     | where CategoryValue == "Administrative"
-    | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource
     | project-rename 
         Operation = OperationNameValue,
         SrcIpAddr = CallerIpAddress,
@@ -85,12 +84,13 @@ ParserQuery: |
         ActorSessionId = CorrelationId,
         EventOriginalType = CategoryValue
     | extend
+        Type = "AzureActivity",
         EventCount = int(1),
         EventStartTime = TimeGenerated, 
         EventEndTime= TimeGenerated,
         EventProduct = 'Azure',
         EventVendor = 'Microsoft',
-        EventSchemaVersion = '0.1.0',
+        EventSchemaVersion = '0.1.2',
         EventSchema = 'AuditEvent',
         ObjectType = "Cloud Resource",
         TargetAppName = "Azure",
@@ -105,9 +105,8 @@ ParserQuery: |
     | extend 
         ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
     | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
-    | extend EventResult = iff(EventResult == "", "Other", EventResult)
+    | extend EventResult = iff(EventResult == "", "NA", EventResult)
     | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
-    | project-away ActivityStatus*, ActivitySubstatus*
     // --
     // Calculate Actor
     | extend 
@@ -119,7 +118,6 @@ ParserQuery: |
         ActorUserId = iff (ActorUsernameType != "UPN", Caller, "")
     | extend
         ActorUserIdType = iff  (ActorUserId != "", "AADID", "")
-    | project-away Caller
     // --
     // Calculate Object
     | extend 
@@ -130,15 +128,13 @@ ParserQuery: |
             entity != "", entity,
             strcat ("/subscriptions/", SubscriptionId, "/resourceGroups/", ResourceGroup, "/providers/", ResourceProviderValue, "/",resource, iff (entity_name != "", strcat("/", entity_name), ""))
         )
-    | project-away entity, resource,entity_name, _SubscriptionId, SubscriptionId, ResourceGroup, ResourceProviderValue
     // --
     // Calculate EventType
     | extend op = toupper(tostring(split(Operation,"/")[-1]))
     | lookup AzureActivityOperationLookup on op
-    | extend EventType = iff (EventType == "", "Other", EventType)
-    | project-away op
+    | extend EventType = iff (AzureEventType == "", "Other", AzureEventType)
     // Aliases
-    | extend AdditionalFields = pack_dictionary("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
+    | extend AdditionalFields = bag_pack("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
     // -- Aliases
     | extend 
         IpAddr = SrcIpAddr,
@@ -147,9 +143,43 @@ ParserQuery: |
         Dst = TargetAppName,
         Src = SrcIpAddr,
     // -- Entity identifier explicit aliases
-        ActorUserUpn = ActorUsername,
-        ActorUserAadId = ActorUserId
-    | project-away OperationName, Properties*, Authorization*, Claims*
-    // -- Properties*
+        ActorUserAadId = ActorUserId,
+        Dvc = EventProduct
+    | project
+        Type,
+        TimeGenerated,
+        Operation,
+        SrcIpAddr,
+        EventOriginalUid,
+        ActorSessionId,
+        EventOriginalType,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventProduct,
+        EventVendor,
+        EventSchemaVersion,
+        EventSchema,
+        ObjectType,
+        TargetAppName,
+        TargetAppType,
+        EventOriginalResultDetails,
+        EventResult,
+        EventResultDetails,
+        EventSeverity,
+        ActorUsernameType,
+        ActorUsername,
+        ActorUserId,
+        ActorUserIdType,
+        Object,
+        EventType,
+        AdditionalFields,
+        IpAddr,
+        User,
+        Application,
+        Dst,
+        Src,
+        ActorUserAadId,
+        Dvc
   };
   parser (disabled=disabled)
