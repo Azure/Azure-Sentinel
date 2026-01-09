@@ -1,0 +1,354 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "TacitRed - support@data443.com",
+    "comments": "Solution template for TacitRed-IOC-CrowdStrike"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@data443.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "TacitRed-IOC-CrowdStrike",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "data443.azure-sentinel-solution-tacitred-crowdstrike-ioc-automation",
+    "_solutionId": "[variables('solutionId')]",
+    "Playbooks": "Playbooks",
+    "_Playbooks": "[variables('Playbooks')]",
+    "blanks": "[replace('b', 'b', '')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "TacitRedToCrowdStrike",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2025-09-01",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "TacitRed to CrowdStrike IOC Automation Playbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "logicAppName": {
+              "type": "string",
+              "defaultValue": "pb-tacitred-to-crowdstrike"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
+            },
+            "TacitRed_ApiKey": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "TacitRed API Key for authentication"
+              }
+            },
+            "TacitRed_Domain": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional domain filter for TacitRed findings"
+              }
+            },
+            "CrowdStrike_ClientId": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "CrowdStrike OAuth2 Client ID"
+              }
+            },
+            "CrowdStrike_ClientSecret": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "CrowdStrike OAuth2 Client Secret"
+              }
+            }
+          },
+          "variables": {
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[[parameters('logicAppName')]",
+              "location": "[[parameters('location')]",
+              "properties": {
+                "state": "Enabled",
+                "parameters": {
+                  "TacitRed_ApiKey": {
+                    "value": "[[parameters('TacitRed_ApiKey')]"
+                  },
+                  "TacitRed_Domain": {
+                    "value": "[[parameters('TacitRed_Domain')]"
+                  },
+                  "CrowdStrike_ClientId": {
+                    "value": "[[parameters('CrowdStrike_ClientId')]"
+                  },
+                  "CrowdStrike_ClientSecret": {
+                    "value": "[[parameters('CrowdStrike_ClientSecret')]"
+                  }
+                },
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "TacitRed_ApiUrl": {
+                      "type": "string",
+                      "defaultValue": "https://app.tacitred.com/api/v1/findings"
+                    },
+                    "TacitRed_ApiKey": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    },
+                    "TacitRed_Domain": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    },
+                    "CrowdStrike_BaseUrl": {
+                      "type": "string",
+                      "defaultValue": "https://api.us-2.crowdstrike.com"
+                    },
+                    "CrowdStrike_TokenPath": {
+                      "type": "string",
+                      "defaultValue": "/oauth2/token"
+                    },
+                    "CrowdStrike_IocPath": {
+                      "type": "string",
+                      "defaultValue": "/iocs/entities/indicators/v1"
+                    },
+                    "CrowdStrike_ClientId": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    },
+                    "CrowdStrike_ClientSecret": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    }
+                  },
+                  "triggers": {
+                    "Recurrence": {
+                      "type": "Recurrence",
+                      "recurrence": {
+                        "frequency": "Hour",
+                        "interval": 6,
+                        "timeZone": "UTC"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Get_TacitRed_Findings": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{parameters('TacitRed_ApiUrl')}?types[]=compromised_credentials&domains[]=@{encodeUriComponent(if(empty(parameters('TacitRed_Domain')),'',parameters('TacitRed_Domain')))}&page=1&page_size=50",
+                        "headers": {
+                          "accept": "application/json",
+                          "Authorization": "@{parameters('TacitRed_ApiKey')}"
+                        }
+                      }
+                    },
+                    "Get_CrowdStrike_Token": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{parameters('CrowdStrike_BaseUrl')}@{parameters('CrowdStrike_TokenPath')}",
+                        "headers": {
+                          "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        "body": "client_id=@{parameters('CrowdStrike_ClientId')}&client_secret=@{parameters('CrowdStrike_ClientSecret')}"
+                      },
+                      "runAfter": {
+                        "Get_TacitRed_Findings": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "For_each_Finding": {
+                      "type": "Foreach",
+                      "foreach": "@body('Get_TacitRed_Findings')?['results']",
+                      "runAfter": {
+                        "Get_CrowdStrike_Token": [
+                          "Succeeded"
+                        ]
+                      },
+                      "actions": {
+                        "Post_IOC_to_CrowdStrike": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{parameters('CrowdStrike_BaseUrl')}@{parameters('CrowdStrike_IocPath')}?ignore_warnings=true",
+                            "headers": {
+                              "Content-Type": "application/json",
+                              "Authorization": "Bearer @{body('Get_CrowdStrike_Token')?['access_token']}"
+                            },
+                            "body": {
+                              "indicators": [
+                                {
+                                  "type": "domain",
+                                  "value": "@{coalesce(item()?['finding']?['supporting_data']?['site_domain'], item()?['finding']?['supporting_data']?['domain'])}",
+                                  "action": "detect",
+                                  "severity": "medium",
+                                  "description": "TacitRed: @{coalesce(item()?['finding']?['supporting_data']?['stealer'], 'Unknown Stealer')} | Credential: @{coalesce(item()?['finding']?['supporting_data']?['credential'], 'N/A')} | Compromised: @{coalesce(item()?['finding']?['supporting_data']?['date_compromised'], item()?['time'])} | Machine: @{coalesce(item()?['finding']?['supporting_data']?['machine_name'], 'Unknown')} (@{coalesce(item()?['finding']?['supporting_data']?['os'], 'Unknown OS')}) | URL: @{coalesce(item()?['finding']?['supporting_data']?['compromised_url'], 'N/A')} | UID: @{coalesce(item()?['finding']?['uid'], string(item()?['activity_id']))}",
+                                  "source": "TacitRed",
+                                  "tags": [
+                                    "compromised_credential",
+                                    "@{coalesce(item()?['finding']?['supporting_data']?['stealer'], 'stealer')}",
+                                    "tacitred"
+                                  ],
+                                  "platforms": [
+                                    "windows",
+                                    "mac",
+                                    "linux"
+                                  ],
+                                  "applied_globally": true
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": {
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2025-09-01",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "TacitRed-IOC-CrowdStrike",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "TacitRed",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Data443 Risk Mitigation, Inc.",
+                  "email": "support@data443.com",
+                  "tier": "Partner",
+                  "link": "https://www.data443.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "Playbook",
+        "displayName": "TacitRed to CrowdStrike IOC Automation",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2025-09-01",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "TacitRed-IOC-CrowdStrike",
+        "publisherDisplayName": "Data443 Risk Mitigation, Inc.",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>&#8226; Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TacitRed-IOC-CrowdStrike/ReleaseNotes.md\">Release Notes</a></p>\n<p>&#8226; There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TacitRed CrowdStrike IOC Automation solution provides example playbooks that demonstrate how to consume TacitRed threat intelligence from Microsoft Sentinel and prepare indicators for ingestion into CrowdStrike.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Workbooks/Images/Logos/tacitred_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "TacitRed-IOC-CrowdStrike",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "TacitRed",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Data443 Risk Mitigation, Inc.",
+          "email": "support@data443.com",
+          "tier": "Partner",
+          "link": "https://www.data443.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_playbookContentId1')]",
+              "version": "[variables('playbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-11-25",
+        "providers": [
+          "Data443 Risk Mitigation, Inc."
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
