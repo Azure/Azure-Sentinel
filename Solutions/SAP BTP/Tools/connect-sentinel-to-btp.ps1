@@ -47,7 +47,6 @@ param(
     [SecureString]$CfPassword,
     
     [Parameter(Mandatory=$false)]
-<<<<<<< HEAD
     [switch]$UseCredentialsFromCsv,
     
     [Parameter(Mandatory=$false)]
@@ -55,12 +54,12 @@ param(
     
     [Parameter(Mandatory=$false)]
     [string]$KeyVaultName,
-=======
+    
+    [Parameter(Mandatory=$false)]
     [int]$PollingFrequencyMinutes = 1,
     
     [Parameter(Mandatory=$false)]
     [int]$IngestDelayMinutes = 20,
->>>>>>> master
     
     [Parameter(Mandatory=$false)]
     [string]$ApiVersion = "2025-09-01"
@@ -152,6 +151,7 @@ Write-Log "=====================================================================
 Write-Log "Setting up Data Collection Endpoint (DCE) and Data Collection Rule (DCR)"
 Write-Log "======================================================================="
 
+# Single ARG query gets workspace details AND checks for existing DCE/DCR
 $workspaceDetails = Get-SentinelWorkspaceDetails `
     -SubscriptionId $SubscriptionId `
     -ResourceGroupName $ResourceGroupName `
@@ -162,49 +162,41 @@ if ($null -eq $workspaceDetails) {
     exit 1
 }
 
-# First try to find existing DCR - if found, we can get DCE from its properties
-# DCE naming pattern (e.g., ASI-{guid}) differs from DCR naming pattern
-$dcrInfo = Get-OrCreateDataCollectionRule `
-    -SubscriptionId $SubscriptionId `
-    -ResourceGroupName $ResourceGroupName `
-    -WorkspaceShortId $workspaceDetails.ShortId `
-    -WorkspaceResourceId $workspaceDetails.ResourceId `
-    -Location $workspaceDetails.Location
-
-$dceInfo = $null
-
-if ($null -ne $dcrInfo -and -not [string]::IsNullOrWhiteSpace($dcrInfo.DataCollectionEndpointId)) {
-    # DCR exists - get DCE details from the DCR's referenced endpoint
-    Write-Log "Found existing DCR with DCE reference, retrieving DCE details..."
-    $dceInfo = Get-DataCollectionEndpointById -DataCollectionEndpointId $dcrInfo.DataCollectionEndpointId
-}
-
-if ($null -eq $dceInfo) {
-    # DCE not found via DCR - create new DCE first, then create DCR
-    Write-Log "No existing DCE found, creating new Data Collection Endpoint..."
-    
-    $dceInfo = Get-OrCreateDataCollectionEndpoint `
+# Handle DCE: Use existing or create new
+if ($workspaceDetails.ExistingDCE) {
+    Write-Log "Using existing DCE" -Level "SUCCESS"
+    $dceInfo = $workspaceDetails.ExistingDCE
+} else {
+    Write-Log "Creating new DCE..."
+    $dceInfo = New-DataCollectionEndpoint `
         -SubscriptionId $SubscriptionId `
         -ResourceGroupName $ResourceGroupName `
-        -WorkspaceShortId $workspaceDetails.ShortId `
+        -WorkspaceGuid $workspaceDetails.WorkspaceGuid `
         -Location $workspaceDetails.Location
     
     if ($null -eq $dceInfo) {
-        Write-Log "Failed to get or create DCE. Exiting." -Level "ERROR"
+        Write-Log "Failed to create DCE. Exiting." -Level "ERROR"
         exit 1
     }
-    
-    # Now create DCR with the new DCE
-    $dcrInfo = Get-OrCreateDataCollectionRule `
+}
+
+# Handle DCR: Use existing or create new
+if ($workspaceDetails.ExistingDCR) {
+    Write-Log "Using existing DCR" -Level "SUCCESS"
+    $dcrInfo = $workspaceDetails.ExistingDCR
+} else {
+    Write-Log "Creating new DCR..."
+    $dcrInfo = New-DataCollectionRule `
         -SubscriptionId $SubscriptionId `
         -ResourceGroupName $ResourceGroupName `
+        -WorkspaceName $WorkspaceName `
         -WorkspaceShortId $workspaceDetails.ShortId `
         -WorkspaceResourceId $workspaceDetails.ResourceId `
         -DataCollectionEndpointId $dceInfo.ResourceId `
         -Location $workspaceDetails.Location
     
     if ($null -eq $dcrInfo) {
-        Write-Log "Failed to get or create DCR. Exiting." -Level "ERROR"
+        Write-Log "Failed to create DCR. Exiting." -Level "ERROR"
         exit 1
     }
 }
@@ -314,7 +306,7 @@ foreach ($subaccount in $subaccounts) {
         }
         
         # Get service keys for this instance and use the newest one (last in list)
-        $existingKeys = Get-CfServiceKeys -InstanceName $instanceName
+        $existingKeys = @(Get-CfServiceKeys -InstanceName $instanceName)
         
         if ($existingKeys.Count -eq 0) {
             Write-Log "No service keys found for instance '$instanceName'. Skipping." -Level "ERROR"
@@ -323,7 +315,8 @@ foreach ($subaccount in $subaccounts) {
         }
         
         # CF returns keys in creation order - use the last one (newest)
-        $keyName = $existingKeys[-1]
+        # Ensure we handle both single key (string) and multiple keys (array)
+        $keyName = if ($existingKeys.Count -eq 1) { $existingKeys[0] } else { $existingKeys[-1] }
         Write-Log "Using newest service key: $keyName" -Level "INFO"
         
         if ($existingKeys.Count -gt 1) {

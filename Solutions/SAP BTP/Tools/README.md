@@ -13,7 +13,7 @@ This directory contains PowerShell script blue prints to handle Microsoft Sentin
 
 ## Scripts
 
-- `provision-audit-to-subaccount.ps1`: Script to provision auditlog management service in SAP BTP subaccounts. It reads subaccount details from a CSV file and provisions the service using the CloudFoundry CLI.
+- `provision-audit-to-subaccounts.ps1`: Script to provision auditlog management service in SAP BTP subaccounts. It reads subaccount details from a CSV file and provisions the service using the CloudFoundry CLI.
 - `connect-sentinel-to-btp.ps1`: Main script to connect Microsoft Sentinel Solution for SAP BTP to SAP BTP subaccounts. It reads subaccount details from a CSV file, reads the SAP BTP service keys, and creates connections in the Sentinel SAP BTP data connector.
 - `export-subaccounts.ps1`: Script to enumerate SAP BTP subaccounts and export them to a CSV file for use with other scripts.
 - `BtpHelpers.ps1`: Helper functions used by the main scripts for tasks such as logging, authentication, and API interactions.
@@ -23,6 +23,7 @@ This directory contains PowerShell script blue prints to handle Microsoft Sentin
 Ensure you have the following:
 - PowerShell 7 or later
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed and authenticated
+- [BTP CLI](https://help.sap.com/docs/btp/sap-business-technology-platform/download-and-start-using-btp-cli-client) installed and in path
 - [CloudFoundry CLI](https://docs.cloudfoundry.org/cf-cli/install-go-cli.html) installed and authenticated
 - Appropriate permissions in both Azure and SAP BTP. Learn more [here](https://learn.microsoft.com/azure/sentinel/sap/deploy-sap-btp-solution#prerequisites)
 - Azure Key Vault (optional, required for split permissions workflow)
@@ -91,10 +92,10 @@ Creates or updates Sentinel connections to BTP subaccounts.
 
 ```powershell
 # Export to Key Vault (recommended)
-.\provision-audit-to-subaccount.ps1 -ExportCredentialsToKeyVault -KeyVaultName "<kv-name>"
+.\provision-audit-to-subaccounts.ps1 -ExportCredentialsToKeyVault -KeyVaultName "<kv-name>"
 
 # Export to CSV (not recommended)
-# .\provision-audit-to-subaccount.ps1 -ExportCredentialsToCsv
+# .\provision-audit-to-subaccounts.ps1 -ExportCredentialsToCsv
 ```
 
 **Step 3: Sentinel Admin - Create Sentinel connections**
@@ -141,7 +142,7 @@ It is recommend to rotate service keys for security best practices. Zero-downtim
 
 ## Full Permissions
 
-**Use this if you have access to both:** You have a single administrator (or team) with access to both SAP BTP and Microsoft Sentinel.
+**Use this if you have access to both Sentinel and BTP:** You have a single administrator (or team) with access to both SAP BTP and Microsoft Sentinel.
 
 **How it works:** Simpler workflow where the same person runs both provisioning and connection scripts directly without credential handoff via Key Vault.
 
@@ -158,7 +159,7 @@ It is recommend to rotate service keys for security best practices. Zero-downtim
 **Step 2: Provision audit services**
 
 ```powershell
-.\provision-audit-to-subaccount.ps1
+.\provision-audit-to-subaccounts.ps1
 ```
 
 **Step 3: Create Sentinel connections**

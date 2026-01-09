@@ -79,6 +79,116 @@ function Get-AzureAccessToken {
     }
 }
 
+# Generic helper function to parse CLI table output
+# Used by BTP and CF CLI commands that output tables
+function Parse-CliTableOutput {
+    param(
+        [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
+        [AllowEmptyCollection()]
+        [object[]]$Lines,
+        
+        [Parameter(Mandatory=$true)]
+        [string[]]$ColumnHeaders,  # Array of column header names in order (e.g., @('name', 'offering', 'plan'))
+        
+        [Parameter(Mandatory=$false)]
+        [string[]]$SkipPatterns = @('^Getting', '^OK$', '^No ', '^[-\s]*$'),  # Regex patterns for lines to skip
+        
+        [Parameter(Mandatory=$false)]
+        [string]$HeaderMatchPattern  # Optional regex to identify header line (e.g., '^name\s+offering')
+    )
+    
+    try {
+        $results = @()
+        $headerLine = $null
+        $columnPositions = @()
+        
+        foreach ($line in $Lines) {
+            # Skip empty lines and informational text
+            $shouldSkip = $false
+            foreach ($pattern in $SkipPatterns) {
+                if ($line -match $pattern -or [string]::IsNullOrWhiteSpace($line)) {
+                    $shouldSkip = $true
+                    break
+                }
+            }
+            if ($shouldSkip) { continue }
+            
+            # Try to find header line
+            if ($null -eq $headerLine) {
+                # Use custom pattern if provided, otherwise look for first column header
+                $isHeader = if ($HeaderMatchPattern) {
+                    $line -match $HeaderMatchPattern
+                } else {
+                    $line -match [regex]::Escape($ColumnHeaders[0])
+                }
+                
+                if ($isHeader) {
+                    $headerLine = $line
+                    
+                    # Calculate column positions by finding where each header starts
+                    for ($i = 0; $i -lt $ColumnHeaders.Count; $i++) {
+                        $headerName = $ColumnHeaders[$i]
+                        $startPos = $line.IndexOf($headerName)
+                        
+                        if ($startPos -ge 0) {
+                            # End position is where the next column starts (or end of line)
+                            $endPos = if ($i -lt $ColumnHeaders.Count - 1) {
+                                $nextHeader = $ColumnHeaders[$i + 1]
+                                $line.IndexOf($nextHeader, $startPos + $headerName.Length)
+                            } else {
+                                -1  # Last column goes to end of line
+                            }
+                            
+                            $columnPositions += @{
+                                Name = $headerName
+                                Start = $startPos
+                                End = $endPos
+                            }
+                        }
+                    }
+                    
+                    continue
+                }
+            }
+            
+            # Parse data rows using column positions
+            if ($null -ne $headerLine -and $columnPositions.Count -gt 0) {
+                $row = @{}
+                $hasData = $false
+                
+                foreach ($col in $columnPositions) {
+                    $value = ""
+                    
+                    if ($col.End -gt 0 -and $line.Length -ge $col.End) {
+                        # Column has defined end position
+                        $value = $line.Substring($col.Start, $col.End - $col.Start).Trim()
+                    }
+                    elseif ($line.Length -gt $col.Start) {
+                        # Last column or line shorter than expected
+                        $value = $line.Substring($col.Start).Trim()
+                    }
+                    
+                    $row[$col.Name] = $value
+                    if (-not [string]::IsNullOrWhiteSpace($value)) {
+                        $hasData = $true
+                    }
+                }
+                
+                if ($hasData) {
+                    $results += [PSCustomObject]$row
+                }
+            }
+        }
+        
+        return $results
+    }
+    catch {
+        Write-Log "Error parsing CLI table output: $_" -Level "ERROR"
+        return @()
+    }
+}
+
 # Function to validate and prompt for CF credentials
 function Get-CfCredentials {
     param(
@@ -402,50 +512,17 @@ function Get-CfServiceInstancesByOffering {
             return @()
         }
         
-        # Parse service instances from the output
-        # Format: name    offering    plan    bound apps    last operation    broker    upgrade available
-        $matchingInstances = @()
+        # Parse service instances using generic helper
+        $columnHeaders = @('name', 'offering', 'plan')
+        $skipPatterns = @('^Getting service', '^OK$', '^No services found', '^upgrade available', '^[-\s]*$')
         $lines = $rawOutput -split "`n"
-        $headerLine = $null
-        $nameColumnEnd = -1
-        $offeringColumnEnd = -1
         
-        foreach ($line in $lines) {
-            # Skip empty lines and informational text
-            if ([string]::IsNullOrWhiteSpace($line) -or 
-                $line -match '^Getting service' -or 
-                $line -match '^OK$' -or
-                $line -match '^No services found' -or
-                $line -match '^upgrade available') {
-                continue
-            }
-            
-            # Capture header line to determine column positions
-            if ($line -match '^name\s+offering\s+plan' -and $null -eq $headerLine) {
-                $headerLine = $line
-                # Find where "offering" and "plan" columns start
-                if ($line -match 'name\s+offering') {
-                    $nameColumnEnd = $line.IndexOf('offering')
-                    $planIndex = $line.IndexOf('plan')
-                    if ($planIndex -gt $nameColumnEnd) {
-                        $offeringColumnEnd = $planIndex
-                    }
-                }
-                continue
-            }
-            
-            # Parse data rows using fixed column positions
-            if ($null -ne $headerLine -and $nameColumnEnd -gt 0 -and $offeringColumnEnd -gt 0) {
-                if ($line.Length -ge $offeringColumnEnd) {
-                    $instanceName = $line.Substring(0, $nameColumnEnd).Trim()
-                    $offering = $line.Substring($nameColumnEnd, $offeringColumnEnd - $nameColumnEnd).Trim()
-                    
-                    if (-not [string]::IsNullOrWhiteSpace($instanceName) -and $offering -eq $ServiceOffering) {
-                        Write-Log "Found matching instance: $instanceName" -Level "SUCCESS"
-                        $matchingInstances += $instanceName
-                    }
-                }
-            }
+        $parsedServices = Parse-CliTableOutput -Lines $lines -ColumnHeaders $columnHeaders -SkipPatterns $skipPatterns -HeaderMatchPattern '^name\s+offering'
+        
+        # Filter by offering and extract names
+        $matchingInstances = $parsedServices | Where-Object { $_.offering -eq $ServiceOffering } | ForEach-Object { 
+            Write-Log "Found matching instance: $($_.name)" -Level "SUCCESS"
+            $_.name
         }
         
         if ($matchingInstances.Count -gt 0) {
@@ -480,50 +557,21 @@ function Get-CfServiceKeys {
             return @()
         }
         
-        # Parse the output to extract key names
+        # Parse service keys using generic helper
         # Output format:
         # Getting keys for service instance <name> as <user>...
         # 
         # name                     last operation     message
         # key-name-1              create succeeded
         # key-name-2              create succeeded
-        $keyNames = @()
-        $headerLine = $null
-        $nameColumnEnd = -1
+        $columnHeaders = @('name', 'last operation')
+        $skipPatterns = @('^Getting keys', '^OK$', '^[-\s]*$')
+        $lines = $rawOutput
         
-        foreach ($line in $rawOutput) {
-            # Skip empty lines and informational text
-            if ([string]::IsNullOrWhiteSpace($line) -or 
-                $line -match '^Getting keys' -or 
-                $line -match '^OK$') {
-                continue
-            }
-            
-            # Capture the header line to determine column positions
-            if ($line -match '^name\s+' -and $null -eq $headerLine) {
-                $headerLine = $line
-                # Find where "last operation" starts (end of name column)
-                # Look for the pattern "name" followed by spaces, then "last"
-                if ($line -match 'name\s+last') {
-                    $nameColumnEnd = $line.IndexOf('last')
-                }
-                continue
-            }
-            
-            # Extract key names using fixed column width from header
-            if ($null -ne $headerLine -and $nameColumnEnd -gt 0) {
-                # Extract the name column (everything before the "last operation" column)
-                if ($line.Length -ge $nameColumnEnd) {
-                    $keyName = $line.Substring(0, $nameColumnEnd).Trim()
-                } else {
-                    $keyName = $line.Trim()
-                }
-                
-                if (-not [string]::IsNullOrWhiteSpace($keyName)) {
-                    $keyNames += $keyName
-                }
-            }
-        }
+        $parsedKeys = Parse-CliTableOutput -Lines $lines -ColumnHeaders $columnHeaders -SkipPatterns $skipPatterns -HeaderMatchPattern '^name\s+'
+        
+        # Extract key names and ensure always returns array
+        $keyNames = @($parsedKeys | ForEach-Object { $_.name })
         
         if ($keyNames.Count -gt 0) {
             Write-Log "Found $($keyNames.Count) service key(s)" -Level "SUCCESS"
@@ -1371,62 +1419,34 @@ function Get-BtpSubaccounts {
             return $null
         }
         
-        # Parse table output
-        $subaccounts = @()
-        $headerLine = $null
-        $guidColumnEnd = -1
-        $displayNameColumnEnd = -1
+        # Convert output to string array and filter out exception objects
+        $lines = @($subaccountsOutput | ForEach-Object { 
+            if ($_ -is [string]) { 
+                $_ 
+            } elseif ($null -ne $_) {
+                $_.ToString()
+            }
+        } | Where-Object { 
+            $_ -notmatch 'System\.Management\.Automation' 
+        })
         
-        foreach ($line in $subaccountsOutput) {
-            if ($line -match 'guid|subaccount id') {
-                $headerLine = $line
-                # Find column positions - look for the next column header after guid/displayName
-                # Typical format: "guid" or "subaccount id"  "display name"  "subdomain"  "region"
-                $guidMatch = [regex]::Match($line, '(guid|subaccount id)\s+')
-                if ($guidMatch.Success) {
-                    $guidColumnEnd = $guidMatch.Index + $guidMatch.Length
-                    # Find where display name column ends (look for next column)
-                    $remainingLine = $line.Substring($guidColumnEnd)
-                    if ($remainingLine -match 'display name\s+') {
-                        $displayNameStart = $line.IndexOf('display name', $guidColumnEnd)
-                        $afterDisplayName = $line.Substring($displayNameStart + 'display name'.Length)
-                        if ($afterDisplayName -match '^\s+(\S+)') {
-                            $displayNameColumnEnd = $line.IndexOf($matches[1], $displayNameStart)
-                        }
-                    }
-                }
-                continue
-            }
-            
-            if ($line -match '^[-\s]+$' -or [string]::IsNullOrWhiteSpace($line)) {
-                continue
-            }
-            
-            if ($null -ne $headerLine -and $guidColumnEnd -gt 0) {
-                # Extract columns using positions or fallback to split if positions not found
-                if ($displayNameColumnEnd -gt $guidColumnEnd) {
-                    $guid = $line.Substring(0, $guidColumnEnd).Trim()
-                    $displayName = $line.Substring($guidColumnEnd, $displayNameColumnEnd - $guidColumnEnd).Trim()
-                    $region = if ($line.Length -gt $displayNameColumnEnd) { 
-                        $remaining = $line.Substring($displayNameColumnEnd).Trim()
-                        # Skip subdomain, get region (may need to parse further)
-                        ($remaining -split '\s{2,}')[1].Trim()
-                    } else { "" }
-                } else {
-                    # Fallback to split method
-                    $columns = $line -split '\s{2,}' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-                    $guid = if ($columns.Count -ge 1) { $columns[0].Trim() } else { "" }
-                    $displayName = if ($columns.Count -ge 2) { $columns[1].Trim() } else { "" }
-                    $region = if ($columns.Count -ge 4) { $columns[3].Trim() } else { "" }
-                }
-                
-                if (-not [string]::IsNullOrWhiteSpace($guid)) {
-                    $subaccounts += [PSCustomObject]@{
-                        guid = $guid
-                        displayName = $displayName
-                        region = $region
-                    }
-                }
+        if ($lines.Count -eq 0) {
+            Write-Log "No output from BTP CLI" -Level "WARNING"
+            return @()
+        }
+        
+        # Parse table output using generic helper
+        $columnHeaders = @('subaccount id:', 'display name:', 'subdomain:', 'region:')
+        $skipPatterns = @('^subaccounts in global account', '^OK$', '^[-\s]*$')
+        
+        $parsedSubaccounts = Parse-CliTableOutput -Lines $lines -ColumnHeaders $columnHeaders -SkipPatterns $skipPatterns
+        
+        # Map to expected output format
+        $subaccounts = $parsedSubaccounts | ForEach-Object {
+            [PSCustomObject]@{
+                guid = $_.'subaccount id:'
+                displayName = $_.'display name:'
+                region = $_.'region:'
             }
         }
         
@@ -1540,37 +1560,105 @@ function Get-SentinelWorkspaceDetails {
     )
     
     try {
-        Write-Log "Getting workspace details for '$WorkspaceName'..."
+        Write-Log "Getting workspace details via Azure Resource Graph for '$WorkspaceName'..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
             return $null
         }
         
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName`?api-version=2022-10-01"
-        
         $headers = @{
             "Authorization" = "Bearer $token"
             "Content-Type" = "application/json"
         }
+
+        $argQuery = @"
+Resources
+| where subscriptionId =~ '$SubscriptionId'
+| where resourceGroup =~ '$ResourceGroupName'
+| where type =~ 'Microsoft.OperationalInsights/workspaces' and name =~ '$WorkspaceName'
+| extend workspaceGuid = tostring(properties.customerId)
+| extend workspaceShortId = substring(workspaceGuid, 0, 12)
+| project workspaceId = id, workspaceLocation = location, workspaceName = name, workspaceGuid, workspaceShortId, 
+    dceName = strcat('ASI-', workspaceGuid), 
+    dcrNamePrefix = strcat('Microsoft-Sentinel-SAP-BTP-DCR-', workspaceShortId),
+    resourceName = '', resourceType = '', resourceId = '', resourceProperties = dynamic({})
+| union (
+    Resources
+    | where subscriptionId =~ '$SubscriptionId'
+    | where resourceGroup =~ '$ResourceGroupName'
+    | where type in~ ('Microsoft.Insights/dataCollectionEndpoints', 'Microsoft.Insights/dataCollectionRules')
+    | project workspaceId = '', workspaceLocation = '', workspaceName = '', workspaceGuid = '', workspaceShortId = '', 
+        dceName = '', dcrNamePrefix = '', 
+        resourceName = name, resourceType = type, resourceId = id, resourceProperties = properties
+)
+"@
         
-        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+        $argBody = @{
+            subscriptions = @($SubscriptionId)
+            query = $argQuery
+        } | ConvertTo-Json -Depth 10
         
-        # Extract a short ID from workspace ID for naming (first 12 chars of last GUID segment)
-        $workspaceId = $response.properties.customerId
-        $shortId = $workspaceId.Substring(0, [Math]::Min(12, $workspaceId.Length))
+        $uri = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+        $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $argBody
         
-        Write-Log "Workspace details retrieved successfully" -Level "SUCCESS"
-        Write-Log "  Location: $($response.location)"
-        Write-Log "  Workspace ID: $workspaceId"
-        Write-Log "  Short ID for naming: $shortId"
+        if ($null -eq $response.data -or $response.data.Count -eq 0) {
+            Write-Log "Workspace '$WorkspaceName' not found in resource group '$ResourceGroupName'" -Level "ERROR"
+            return $null
+        }
+        
+        $workspaceRow = $response.data | Where-Object { -not [string]::IsNullOrEmpty($_.workspaceName) } | Select-Object -First 1
+        
+        if ($null -eq $workspaceRow) {
+            Write-Log "Workspace '$WorkspaceName' not found in ARG response" -Level "ERROR"
+            return $null
+        }
+        
+        $dceName = $workspaceRow.dceName
+        $dcrNamePrefix = $workspaceRow.dcrNamePrefix
+        
+        $dceRow = $response.data | Where-Object { 
+            $_.resourceType -eq "microsoft.insights/datacollectionendpoints" -and $_.resourceName -eq $dceName 
+        } | Select-Object -First 1
+        
+        $dcrRow = $response.data | Where-Object { 
+            $_.resourceType -eq "microsoft.insights/datacollectionrules" -and $_.resourceName -like "$dcrNamePrefix*" 
+        } | Select-Object -First 1
+        
+        Write-Log "Workspace details retrieved successfully via ARG" -Level "SUCCESS"
+        Write-Log "  Location: $($workspaceRow.workspaceLocation)"
+        Write-Log "  Workspace GUID: $($workspaceRow.workspaceGuid)"
+        Write-Log "  Short ID for naming: $($workspaceRow.workspaceShortId)"
+        
+        $dceInfo = $null
+        if ($dceRow) {
+            Write-Log "  Found existing DCE: $($dceRow.resourceName)" -Level "SUCCESS"
+            $dceInfo = @{
+                Name = $dceRow.resourceName
+                ResourceId = $dceRow.resourceId
+                LogsIngestionEndpoint = $dceRow.resourceProperties.logsIngestion.endpoint
+            }
+        }
+        
+        $dcrInfo = $null
+        if ($dcrRow) {
+            Write-Log "  Found existing DCR: $($dcrRow.resourceName)" -Level "SUCCESS"
+            $dcrInfo = @{
+                Name = $dcrRow.resourceName
+                ResourceId = $dcrRow.resourceId
+                ImmutableId = $dcrRow.resourceProperties.immutableId
+                DataCollectionEndpointId = $dcrRow.resourceProperties.dataCollectionEndpointId
+            }
+        }
         
         return @{
-            ResourceId = $response.id
-            Location = $response.location
-            WorkspaceId = $workspaceId
-            ShortId = $shortId
+            ResourceId = $workspaceRow.workspaceId
+            Location = $workspaceRow.workspaceLocation
+            WorkspaceGuid = $workspaceRow.workspaceGuid
+            ShortId = $workspaceRow.workspaceShortId
             Name = $WorkspaceName
+            ExistingDCE = $dceInfo
+            ExistingDCR = $dcrInfo
         }
     }
     catch {
@@ -1579,24 +1667,24 @@ function Get-SentinelWorkspaceDetails {
     }
 }
 
-# Function to get or create Data Collection Endpoint for SAP BTP
-function Get-OrCreateDataCollectionEndpoint {
+# Function to create a new Data Collection Endpoint for SAP BTP
+# Only called when DCE doesn't exist (checked via ARG query upfront)
+function New-DataCollectionEndpoint {
     param(
         [Parameter(Mandatory=$true)]
         [string]$SubscriptionId,
         [Parameter(Mandatory=$true)]
         [string]$ResourceGroupName,
         [Parameter(Mandatory=$true)]
-        [string]$WorkspaceShortId,
+        [string]$WorkspaceGuid,
         [Parameter(Mandatory=$true)]
         [string]$Location
     )
     
     try {
-        # DCE naming convention matching portal: Microsoft-Sentinel-SAP-BTP-{workspace-short-id}
-        $dceName = "Microsoft-Sentinel-SAP-BTP-$WorkspaceShortId"
+        $dceName = "ASI-$WorkspaceGuid"
         
-        Write-Log "Checking for existing Data Collection Endpoint '$dceName'..."
+        Write-Log "Creating Data Collection Endpoint '$dceName'..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
@@ -1610,29 +1698,6 @@ function Get-OrCreateDataCollectionEndpoint {
         
         $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionEndpoints/$dceName`?api-version=2022-06-01"
         
-        # Try to get existing DCE
-        try {
-            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
-            
-            Write-Log "Found existing DCE '$dceName'" -Level "SUCCESS"
-            Write-Log "  Logs Ingestion Endpoint: $($response.properties.logsIngestion.endpoint)"
-            
-            return @{
-                Name = $dceName
-                ResourceId = $response.id
-                LogsIngestionEndpoint = $response.properties.logsIngestion.endpoint
-            }
-        }
-        catch {
-            if ($_.Exception.Response.StatusCode -eq 404) {
-                Write-Log "DCE '$dceName' not found, creating new one..."
-            }
-            else {
-                throw $_
-            }
-        }
-        
-        # Create new DCE
         $dceBody = @{
             location = $Location
             properties = @{
@@ -1654,14 +1719,12 @@ function Get-OrCreateDataCollectionEndpoint {
         }
     }
     catch {
-        Write-Log "Error with Data Collection Endpoint: $_" -Level "ERROR"
+        Write-Log "Error creating Data Collection Endpoint: $_" -Level "ERROR"
         return $null
     }
 }
 
 # Function to get Data Collection Endpoint by resource ID
-# DCE naming pattern differs from DCR - DCE uses patterns like ASI-{guid}
-# DCE logsIngestion URL format: https://{dce-name-lowercase}-{random}.{region}.ingest.monitor.azure.com
 function Get-DataCollectionEndpointById {
     param(
         [Parameter(Mandatory=$true)]
@@ -1685,7 +1748,6 @@ function Get-DataCollectionEndpointById {
         
         $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
         
-        # Extract DCE name from resource ID
         $dceName = $DataCollectionEndpointId.Split('/')[-1]
         
         Write-Log "Found DCE '$dceName'" -Level "SUCCESS"
@@ -1703,87 +1765,289 @@ function Get-DataCollectionEndpointById {
     }
 }
 
-# Function to load DCR template from SAPBTP_DCR.json file
-# This provides a single source of truth for the DCR schema definition
-# Note: Only returns the 'properties' section; 'location' is set by the caller at top-level
-function Get-SapBtpDcrTemplate {
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$WorkspaceResourceId,
-        [Parameter(Mandatory=$true)]
-        [string]$DataCollectionEndpointId
-    )
-    
-    try {
-        # Determine the path to SAPBTP_DCR.json relative to this script
-        $scriptDir = $PSScriptRoot
-        if ([string]::IsNullOrWhiteSpace($scriptDir)) {
-            # Fallback if $PSScriptRoot is not available (e.g., running in ISE)
-            $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-        }
-        
-        # Path to DCR template: ../Data Connectors/SAPBTPPollerConnector/SAPBTP_DCR.json
-        $dcrTemplatePath = Join-Path -Path $scriptDir -ChildPath "..\Data Connectors\SAPBTPPollerConnector\SAPBTP_DCR.json"
-        $dcrTemplatePath = [System.IO.Path]::GetFullPath($dcrTemplatePath)
-        
-        if (-not (Test-Path $dcrTemplatePath)) {
-            Write-Log "DCR template file not found at: $dcrTemplatePath" -Level "ERROR"
-            return $null
-        }
-        
-        Write-Log "Loading DCR template from: $dcrTemplatePath"
-        
-        # Read and parse the JSON template
-        $templateContent = Get-Content -Path $dcrTemplatePath -Raw
-        
-        # Replace placeholders with actual values (only properties-level placeholders)
-        # Note: {{location}} is at top-level of JSON, not in properties, so we don't replace it here
-        $templateContent = $templateContent -replace '\{\{workspaceResourceId\}\}', $WorkspaceResourceId
-        $templateContent = $templateContent -replace '\{\{dataCollectionEndpointId\}\}', $DataCollectionEndpointId
-        
-        # Parse JSON - the template is an array with one element
-        $templateArray = $templateContent | ConvertFrom-Json
-        $template = $templateArray[0]
-        
-        if ($null -eq $template -or $null -eq $template.properties) {
-            Write-Log "Invalid DCR template structure" -Level "ERROR"
-            return $null
-        }
-        
-        Write-Log "Successfully loaded DCR template" -Level "SUCCESS"
-        
-        # Return the properties section which contains the DCR configuration
-        return $template.properties
-    }
-    catch {
-        Write-Log "Error loading DCR template: $_" -Level "ERROR"
-        return $null
-    }
-}
-
-# Function to get or create Data Collection Rule for SAP BTP
-# When DCR exists, also returns the associated DCE ID from its properties
-function Get-OrCreateDataCollectionRule {
+# Function to create or verify Log Analytics table exists
+# Creates the table with schema from template if it doesn't exist
+function Get-OrCreateLogAnalyticsTable {
     param(
         [Parameter(Mandatory=$true)]
         [string]$SubscriptionId,
         [Parameter(Mandatory=$true)]
         [string]$ResourceGroupName,
         [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName,
+        [Parameter(Mandatory=$true)]
+        [string]$TableName,
+        [Parameter(Mandatory=$true)]
+        [array]$Columns
+    )
+    
+    try {
+        Write-Log "Checking if Log Analytics table '$TableName' exists..."
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $false
+        }
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/tables/$TableName`?api-version=2021-12-01-preview"
+        
+        try {
+            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+            Write-Log "Table '$TableName' already exists" -Level "SUCCESS"
+            return $true
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 404) {
+                Write-Log "Table '$TableName' not found, creating..."
+            }
+            else {
+                throw $_
+            }
+        }
+        
+        $hasTimeGenerated = $Columns | Where-Object { $_.name -eq "TimeGenerated" }
+        if (-not $hasTimeGenerated) {
+            Write-Log "Adding TimeGenerated column to table schema"
+            $Columns = @(@{ name = "TimeGenerated"; type = "datetime" }) + $Columns
+        }
+        
+        $tableBody = @{
+            properties = @{
+                schema = @{
+                    name = $TableName
+                    columns = $Columns
+                }
+            }
+        } | ConvertTo-Json -Depth 10
+        
+        Write-Log "Creating table with $($Columns.Count) columns..."
+        $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $tableBody
+        
+        Write-Log "Successfully created table '$TableName'" -Level "SUCCESS"
+        return $true
+    }
+    catch {
+        Write-Log "Error with Log Analytics table: $_" -Level "ERROR"
+        Write-Log "Table creation is required before DCR can ingest data" -Level "ERROR"
+        return $false
+    }
+}
+
+# Function to query SAP BTP Content Template API for DCR schema
+# Returns DCR configuration from the Content Hub template including columns, streams, and transforms
+function Get-SapBtpContentTemplate {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName
+    )
+    
+    try {
+        Write-Log "Querying Content Template API for SAP BTP DCR schema..."
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $null
+        }
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $contentId = "SAPBTPAuditEvents"
+        $filterExpression = "properties/contentId eq '$contentId'"
+        $encodedFilter = [System.Web.HttpUtility]::UrlEncode($filterExpression)
+        
+        $listUri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/contentTemplates?api-version=2023-11-01&`$filter=$encodedFilter"
+        
+        Write-Log "Listing content templates to find resource ID..."
+        $listResponse = Invoke-RestMethod -Uri $listUri -Method Get -Headers $headers
+        
+        if ($null -eq $listResponse.value -or $listResponse.value.Count -eq 0) {
+            Write-Log "SAP BTP content template not found. Is the solution installed from Content Hub?" -Level "WARNING"
+            return $null
+        }
+        
+        $template = $listResponse.value[0]
+        $templateResourceId = $template.id
+        Write-Log "Found template: $($template.name)"
+        
+        $getUri = "https://management.azure.com$templateResourceId`?api-version=2025-09-01"
+        
+        Write-Log "Retrieving template mainTemplate with api-version=2025-09-01..."
+        $getResponse = Invoke-RestMethod -Uri $getUri -Method Get -Headers $headers
+        
+        if ($null -eq $getResponse.properties.mainTemplate) {
+            Write-Log "Template does not contain mainTemplate" -Level "WARNING"
+            return $null
+        }
+        
+        $dcrResource = $getResponse.properties.mainTemplate.resources | Where-Object { 
+            $_.type -eq "Microsoft.Insights/dataCollectionRules" 
+        } | Select-Object -First 1
+        
+        if ($null -eq $dcrResource) {
+            Write-Log "No DCR resource found in mainTemplate" -Level "WARNING"
+            return $null
+        }
+        
+        Write-Log "Found DCR resource in template: $($dcrResource.name)" -Level "SUCCESS"
+        
+        $tableResource = $getResponse.properties.mainTemplate.resources | Where-Object { 
+            $_.type -eq "Microsoft.OperationalInsights/workspaces/tables" 
+        } | Select-Object -First 1
+        
+        if ($null -eq $tableResource) {
+            Write-Log "No table resource found in mainTemplate" -Level "WARNING"
+            return $null
+        }
+        
+        Write-Log "Found table resource in template: $($tableResource.name)" -Level "SUCCESS"
+        
+        $streamDeclarations = $dcrResource.properties.streamDeclarations
+        if ($null -eq $streamDeclarations) {
+            Write-Log "No stream declarations found in DCR template" -Level "WARNING"
+            return $null
+        }
+        
+        $streamName = ($streamDeclarations.PSObject.Properties | Select-Object -First 1).Name
+        $streamConfig = $streamDeclarations.$streamName
+        
+        $dataFlows = $dcrResource.properties.dataFlows
+        $transformKql = $null
+        if ($dataFlows -and $dataFlows.Count -gt 0) {
+            $transformKql = $dataFlows[0].transformKql
+        }
+        
+        Write-Log "  DCR Name: $($dcrResource.name)" -Level "SUCCESS"
+        Write-Log "  Stream: $streamName" -Level "SUCCESS"
+        Write-Log "  Stream Input Columns: $($streamConfig.columns.Count)" -Level "SUCCESS"
+        Write-Log "  Table Name: $($tableResource.name)" -Level "SUCCESS"
+        Write-Log "  Table Schema Columns: $($tableResource.properties.schema.columns.Count)" -Level "SUCCESS"
+        Write-Log "  Transform KQL: $(if ($transformKql) { 'Present' } else { 'None' })" -Level "SUCCESS"
+        
+        return @{
+            DcrName = $dcrResource.name
+            StreamName = $streamName
+            StreamColumns = $streamConfig.columns
+            TableName = $tableResource.name
+            TableColumns = $tableResource.properties.schema.columns
+            TransformKql = $transformKql
+            DataFlows = $dataFlows
+            StreamDeclarations = $streamDeclarations
+        }
+    }
+    catch {
+        Write-Log "Error querying Content Template API: $_" -Level "ERROR"
+        Write-Log "Cannot proceed without Content Template. Ensure SAP BTP solution is installed from Content Hub." -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to build SAP BTP DCR schema from template configuration
+# This provides the DCR schema definition based on the Content Template
+# Returns the 'properties' section for the DCR; 'location' is set by the caller at top-level
+function Get-SapBtpDcrTemplate {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceResourceId,
+        [Parameter(Mandatory=$true)]
+        [string]$DataCollectionEndpointId,
+        [Parameter(Mandatory=$true)]
+        [object]$TemplateConfig
+    )
+    
+    try {
+        Write-Log "Building SAP BTP DCR schema from template..."
+        Write-Log "  Stream: $($TemplateConfig.StreamName)"
+        Write-Log "  Stream Input Columns: $($TemplateConfig.StreamColumns.Count)"
+        
+        $streamDeclarations = @{}
+        $streamDeclarations[$TemplateConfig.StreamName] = @{
+            columns = $TemplateConfig.StreamColumns
+        }
+        
+        $dataFlows = @(
+            @{
+                streams = @($TemplateConfig.StreamName)
+                destinations = @("clv2ws1")
+                transformKql = $TemplateConfig.TransformKql
+                outputStream = $TemplateConfig.StreamName
+            }
+        )
+        
+        $dcrProperties = @{
+            dataCollectionEndpointId = $DataCollectionEndpointId
+            streamDeclarations = $streamDeclarations
+            dataSources = @{}
+            destinations = @{
+                logAnalytics = @(
+                    @{
+                        workspaceResourceId = $WorkspaceResourceId
+                        name = "clv2ws1"
+                    }
+                )
+            }
+            dataFlows = $dataFlows
+        }
+        
+        Write-Log "Successfully built DCR schema" -Level "SUCCESS"
+        return $dcrProperties
+    }
+    catch {
+        Write-Log "Error building DCR template: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to create a new Data Collection Rule for SAP BTP
+# Only called when DCR doesn't exist (checked via ARG query upfront)
+function New-DataCollectionRule {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName,
+        [Parameter(Mandatory=$true)]
         [string]$WorkspaceShortId,
         [Parameter(Mandatory=$true)]
         [string]$WorkspaceResourceId,
-        [Parameter(Mandatory=$false)]
-        [string]$DataCollectionEndpointId = "",
+        [Parameter(Mandatory=$true)]
+        [string]$DataCollectionEndpointId,
         [Parameter(Mandatory=$true)]
         [string]$Location
     )
     
     try {
-        # DCR naming convention matching portal: Microsoft-Sentinel-SAP-BTP-DCR-{workspace-short-id}
-        $dcrName = "Microsoft-Sentinel-SAP-BTP-DCR-$WorkspaceShortId"
+        $templateConfig = Get-SapBtpContentTemplate -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName -WorkspaceName $WorkspaceName
         
-        Write-Log "Checking for existing Data Collection Rule '$dcrName'..."
+        if ($null -eq $templateConfig) {
+            Write-Log "Failed to retrieve Content Template. Cannot proceed with DCR creation." -Level "ERROR"
+            Write-Log "Ensure the SAP BTP solution is installed from Content Hub." -Level "ERROR"
+            return $null
+        }
+        
+        $dcrBaseName = $templateConfig.DcrName
+        if ($dcrBaseName.StartsWith("Microsoft-Sentinel-")) {
+            $dcrName = "$dcrBaseName-$WorkspaceShortId"
+        } else {
+            $dcrName = "Microsoft-Sentinel-$dcrBaseName-$WorkspaceShortId"
+        }
+        
+        Write-Log "DCR Base Name from template: $dcrBaseName"
+        Write-Log "Full DCR Name: $dcrName"
+        Write-Log "Creating new DCR '$dcrName'..."
         
         $token = Get-AzureAccessToken
         if ($null -eq $token) {
@@ -1797,45 +2061,33 @@ function Get-OrCreateDataCollectionRule {
         
         $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionRules/$dcrName`?api-version=2022-06-01"
         
-        # Try to get existing DCR
-        try {
-            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
-            
-            Write-Log "Found existing DCR '$dcrName'" -Level "SUCCESS"
-            Write-Log "  Immutable ID: $($response.properties.immutableId)"
-            Write-Log "  DCE Reference: $($response.properties.dataCollectionEndpointId)"
-            
-            return @{
-                Name = $dcrName
-                ResourceId = $response.id
-                ImmutableId = $response.properties.immutableId
-                DataCollectionEndpointId = $response.properties.dataCollectionEndpointId
-            }
-        }
-        catch {
-            if ($_.Exception.Response.StatusCode -eq 404) {
-                Write-Log "DCR '$dcrName' not found, creating new one..."
-            }
-            else {
-                throw $_
-            }
+        $tableName = $templateConfig.TableName
+
+        if ($tableName -match '/([^/]+)$') {
+            $tableName = $matches[1]
         }
         
-        # For creating new DCR, DataCollectionEndpointId is required
-        if ([string]::IsNullOrWhiteSpace($DataCollectionEndpointId)) {
-            Write-Log "DataCollectionEndpointId is required to create a new DCR" -Level "ERROR"
+        Write-Log "Table name: $tableName"
+        
+        $tableCreated = Get-OrCreateLogAnalyticsTable `
+            -SubscriptionId $SubscriptionId `
+            -ResourceGroupName $ResourceGroupName `
+            -WorkspaceName $WorkspaceName `
+            -TableName $tableName `
+            -Columns $templateConfig.TableColumns
+        
+        if (-not $tableCreated) {
+            Write-Log "Failed to create or verify table. Cannot proceed with DCR creation." -Level "ERROR"
             return $null
         }
         
-        # Load DCR schema from SAPBTP_DCR.json to avoid duplication and ensure single source of truth
-        $dcrProperties = Get-SapBtpDcrTemplate -WorkspaceResourceId $WorkspaceResourceId -DataCollectionEndpointId $DataCollectionEndpointId
+        $dcrProperties = Get-SapBtpDcrTemplate -WorkspaceResourceId $WorkspaceResourceId -DataCollectionEndpointId $DataCollectionEndpointId -TemplateConfig $templateConfig
         
         if ($null -eq $dcrProperties) {
-            Write-Log "Failed to load DCR template from SAPBTP_DCR.json" -Level "ERROR"
+            Write-Log "Failed to build DCR schema from template" -Level "ERROR"
             return $null
         }
         
-        # Build the DCR body with location and loaded properties
         $dcrBody = @{
             location = $Location
             properties = $dcrProperties
