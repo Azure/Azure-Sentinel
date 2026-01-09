@@ -12,16 +12,16 @@ This reference documentation provides detailed information about data connectors
 
 ## Overview
 
-This documentation covers **480 solutions**, of which **335** include data connectors, providing access to **462 unique connectors** and **740 unique tables**.
+This documentation covers **482 solutions**, of which **338** include data connectors, providing access to **468 unique connectors** and **744 unique tables**.
 
 ### Quick Statistics
 
 | Metric | Count |
 |--------|-------|
-| Total Solutions | 480 |
-| Solutions with Connectors | 335 (69%) |
-| Unique Connectors | 462 |
-| Unique Tables | 740 |
+| Total Solutions | 482 |
+| Solutions with Connectors | 338 (70%) |
+| Unique Connectors | 468 |
+| Unique Tables | 744 |
 
 ## How This Documentation is Organized\n\nEach solution has its own page containing:
 
@@ -395,6 +395,7 @@ Browse solutions alphabetically:
 | [MimecastTIRegional](solutions/mimecasttiregional.md) | 2023-08-23 | Mimecast |
 | [MimecastTTP](solutions/mimecastttp.md) | 2022-02-24 | Mimecast |
 | [Minemeld](solutions/minemeld.md) | 2022-10-11 | Microsoft Corporation |
+| [Miro](solutions/miro.md) |  | Miro |
 | [MongoDBAtlas](solutions/mongodbatlas.md) | 2025-08-22 | MongoDB |
 | [MongoDBAudit](solutions/mongodbaudit.md) | 2022-06-01 | Microsoft Corporation |
 | [Morphisec](solutions/morphisec.md) | 2022-05-05 | Morphisec |
@@ -578,6 +579,7 @@ Browse solutions alphabetically:
 | [Trend Micro Deep Security](solutions/trend-micro-deep-security.md) | 2022-05-10 | Trend Micro |
 | [Trend Micro TippingPoint](solutions/trend-micro-tippingpoint.md) | 2022-05-02 | Trend Micro |
 | [Trend Micro Vision One](solutions/trend-micro-vision-one.md) | 2022-05-11 | Trend Micro |
+| [Tropico](solutions/tropico.md) | 2025-12-02 | TROPICO Security |
 
 ### U
 
