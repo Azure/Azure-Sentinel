@@ -14,6 +14,20 @@ function verlt() {
 	[ "$1" = "$2" ] && return 1 || verlte $1 $2
 }
 
+function validate_guid() {
+	local input="$1"
+	local name="$2"
+	
+	if [ -z "$input" ]; then
+		return 0
+	fi
+	
+	if ! [[ "$input" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+		echo "Invalid $name: must be a valid GUID format (e.g., 12345678-1234-1234-1234-123456789012)"
+		exit 1
+	fi
+}
+
 
 function install_package() {
 	# $1 package name
@@ -34,6 +48,7 @@ function install_package() {
 
 MODE="kvmi"
 CONFIGPATH="/opt"
+CUSTOM_CONFIGPATH=""
 RESTARTPOLICY="--restart unless-stopped"
 NETWORKSTRING=""
 CLOUD="public"
@@ -47,7 +62,8 @@ while [[ $# -gt 0 ]]; do
 		shift 2
 		;;
 	--configpath)
-		CONFIGPATH="$2"
+		CUSTOM_CONFIGPATH="$2"
+		CONFIGPATH="/opt"
 		shift 2
 		;;
 	--sdk)
@@ -61,6 +77,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--appid)
 		APPID="$2"
+		validate_guid "$APPID" "Application ID (--appid)"
 		shift 2
 		;;
   	--hostnetwork)
@@ -73,6 +90,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--tenantid)
 		TENANT="$2"
+		validate_guid "$TENANT" "Tenant ID (--tenantid)"
 		shift 2
 		;;
 	--kvaultname)
@@ -114,6 +132,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--guid)
 		GUID="$2"
+		validate_guid "$GUID" "Sentinel Agent GUID (--guid)"
 		shift 2
 		;;
 	--ui-agent)
@@ -439,7 +458,7 @@ fi
 
 #Building the container
 containername="$containername-$AGENTNAME"
-cmdparams=""
+
 sudo docker inspect "$containername" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
 	log 'Microsoft Sentinel SAP agent is already installed. The previous agent will be removed and replaced by the new version.'
@@ -447,40 +466,136 @@ if [ $? -eq 0 ]; then
 	sudo docker container rm "$containername" >/dev/null
 fi
 
-if [ $USESNC ]; then
-	cmdparams+=" -e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
+# Build base container parameters (safe, validated values only)
+cmdparams=("-e" "AZURE_KEY_VAULT_NAME=$kv" "-e" "SENTINEL_AGENT_GUID=$GUID" "--label" "Cloud=$CLOUD")
+
+# Add restart policy if not disabled
+if [ -n "$RESTARTPOLICY" ]; then
+	cmdparams+=("--restart" "unless-stopped")
 fi
 
-if [ -n "$NETWORKSTRING" ]; then
-	cmdparams+=" --label ContainerNetworkSetting=$NETWORKSTRING"
-	cmdparams+=" $NETWORKSTRING"
+# Add UI agent flag if specified
+if [ -n "$UI_AGENT" ]; then
+	cmdparams+=("-e" "UI_AGENT=True")
 fi
-
-if [ -n "$HTTPPROXY" ]; then
-	cmdparams+=" -e HTTP_PROXY=$HTTPPROXY -e HTTPS_PROXY=$HTTPPROXY -e NO_PROXY=169.254.169.254"
-fi
-
-cmdparams+=" -e AZURE_KEY_VAULT_NAME=$kv"
-cmdparams+=" -e SENTINEL_AGENT_GUID=$GUID"
-
-cmdparams+=" --label Cloud=$CLOUD"
-
-cmdparams+=" $RESTARTPOLICY"
-
-cmdparams+=" $UI_AGENT"
 
 if [ "$MODE" == "kvmi" ]; then
 	log "Creating agent and configuring to use Azure Key vault and managed VM identity"
 elif [ "$MODE" == "kvsi" ]; then
 	log "Creating agent and configuring to use Azure Key vault and application authentication"
-	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
+	cmdparams+=("-e" "AZURE_CLIENT_ID=$APPID" "-e" "AZURE_CLIENT_SECRET=$APPSECRET" "-e" "AZURE_TENANT_ID=$TENANT")
 fi
-if [ $HOSTNETWORK ]; then
-	cmdparams+=" --network host "
-fi
-sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
+
+sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system "${cmdparams[@]}" --name "$containername" $dockerimage$tagver >/dev/null
 
 log 'Created Microsoft Sentinel SAP agent '"$AGENTNAME"
+
+# Show CONFIGPATH migration instructions if custom path was specified
+if [ -n "$CUSTOM_CONFIGPATH" ]; then
+	CUSTOM_SYSFILELOC="$CUSTOM_CONFIGPATH/$containername/$AGENTNAME/"
+	log ""
+	log "═══════════════════════════════════════════════════════════════════════════"
+	log "CUSTOM CONFIGURATION PATH SPECIFIED"
+	log "═══════════════════════════════════════════════════════════════════════════"
+	log ""
+	log "You specified: --configpath $CUSTOM_CONFIGPATH"
+	log "Configuration files were created in: $sysfileloc"
+	log ""
+	log "To migrate to your custom path, run these commands:"
+	log ""
+	log "  # 1. Stop and remove the container"
+	log "  sudo docker stop \"$containername\""
+	log "  sudo docker rm \"$containername\""
+	log ""
+	log "  # 2. Move configuration files to custom location"
+	log "  sudo mkdir -p \"$CUSTOM_SYSFILELOC\""
+	log "  sudo mv \"$sysfileloc\"* \"$CUSTOM_SYSFILELOC\""
+	log "  sudo rmdir \"$sysfileloc\""
+	log ""
+	log "  # 3. Recreate container with new mount path"
+	echo -n "  sudo docker create -v \"$CUSTOM_SYSFILELOC\":/sapcon-app/sapcon/config/system"
+	echo -n " -e AZURE_KEY_VAULT_NAME=$kv"
+	echo -n " -e SENTINEL_AGENT_GUID=$GUID"
+	echo -n " --label Cloud=$CLOUD"
+	if [ -n "$RESTARTPOLICY" ]; then
+		echo -n " --restart unless-stopped"
+	fi
+	if [ -n "$UI_AGENT" ]; then
+		echo -n " -e UI_AGENT=True"
+	fi
+	if [ "$MODE" == "kvsi" ]; then
+		echo -n " -e AZURE_CLIENT_ID=\"$APPID\""
+		echo -n " -e AZURE_CLIENT_SECRET=\"$APPSECRET\""
+		echo -n " -e AZURE_TENANT_ID=\"$TENANT\""
+	fi
+	echo -n " --name \"$containername\""
+	echo " $dockerimage$tagver"
+	log ""
+	log "  # 4. Start the container"
+	log "  sudo docker start \"$containername\""
+	log ""
+	log "═══════════════════════════════════════════════════════════════════════════"
+	log ""
+fi
+
+# Show additional configuration instructions if user specified advanced options
+if [ $USESNC ] || [ -n "$HTTPPROXY" ] || [ $HOSTNETWORK ] || [ -n "$NETWORKSTRING" ]; then
+	log ""
+	log "═══════════════════════════════════════════════════════════════════════════"
+	log "ADDITIONAL CONFIGURATION REQUIRED"
+	log "═══════════════════════════════════════════════════════════════════════════"
+	log ""
+	log "You specified advanced options that require manual configuration."
+	log "Run the following commands to apply them:"
+	log ""
+	log "  sudo docker stop \"$containername\""
+	log "  sudo docker rm \"$containername\""
+	echo -n "  sudo docker create -v \"$sysfileloc\":/sapcon-app/sapcon/config/system"
+	echo -n " -e AZURE_KEY_VAULT_NAME=$kv"
+	echo -n " -e SENTINEL_AGENT_GUID=$GUID"
+	echo -n " --label Cloud=$CLOUD"
+	
+	if [ -n "$RESTARTPOLICY" ]; then
+		echo -n " --restart unless-stopped"
+	fi
+	
+	if [ -n "$UI_AGENT" ]; then
+		echo -n " -e UI_AGENT=True"
+	fi
+	
+	if [ $USESNC ]; then
+		echo -n " -e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
+	fi
+	
+	if [ -n "$HTTPPROXY" ]; then
+		echo -n " -e HTTP_PROXY='$HTTPPROXY'"
+		echo -n " -e HTTPS_PROXY='$HTTPPROXY'"
+		echo -n " -e NO_PROXY=169.254.169.254"
+	fi
+	
+	if [ -n "$NETWORKSTRING" ]; then
+		echo -n " --label ContainerNetworkSetting=$NETWORKSTRING"
+		echo -n " $NETWORKSTRING"
+	fi
+	
+	if [ $HOSTNETWORK ]; then
+		echo -n " --network host"
+	fi
+	
+	if [ "$MODE" == "kvsi" ]; then
+		echo -n " -e AZURE_CLIENT_ID=\"$APPID\""
+		echo -n " -e AZURE_CLIENT_SECRET=\"$APPSECRET\""
+		echo -n " -e AZURE_TENANT_ID=\"$TENANT\""
+	fi
+	
+	echo -n " --name \"$containername\""
+	echo " $dockerimage$tagver"
+	log "  sudo docker start \"$containername\""
+	log ""
+	log "Review the command above before executing. Verify all values are correct."
+	log "═══════════════════════════════════════════════════════════════════════════"
+	log ""
+fi
 
 sudo docker run --rm --entrypoint cat $dockerimage$tagver /sapcon-app/template/systemconfig-kickstart-blank.ini | sudo tee "$sysfileloc$sysconf" > /dev/null
 
