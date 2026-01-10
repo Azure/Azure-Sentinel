@@ -382,7 +382,7 @@ def generate_bicep_template(
     schemas: Dict[str, TableSchema],
     output_path: Optional[str] = None,
     function_prefix: str = "",
-    function_suffix: str = "_view"
+    function_suffix: str = ""
 ) -> str:
     """Generate a Bicep template for deploying table view functions."""
     
@@ -434,7 +434,7 @@ def generate_arm_template(
     schemas: Dict[str, TableSchema],
     output_path: Optional[str] = None,
     function_prefix: str = "",
-    function_suffix: str = "_view"
+    function_suffix: str = ""
 ) -> str:
     """Generate an ARM JSON template for deploying table view functions."""
     
@@ -491,7 +491,7 @@ def generate_kql_only(
     schemas: Dict[str, TableSchema],
     output_path: Optional[str] = None,
     function_prefix: str = "",
-    function_suffix: str = "_view"
+    function_suffix: str = ""
 ) -> str:
     """Generate KQL function definitions without deployment template."""
     

@@ -314,7 +314,7 @@ def generate_datatable_kql(schema: TableSchema) -> str:
 def generate_bicep_template(
     schemas: Dict[str, TableSchema],
     function_prefix: str = "",
-    function_suffix: str = "_view"
+    function_suffix: str = ""
 ) -> str:
     """Generate a Bicep template for deploying table view functions."""
     
