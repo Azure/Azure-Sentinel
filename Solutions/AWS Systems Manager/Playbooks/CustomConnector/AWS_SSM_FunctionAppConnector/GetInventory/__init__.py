@@ -39,7 +39,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (filters and aggregators and result_attributes and next_token and max_results):
         try:
-            req_body = json.loads(req.get_json())
+            req_body = req.get_json() 
         except ValueError:
             pass
         else:
@@ -49,6 +49,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             next_token = req_body.get('NextToken')
             max_results = req_body.get('MaxResults')
     
+    logging.info(f'Parsed Parameters - Filters: {filters}, Aggregators: {aggregators}, ResultAttributes: {result_attributes}, NextToken: {next_token}, MaxResults: {max_results}')
     # Set parameter dictionary based on the request parameters
     kwargs = {}
     if filters:
@@ -73,17 +74,30 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         try:
             logging.info('Calling function to get AWS SSM Inventory.')
-
+            logging.info(f'Parameters: {kwargs}')
             results = ssm_client.get_inventory(**kwargs)
 
             logging.info('Call to get AWS SSM Inventory successful.')
 
-            # Return the results
+            results = ssm_client.get_inventory(**kwargs)
+
+            base_url = req.url.split('?')[0]
+
+            response = {
+                "value": results.get("Entities", []),
+                "nextLink": (
+                    f"{base_url}?NextToken={results['NextToken']}"
+                    if results.get("NextToken")
+                    else None
+                )
+            }
+
+            logging.info(f'Response:{response}')
             return func.HttpResponse(
-                json.dumps(results),
-                headers = {"Content-Type": "application/json"},
-                status_code = 200
-            )
+                json.dumps(response),
+                headers={"Content-Type": "application/json"},
+                status_code=200
+            )                                 
             
         except ssm_client.exceptions.InternalServerError as ex:
             logging.error(f"Internal Server Exception: {str(ex)}")
