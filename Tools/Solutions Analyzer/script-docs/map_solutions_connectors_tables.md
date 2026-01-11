@@ -97,7 +97,9 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--connectors-csv` | `connectors.csv` | Path for the connectors output CSV file (with collection method) |
 | `--solutions-csv` | `solutions.csv` | Path for the solutions output CSV file |
 | `--tables-csv` | `tables.csv` | Path for the tables output CSV file (with metadata) |
+| `--content-items-csv` | `content_items.csv` | Path for the content items output CSV file |
 | `--content-tables-mapping-csv` | `content_tables_mapping.csv` | Path for the content-to-tables mapping CSV file |
+| `--asim-parsers-csv` | `asim_parsers.csv` | Path for the ASIM parsers CSV file |
 | `--tables-reference-csv` | `tables_reference.csv` | Path to tables_reference.csv for table metadata |
 | `--mapping-csv` | `solutions_connectors_tables_mapping_simplified.csv` | Path for the simplified mapping CSV file |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
@@ -235,26 +237,39 @@ Contains one row per unique connector with all connector-specific fields and col
 | `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files |
 | `collection_method` | Data collection method (see Collection Method Detection below) |
 | `collection_method_reason` | Explanation of how collection method was determined |
+| `not_in_solution_json` | `true` if connector was found by file scanning but not listed in the Solution JSON |
 
 ### 3. solutions.csv (Solution Details)
 
-Contains one row per solution with all solution-specific metadata.
+Contains one row per solution with all solution-specific metadata. Metadata is sourced from both `SolutionMetadata.json` and `Data/Solution_*.json` files.
 
 | Column | Description |
 |--------|-------------|
-| `solution_name` | Solution folder name |
+| `solution_name` | Official solution name from Solution JSON (or folder name if not available) |
 | `solution_folder` | GitHub URL to the solution's folder |
 | `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
 | `solution_offer_id` | Offer ID from SolutionMetadata.json |
 | `solution_first_publish_date` | First publication date |
 | `solution_last_publish_date` | Last update date |
-| `solution_version` | Solution version number |
+| `solution_version` | Solution version from Solution JSON or SolutionMetadata.json |
 | `solution_support_name` | Support provider name |
-| `solution_support_tier` | Support tier |
+| `solution_support_tier` | Support tier (Microsoft, Partner, Community) |
 | `solution_support_link` | Support link URL |
-| `solution_author_name` | Author name from metadata |
-| `solution_categories` | Comma-separated list of solution categories |
+| `solution_author_name` | Author name from Solution JSON (e.g., "Microsoft - support@microsoft.com") |
+| `solution_categories` | Comma-separated list of solution categories (e.g., "Security - Others, domains") |
+| `solution_readme_file` | Path to solution README file (if exists) |
+| `solution_logo_url` | URL to solution logo image extracted from HTML img tag in Solution JSON Logo field |
+| `solution_description` | Full solution description with HTML/markdown formatting from Solution JSON |
+| `solution_dependencies` | Semicolon-separated list of dependent solution IDs from `dependentDomainSolutionIds` |
 | `has_connectors` | `true` if solution has data connectors, `false` otherwise |
+
+**Solution JSON File Selection:**
+
+The script locates Solution JSON files using this algorithm:
+1. Look for `Data/` or `data/` folder within the solution directory
+2. Find files matching the pattern `Solution_*.json` (e.g., `Solution_1Password.json`)
+3. Parse the first matching JSON file to extract Name, Logo, Author, Version, and Description
+4. Logo URL is extracted from HTML img tags like `<img src="https://..." width="75px" height="75px">`
 
 ### 4. tables.csv (Table Metadata)
 
@@ -288,21 +303,74 @@ A simplified mapping file containing only key fields for linking connectors, tab
 | `connector_id` | Connector identifier |
 | `table_name` | Table name |
 
-### 6. content_tables_mapping.csv (Content Item to Table Mapping)
+### 6. content_items.csv (Content Item Details)
+
+Contains one row per content item (analytics rule, hunting query, playbook, workbook, parser, watchlist, or summary rule) found in solutions.
+
+| Column | Description |
+|--------|-------------|
+| `content_id` | Unique identifier for the content item (GUID from YAML/JSON) |
+| `content_name` | Display name of the content item |
+| `content_type` | Type: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `parser`, `watchlist`, `summary_rule` |
+| `content_description` | Description of the content item |
+| `content_file` | Filename of the source file |
+| `content_readme_file` | Path to associated README file (if exists) |
+| `content_severity` | Severity level (for analytics rules): `High`, `Medium`, `Low`, `Informational` |
+| `content_status` | Status field from content item |
+| `content_kind` | Kind/type from content item |
+| `content_tactics` | MITRE ATT&CK tactics (comma-separated) |
+| `content_techniques` | MITRE ATT&CK techniques (comma-separated) |
+| `content_required_connectors` | Required data connectors (from requiredDataConnectors field) |
+| `content_query_status` | Query status: `has_query`, `no_query`, `query_error` |
+| `content_event_vendor` | Event vendor from parser metadata |
+| `content_event_product` | Event product from parser metadata |
+| `not_in_solution_json` | `true` if item was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) |
+| `solution_name` | Solution name |
+| `solution_folder` | Solution folder path |
+
+### 7. content_tables_mapping.csv (Content Item to Table Mapping)
 
 Contains one row per unique combination of solution, content item, and table. This maps tables found in KQL queries within analytics rules, hunting queries, playbooks, workbooks, watchlists, and summary rules.
 
 | Column | Description |
 |--------|-------------|
 | `solution_name` | Solution folder name |
-| `content_type` | Type of content item: `AnalyticsRule`, `HuntingQuery`, `Playbook`, `Workbook`, `Watchlist`, `SummaryRule` |
+| `solution_folder` | Solution folder path |
+| `content_type` | Type of content item: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `watchlist`, `summary_rule` |
+| `content_id` | Content item identifier |
 | `content_name` | Name or filename of the content item |
+| `content_file` | Source filename |
 | `table_name` | Table name extracted from the KQL query |
 | `table_usage` | Usage indicator for playbooks: `read`, `write`, or `read/write`. Empty for other content types (assumed read). |
 
 > **Note:** For playbooks, `table_usage` tracks whether the playbook reads from a table (Azure Monitor query), writes to it (Send Data action), or both. Other content types are assumed to only read from tables.
 
-### 7. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 8. asim_parsers.csv (ASIM Parser Details)
+
+Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. This includes all ASIM (Advanced Security Information Model) parsers with full metadata.
+
+| Column | Description |
+|--------|-------------|
+| `parser_name` | Parser function name (e.g., `ASimDnsAzureFirewall`) |
+| `equivalent_builtin` | Built-in parser alias (e.g., `_ASim_Dns_AzureFirewall`) |
+| `schema` | ASIM schema name (e.g., `Dns`, `NetworkSession`, `Authentication`) |
+| `schema_version` | Schema version number |
+| `parser_type` | Parser type: `union` (schema-level aggregator), `source` (product-specific), or `empty` (placeholder) |
+| `parser_title` | Display title of the parser |
+| `parser_version` | Parser version number |
+| `parser_last_updated` | Last update date |
+| `product_name` | Product/source name (e.g., `Azure Firewall`, `Palo Alto`) |
+| `description` | Parser description |
+| `tables` | Semicolon-separated list of source tables used by the parser |
+| `sub_parsers` | Semicolon-separated list of sub-parser references (for union parsers) |
+| `parser_params` | Parser parameters in format `name:type=default` |
+| `references` | Semicolon-separated list of reference links |
+| `source_file` | Relative path to the source YAML file |
+| `github_url` | Full GitHub URL to the parser definition |
+
+> **Note:** ASIM parsers are loaded from YAML files in the `/Parsers/ASim*/Parsers` directories. Union parsers aggregate multiple source parsers and typically have empty `tables` but populated `sub_parsers`. Source parsers reference actual Log Analytics tables.
+
+### 9. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 
