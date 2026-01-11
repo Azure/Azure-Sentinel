@@ -1,12 +1,11 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains five complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
 
 1. **[`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md)** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
 2. **[`collect_table_info.py`](script-docs/collect_table_info.md)** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
 3. **[`generate_connector_docs.py`](script-docs/generate_connector_docs.md)** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
 4. **[`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md)** - Generates summary reports of solutions with connectors in markdown and CSV formats
-5. **[`solution_analyzer_upload_to_kusto.py`](script-docs/upload_to_kusto.md)** - Uploads the generated CSV files to Azure Data Explorer (Kusto) for querying and analysis
 
 ## Prerequisites
 
@@ -32,7 +31,7 @@ git pull origin master
 
 **Quick install for all scripts:**
 ```bash
-pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
+pip install requests json5 pyyaml
 ```
 
 ## Quick Start
@@ -42,7 +41,8 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 - [`connectors.csv`](connectors.csv) - All connectors with collection method analysis
 - [`solutions.csv`](solutions.csv) - All solutions with metadata
 - [`tables.csv`](tables.csv) - All tables with solution/connector references
-- [`content_tables_mapping.csv`](content_tables_mapping.csv) - **NEW:** Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
+- [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
+- [`asim_parsers.csv`](asim_parsers.csv) - **NEW:** All ASIM parsers with metadata, source tables, and sub-parser references
 - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
 - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor documentation
@@ -59,6 +59,7 @@ pip install requests json5 azure-kusto-data azure-kusto-ingest azure-identity
 | **Connectors Index** | [View Connectors](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
 | **Tables Index** | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
 | **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content/content-index.md) |
+| **ASIM Index** | [View ASIM Parsers](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-index.md) |
 
 You can also generate documentation locally using the `--output-dir` parameter (see below).
 
@@ -96,16 +97,16 @@ python generate_connector_docs.py --output-dir "path/to/output"
 | `--skip-input-generation` | Skip running input CSV generation scripts |
 | `--solutions <name1> <name2>` | Generate docs only for specific solutions |
 | `--solutions-dir <path>` | Path to Solutions directory for reading additional markdown |
+| `--asim-parsers-csv <path>` | Path to ASIM parsers CSV file (default: asim_parsers.csv) |
 
 ### Quick Reference
 
 | Script | Purpose | Key Output |
 |--------|---------|------------|
 | [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv` |
-| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `asim_parsers.csv` |
+| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory (including `asim/` subdirectory) |
 | [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
-| [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSVs to Kusto | Kusto tables |
 
 ## Data Flow
 
@@ -163,16 +164,34 @@ Example use cases:
 
 See [Override System documentation](script-docs/map_solutions_connectors_tables.md#override-system) for details.
 
-## Documentation
-
-- **[Solution Connector Tables Analyzer](script-docs/map_solutions_connectors_tables.md)** - Full documentation for the main mapping script
-- **[Table Reference Collector](script-docs/collect_table_info.md)** - Documentation for the Azure Monitor metadata collector
-- **[Connector Documentation Generator](script-docs/generate_connector_docs.md)** - Documentation for the markdown generator
-- **[Kusto Upload Script](script-docs/upload_to_kusto.md)** - Documentation for uploading to Azure Data Explorer
-
 ---
 
 ## Version History
+
+### v7.0 - ASIM Parser Documentation
+
+**New ASIM Parser Analysis and Documentation:**
+- Added comprehensive ASIM parser extraction from `/Parsers/ASim*/Parsers` directories
+- New `asim_parsers.csv` file containing all parser metadata:
+  - Parser name, equivalent built-in name, schema, version
+  - Parser type (union, source, empty), product name, description
+  - Source tables extracted from parser queries
+  - Sub-parser references for union parsers
+  - Parser parameters, references, and source file links
+
+**ASIM Documentation Generation:**
+- New **ASIM Index** page (`asim/asim-index.md`) grouped by schema (Dns, NetworkSession, Authentication, etc.)
+- Individual parser documentation pages with:
+  - Parser metadata (name, built-in alias, schema, version)
+  - Parser type indicators (📦 Union, 🔌 Source, ⬜ Empty)
+  - Source tables with links to table documentation
+  - Sub-parser references with navigation links
+  - Parameter documentation
+  - GitHub source file links
+
+**New Command Line Arguments:**
+- `--asim-parsers-csv` for map_solutions_connectors_tables.py
+- `--asim-parsers-csv` for generate_connector_docs.py
 
 ### v6.0 - Solution Logos, Descriptions, and Enhanced Metadata
 
@@ -242,11 +261,6 @@ Items found by scanning but not listed in Solution JSON are marked with ⚠️ i
 
 ### v4.2
 
-- Added `solution_analyzer_upload_to_kusto.py` script to upload CSV files to Azure Data Explorer (Kusto)
-  - Uses managed streaming ingestion for fast uploads (same method as ADX "Get Data" UI)
-  - Creates 6 lookup tables: table reference, connectors, tables, solutions, mapping, and full mapping
-  - Supports Azure CLI authentication via DefaultAzureCredential
-  - Includes dry-run mode for previewing changes
 - Added **override system** for customizing output field values
   - Override file uses CSV format with Entity, Pattern, Field, Value columns
   - Supports regex pattern matching (case insensitive, full match) including negative lookbehind

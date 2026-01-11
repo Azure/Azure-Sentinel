@@ -13,6 +13,7 @@ import argparse
 from urllib.parse import quote
 import json
 import re
+import shutil
 import subprocess
 import sys
 
@@ -24,24 +25,106 @@ DEFAULT_SOLUTIONS_DIR = Path(__file__).parent.parent.parent / "Solutions"
 # Internal tables are written AND read by the same solution for internal data storage
 INTERNAL_TABLES: Set[str] = set()
 
+# Global set of known ASIM parser names (built-in function names like _Im_Dns, _ASim_NetworkSession, etc.)
+# This is populated when loading asim_parsers.csv
+ASIM_PARSER_NAMES: Set[str] = set()
+
+# Global mapping from any ASIM parser identifier to its documentation filename (without .md)
+# Maps both parser_name and equivalent_builtin to the same filename
+# e.g., "imDns" -> "imdns", "_Im_Dns" -> "imdns"
+ASIM_PARSER_TO_FILENAME: Dict[str, str] = {}
+
+# Global mapping from ASIM parser identifier to product name
+# Maps both parser_name and equivalent_builtin to the product_name
+# e.g., "_Im_Dns_AzureFirewall" -> "Azure Firewall"
+ASIM_PARSER_TO_PRODUCT: Dict[str, str] = {}
+
+# Global mapping from union parser to its sub-parsers (member parsers)
+# Maps both parser_name and equivalent_builtin of union parsers to list of sub-parser equivalent_builtins
+# e.g., "_Im_Dns" -> ["_Im_Dns_AzureFirewall", "_Im_Dns_CiscoUmbrella", ...]
+ASIM_UNION_TO_SUB_PARSERS: Dict[str, List[str]] = {}
+
+# ASIM graphics files (source in graphics/ folder)
+ASIM_BADGE_LARGE_FILE = "Large ASIM badge.png"
+ASIM_LOGO_SMALL_FILE = "Small ASIM logo.png"
+
+# ASIM icon/badge HTML - using img tags to control size for proper text alignment
+# Large badge for page titles (H1 headers) - sized to match heading text (~32px)
+ASIM_BADGE_LARGE = '<img src="../images/asim-badge.png" alt="ASIM" height="32">'
+# Small logo for inline use (lists, tables, section headers) - sized to match text (~16px)
+ASIM_ICON = '<img src="../images/asim-logo-small.png" alt="ASIM" height="16">'
+# Small logo for root-level files (no ../ prefix needed)
+ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" height="16">'
+
+
+def get_asim_icon(relative_path: str = "../tables/") -> str:
+    """Get the appropriate ASIM icon HTML based on the relative path context.
+    
+    Args:
+        relative_path: The relative path being used (e.g., '../tables/' or 'tables/')
+    
+    Returns:
+        ASIM_ICON if path starts with '../', otherwise ASIM_ICON_ROOT
+    """
+    if relative_path.startswith("../"):
+        return ASIM_ICON
+    return ASIM_ICON_ROOT
+
+
+def copy_asim_images(output_dir: Path) -> None:
+    """Copy ASIM images to the output directory images folder.
+    
+    Args:
+        output_dir: Output directory for documentation
+    """
+    # Source graphics folder
+    graphics_dir = Path(__file__).parent / "graphics"
+    
+    # Destination images folder
+    images_dir = output_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Copy large badge
+    src_badge = graphics_dir / ASIM_BADGE_LARGE_FILE
+    if src_badge.exists():
+        dst_badge = images_dir / "asim-badge.png"
+        shutil.copy2(src_badge, dst_badge)
+    
+    # Copy small logo
+    src_logo = graphics_dir / ASIM_LOGO_SMALL_FILE
+    if src_logo.exists():
+        dst_logo = images_dir / "asim-logo-small.png"
+        shutil.copy2(src_logo, dst_logo)
+
+
 # Global dict for documentation overrides (additional_information, etc.)
-# Structure: {entity_type: {pattern: {field: value}}}
-DOC_OVERRIDES: Dict[str, Dict[str, Dict[str, str]]] = {
+# Structure: {entity_type: {pattern: {field: [values]}}}
+DOC_OVERRIDES: Dict[str, Dict[str, Dict[str, List[str]]]] = {
     'table': {},
     'connector': {},
     'solution': {},
 }
+
+# Global dict for solution dependency overrides
+# Structure: {"solution_pattern|dependency_id": "resolved_name"}
+DEPENDENCY_OVERRIDES: Dict[str, str] = {}
 
 
 def load_doc_overrides(overrides_path: Path) -> None:
     """Load documentation-only overrides from CSV file.
     
     CSV format: Entity,Pattern,Field,Value
-    Currently used for: additional_information
+    Currently used for: additional_information, dependency_override
     
-    Populates the global DOC_OVERRIDES dict.
+    For dependency_override:
+      - Entity: Solution
+      - Pattern: solution_pattern|dependency_id (pipe-separated)
+      - Field: dependency_override
+      - Value: The resolved name to display for the dependency
+    
+    Populates the global DOC_OVERRIDES and DEPENDENCY_OVERRIDES dicts.
     """
-    global DOC_OVERRIDES
+    global DOC_OVERRIDES, DEPENDENCY_OVERRIDES
     
     if not overrides_path.exists():
         return
@@ -55,11 +138,17 @@ def load_doc_overrides(overrides_path: Path) -> None:
                 field = row.get("Field", "").strip()
                 value = row.get("Value", "")
                 
-                # Only load doc-specific fields
-                if field != "additional_information":
+                if not entity or not pattern or not field:
                     continue
                 
-                if not entity or not pattern or not field:
+                # Handle dependency_override separately
+                if field == "dependency_override" and entity == "solution":
+                    # Pattern format: solution_pattern|dependency_id
+                    DEPENDENCY_OVERRIDES[pattern] = value
+                    continue
+                
+                # Only load doc-specific fields for DOC_OVERRIDES
+                if field != "additional_information":
                     continue
                 
                 if entity not in DOC_OVERRIDES:
@@ -68,13 +157,16 @@ def load_doc_overrides(overrides_path: Path) -> None:
                 if pattern not in DOC_OVERRIDES[entity]:
                     DOC_OVERRIDES[entity][pattern] = {}
                 
-                DOC_OVERRIDES[entity][pattern][field] = value
+                # Accumulate multiple values for the same field into a list
+                if field not in DOC_OVERRIDES[entity][pattern]:
+                    DOC_OVERRIDES[entity][pattern][field] = []
+                DOC_OVERRIDES[entity][pattern][field].append(value)
     except Exception as e:
         print(f"Warning: Could not load doc overrides from {overrides_path}: {e}")
 
 
-def get_doc_override(entity_type: str, key: str, field: str) -> Optional[str]:
-    """Get a documentation override value for an entity.
+def get_doc_override(entity_type: str, key: str, field: str) -> Optional[List[str]]:
+    """Get documentation override values for an entity.
     
     Args:
         entity_type: 'table', 'connector', or 'solution'
@@ -82,7 +174,7 @@ def get_doc_override(entity_type: str, key: str, field: str) -> Optional[str]:
         field: The field to get (e.g., 'additional_information')
     
     Returns:
-        Override value or None if not found
+        List of override values or None if not found
     """
     entity_overrides = DOC_OVERRIDES.get(entity_type.lower(), {})
     
@@ -99,6 +191,141 @@ def get_doc_override(entity_type: str, key: str, field: str) -> Optional[str]:
                     return fields[field]
     
     return None
+
+
+def get_dependency_override(solution_name: str, dependency_id: str) -> Optional[str]:
+    """Get dependency override for a specific solution and dependency ID.
+    
+    Args:
+        solution_name: The solution name to check
+        dependency_id: The dependency ID to resolve
+    
+    Returns:
+        The resolved dependency name if an override exists, None otherwise
+    """
+    for pattern, resolved_name in DEPENDENCY_OVERRIDES.items():
+        if '|' not in pattern:
+            continue
+        
+        solution_pattern, dep_id_pattern = pattern.split('|', 1)
+        
+        try:
+            # Check if solution matches the pattern
+            solution_match = re.fullmatch(solution_pattern, solution_name, re.IGNORECASE)
+            if not solution_match:
+                continue
+            
+            # Check if dependency ID matches (exact or regex)
+            dep_match = re.fullmatch(dep_id_pattern, dependency_id, re.IGNORECASE)
+            if dep_match:
+                return resolved_name
+        except re.error:
+            # Invalid regex, try exact match
+            if (solution_pattern.lower() == solution_name.lower() and 
+                dep_id_pattern.lower() == dependency_id.lower()):
+                return resolved_name
+    
+    return None
+
+
+def format_additional_info(info_list: Optional[List[str]]) -> str:
+    """Format additional information as markdown.
+    
+    Args:
+        info_list: List of additional information entries
+    
+    Returns:
+        Formatted markdown string with bullets if multiple entries
+    """
+    if not info_list:
+        return ""
+    
+    if len(info_list) == 1:
+        return info_list[0]
+    
+    # Multiple entries - format as bullet list
+    return "\n".join(f"- {item}" for item in info_list)
+
+
+def is_asim_parser(table_name: str) -> bool:
+    """
+    Check if a table name is actually an ASIM parser.
+    
+    ASIM parsers are identified by:
+    1. Being in the global ASIM_PARSER_NAMES set (from asim_parsers.csv)
+    2. Starting with underscore (like _Im_, _ASim_) - these are KQL functions
+    
+    Args:
+        table_name: The name to check
+    
+    Returns:
+        True if the name represents an ASIM parser, False otherwise
+    """
+    if not table_name:
+        return False
+    # Check if it's in the known ASIM parsers set (includes both the parser name and equivalent_builtin)
+    if table_name in ASIM_PARSER_NAMES:
+        return True
+    # Also check if it starts with underscore (ASIM parser functions)
+    if table_name.startswith('_'):
+        return True
+    return False
+
+
+def load_asim_parser_names(asim_parsers_path: Path) -> None:
+    """
+    Load ASIM parser names from CSV file into global set.
+    Loads both parser_name and equivalent_builtin columns.
+    Also builds a mapping from any parser identifier to its documentation filename.
+    Also builds a mapping from parser identifier to product name.
+    
+    The filename is generated using sanitize_filename(parser_name) - the same
+    function used when creating the actual parser documentation pages.
+    
+    Args:
+        asim_parsers_path: Path to asim_parsers.csv
+    """
+    global ASIM_PARSER_NAMES, ASIM_PARSER_TO_FILENAME, ASIM_PARSER_TO_PRODUCT, ASIM_UNION_TO_SUB_PARSERS
+    
+    if not asim_parsers_path.exists():
+        return
+    
+    try:
+        with asim_parsers_path.open("r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                parser_name = row.get('parser_name', '').strip()
+                equivalent_builtin = row.get('equivalent_builtin', '').strip()
+                product_name = row.get('product_name', '').strip()
+                
+                if parser_name:
+                    ASIM_PARSER_NAMES.add(parser_name)
+                    # Generate filename using the same function as generate_asim_parser_page
+                    filename = sanitize_filename(parser_name)
+                    ASIM_PARSER_TO_FILENAME[parser_name] = filename
+                    # Map parser_name to product
+                    if product_name:
+                        ASIM_PARSER_TO_PRODUCT[parser_name] = product_name
+                if equivalent_builtin:
+                    ASIM_PARSER_NAMES.add(equivalent_builtin)
+                    # Map equivalent_builtin to the same filename as parser_name
+                    if parser_name:
+                        filename = sanitize_filename(parser_name)
+                        ASIM_PARSER_TO_FILENAME[equivalent_builtin] = filename
+                    # Map equivalent_builtin to product
+                    if product_name:
+                        ASIM_PARSER_TO_PRODUCT[equivalent_builtin] = product_name
+                
+                # For union parsers, store the sub-parsers mapping
+                sub_parsers = row.get('sub_parsers', '').strip()
+                if sub_parsers:
+                    sub_list = [s.strip() for s in sub_parsers.split(';') if s.strip()]
+                    if parser_name:
+                        ASIM_UNION_TO_SUB_PARSERS[parser_name] = sub_list
+                    if equivalent_builtin:
+                        ASIM_UNION_TO_SUB_PARSERS[equivalent_builtin] = sub_list
+    except Exception as e:
+        print(f"Warning: Could not load ASIM parser names from {asim_parsers_path}: {e}")
 
 
 def sanitize_anchor(text: str) -> str:
@@ -269,17 +496,67 @@ def get_content_item_github_url(item: Dict[str, str], solutions_dir: Path = None
     return f"{base_url}/{encoded_solution}/{encoded_folder}/{encoded_file}"
 
 
-def format_table_link(table_name: str, relative_path: str = "../tables/") -> str:
+def get_asim_parser_filename(parser_identifier: str) -> str:
     """
-    Format a table name as a markdown link to its table page.
+    Get the documentation filename for an ASIM parser identifier.
+    
+    Looks up the filename in ASIM_PARSER_TO_FILENAME mapping. If not found,
+    tries stripping version suffix (e.g., V03) and looking up again.
+    Falls back to sanitize_filename if no mapping exists.
     
     Args:
-        table_name: The name of the table
-        relative_path: Relative path to tables directory (default: ../tables/)
+        parser_identifier: Parser name or equivalent_builtin (e.g., "imDns", "_Im_Dns")
     
     Returns:
-        Markdown formatted link like [`TableName`](../tables/tablename.md)
+        Filename without .md extension (e.g., "imdns")
     """
+    # Direct lookup
+    filename = ASIM_PARSER_TO_FILENAME.get(parser_identifier)
+    if filename:
+        return filename
+    
+    # Try stripping version suffix (e.g., _Im_NetworkSession_AWSVPCV03 -> _Im_NetworkSession_AWSVPC)
+    import re
+    stripped = re.sub(r'V\d+$', '', parser_identifier)
+    if stripped != parser_identifier:
+        filename = ASIM_PARSER_TO_FILENAME.get(stripped)
+        if filename:
+            return filename
+    
+    # Fallback: use sanitize_filename on the identifier itself
+    # This handles cases where the parser is detected but not in the CSV
+    return sanitize_filename(parser_identifier)
+
+
+def format_table_link(table_name: str, relative_path: str = "../tables/", asim_path: str = None) -> str:
+    """
+    Format a table name (or ASIM parser) as a markdown link to its documentation page.
+    
+    If the table_name is an ASIM parser, links to the ASIM parser page instead of tables page.
+    Uses get_asim_parser_filename() which consults ASIM_PARSER_TO_FILENAME mapping.
+    
+    Args:
+        table_name: The name of the table or ASIM parser
+        relative_path: Relative path to tables directory (default: ../tables/)
+        asim_path: Relative path to ASIM directory (default: derived from relative_path)
+    
+    Returns:
+        Markdown formatted link like [`TableName`](../tables/tablename.md) or
+        [`_Im_Dns`](../asim/imdns.md) for ASIM parsers
+    """
+    # Determine ASIM path based on tables path if not explicitly provided
+    if asim_path is None:
+        # Replace 'tables/' with 'asim/' in the relative path
+        if relative_path.endswith('tables/'):
+            asim_path = relative_path[:-7] + 'asim/'
+        else:
+            asim_path = relative_path.replace('/tables/', '/asim/')
+    
+    # Check if this is an ASIM parser
+    if is_asim_parser(table_name):
+        parser_filename = get_asim_parser_filename(table_name) + ".md"
+        return f"[`{table_name}`]({asim_path}{parser_filename})"
+    
     table_filename = sanitize_filename(table_name) + ".md"
     return f"[`{table_name}`]({relative_path}{table_filename})"
 
@@ -303,35 +580,44 @@ def format_tables_with_links(tables: List[str], relative_path: str = "../tables/
 def format_tables_with_usage(tables_with_usage: List[Tuple[str, str]], relative_path: str = "../tables/") -> str:
     """
     Format a list of (table_name, usage) tuples as line-separated markdown links with usage indicators.
-    Separates internal tables (written to by playbooks) from regular tables.
+    Separates ASIM parsers from regular tables and internal tables.
     
     Args:
         tables_with_usage: List of (table_name, usage) tuples where usage is 'read', 'write', or 'read/write'
         relative_path: Relative path to tables directory
     
     Returns:
-        Line-separated markdown links with usage indicators and internal tables listed separately, or '-' if no tables
+        Line-separated markdown links with usage indicators, ASIM parsers and internal tables listed separately, or '-' if no tables
     """
     if not tables_with_usage:
         return '-'
     
-    # Separate internal and regular tables
-    regular_tables = [(t, u) for t, u in tables_with_usage if t not in INTERNAL_TABLES]
+    # Separate into ASIM parsers, regular tables, and internal tables
+    asim_parsers = [(t, u) for t, u in tables_with_usage if is_asim_parser(t)]
+    regular_tables = [(t, u) for t, u in tables_with_usage if t not in INTERNAL_TABLES and not is_asim_parser(t)]
     internal_tables = [(t, u) for t, u in tables_with_usage if t in INTERNAL_TABLES]
     
-    def format_with_usage(table_name: str, usage: str) -> str:
+    # Get appropriate ASIM icon based on relative path
+    asim_icon = get_asim_icon(relative_path)
+    
+    def format_with_usage(table_name: str, usage: str, with_asim_icon: bool = False) -> str:
         link = format_table_link(table_name, relative_path)
+        prefix = f"{asim_icon} " if with_asim_icon else ""
         if usage == 'read':
-            return f"{link} *(read)*"
+            return f"{prefix}{link} *(read)*"
         elif usage == 'write':
-            return f"{link} *(write)*"
+            return f"{prefix}{link} *(write)*"
         elif usage == 'read/write':
-            return f"{link} *(read/write)*"
-        return link
+            return f"{prefix}{link} *(read/write)*"
+        return f"{prefix}{link}"
     
     result_parts = []
     
-    # Regular tables first
+    # ASIM parsers first (with icon)
+    for table_name, usage in sorted(asim_parsers, key=lambda x: x[0]):
+        result_parts.append(format_with_usage(table_name, usage, with_asim_icon=True))
+    
+    # Regular tables
     for table_name, usage in sorted(regular_tables, key=lambda x: x[0]):
         result_parts.append(format_with_usage(table_name, usage))
     
@@ -347,26 +633,33 @@ def format_tables_with_usage(tables_with_usage: List[Tuple[str, str]], relative_
 def format_tables_simple(tables_with_usage: List[Tuple[str, str]], relative_path: str = "../tables/") -> str:
     """
     Format a list of (table_name, usage) tuples as line-separated markdown links WITHOUT usage indicators.
-    Separates internal tables (written to by playbooks) from regular tables.
+    Separates ASIM parsers from regular tables and internal tables.
     
     Args:
         tables_with_usage: List of (table_name, usage) tuples - usage is ignored
         relative_path: Relative path to tables directory
     
     Returns:
-        Line-separated markdown links with internal tables listed separately, or '-' if no tables
+        Line-separated markdown links with ASIM parsers and internal tables listed separately, or '-' if no tables
     """
     if not tables_with_usage:
         return '-'
     
-    # Separate internal and regular tables
+    # Separate into ASIM parsers, regular tables, and internal tables
     table_names = sorted(set(t[0] for t in tables_with_usage))
-    regular_tables = [t for t in table_names if t not in INTERNAL_TABLES]
+    asim_parsers = [t for t in table_names if is_asim_parser(t)]
+    regular_tables = [t for t in table_names if t not in INTERNAL_TABLES and not is_asim_parser(t)]
     internal_tables = [t for t in table_names if t in INTERNAL_TABLES]
     
     result_parts = []
     
-    # Regular tables first
+    # ASIM parsers first (with icon) - use appropriate icon based on relative path
+    asim_icon = get_asim_icon(relative_path)
+    if asim_parsers:
+        for t in asim_parsers:
+            result_parts.append(f"{asim_icon} {format_table_link(t, relative_path)}")
+    
+    # Regular tables
     if regular_tables:
         result_parts.extend(format_table_link(t, relative_path) for t in regular_tables)
     
@@ -376,6 +669,127 @@ def format_tables_simple(tables_with_usage: List[Tuple[str, str]], relative_path
         result_parts.extend(format_table_link(t, relative_path) for t in internal_tables)
     
     return '<br>'.join(result_parts) if result_parts else '-'
+
+
+def get_asim_products_from_tables(tables: Set[str]) -> Set[str]:
+    """
+    Extract the set of ASIM product names from a set of table names.
+    
+    For union parsers (like _Im_Dns), looks up the products from all member parsers.
+    
+    Args:
+        tables: Set of table names (may include ASIM parsers and regular tables)
+    
+    Returns:
+        Set of unique product names from any ASIM parsers in the tables
+    """
+    products = set()
+    for table in tables:
+        if is_asim_parser(table):
+            # Check if this is a union parser with sub-parsers
+            sub_parsers = ASIM_UNION_TO_SUB_PARSERS.get(table, [])
+            if sub_parsers:
+                # For union parsers, get products from all sub-parsers
+                for sub in sub_parsers:
+                    product = ASIM_PARSER_TO_PRODUCT.get(sub, '')
+                    if product and product.lower() != 'source agnostic':
+                        products.add(product)
+            else:
+                # For source parsers, get product directly
+                product = ASIM_PARSER_TO_PRODUCT.get(table, '')
+                if product and product.lower() != 'source agnostic':
+                    products.add(product)
+    return products
+
+
+def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs) -> None:
+    """
+    Write a standardized browse section to a file.
+    
+    This centralizes browse section generation to ensure consistency across all pages.
+    All pages should include the same navigation options: Solutions, Connectors, Tables, Content, ASIM.
+    
+    Args:
+        f: File object to write to
+        page_type: Type of current page ('solutions', 'connectors', 'tables', 'content', 'asim', 
+                   'solution-page', 'connector-page', 'table-page', 'content-item-page', 'content-type', 
+                   'content-type-letter', 'content-type-letter-header', 'asim-parser', 'asim-index', 'asim-products')
+        relative_to_root: Path prefix to get from current directory to root 
+                          (e.g., "../" for pages in subdirectories, "" for root pages)
+        **kwargs: Additional parameters:
+            - solution_name: For content-item-page, the parent solution name
+            - content_type_plural: For content-item-page, the plural name of the content type
+            - content_type_slug: For content-item-page, the slug for the content type index
+            - type_name: For content-type-letter, the plural name of the content type
+            - type_slug: For content-type-letter, the slug for the content type index
+    """
+    # Define the navigation items - all pages should include all six
+    nav_items = [
+        ('Solutions', f'{relative_to_root}solutions-index.md'),
+        ('Connectors', f'{relative_to_root}connectors-index.md'),
+        ('Tables', f'{relative_to_root}tables-index.md'),
+        ('Content', f'{relative_to_root}content/content-index.md'),
+        ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md'),
+        ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md'),
+    ]
+    
+    # Determine label style based on page type
+    is_index = page_type in ('solutions', 'connectors', 'tables', 'content', 'asim-index', 'asim-products', 'content-type-letter-header')
+    label_style = "**Browse by:**" if is_index else "**Browse:**"
+    
+    f.write(f"{label_style}\n\n")
+    
+    # Add back links at the top for specific page types
+    if page_type == 'content-item-page':
+        # Content item pages have back links to the content type and solution
+        content_type_plural = kwargs.get('content_type_plural', 'Items')
+        content_type_slug = kwargs.get('content_type_slug', 'content-index')
+        solution_name = kwargs.get('solution_name', '')
+        f.write(f"- [← Back to {content_type_plural}]({content_type_slug}.md)\n")
+        if solution_name:
+            f.write(f"- [← Back to {solution_name}]({relative_to_root}solutions/{sanitize_filename(solution_name)}.md)\n")
+    elif page_type == 'content-type-letter':
+        # Content type letter pages have back links to content index and specific type index
+        type_name = kwargs.get('type_name', 'Content')
+        type_slug = kwargs.get('type_slug', 'content-index')
+        f.write("- [← Back to Content Index](content-index.md)\n")
+        f.write(f"- [← Back to {type_name}]({type_slug}.md)\n")
+    elif page_type == 'table-page':
+        f.write(f"- [← Back to Tables Index]({relative_to_root}tables-index.md)\n")
+    elif page_type == 'connector-page':
+        f.write(f"- [← Back to Connectors Index]({relative_to_root}connectors-index.md)\n")
+    elif page_type == 'solution-page':
+        f.write(f"- [← Back to Solutions Index]({relative_to_root}solutions-index.md)\n")
+    elif page_type == 'content-type':
+        f.write("- [← Back to Content Index](content-index.md)\n")
+    elif page_type == 'asim-parser':
+        # No special back link needed - ASIM Products is now in the standard nav
+        pass
+    
+    for name, path in nav_items:
+        # Mark current page with "(this page)"
+        if page_type == 'solutions' and name == 'Solutions':
+            f.write(f"- [{name}]({path}) (this page)\n")
+        elif page_type == 'connectors' and name == 'Connectors':
+            f.write(f"- [{name}]({path}) (this page)\n")
+        elif page_type == 'tables' and name == 'Tables':
+            f.write(f"- [{name}]({path}) (this page)\n")
+        elif page_type == 'content' and name == 'Content':
+            f.write(f"- [{name}]({path}) (this page)\n")
+        elif page_type == 'asim-index' and name == 'ASIM Parsers':
+            f.write(f"- [{name}]({path}) (this page)\n")
+        elif page_type == 'asim-products' and name == 'ASIM Products':
+            f.write(f"- [{name}]({path}) (this page)\n")
+        else:
+            f.write(f"- [{name}]({path})\n")
+    
+    # Add "All {type_name}" link for content type letter header pages
+    if page_type == 'content-type-letter-header':
+        type_name = kwargs.get('type_name', 'Content')
+        type_slug = kwargs.get('type_slug', 'content-index')
+        f.write(f"- [All {type_name}]({type_slug}.md)\n")
+    
+    f.write("\n")
 
 
 def get_release_notes(solution_name: str, solutions_dir: Path) -> Optional[str]:
@@ -1467,11 +1881,16 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
             content_key = get_content_key(content_id, content_name, solution_name)
             tables_with_usage = content_tables_mapping.get(content_key, [])
             
+            # Check if this content item uses any ASIM parsers
+            uses_asim = any(is_asim_parser(t[0]) for t in tables_with_usage) if tables_with_usage else False
+            
             # Get GitHub URL (pass solutions_dir to check which folder variant exists)
             github_url = get_content_item_github_url(item, solutions_dir)
             
             with page_path.open("w", encoding="utf-8") as f:
-                f.write(f"# {content_name}\n\n")
+                # Title with ASIM badge if applicable
+                title_prefix = f"{ASIM_BADGE_LARGE} " if uses_asim else ""
+                f.write(f"# {title_prefix}{content_name}\n\n")
                 
                 # Status banner if retired/deprecated
                 if content_query_status in ('retired', 'deprecated', 'moved_or_replaced'):
@@ -1542,29 +1961,39 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                 
                 # Tables section
                 if tables_with_usage:
-                    f.write("## Tables Used\n\n")
+                    # Separate ASIM parsers from regular tables
+                    asim_parsers_used = [(t, u) for t, u in tables_with_usage if is_asim_parser(t)]
+                    regular_tables_used = [(t, u) for t, u in tables_with_usage if not is_asim_parser(t)]
                     
-                    # For playbooks, show read/write usage
-                    if content_type == 'playbook':
-                        read_tables = [(t, u) for t, u in tables_with_usage if u == 'read']
-                        write_tables = [(t, u) for t, u in tables_with_usage if u == 'write']
-                        readwrite_tables = [(t, u) for t, u in tables_with_usage if u == 'read/write']
+                    # ASIM Parsers section
+                    if asim_parsers_used:
+                        f.write(f"## {ASIM_ICON} ASIM Parsers Used\n\n")
+                        f.write("This content item uses ASIM (Advanced Security Information Model) parsers for normalized data:\n\n")
+                        for parser, _ in sorted(set(asim_parsers_used), key=lambda x: x[0]):
+                            parser_link = format_table_link(parser, "../tables/")
+                            f.write(f"- {parser_link}\n")
+                        f.write("\n")
+                    
+                    # Regular Tables section
+                    if regular_tables_used:
+                        f.write("## Tables Used\n\n")
                         
-                        if read_tables or write_tables or readwrite_tables:
+                        # For playbooks, show read/write usage
+                        if content_type == 'playbook':
                             f.write("| Table | Usage |\n")
                             f.write("|:------|:------|\n")
-                            for table, usage in sorted(tables_with_usage, key=lambda x: x[0]):
+                            for table, usage in sorted(regular_tables_used, key=lambda x: x[0]):
                                 table_link = format_table_link(table, "../tables/")
                                 usage_display = usage if usage else 'read'
                                 f.write(f"| {table_link} | {usage_display} |\n")
                             f.write("\n")
-                    else:
-                        # For other content types, just list the tables
-                        f.write("This content item queries data from the following tables:\n\n")
-                        for table, _ in sorted(set(tables_with_usage), key=lambda x: x[0]):
-                            table_link = format_table_link(table, "../tables/")
-                            f.write(f"- {table_link}\n")
-                        f.write("\n")
+                        else:
+                            # For other content types, just list the tables
+                            f.write("This content item queries data from the following tables:\n\n")
+                            for table, _ in sorted(set(regular_tables_used), key=lambda x: x[0]):
+                                table_link = format_table_link(table, "../tables/")
+                                f.write(f"- {table_link}\n")
+                            f.write("\n")
                 
                 # Additional Documentation section for playbooks (embedded README content)
                 if content_type == 'playbook' and content_readme_file and solution_folder and solutions_dir:
@@ -1595,13 +2024,10 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                 type_slug = get_content_type_slug(content_type)
                 
                 f.write("---\n\n")
-                f.write("**Browse:**\n\n")
-                f.write(f"- [← Back to {type_plural}]({type_slug}.md)\n")
-                f.write(f"- [← Back to {solution_name}](../solutions/{sanitize_filename(solution_name)}.md)\n")
-                f.write("- [Content Index](content-index.md)\n")
-                f.write("- [Solutions Index](../solutions-index.md)\n")
-                f.write("- [Connectors Index](../connectors-index.md)\n")
-                f.write("- [Tables Index](../tables-index.md)\n")
+                write_browse_section(f, 'content-item-page', "../", 
+                                    content_type_plural=type_plural, 
+                                    content_type_slug=type_slug, 
+                                    solution_name=solution_name)
             
             pages_created += 1
     
@@ -1634,13 +2060,9 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
         f.write(f"# {type_name} - {letter}\n\n")
         f.write(f"**{len(items)} {type_name.lower()}** starting with '{letter}'.\n\n")
         
-        # Navigation
-        f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](../solutions-index.md)\n")
-        f.write("- [Connectors](../connectors-index.md)\n")
-        f.write("- [Tables](../tables-index.md)\n")
-        f.write("- [Content](content-index.md)\n")
-        f.write(f"- [All {type_name}]({type_slug}.md)\n\n")
+        # Navigation header
+        write_browse_section(f, 'content-type-letter-header', "../", 
+                            type_name=type_name, type_slug=type_slug)
         f.write("---\n\n")
         
         # Letter navigation
@@ -1692,12 +2114,8 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
         
         # Navigation footer
         f.write("---\n\n")
-        f.write("**Browse:**\n\n")
-        f.write("- [← Back to Content Index](content-index.md)\n")
-        f.write(f"- [← Back to {type_name}]({type_slug}.md)\n")
-        f.write("- [Solutions Index](../solutions-index.md)\n")
-        f.write("- [Connectors Index](../connectors-index.md)\n")
-        f.write("- [Tables Index](../tables-index.md)\n")
+        write_browse_section(f, 'content-type-letter', "../", 
+                            type_name=type_name, type_slug=type_slug)
 
 
 def generate_content_type_index(content_type: str, items: List[Dict[str, str]], 
@@ -1737,6 +2155,22 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
     
     with page_path.open("w", encoding="utf-8") as f:
         f.write(f"# {type_name}\n\n")
+        
+        # Add intro paragraph based on content type
+        type_intros = {
+            'analytic_rule': "Analytic rules are the core detection mechanism in Microsoft Sentinel. They run scheduled queries against your data to identify security threats, anomalies, and suspicious activities. When a rule's conditions are met, it generates alerts that can trigger incidents for investigation. [Learn more](https://learn.microsoft.com/azure/sentinel/detect-threats-built-in)",
+            'hunting_query': "Hunting queries enable proactive threat hunting by security analysts. Unlike analytic rules that run automatically, hunting queries are designed for manual investigation to uncover hidden threats, explore suspicious patterns, and identify indicators of compromise that automated detection may have missed. [Learn more](https://learn.microsoft.com/azure/sentinel/hunting)",
+            'playbook': "Playbooks are automated workflows built on Azure Logic Apps that respond to alerts and incidents. They can perform actions such as enriching alerts with threat intelligence, isolating compromised devices, blocking malicious IPs, notifying stakeholders, or creating tickets in external systems. [Learn more](https://learn.microsoft.com/azure/sentinel/automate-responses-with-playbooks)",
+            'workbook': "Workbooks are interactive dashboards that visualize security data from Microsoft Sentinel. They combine charts, tables, and text to provide insights into your security posture, help monitor key metrics, and support investigation with drill-down capabilities. [Learn more](https://learn.microsoft.com/azure/sentinel/monitor-your-data)",
+            'parser': "Parsers are KQL functions that normalize and transform raw log data into a consistent format. They extract fields, standardize naming conventions, and prepare data for use by analytic rules, hunting queries, and workbooks. [Learn more](https://learn.microsoft.com/azure/sentinel/normalization)",
+            'watchlist': "Watchlists are reference data tables that you can import into Microsoft Sentinel and use in queries and analytic rules. They are useful for storing lists of high-value assets, VIP users, known malicious indicators, or approved IP addresses for allowlisting. [Learn more](https://learn.microsoft.com/azure/sentinel/watchlists)",
+            'summary_rule': "Summary rules aggregate and summarize data over time, creating pre-computed results that improve query performance. They are useful for creating dashboards with historical trends or analyzing large volumes of data efficiently. [Learn more](https://learn.microsoft.com/azure/sentinel/summary-rules)",
+        }
+        
+        intro = type_intros.get(content_type, '')
+        if intro:
+            f.write(f"{intro}\n\n")
+        
         f.write(f"**{len(items)} {type_name.lower()}** across all Microsoft Sentinel solutions.\n\n")
         
         # Letter navigation
@@ -1802,11 +2236,7 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
         
         # Navigation footer
         f.write("---\n\n")
-        f.write("**Browse:**\n\n")
-        f.write("- [← Back to Content Index](content-index.md)\n")
-        f.write("- [Solutions Index](../solutions-index.md)\n")
-        f.write("- [Connectors Index](../connectors-index.md)\n")
-        f.write("- [Tables Index](../tables-index.md)\n")
+        write_browse_section(f, 'content-type', "../")
     
     print(f"Generated {type_name.lower()} index: {page_path}")
 
@@ -1858,15 +2288,13 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
     # Generate main content index
     with index_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Content Index\n\n")
-        f.write("Browse all content items (analytic rules, hunting queries, playbooks, workbooks, etc.) ")
-        f.write("across Microsoft Sentinel solutions.\n\n")
+        f.write("Content items are the security artifacts that provide value from the data collected by Microsoft Sentinel. ")
+        f.write("They include analytics rules for detecting threats, hunting queries for proactive investigation, ")
+        f.write("playbooks for automated response and remediation, workbooks for interactive dashboards, ")
+        f.write("and parsers for data normalization.\n\n")
         
         # Navigation
-        f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](../solutions-index.md)\n")
-        f.write("- [Connectors](../connectors-index.md)\n")
-        f.write("- [Tables](../tables-index.md)\n")
-        f.write("- [Content](content-index.md) (this page)\n\n")
+        write_browse_section(f, 'content', "../")
         f.write("---\n\n")
         
         # Overview
@@ -1879,13 +2307,13 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
         f.write("|:-------------|------:|:------------|\n")
         
         type_descriptions = {
-            'analytic_rule': 'Detection rules for identifying security threats',
-            'hunting_query': 'Proactive threat hunting queries',
-            'playbook': 'Automated response and remediation workflows',
-            'workbook': 'Interactive dashboards and reports',
-            'parser': 'Data normalization and transformation functions',
-            'watchlist': 'Reference data lists for enrichment and filtering',
-            'summary_rule': 'Rules for aggregating and summarizing data',
+            'analytic_rule': 'Detection rules for identifying security threats. [Learn more](https://learn.microsoft.com/azure/sentinel/detect-threats-built-in)',
+            'hunting_query': 'Proactive threat hunting queries. [Learn more](https://learn.microsoft.com/azure/sentinel/hunting)',
+            'playbook': 'Automated response and remediation workflows. [Learn more](https://learn.microsoft.com/azure/sentinel/automate-responses-with-playbooks)',
+            'workbook': 'Interactive dashboards and reports. [Learn more](https://learn.microsoft.com/azure/sentinel/monitor-your-data)',
+            'parser': 'Data normalization and transformation functions. [Learn more](https://learn.microsoft.com/azure/sentinel/normalization)',
+            'watchlist': 'Reference data lists for enrichment and filtering. [Learn more](https://learn.microsoft.com/azure/sentinel/watchlists)',
+            'summary_rule': 'Rules for aggregating and summarizing data. [Learn more](https://learn.microsoft.com/azure/sentinel/summary-rules)',
         }
         
         for content_type in type_order:
@@ -1907,10 +2335,7 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
         
         # Navigation footer
         f.write("---\n\n")
-        f.write("**Browse:**\n\n")
-        f.write("- [Solutions Index](../solutions-index.md)\n")
-        f.write("- [Connectors Index](../connectors-index.md)\n")
-        f.write("- [Tables Index](../tables-index.md)\n")
+        write_browse_section(f, 'content', "../")
     
     print(f"Generated content index: {index_path}")
 
@@ -1918,7 +2343,8 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
 def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path,
                        content_items_by_solution: Dict[str, List[Dict[str, str]]] = None,
                        tables_count: int = None,
-                       tables_in_solutions: int = None) -> None:
+                       tables_in_solutions: int = None,
+                       content_tables_mapping: Dict[str, List[Tuple[str, str]]] = None) -> None:
     """Generate the main index page with table of all solutions.
     
     Args:
@@ -1927,16 +2353,24 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         content_items_by_solution: Dictionary mapping solution name to list of content items
         tables_count: Total number of tables (from tables_map)
         tables_in_solutions: Number of tables linked to solutions via connectors
+        content_tables_mapping: Dictionary mapping content_key to list of (table_name, usage) tuples
     """
     if content_items_by_solution is None:
         content_items_by_solution = {}
+    if content_tables_mapping is None:
+        content_tables_mapping = {}
     
     index_path = output_dir / "solutions-index.md"
     
     with index_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Solutions Index\n\n")
-        f.write("This reference documentation provides detailed information about data connectors ")
-        f.write("available in Microsoft Sentinel Solutions.\n\n")
+        f.write("Microsoft Sentinel Solutions are packaged content bundles that provide out-of-the-box ")
+        f.write("integration with various data sources and security products. Each Solution can include ")
+        f.write("data connectors for data ingestion, analytics rules for threat detection, hunting queries ")
+        f.write("for proactive threat hunting, workbooks for visualization, playbooks for automated ")
+        f.write("response, and other content types.\n\n")
+        
+        f.write("📚 **Learn more:** [Deploy Microsoft Sentinel solutions](https://learn.microsoft.com/azure/sentinel/sentinel-solutions-deploy)\n\n")
         
         # Add coverage note
         f.write("> **Note:** This index covers connectors managed through Solutions in the Azure-Sentinel ")
@@ -1945,11 +2379,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write("are not managed via Solutions and are therefore not included here.\n\n")
         
         # Add navigation to other indexes
-        f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](solutions-index.md) (this page)\n")
-        f.write("- [Connectors](connectors-index.md)\n")
-        f.write("- [Tables](tables-index.md)\n")
-        f.write("- [Content](content/content-index.md)\n\n")
+        write_browse_section(f, 'solutions', "")
         f.write("---\n\n")
         
         f.write("## Overview\n\n")
@@ -2032,6 +2462,18 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
         f.write("\n\n")
         
+        # Build a set of solutions that use ASIM
+        solutions_using_asim: Set[str] = set()
+        for sol_name, sol_content_items in content_items_by_solution.items():
+            for item in sol_content_items:
+                content_name = item.get('content_name', '')
+                content_id = item.get('content_id', '')
+                content_key = get_content_key(content_id, content_name, sol_name)
+                tables_with_usage = content_tables_mapping.get(content_key, [])
+                if any(is_asim_parser(t[0]) for t in tables_with_usage):
+                    solutions_using_asim.add(sol_name)
+                    break  # No need to check more items for this solution
+        
         # Generate sections by letter
         for letter in letters:
             f.write(f"### {letter}\n\n")
@@ -2052,7 +2494,10 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 else:
                     logo_cell = ''
                 
-                solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
+                # Add ASIM icon if solution uses ASIM - place OUTSIDE link for proper rendering
+                # Use ASIM_ICON_ROOT since index file is in root directory
+                asim_prefix = f"{ASIM_ICON_ROOT} " if solution_name in solutions_using_asim else ""
+                solution_link = f"{asim_prefix}[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 f.write(f"| {logo_cell} | {solution_link} | {first_published} | {support_name} |\n")
             
             f.write("\n")
@@ -2095,14 +2540,14 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
     
     with index_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Connectors Index\n\n")
-        f.write("Browse all data connectors available in Microsoft Sentinel Solutions.\n\n")
+        f.write("Data connectors are the ingestion mechanism for Microsoft Sentinel, enabling ")
+        f.write("you to collect security data from various sources into your Log Analytics workspace. ")
+        f.write("Each connector defines how data flows from a source system to Sentinel tables, ")
+        f.write("including the collection method (such as Azure Functions, Diagnostic Settings, ")
+        f.write("or Log Analytics Agent) and the target table schema.\n\n")
         
         # Add navigation
-        f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](solutions-index.md)\n")
-        f.write("- [Connectors](connectors-index.md) (this page)\n")
-        f.write("- [Tables](tables-index.md)\n")
-        f.write("- [Content](content/content-index.md)\n\n")
+        write_browse_section(f, 'connectors', "")
         f.write("---\n\n")
         
         # Add coverage note
@@ -2253,14 +2698,13 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     
     with index_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Tables Index\n\n")
-        f.write("Browse all tables used by Microsoft Sentinel solutions and data connectors.\n\n")
+        f.write("Tables in Microsoft Sentinel store the security data ingested by data connectors ")
+        f.write("and referenced by content items such as analytics rules and hunting queries. ")
+        f.write("Each table represents a specific data type (such as sign-in logs, network traffic, ")
+        f.write("or security events) and follows a defined schema with columns for relevant attributes.\n\n")
         
         # Add navigation
-        f.write("**Browse by:**\n\n")
-        f.write("- [Solutions](solutions-index.md)\n")
-        f.write("- [Connectors](connectors-index.md)\n")
-        f.write("- [Tables](tables-index.md) (this page)\n")
-        f.write("- [Content](content/content-index.md)\n\n")
+        write_browse_section(f, 'tables', "")
         f.write("---\n\n")
         
         f.write(f"## Overview\n\n")
@@ -2295,8 +2739,8 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 num_solutions = len(info['solutions'])
                 num_connectors = len(info['connectors'])
                 
-                # All tables get individual pages now
-                table_cell = f"[`{table}`](tables/{sanitize_filename(table)}.md)"
+                # All tables get individual pages now - use format_table_link for proper ASIM handling
+                table_cell = format_table_link(table, "tables/", "asim/")
                 
                 # Solutions cell - use line breaks (HTML <br>) for multiple solutions
                 if num_solutions == 1:
@@ -2311,7 +2755,12 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                     solution_links = []
                     for solution_name in sorted(info['solutions'])[:3]:
                         solution_links.append(f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)")
-                    more_link = f"[+{num_solutions - 3} more](tables/{sanitize_filename(table)}.md)"
+                    more_link = format_table_link(f"+{num_solutions - 3} more", "tables/", "asim/").replace(f"`+{num_solutions - 3} more`", f"+{num_solutions - 3} more")
+                    # More link should point to table page - rebuild properly
+                    if is_asim_parser(table):
+                        more_link = f"[+{num_solutions - 3} more](asim/{get_asim_parser_filename(table)}.md)"
+                    else:
+                        more_link = f"[+{num_solutions - 3} more](tables/{sanitize_filename(table)}.md)"
                     solutions_cell = "<br>".join(solution_links) + "<br>" + more_link
                 
                 # Connectors cell - use line breaks for multiple connectors
@@ -2327,7 +2776,11 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                     connector_links = []
                     for connector_id, connector_title in sorted(info['connectors'])[:5]:
                         connector_links.append(f"[{connector_title}](connectors/{sanitize_filename(connector_id)}.md)")
-                    more_link = f"[+{num_connectors - 5} more](tables/{sanitize_filename(table)}.md)"
+                    # More link should point to table/ASIM page
+                    if is_asim_parser(table):
+                        more_link = f"[+{num_connectors - 5} more](asim/{get_asim_parser_filename(table)}.md)"
+                    else:
+                        more_link = f"[+{num_connectors - 5} more](tables/{sanitize_filename(table)}.md)"
                     connectors_cell = "<br>".join(connector_links) + "<br>" + more_link
                 
                 f.write(f"| {table_cell} | {solutions_cell} | {connectors_cell} |\n")
@@ -2443,7 +2896,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             
             # Generate fallback Azure Monitor link if table is in Azure Monitor reference but no link stored
             if not azure_monitor_link and table_ref.get('source_azure_monitor', '').lower() == 'yes':
-                azure_monitor_link = f"https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/{table.lower()}"
+                azure_monitor_link = f"https://learn.microsoft.com/azure/azure-monitor/reference/tables/{table.lower()}"
             
             if azure_monitor_link:
                 attributes.append(('Azure Monitor Docs', f"[View Documentation]({azure_monitor_link})"))
@@ -2463,7 +2916,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             additional_info = get_doc_override('table', table, 'additional_information')
             if additional_info:
                 f.write("## Additional Information\n\n")
-                f.write(f"{additional_info}\n\n")
+                f.write(f"{format_additional_info(additional_info)}\n\n")
             
             # Solutions using this table - bullet list
             if info['solutions']:
@@ -2601,11 +3054,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             
             # Navigation
             f.write("---\n\n")
-            f.write("**Browse:**\n\n")
-            f.write("- [← Back to Tables Index](../tables-index.md)\n")
-            f.write("- [Solutions Index](../solutions-index.md)\n")
-            f.write("- [Connectors Index](../connectors-index.md)\n")
-            f.write("- [Content Index](../content/content-index.md)\n")
+            write_browse_section(f, 'table-page', "../")
         
         pages_created += 1
     
@@ -2707,7 +3156,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             additional_info = get_doc_override('connector', connector_id, 'additional_information')
             if additional_info:
                 f.write("## Additional Information\n\n")
-                f.write(f"{additional_info}\n\n")
+                f.write(f"{format_additional_info(additional_info)}\n\n")
             
             # Description
             description = first_entry.get('connector_description', '')
@@ -2749,7 +3198,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
                     ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
                     
-                    table_link = f"[`{table}`](../tables/{sanitize_filename(table)}.md)"
+                    table_link = format_table_link(table, "../tables/")
                     
                     if has_vp_data:
                         # Get vendor/product for this table
@@ -2768,7 +3217,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     for t in tables
                 )
                 if has_ingestion_api_tables:
-                    f.write("> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.\n\n")
+                    f.write("> 💡 **Tip:** Tables with Ingestion API support allow data ingestion via the [Azure Monitor Data Collector API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview), which also enables custom transformations during ingestion.\n\n")
             
             # Permissions section
             permissions = first_entry.get('connector_permissions', '')
@@ -2817,11 +3266,7 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             
             # Back navigation
             f.write("---\n\n")
-            f.write("**Browse:**\n\n")
-            f.write("- [← Back to Connectors Index](../connectors-index.md)\n")
-            f.write("- [Solutions Index](../solutions-index.md)\n")
-            f.write("- [Tables Index](../tables-index.md)\n")
-            f.write("- [Content Index](../content/content-index.md)\n")
+            write_browse_section(f, 'connector-page', "../")
         
         print(f"Generated connector page: {connector_path}")
 
@@ -2829,7 +3274,8 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
 def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]], output_dir: Path,
                           solutions_dir: Path = None, content_items: List[Dict[str, str]] = None,
                           content_tables_mapping: Dict[str, List[str]] = None,
-                          solution_table_content_types: Dict[str, Dict[str, Set[str]]] = None) -> None:
+                          solution_table_content_types: Dict[str, Dict[str, Set[str]]] = None,
+                          dependency_id_to_solution: Dict[str, str] = None) -> None:
     """Generate individual solution documentation page.
     
     Args:
@@ -2840,6 +3286,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         content_items: List of content items (analytics rules, hunting queries, etc.) for this solution
         content_tables_mapping: Dictionary mapping content_id to list of tables used
         solution_table_content_types: Dictionary mapping table_name to content types and usage for this solution
+        dependency_id_to_solution: Dictionary mapping publisher_id.offer_id to solution_name for dependency resolution
     """
     if content_items is None:
         content_items = []
@@ -2847,6 +3294,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         content_tables_mapping = {}
     if solution_table_content_types is None:
         solution_table_content_types = {}
+    if dependency_id_to_solution is None:
+        dependency_id_to_solution = {}
     
     solution_dir = output_dir / "solutions"
     solution_dir.mkdir(parents=True, exist_ok=True)
@@ -2865,13 +3314,34 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     # Also check if there are any connectors at all (real or discovered)
     has_any_connectors = any(bool(conn.get('connector_id', '').strip()) for conn in connectors)
     
+    # Determine if solution uses ASIM by checking if any content item uses ASIM parsers
+    # Collect all tables used by content items
+    all_content_tables = set()
+    for item in content_items:
+        content_name = item.get('content_name', '')
+        content_id = item.get('content_id', '')
+        content_key = get_content_key(content_id, content_name, solution_name)
+        tables_with_usage = content_tables_mapping.get(content_key, [])
+        for table, _ in tables_with_usage:
+            all_content_tables.add(table)
+    
+    # Check if any of these are ASIM parsers
+    solution_uses_asim = any(is_asim_parser(t) for t in all_content_tables)
+    
+    # Get the ASIM products used by this solution
+    solution_asim_products = get_asim_products_from_tables(all_content_tables)
+    
     # Get release notes if available
     release_notes = None
     if solutions_dir:
         release_notes = get_release_notes(solution_name, solutions_dir)
     
     with solution_path.open("w", encoding="utf-8") as f:
-        f.write(f"# {solution_name}\n\n")
+        # Add ASIM badge to title if solution uses ASIM
+        if solution_uses_asim:
+            f.write(f"# {ASIM_BADGE_LARGE} {solution_name}\n\n")
+        else:
+            f.write(f"# {solution_name}\n\n")
         
         # Add logo if available
         logo_url = metadata.get('solution_logo_url', '')
@@ -2925,7 +3395,22 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             # Format dependencies as a list
             dep_list = [d.strip() for d in dependencies.split(';') if d.strip()]
             if dep_list:
-                deps_formatted = ', '.join(dep_list)
+                # Resolve dependency IDs to solution names with links
+                dep_links = []
+                for dep_id in dep_list:
+                    # First check for override
+                    override_name = get_dependency_override(solution_name, dep_id)
+                    if override_name:
+                        dep_filename = sanitize_filename(override_name)
+                        dep_links.append(f"[{override_name}]({dep_filename}.md)")
+                    elif dep_id in dependency_id_to_solution:
+                        dep_name = dependency_id_to_solution[dep_id]
+                        dep_filename = sanitize_filename(dep_name)
+                        dep_links.append(f"[{dep_name}]({dep_filename}.md)")
+                    else:
+                        # Keep the raw ID if we can't resolve it
+                        dep_links.append(dep_id)
+                deps_formatted = ', '.join(dep_links)
                 f.write(f"| **Dependencies** | {deps_formatted} |\n")
         
         f.write("\n")
@@ -2934,13 +3419,25 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         additional_info = get_doc_override('solution', solution_name, 'additional_information')
         if additional_info:
             f.write("## Additional Information\n\n")
-            f.write(f"{additional_info}\n\n")
+            f.write(f"{format_additional_info(additional_info)}\n\n")
         
         # Load README content for later use (added at the end like connector docs)
         readme_content = None
         readme_github_url = None
         if solutions_dir:
             readme_content, readme_github_url = get_solution_readme(solution_name, solutions_dir)
+        
+        # Supported Products section (if solution uses ASIM)
+        if solution_asim_products:
+            f.write(f"## {ASIM_ICON} Supported Products\n\n")
+            f.write("This solution uses ASIM parsers and supports the following products:\n\n")
+            f.write("| Product |\n")
+            f.write("|:--------|\n")
+            for product in sorted(solution_asim_products):
+                # Link to ASIM products index with anchor
+                product_anchor = sanitize_anchor(product)
+                f.write(f"| [{product}](../asim/asim-products-index.md#{product_anchor}) |\n")
+            f.write("\n")
         
         # Only include connectors section if solution has any connectors
         if not has_any_connectors:
@@ -2951,11 +3448,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             # For solutions without connectors, show content item tables if any
             content_item_tables = set(solution_table_content_types.keys())
             if content_item_tables:
-                # Separate internal tables from regular tables
-                regular_tables = sorted([t for t in content_item_tables if t not in INTERNAL_TABLES])
+                # Separate ASIM parsers, regular tables, and internal tables
+                asim_parser_tables = sorted([t for t in content_item_tables if is_asim_parser(t)])
+                regular_tables = sorted([t for t in content_item_tables if t not in INTERNAL_TABLES and not is_asim_parser(t)])
                 internal_tables = sorted([t for t in content_item_tables if t in INTERNAL_TABLES])
-                
-                f.write("## Tables Reference\n\n")
                 
                 # Content type display names
                 content_type_short_names = {
@@ -2988,7 +3484,15 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         f.write(f"| {format_table_link(table)} | {content_list} |\n")
                     f.write("\n")
                 
+                # ASIM Parsers section (if any)
+                if asim_parser_tables:
+                    f.write(f"## {ASIM_ICON} ASIM Parsers Used\n\n")
+                    f.write(f"This solution uses **{len(asim_parser_tables)} ASIM parser(s)** for normalized data:\n\n")
+                    write_tables_table(asim_parser_tables)
+                
+                # Regular Tables section (if any)
                 if regular_tables:
+                    f.write("## Tables Used\n\n")
                     f.write(f"This solution queries **{len(regular_tables)} table(s)** from its content items:\n\n")
                     write_tables_table(regular_tables)
                 
@@ -2997,7 +3501,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                     f.write(f"The following **{len(internal_tables)} table(s)** are used internally by this solution's playbooks:\n\n")
                     write_tables_table(internal_tables)
                 
-                if not regular_tables and not internal_tables:
+                if not asim_parser_tables and not regular_tables and not internal_tables:
                     f.write("No tables found.\n\n")
         else:
             # Group by connector (filter out empty connector_ids from the row added for solutions without connectors)
@@ -3043,11 +3547,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             all_tables = sorted(connector_tables | content_item_tables)
             
             if all_tables:
-                # Separate internal tables from regular tables
-                regular_tables = sorted([t for t in all_tables if t not in INTERNAL_TABLES])
+                # Separate ASIM parsers, regular tables, and internal tables
+                asim_parser_tables = sorted([t for t in all_tables if is_asim_parser(t)])
+                regular_tables = sorted([t for t in all_tables if t not in INTERNAL_TABLES and not is_asim_parser(t)])
                 internal_tables = sorted([t for t in all_tables if t in INTERNAL_TABLES])
-                
-                f.write("## Tables Reference\n\n")
                 
                 # Content type display names
                 content_type_short_names = {
@@ -3091,7 +3594,31 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                         f.write(f"| {format_table_link(table)} | {connector_list} | {content_list} |\n")
                     f.write("\n")
                 
+                def write_asim_parsers_table(tables: List[str]) -> None:
+                    """Write a table of ASIM parsers with their content types."""
+                    f.write("| Parser | Used By Content |\n")
+                    f.write("|--------|----------------|\n")
+                    for table in tables:
+                        # Get content types
+                        table_info = solution_table_content_types.get(table, {'types': set(), 'usage': set()})
+                        content_types = table_info.get('types', set())
+                        content_parts = []
+                        for ct in sorted(content_types):
+                            ct_name = content_type_short_names.get(ct, ct.replace('_', ' ').title())
+                            content_parts.append(ct_name)
+                        content_list = ", ".join(content_parts) if content_parts else "-"
+                        f.write(f"| {format_table_link(table)} | {content_list} |\n")
+                    f.write("\n")
+                
+                # ASIM Parsers section (if any)
+                if asim_parser_tables:
+                    f.write(f"## {ASIM_ICON} ASIM Parsers Used\n\n")
+                    f.write(f"This solution uses **{len(asim_parser_tables)} ASIM parser(s)** for normalized data:\n\n")
+                    write_asim_parsers_table(asim_parser_tables)
+                
+                # Regular Tables section (if any)
                 if regular_tables:
+                    f.write("## Tables Used\n\n")
                     f.write(f"This solution uses **{len(regular_tables)} table(s)**:\n\n")
                     write_connector_tables_table(regular_tables)
                 
@@ -3130,7 +3657,7 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             f.write("\n")
             
             # Detailed sections for each content type
-            for content_type in ['analytic_rule', 'hunting_query', 'workbook', 'playbook', 'parser', 'watchlist']:
+            for content_type in ['analytic_rule', 'hunting_query', 'workbook', 'playbook', 'parser', 'watchlist', 'summary_rule']:
                 items = content_by_type.get(content_type, [])
                 if not items:
                     continue
@@ -3161,8 +3688,11 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
-                            # Link to content item page
+                            # Link to content item page, with ASIM icon if it uses ASIM parsers
                             name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
+                            uses_asim = any(is_asim_parser(t[0]) for t in tables_with_usage) if tables_with_usage else False
+                            if uses_asim:
+                                name_display = f"{ASIM_ICON} {name_display}"
                             f.write(f"| {name_display} | {severity} | {tactics} | {tables_str} |\n")
                         f.write("\n")
                     
@@ -3190,8 +3720,11 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
-                            # Link to content item page
+                            # Link to content item page, with ASIM icon if it uses ASIM parsers
                             name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
+                            uses_asim = any(is_asim_parser(t[0]) for t in tables_with_usage) if tables_with_usage else False
+                            if uses_asim:
+                                name_display = f"{ASIM_ICON} {name_display}"
                             f.write(f"| {name_display} | {tactics} | {tables_str} |\n")
                         f.write("\n")
                     
@@ -3219,8 +3752,11 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_simple(tables_with_usage)
-                            # Link to content item page
+                            # Link to content item page, with ASIM icon if it uses ASIM parsers
                             name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
+                            uses_asim = any(is_asim_parser(t[0]) for t in tables_with_usage) if tables_with_usage else False
+                            if uses_asim:
+                                name_display = f"{ASIM_ICON} {name_display}"
                             f.write(f"| {name_display} | {tables_str} |\n")
                         f.write("\n")
                     else:
@@ -3232,8 +3768,11 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                             content_key = get_content_key(item.get('content_id', ''), name, solution_name)
                             tables_with_usage = content_tables_mapping.get(content_key, [])
                             tables_str = format_tables_with_usage(tables_with_usage)
-                            # Link to content item page
+                            # Link to content item page, with ASIM icon if it uses ASIM parsers
                             name_display = get_content_item_link(item, "../content/", show_not_in_json=True)
+                            uses_asim = any(is_asim_parser(t[0]) for t in tables_with_usage) if tables_with_usage else False
+                            if uses_asim:
+                                name_display = f"{ASIM_ICON} {name_display}"
                             f.write(f"| {name_display} | {desc} | {tables_str} |\n")
                         f.write("\n")
             
@@ -3272,13 +3811,485 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         # Navigation
         f.write("---\n\n")
-        f.write("**Browse:**\n\n")
-        f.write("- [← Back to Solutions Index](../solutions-index.md)\n")
-        f.write("- [Connectors Index](../connectors-index.md)\n")
-        f.write("- [Tables Index](../tables-index.md)\n")
-        f.write("- [Content Index](../content/content-index.md)\n")
+        write_browse_section(f, 'solution-page', "../")
     
     print(f"Generated solution page: {solution_path}")
+
+
+# =============================================================================
+# ASIM Parser Documentation Functions
+# =============================================================================
+
+def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_union: Dict[str, List[str]] = None, parser_product_map: Dict[str, str] = None) -> None:
+    """Generate a single ASIM parser documentation page.
+    
+    Args:
+        parser: Parser data dictionary
+        output_dir: Output directory for documentation
+        sub_to_union: Optional mapping from sub-parser names to their parent union parsers
+        parser_product_map: Optional mapping from parser equivalent_builtin to product_name
+    """
+    if sub_to_union is None:
+        sub_to_union = {}
+    if parser_product_map is None:
+        parser_product_map = {}
+    parser_name = parser.get('parser_name', 'Unknown')
+    safe_name = sanitize_filename(parser_name)
+    parsers_dir = output_dir / "asim"
+    parsers_dir.mkdir(parents=True, exist_ok=True)
+    parser_path = parsers_dir / f"{safe_name}.md"
+    
+    with parser_path.open("w", encoding="utf-8") as f:
+        # Title with ASIM badge
+        title = parser.get('parser_title', '') or parser_name
+        f.write(f"# {ASIM_BADGE_LARGE} {title}\n\n")
+        
+        # Metadata table
+        f.write("## Parser Information\n\n")
+        f.write("| Property | Value |\n")
+        f.write("|:---------|:------|\n")
+        f.write(f"| **Parser Name** | `{parser_name}` |\n")
+        
+        equivalent = parser.get('equivalent_builtin', '')
+        if equivalent:
+            f.write(f"| **Built-in Parser** | `{equivalent}` |\n")
+        
+        schema = parser.get('schema', '')
+        if schema:
+            f.write(f"| **Schema** | {schema} |\n")
+        
+        schema_version = parser.get('schema_version', '')
+        if schema_version:
+            f.write(f"| **Schema Version** | {schema_version} |\n")
+        
+        parser_type = parser.get('parser_type', '')
+        type_display = {
+            'union': '📦 Union (schema-level)',
+            'source': '🔌 Source (product-specific)',
+            'empty': '⬜ Empty (placeholder)',
+        }
+        if parser_type:
+            f.write(f"| **Parser Type** | {type_display.get(parser_type, parser_type)} |\n")
+        
+        # Only show Product for source parsers (not union parsers)
+        product = parser.get('product_name', '')
+        if product and parser_type != 'union':
+            f.write(f"| **Product** | {product} |\n")
+        
+        version = parser.get('parser_version', '')
+        if version:
+            f.write(f"| **Parser Version** | {version} |\n")
+        
+        last_updated = parser.get('parser_last_updated', '')
+        if last_updated:
+            f.write(f"| **Last Updated** | {last_updated} |\n")
+        
+        # Unifying parser link (for source parsers) - in properties table
+        equivalent = parser.get('equivalent_builtin', '')
+        parser_type = parser.get('parser_type', '')
+        if parser_type == 'source' and equivalent and equivalent in sub_to_union:
+            union_parsers = sub_to_union[equivalent]
+            if union_parsers:
+                union_links = ", ".join([f"[{name}]({get_asim_parser_filename(name)}.md)" for name in sorted(union_parsers)])
+                f.write(f"| **Unifying Parser** | {union_links} |\n")
+        
+        # Source file link - in properties table
+        github_url = parser.get('github_url', '')
+        source_file = parser.get('source_file', '')
+        if github_url and source_file:
+            f.write(f"| **Source File** | [{source_file}]({github_url}) |\n")
+        
+        f.write("\n")
+        
+        # Description
+        description = parser.get('description', '')
+        if description:
+            f.write("## Description\n\n")
+            f.write(f"{description}\n\n")
+        
+        # Sub-parsers (for union parsers)
+        sub_parsers = parser.get('sub_parsers', '')
+        if sub_parsers:
+            f.write("## Products\n\n")
+            f.write("This union parser includes parsers for the following products:\n\n")
+            f.write("| Product | Source Parser |\n")
+            f.write("|:--------|:--------------|\n")
+            for sub in sorted(sub_parsers.split(';')):
+                sub = sub.strip()
+                if sub:
+                    # Get product name from mapping, use sub-parser name if not found
+                    product = parser_product_map.get(sub, '')
+                    # Use get_asim_parser_filename to get correct filename from mapping
+                    # Sub-parsers are referenced by equivalent_builtin but files use parser_name
+                    sub_filename = get_asim_parser_filename(sub)
+                    f.write(f"| {product} | [{sub}]({sub_filename}.md) |\n")
+            f.write("\n")
+        
+        # Tables
+        tables = parser.get('tables', '')
+        if tables:
+            f.write("## Source Tables\n\n")
+            f.write("This parser reads from the following tables:\n\n")
+            f.write("| Table |\n")
+            f.write("|:------|\n")
+            for table in sorted(tables.split(';')):
+                table = table.strip()
+                if table:
+                    # Use format_table_link but strip backticks for table column formatting
+                    table_link = format_table_link(table, "../tables/").replace('`', '')
+                    f.write(f"| {table_link} |\n")
+            f.write("\n")
+        
+        # Parser Parameters
+        params = parser.get('parser_params', '')
+        if params:
+            f.write("## Parameters\n\n")
+            f.write("| Name | Type | Default |\n")
+            f.write("|:-----|:-----|:--------|\n")
+            for param in params.split(';'):
+                param = param.strip()
+                if param and ':' in param:
+                    parts = param.split(':')
+                    name = parts[0]
+                    rest = ':'.join(parts[1:])
+                    if '=' in rest:
+                        ptype, default = rest.split('=', 1)
+                        f.write(f"| `{name}` | {ptype} | {default} |\n")
+                    else:
+                        f.write(f"| `{name}` | {rest} | |\n")
+            f.write("\n")
+        
+        # References
+        refs = parser.get('references', '')
+        if refs:
+            f.write("## References\n\n")
+            for ref in refs.split(';'):
+                ref = ref.strip()
+                if ref:
+                    f.write(f"- {ref}\n")
+            f.write("\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'asim-parser', "../")
+
+
+def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
+    """Generate ASIM parsers index page grouped by schema."""
+    if not parsers:
+        return 0
+    
+    asim_dir = output_dir / "asim"
+    asim_dir.mkdir(parents=True, exist_ok=True)
+    index_path = asim_dir / "asim-index.md"
+    
+    # Group parsers by schema
+    by_schema: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    for parser in parsers:
+        schema = parser.get('schema', 'Other')
+        by_schema[schema].append(parser)
+    
+    # Count by type
+    union_count = sum(1 for p in parsers if p.get('parser_type') == 'union')
+    source_count = sum(1 for p in parsers if p.get('parser_type') == 'source')
+    empty_count = sum(1 for p in parsers if p.get('parser_type') == 'empty')
+    
+    # Parser pairs (ASim + vim = 1 pair)
+    source_pair_count = source_count // 2
+    union_pair_count = union_count // 2
+    
+    with index_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {ASIM_BADGE_LARGE} ASIM Parsers Index\n\n")
+        
+        f.write("The Advanced Security Information Model (ASIM) provides a layer of abstraction between ")
+        f.write("the various data sources and the user. ASIM parsers normalize data from different sources ")
+        f.write("to a common schema, enabling queries that work across multiple data sources.\n\n")
+        
+        f.write("📚 **Learn more:** [ASIM-based domain solutions for Microsoft Sentinel](https://learn.microsoft.com/azure/sentinel/domain-based-essential-solutions)\n\n")
+        
+        # Summary stats
+        f.write("## Summary\n\n")
+        f.write("| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| **Schemas** | {len(by_schema)} |\n")
+        f.write(f"| **Source Parser Pairs*** | {source_pair_count} |\n")
+        f.write(f"| **Union Parser Pairs*** | {union_pair_count} |\n")
+        f.write(f"| **Empty Parsers** | {empty_count} |\n")
+        f.write("\n")
+        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        
+        # Quick links by schema with detailed counts
+        f.write("## Schemas\n\n")
+        for schema in sorted(by_schema.keys()):
+            anchor = schema.lower().replace(' ', '-')
+            schema_parsers = by_schema[schema]
+            schema_source = sum(1 for p in schema_parsers if p.get('parser_type') == 'source')
+            schema_union = sum(1 for p in schema_parsers if p.get('parser_type') == 'union')
+            schema_empty = sum(1 for p in schema_parsers if p.get('parser_type') == 'empty')
+            
+            # Build counts string
+            counts_parts = []
+            if schema_source > 0:
+                counts_parts.append(f"{schema_source // 2} source pairs")
+            if schema_union > 0:
+                counts_parts.append(f"{schema_union // 2} union pair{'s' if schema_union > 2 else ''}")
+            if schema_empty > 0:
+                counts_parts.append(f"{schema_empty} empty")
+            counts_str = ", ".join(counts_parts)
+            f.write(f"- [{schema}](#{anchor}) ({counts_str})\n")
+        f.write("\n")
+        
+        # Parsers by schema
+        for schema in sorted(by_schema.keys()):
+            anchor = schema.lower().replace(' ', '-')
+            schema_parsers = by_schema[schema]
+            
+            f.write(f"## {schema}\n\n")
+            
+            # Separate union and source parsers
+            union_parsers = [p for p in schema_parsers if p.get('parser_type') == 'union']
+            source_parsers = [p for p in schema_parsers if p.get('parser_type') == 'source']
+            empty_parsers = [p for p in schema_parsers if p.get('parser_type') == 'empty']
+            
+            # Show union parser first (main entry point)
+            if union_parsers:
+                f.write("### Union Parsers\n\n")
+                f.write("These are the main entry points that combine all source parsers:\n\n")
+                f.write("| Parser | Built-in Name | Version | Description |\n")
+                f.write("|:-------|:--------------|:--------|:------------|\n")
+                for p in sorted(union_parsers, key=lambda x: x.get('parser_name', '')):
+                    name = p.get('parser_name', '')
+                    safe_name = sanitize_filename(name)
+                    builtin = p.get('equivalent_builtin', '')
+                    version = p.get('parser_version', '')
+                    desc = p.get('description', '')
+                    # Truncate description for table
+                    if len(desc) > 80:
+                        desc = desc[:77] + "..."
+                    desc = desc.replace('\n', ' ').replace('|', '\\|')
+                    f.write(f"| [{name}]({safe_name}.md) | `{builtin}` | {version} | {desc} |\n")
+                f.write("\n")
+            
+            # Products list before source parsers
+            if source_parsers:
+                # Collect unique products
+                products = set()
+                for p in source_parsers:
+                    product = p.get('product_name', '').strip()
+                    if product and product.lower() != 'source agnostic':
+                        products.add(product)
+                
+                if products:
+                    f.write("### Supported Products\n\n")
+                    product_links = []
+                    for product in sorted(products, key=str.lower):
+                        anchor = product.lower().replace(' ', '-').replace('/', '-').replace('(', '').replace(')', '')
+                        product_links.append(f"[{product}](asim-products-index.md#{anchor})")
+                    f.write(", ".join(product_links) + "\n\n")
+            
+            # Source parsers
+            if source_parsers:
+                f.write("### Source Parsers\n\n")
+                f.write("| Parser | Product | Tables | Version |\n")
+                f.write("|:-------|:--------|:-------|:--------|\n")
+                for p in sorted(source_parsers, key=lambda x: x.get('parser_name', '')):
+                    name = p.get('parser_name', '')
+                    safe_name = sanitize_filename(name)
+                    product = p.get('product_name', '')
+                    tables = p.get('tables', '')
+                    # Count tables
+                    table_count = len([t for t in tables.split(';') if t.strip()]) if tables else 0
+                    version = p.get('parser_version', '')
+                    f.write(f"| [{name}]({safe_name}.md) | {product} | {table_count} | {version} |\n")
+                f.write("\n")
+            
+            # Empty parsers (collapsed)
+            if empty_parsers:
+                f.write("<details>\n")
+                f.write("<summary>Empty Parsers ({} parser{})</summary>\n\n".format(
+                    len(empty_parsers), 's' if len(empty_parsers) != 1 else ''))
+                f.write("| Parser | Description |\n")
+                f.write("|:-------|:------------|\n")
+                for p in sorted(empty_parsers, key=lambda x: x.get('parser_name', '')):
+                    name = p.get('parser_name', '')
+                    safe_name = sanitize_filename(name)
+                    desc = p.get('description', 'Empty placeholder parser')
+                    if len(desc) > 60:
+                        desc = desc[:57] + "..."
+                    desc = desc.replace('\n', ' ').replace('|', '\\|')
+                    f.write(f"| [{name}]({safe_name}.md) | {desc} |\n")
+                f.write("\n</details>\n\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'asim-index', "../")
+    
+    print(f"Generated ASIM index: {index_path}")
+    return len(parsers)
+
+
+def generate_asim_products_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
+    """Generate ASIM parsers index page grouped by product."""
+    if not parsers:
+        return 0
+    
+    asim_dir = output_dir / "asim"
+    asim_dir.mkdir(parents=True, exist_ok=True)
+    index_path = asim_dir / "asim-products-index.md"
+    
+    # Group parsers by product (excluding union and empty parsers which are "Source agnostic")
+    by_product: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    for parser in parsers:
+        # Only include source parsers (not union or empty)
+        if parser.get('parser_type') != 'source':
+            continue
+        product = parser.get('product_name', '').strip()
+        if product and product.lower() != 'source agnostic':
+            by_product[product].append(parser)
+    
+    # Calculate unique schemas and tables per product
+    product_stats: Dict[str, Dict[str, set]] = {}
+    for product, product_parsers in by_product.items():
+        schemas = set()
+        tables = set()
+        for p in product_parsers:
+            schema = p.get('schema', '')
+            if schema:
+                schemas.add(schema)
+            parser_tables = p.get('tables', '')
+            if parser_tables:
+                for t in parser_tables.split(';'):
+                    t = t.strip()
+                    if t:
+                        tables.add(t)
+        product_stats[product] = {'schemas': schemas, 'tables': tables}
+    
+    with index_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {ASIM_BADGE_LARGE} ASIM Parsers by Product\n\n")
+        
+        f.write("This index organizes ASIM parsers by the product or data source they normalize. ")
+        f.write("Use this view to find ASIM support for a specific product, including which schemas ")
+        f.write("are supported and which tables contain the source data.\n\n")
+        
+        # Summary stats
+        f.write("## Summary\n\n")
+        f.write("| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        total_parsers = sum(len(p) for p in by_product.values())
+        total_parser_pairs = total_parsers // 2
+        f.write(f"| **Products** | {len(by_product):,} |\n")
+        f.write(f"| **Source Parser Pairs*** | {total_parser_pairs:,} |\n")
+        
+        # Count unique schemas and tables
+        all_schemas = set()
+        all_tables = set()
+        for stats in product_stats.values():
+            all_schemas.update(stats['schemas'])
+            all_tables.update(stats['tables'])
+        f.write(f"| **Schemas Covered** | {len(all_schemas)} |\n")
+        f.write(f"| **Tables Used** | {len(all_tables):,} |\n")
+        f.write("\n")
+        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        
+        # Quick product list with counts
+        f.write("## Products Overview\n\n")
+        f.write("| Product | Parser Pairs* | Schemas | Tables |\n")
+        f.write("|:--------|-------------:|--------:|-------:|\n")
+        for product in sorted(by_product.keys(), key=str.lower):
+            anchor = product.lower().replace(' ', '-').replace('/', '-').replace('(', '').replace(')', '')
+            parser_count = len(by_product[product])
+            parser_pair_count = parser_count // 2
+            schema_count = len(product_stats[product]['schemas'])
+            table_count = len(product_stats[product]['tables'])
+            f.write(f"| [{product}](#{anchor}) | {parser_pair_count} | {schema_count} | {table_count} |\n")
+        f.write("\n")
+        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        
+        # Detailed section per product
+        for product in sorted(by_product.keys(), key=str.lower):
+            product_parsers = by_product[product]
+            stats = product_stats[product]
+            
+            f.write(f"## {product}\n\n")
+            
+            # Group by schema within product
+            by_schema: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+            for p in product_parsers:
+                schema = p.get('schema', 'Other')
+                by_schema[schema].append(p)
+            
+            f.write(f"**Schemas:** {', '.join(sorted(stats['schemas']))}\n\n")
+            
+            if stats['tables']:
+                f.write(f"**Tables:** ")
+                table_links = []
+                for t in sorted(stats['tables']):
+                    # Use format_table_link but strip backticks for inline formatting
+                    link = format_table_link(t, "../tables/").replace('`', '')
+                    table_links.append(link)
+                f.write(", ".join(table_links))
+                f.write("\n\n")
+            
+            f.write("### Parsers\n\n")
+            f.write("| Parser | Schema | Tables | Version |\n")
+            f.write("|:-------|:-------|:-------|:--------|\n")
+            
+            for p in sorted(product_parsers, key=lambda x: (x.get('schema', ''), x.get('parser_name', ''))):
+                name = p.get('parser_name', '')
+                safe_name = sanitize_filename(name)
+                schema = p.get('schema', '')
+                tables = p.get('tables', '')
+                version = p.get('parser_version', '')
+                # Build table links for the Tables column using format_table_link
+                if tables:
+                    table_list = [t.strip() for t in tables.split(';') if t.strip()]
+                    # Use format_table_link but strip backticks for table cell formatting
+                    table_links = [format_table_link(t, "../tables/").replace('`', '') for t in sorted(table_list)]
+                    tables_cell = ", ".join(table_links)
+                else:
+                    tables_cell = ""
+                f.write(f"| [{name}]({safe_name}.md) | {schema} | {tables_cell} | {version} |\n")
+            
+            f.write("\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'asim-products', "../")
+    
+    print(f"Generated ASIM products index: {index_path}")
+    return len(by_product)
+
+
+def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path) -> int:
+    """Generate individual ASIM parser documentation pages."""
+    if not parsers:
+        return 0
+    
+    # Build reverse mapping: sub-parser equivalent_builtin -> list of union parser names
+    sub_to_union: Dict[str, List[str]] = defaultdict(list)
+    # Build mapping: parser equivalent_builtin -> product_name
+    parser_product_map: Dict[str, str] = {}
+    
+    for parser in parsers:
+        # Build product mapping (using equivalent_builtin as key since that's how sub-parsers are listed)
+        equiv = parser.get('equivalent_builtin', '')
+        product = parser.get('product_name', '')
+        if equiv and product:
+            parser_product_map[equiv] = product
+        
+        if parser.get('parser_type') == 'union':
+            union_name = parser.get('parser_name', '')
+            sub_parsers = parser.get('sub_parsers', '')
+            if sub_parsers:
+                for sub in sub_parsers.split(';'):
+                    sub = sub.strip()
+                    if sub:
+                        sub_to_union[sub].append(union_name)
+    
+    for parser in parsers:
+        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map)
+    
+    return len(parsers)
 
 
 def generate_docs_readme(
@@ -3289,7 +4300,10 @@ def generate_docs_readme(
     content_count: int,
     content_items_by_solution: Dict[str, List[Dict[str, str]]],
     solutions: Dict[str, List[Dict[str, str]]] = None,
-    tables_in_solutions: int = None
+    tables_in_solutions: int = None,
+    asim_source_pairs: int = 0,
+    asim_union_pairs: int = 0,
+    asim_empty_count: int = 0,
 ) -> None:
     """
     Generate the README.md file for the documentation folder with current statistics
@@ -3401,15 +4415,18 @@ def generate_docs_readme(
     with readme_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Solutions Documentation\n\n")
         f.write("This documentation provides comprehensive information about Microsoft Sentinel Solutions, ")
-        f.write("including data connectors, log tables, and content items.\n\n")
+        f.write("including data connectors, log tables, content items, and ASIM parsers.\n\n")
         
         f.write("## Quick Links\n\n")
         f.write("| Documentation | Description |\n")
         f.write("|:--------------|:------------|\n")
-        f.write(f"| [Solutions Index](solutions-index.md) | Browse all {solutions_count} solutions |\n")
-        f.write(f"| [Connectors Index](connectors-index.md) | Browse all {connectors_count} data connectors |\n")
-        f.write(f"| [Tables Index](tables-index.md) | Browse all {tables_count} log tables |\n")
-        f.write(f"| [Content Index](content/content-index.md) | Browse all {content_count} content items |\n")
+        f.write(f"| [Solutions](solutions-index.md) | Browse all {solutions_count} solutions |\n")
+        f.write(f"| [Connectors](connectors-index.md) | Browse all {connectors_count} data connectors |\n")
+        f.write(f"| [Tables](tables-index.md) | Browse all {tables_count} log tables |\n")
+        f.write(f"| [Content](content/content-index.md) | Browse all {content_count} content items |\n")
+        if asim_source_pairs > 0 or asim_union_pairs > 0:
+            f.write(f"| [ASIM Parsers](asim/asim-index.md) | Browse ASIM parsers by schema |\n")
+            f.write(f"| [ASIM Products](asim/asim-products-index.md) | Browse ASIM parsers by product |\n")
         f.write("\n")
         
         # Quick Statistics table (moved from solutions-index)
@@ -3428,10 +4445,21 @@ def generate_docs_readme(
             f.write(f"| Total Tables | {tables_count} |\n")
         f.write(f"| Content Items | {content_count} |\n")
         f.write(f"| Solutions with Content | {solutions_with_content} ({100*solutions_with_content//max(len(solutions), 1)}%) |\n")
+        if asim_source_pairs > 0 or asim_union_pairs > 0:
+            asim_parts = []
+            if asim_source_pairs > 0:
+                asim_parts.append(f"{asim_source_pairs} source pairs")
+            if asim_union_pairs > 0:
+                asim_parts.append(f"{asim_union_pairs} union pair{'s' if asim_union_pairs > 1 else ''}")
+            if asim_empty_count > 0:
+                asim_parts.append(f"{asim_empty_count} empty")
+            f.write(f"| ASIM Parser Pairs* | {', '.join(asim_parts)} |\n")
         if tables_in_solutions and tables_count > tables_in_solutions:
             f.write(f"\n*Note: {tables_count} total tables are documented, including {tables_count - tables_in_solutions} additional tables referenced by content items or from the Azure Monitor reference.*\n")
         if all_discovered_connector_ids:
             f.write(f"\n*⚠️ Discovered connectors are found in solution folders but not listed in Solution JSON definitions.*\n")
+        if asim_source_pairs > 0 or asim_union_pairs > 0:
+            f.write(f"\n*\\* Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n")
         f.write("\n")
         
         # Collection Methods table (moved from solutions-index)
@@ -3487,9 +4515,13 @@ def generate_docs_readme(
         f.write("├── solutions/              # Individual solution pages\n")
         f.write("├── connectors/             # Individual connector pages\n")
         f.write("├── tables/                 # Individual table pages\n")
-        f.write("└── content/                # Content item pages\n")
-        f.write("    ├── content-index.md    # Content items listing\n")
-        f.write("    └── *.md                # Individual content pages\n")
+        f.write("├── content/                # Content item pages\n")
+        f.write("│   ├── content-index.md    # Content items listing\n")
+        f.write("│   └── *.md                # Individual content pages\n")
+        f.write("└── asim/                   # ASIM parser documentation\n")
+        f.write("    ├── asim-index.md       # ASIM parsers index by schema\n")
+        f.write("    ├── asim-products-index.md  # ASIM parsers index by product\n")
+        f.write("    └── *.md                # Individual parser pages\n")
         f.write("```\n\n")
         
         f.write("## Source\n\n")
@@ -3505,7 +4537,7 @@ def generate_docs_readme(
         f.write("```\n\n")
         
         f.write("---\n\n")
-        f.write(f"*Generated by Solutions Analyzer v6.0 - {datetime.now().strftime('%B %Y')}*\n")
+        f.write(f"*Generated by Solutions Analyzer v7.0 - {datetime.now().strftime('%B %Y')}*\n")
     
     print(f"Generated readme: {readme_path}")
 
@@ -3578,6 +4610,12 @@ def main() -> None:
         type=Path,
         default=Path(__file__).parent / "solution_analyzer_overrides.csv",
         help="Path to overrides CSV file for additional_information and other doc-only fields (default: solution_analyzer_overrides.csv)",
+    )
+    parser.add_argument(
+        "--asim-parsers-csv",
+        type=Path,
+        default=Path(__file__).parent / "asim_parsers.csv",
+        help="Path to ASIM parsers CSV file (default: asim_parsers.csv)",
     )
     parser.add_argument(
         "--skip-input-generation",
@@ -3673,6 +4711,8 @@ def main() -> None:
     
     # Load solutions CSV for logo, description, author, version info
     solutions_reference: Dict[str, Dict[str, str]] = {}
+    # Also build a mapping from publisher_id.offer_id to solution_name for dependency resolution
+    dependency_id_to_solution: Dict[str, str] = {}
     if args.solutions_csv.exists():
         print(f"Reading {args.solutions_csv}...")
         with args.solutions_csv.open("r", encoding="utf-8") as csvfile:
@@ -3681,6 +4721,12 @@ def main() -> None:
                 solution_name = row.get('solution_name', '')
                 if solution_name:
                     solutions_reference[solution_name] = row
+                    # Build dependency ID from publisher_id.offer_id
+                    publisher_id = row.get('solution_publisher_id', '')
+                    offer_id = row.get('solution_offer_id', '')
+                    if publisher_id and offer_id:
+                        dep_id = f"{publisher_id}.{offer_id}"
+                        dependency_id_to_solution[dep_id] = solution_name
         print(f"Loaded {len(solutions_reference)} solutions from solutions CSV")
     else:
         print(f"Warning: Solutions CSV not found: {args.solutions_csv}")
@@ -3758,8 +4804,24 @@ def main() -> None:
         
         print(f"Built content-to-tables mapping for {len(content_tables_mapping)} content items")
     
+    # Load ASIM parsers CSV
+    asim_parsers: List[Dict[str, str]] = []
+    if args.asim_parsers_csv.exists():
+        print(f"Reading {args.asim_parsers_csv}...")
+        with args.asim_parsers_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            asim_parsers = list(reader)
+        print(f"Loaded {len(asim_parsers)} ASIM parsers")
+        # Populate global ASIM_PARSER_NAMES set for parser detection
+        load_asim_parser_names(args.asim_parsers_csv)
+    else:
+        print(f"Warning: ASIM parsers CSV not found: {args.asim_parsers_csv}")
+    
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Copy ASIM images to output directory
+    copy_asim_images(args.output_dir)
     
     # Read CSV
     print(f"Reading {args.input}...")
@@ -3823,7 +4885,8 @@ def main() -> None:
     tables_in_solutions = sum(1 for info in tables_map.values() if info['connectors'])
     
     generate_index_page(by_solution, args.output_dir, content_items_by_solution, 
-                       tables_count=len(tables_map), tables_in_solutions=tables_in_solutions)
+                       tables_count=len(tables_map), tables_in_solutions=tables_in_solutions,
+                       content_tables_mapping=content_tables_mapping)
     generate_content_index(content_items_by_solution, args.output_dir)
     
     # Generate individual connector pages
@@ -3833,13 +4896,31 @@ def main() -> None:
     for solution_name, connectors in sorted(by_solution.items()):
         solution_content = content_items_by_solution.get(solution_name, [])
         solution_table_types = solution_table_content_types.get(solution_name, {})
-        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types)
+        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution)
     
     # Generate individual table pages with content item references
     generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
     content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir)
+    
+    # Generate ASIM parser documentation
+    asim_source_pairs = 0
+    asim_union_pairs = 0
+    asim_empty_count = 0
+    if asim_parsers:
+        print(f"Generating ASIM parser documentation...")
+        # Count parser types for readme stats
+        asim_source_count = sum(1 for p in asim_parsers if p.get('parser_type') == 'source')
+        asim_union_count = sum(1 for p in asim_parsers if p.get('parser_type') == 'union')
+        asim_empty_count = sum(1 for p in asim_parsers if p.get('parser_type') == 'empty')
+        asim_source_pairs = asim_source_count // 2
+        asim_union_pairs = asim_union_count // 2
+        
+        generate_asim_index(asim_parsers, args.output_dir)
+        generate_asim_products_index(asim_parsers, args.output_dir)
+        asim_parsers_count = generate_asim_parser_pages(asim_parsers, args.output_dir)
+        print(f"  Generated {asim_parsers_count} ASIM parser pages")
     
     # Count unique connectors and tables
     all_connector_ids = set()
@@ -3861,7 +4942,10 @@ def main() -> None:
         content_count=content_pages_count,
         content_items_by_solution=content_items_by_solution,
         solutions=by_solution,
-        tables_in_solutions=tables_in_solutions
+        tables_in_solutions=tables_in_solutions,
+        asim_source_pairs=asim_source_pairs,
+        asim_union_pairs=asim_union_pairs,
+        asim_empty_count=asim_empty_count,
     )
 
     print(f"\nDocumentation generated successfully in: {args.output_dir}")
@@ -3869,10 +4953,12 @@ def main() -> None:
     print(f"  - Connectors index: {args.output_dir / 'connectors-index.md'}")
     print(f"  - Tables index: {args.output_dir / 'tables-index.md'}")
     print(f"  - Content index: {args.output_dir / 'content' / 'content-index.md'}")
+    print(f"  - ASIM index: {args.output_dir / 'asim' / 'asim-index.md'}")
     print(f"  - Solutions: {args.output_dir / 'solutions'}/ ({len(by_solution)} files)")
     print(f"  - Connectors: {args.output_dir / 'connectors'}/ ({len(all_connector_ids)} files)")
     print(f"  - Tables: {args.output_dir / 'tables'}/ ({table_pages_count} files)")
     print(f"  - Content: {args.output_dir / 'content'}/ ({content_pages_count} files)")
+    print(f"  - ASIM Parsers: {args.output_dir / 'asim'}/ ({asim_source_pairs * 2 + asim_union_pairs * 2 + asim_empty_count} files)")
 
 
 if __name__ == "__main__":

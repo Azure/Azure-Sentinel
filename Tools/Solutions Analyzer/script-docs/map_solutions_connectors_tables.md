@@ -99,6 +99,7 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--tables-csv` | `tables.csv` | Path for the tables output CSV file (with metadata) |
 | `--content-items-csv` | `content_items.csv` | Path for the content items output CSV file |
 | `--content-tables-mapping-csv` | `content_tables_mapping.csv` | Path for the content-to-tables mapping CSV file |
+| `--asim-parsers-csv` | `asim_parsers.csv` | Path for the ASIM parsers CSV file |
 | `--tables-reference-csv` | `tables_reference.csv` | Path to tables_reference.csv for table metadata |
 | `--mapping-csv` | `solutions_connectors_tables_mapping_simplified.csv` | Path for the simplified mapping CSV file |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
@@ -344,7 +345,32 @@ Contains one row per unique combination of solution, content item, and table. Th
 
 > **Note:** For playbooks, `table_usage` tracks whether the playbook reads from a table (Azure Monitor query), writes to it (Send Data action), or both. Other content types are assumed to only read from tables.
 
-### 8. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 8. asim_parsers.csv (ASIM Parser Details)
+
+Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. This includes all ASIM (Advanced Security Information Model) parsers with full metadata.
+
+| Column | Description |
+|--------|-------------|
+| `parser_name` | Parser function name (e.g., `ASimDnsAzureFirewall`) |
+| `equivalent_builtin` | Built-in parser alias (e.g., `_ASim_Dns_AzureFirewall`) |
+| `schema` | ASIM schema name (e.g., `Dns`, `NetworkSession`, `Authentication`) |
+| `schema_version` | Schema version number |
+| `parser_type` | Parser type: `union` (schema-level aggregator), `source` (product-specific), or `empty` (placeholder) |
+| `parser_title` | Display title of the parser |
+| `parser_version` | Parser version number |
+| `parser_last_updated` | Last update date |
+| `product_name` | Product/source name (e.g., `Azure Firewall`, `Palo Alto`) |
+| `description` | Parser description |
+| `tables` | Semicolon-separated list of source tables used by the parser |
+| `sub_parsers` | Semicolon-separated list of sub-parser references (for union parsers) |
+| `parser_params` | Parser parameters in format `name:type=default` |
+| `references` | Semicolon-separated list of reference links |
+| `source_file` | Relative path to the source YAML file |
+| `github_url` | Full GitHub URL to the parser definition |
+
+> **Note:** ASIM parsers are loaded from YAML files in the `/Parsers/ASim*/Parsers` directories. Union parsers aggregate multiple source parsers and typically have empty `tables` but populated `sub_parsers`. Source parsers reference actual Log Analytics tables.
+
+### 9. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 

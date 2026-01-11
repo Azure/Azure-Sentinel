@@ -752,13 +752,20 @@ def extract_query_table_tokens(
         if variable_name:
             assigned_variables.add(variable_name)
 
+    # Detect tables in union statements
+    # Union can have tables separated by commas or in parentheses
     if UNION_KEYWORD_PATTERN.search(substituted):
         for match in TOKEN_PATTERN.finditer(substituted):
             candidate = match.group(0)
             lowered = candidate.lower()
+            # Skip union keywords and boolean values
             if lowered in {"union", "isfuzzy", "true", "false"}:
                 continue
-            if lowered.endswith("_cl") and is_valid_table_candidate(candidate):
+            # Skip variable references
+            if lowered in assigned_variables:
+                continue
+            # Accept any valid table candidate (known tables, _CL tables, ASIM views)
+            if is_valid_table_candidate(candidate, allow_parser_names=allow_parser_tokens):
                 tokens.add(candidate)
 
     pipeline_tokens = detect_pipeline_heads(
@@ -773,6 +780,16 @@ def extract_query_table_tokens(
     # Use [^\S\n]* instead of \s* to match whitespace but not newlines
     inline_pipe_pattern = re.compile(r'^[^\S\n]*([A-Za-z_][A-Za-z0-9_]*)[^\S\n]*\|', re.MULTILINE)
     for match in inline_pipe_pattern.finditer(without_comments):
+        candidate = match.group(1)
+        lowered = candidate.lower()
+        if lowered not in assigned_variables:
+            if is_valid_table_candidate(candidate, allow_parser_names=allow_parser_tokens):
+                tokens.add(candidate)
+    
+    # Detect tables in parentheses followed by pipe: (TableName | ...
+    # This handles patterns like let x = (AzureDiagnostics | where ...)
+    paren_pipe_pattern = re.compile(r'\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n?\s*\|', re.MULTILINE)
+    for match in paren_pipe_pattern.finditer(without_comments):
         candidate = match.group(1)
         lowered = candidate.lower()
         if lowered not in assigned_variables:
@@ -1351,6 +1368,184 @@ def load_asim_parsers(repo_root: Path) -> Tuple[Set[str], Dict[str, Set[str]], D
                 continue
     
     return parser_names, dict(parser_table_map), parser_alias_map
+
+
+def load_asim_parsers_detailed(repo_root: Path) -> Tuple[List[Dict[str, Any]], Set[str], Dict[str, Set[str]], Dict[str, str]]:
+    """
+    Load ASIM parsers from /Parsers/ASim*/Parsers directories with full metadata for CSV export.
+    
+    Returns:
+        - parser_records: List of dicts with all parser metadata for CSV export
+        - parser_names: Set of all ASIM parser names (both ParserName and EquivalentBuiltInParser)
+        - parser_table_map: Dict mapping parser name (lowercased) to tables/sub-parsers it references
+        - parser_alias_map: Dict mapping EquivalentBuiltInParser to ParserName (both lowercased)
+    """
+    try:
+        import yaml
+    except ImportError:
+        print("  Warning: PyYAML not installed, skipping ASIM parser loading")
+        return [], set(), {}, {}
+    
+    parsers_dir = repo_root / "Parsers"
+    parser_records: List[Dict[str, Any]] = []
+    parser_names: Set[str] = set()
+    parser_table_map: Dict[str, Set[str]] = defaultdict(set)
+    parser_alias_map: Dict[str, str] = {}
+    
+    if not parsers_dir.exists():
+        return parser_records, parser_names, parser_table_map, parser_alias_map
+    
+    # Find all ASim* directories
+    asim_dirs = [d for d in parsers_dir.iterdir() if d.is_dir() and d.name.startswith("ASim")]
+    
+    for asim_dir in sorted(asim_dirs):
+        parsers_subdir = asim_dir / "Parsers"
+        if not parsers_subdir.exists():
+            continue
+        
+        # Extract schema name from directory (e.g., "ASimDns" -> "Dns", "ASimNetworkSession" -> "NetworkSession")
+        schema_name = asim_dir.name
+        if schema_name.startswith("ASim"):
+            schema_name = schema_name[4:]  # Remove "ASim" prefix
+        
+        for yaml_path in sorted(list(parsers_subdir.glob("*.yaml")) + list(parsers_subdir.glob("*.yml"))):
+            try:
+                content = yaml_path.read_text(encoding="utf-8")
+                data = yaml.safe_load(content)
+                if not isinstance(data, dict):
+                    continue
+                
+                # Extract all available fields
+                parser_info = data.get("Parser", {}) if isinstance(data.get("Parser"), dict) else {}
+                product_info = data.get("Product", {}) if isinstance(data.get("Product"), dict) else {}
+                normalization_info = data.get("Normalization", {}) if isinstance(data.get("Normalization"), dict) else {}
+                references = data.get("References", []) if isinstance(data.get("References"), list) else []
+                
+                parser_name = data.get("ParserName", "")
+                equivalent_builtin = data.get("EquivalentBuiltInParser", "")
+                parser_query = data.get("ParserQuery", "")
+                sub_parsers = data.get("Parsers", [])  # List of sub-parser references
+                parser_params = data.get("ParserParams", [])
+                description = data.get("Description", "")
+                
+                # Skip if no parser name
+                if not parser_name:
+                    continue
+                
+                parser_names.add(parser_name)
+                parser_name_lower = parser_name.lower()
+                
+                # Extract tables from the parser query
+                tables: Set[str] = set()
+                if parser_query:
+                    tables = extract_query_table_tokens(parser_query, {}, {})
+                    parser_table_map[parser_name_lower].update(tables)
+                
+                # Handle sub-parser references
+                sub_parsers_list = []
+                if isinstance(sub_parsers, list):
+                    for sub_parser in sub_parsers:
+                        if isinstance(sub_parser, str) and sub_parser.strip():
+                            parser_table_map[parser_name_lower].add(sub_parser.strip())
+                            sub_parsers_list.append(sub_parser.strip())
+                
+                # Map the EquivalentBuiltInParser to the ParserName
+                if equivalent_builtin and parser_name:
+                    parser_names.add(equivalent_builtin)
+                    equivalent_lower = equivalent_builtin.lower()
+                    parser_alias_map[equivalent_lower] = parser_name_lower
+                    if parser_name_lower in parser_table_map:
+                        parser_table_map[equivalent_lower] = parser_table_map[parser_name_lower]
+                
+                # Determine parser type
+                parser_type = "source"  # Default - individual source parser
+                if sub_parsers_list:
+                    parser_type = "union"  # Schema-level union parser
+                elif parser_name.lower().endswith("empty") or "empty" in yaml_path.name.lower():
+                    parser_type = "empty"  # Empty placeholder parser
+                
+                # Format references as semicolon-separated list
+                ref_links = []
+                for ref in references:
+                    if isinstance(ref, dict):
+                        title = ref.get("Title", "")
+                        link = ref.get("Link", "")
+                        if title and link:
+                            ref_links.append(f"[{title}]({link})")
+                        elif link:
+                            ref_links.append(link)
+                
+                # Format parser params
+                params_list = []
+                if isinstance(parser_params, list):
+                    for param in parser_params:
+                        if isinstance(param, dict):
+                            param_name = param.get("Name", "")
+                            param_type = param.get("Type", "")
+                            param_default = param.get("Default", "")
+                            if param_name:
+                                params_list.append(f"{param_name}:{param_type}={param_default}")
+                
+                # Build the record for CSV export
+                record = {
+                    "parser_name": parser_name,
+                    "equivalent_builtin": equivalent_builtin,
+                    "schema": normalization_info.get("Schema", schema_name),
+                    "schema_version": normalization_info.get("Version", ""),
+                    "parser_type": parser_type,
+                    "parser_title": parser_info.get("Title", ""),
+                    "parser_version": parser_info.get("Version", ""),
+                    "parser_last_updated": parser_info.get("LastUpdated", ""),
+                    "product_name": product_info.get("Name", ""),
+                    "description": description.strip() if description else "",
+                    "tables": ";".join(sorted(tables)) if tables else "",
+                    "sub_parsers": ";".join(sub_parsers_list) if sub_parsers_list else "",
+                    "parser_params": ";".join(params_list) if params_list else "",
+                    "references": ";".join(ref_links) if ref_links else "",
+                    "source_file": str(yaml_path.relative_to(repo_root)),
+                    "github_url": f"https://github.com/Azure/Azure-Sentinel/blob/master/{yaml_path.relative_to(repo_root).as_posix()}",
+                }
+                
+                parser_records.append(record)
+                    
+            except Exception as e:
+                continue
+    
+    return parser_records, parser_names, dict(parser_table_map), parser_alias_map
+
+
+def write_asim_parsers_csv(parser_records: List[Dict[str, Any]], output_path: Path) -> None:
+    """Write ASIM parser records to CSV file."""
+    if not parser_records:
+        print("  No ASIM parser records to write")
+        return
+    
+    fieldnames = [
+        "parser_name",
+        "equivalent_builtin",
+        "schema",
+        "schema_version",
+        "parser_type",
+        "parser_title",
+        "parser_version",
+        "parser_last_updated",
+        "product_name",
+        "description",
+        "tables",
+        "sub_parsers",
+        "parser_params",
+        "references",
+        "source_file",
+        "github_url",
+    ]
+    
+    with output_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
+        for record in parser_records:
+            writer.writerow(record)
+    
+    print(f"  Wrote {len(parser_records)} ASIM parser records to {output_path}")
 
 
 def normalize_parser_name(name: str) -> str:
@@ -1996,6 +2191,22 @@ def extract_content_item_from_workbook(
     if json_path.name.lower().startswith("azuredeploy"):
         return None
     
+    # Skip ARM deployment templates - they have $schema field and are NOT actual workbooks
+    # Real workbooks have "version": "Notebook/1.0" at the root level
+    if isinstance(data, dict):
+        # Check for ARM template schema - these are deployment wrappers, not workbook content
+        if "$schema" in data:
+            schema_val = data.get("$schema", "")
+            if isinstance(schema_val, str) and "deploymentTemplate" in schema_val:
+                return None
+        
+        # Verify this is actually a workbook (has "version": "Notebook/..." or contains "items" array)
+        version = data.get("version", "")
+        has_items = "items" in data
+        if not (version.startswith("Notebook/") or has_items):
+            # Not a valid workbook structure
+            return None
+    
     # Use filename as workbook name (workbooks don't have reliable metadata)
     name = json_path.stem
     
@@ -2381,7 +2592,14 @@ def extract_tables_from_content_query(
     parser_names: Set[str],
     parser_table_map: Dict[str, Set[str]],
 ) -> Set[str]:
-    """Extract table names from a content item's KQL query, expanding parser references recursively."""
+    """Extract table names from a content item's KQL query.
+    
+    ASIM parsers (starting with _Im_ or _ASim_) are kept as-is and NOT expanded
+    to their underlying tables. This allows documentation to show which parsers
+    a content item uses rather than the expanded table list.
+    
+    Non-ASIM parsers (e.g., solution-specific parsers) are still expanded.
+    """
     if not query:
         return set()
     
@@ -2389,27 +2607,33 @@ def extract_tables_from_content_query(
     cache: Dict[str, Optional[str]] = {}
     tables = extract_query_table_tokens(query, {}, cache, allow_parser_tokens=True)
     
-    # Expand parser references to actual tables using recursive expansion
+    # Process tables - keep ASIM parsers as-is, expand other parsers
     # Normalize parser names to handle underscore prefix variations
-    expanded_tables: Set[str] = set()
+    result_tables: Set[str] = set()
     parser_names_normalized = {normalize_parser_name(p) for p in parser_names}
     parser_table_map_normalized = {normalize_parser_name(k): v for k, v in parser_table_map.items()}
     
     for table in tables:
-        table_normalized = normalize_parser_name(table)
-        if table_normalized in parser_names_normalized or table_normalized in parser_table_map_normalized:
-            # This is a parser, expand recursively to underlying tables
-            derived_tables = expand_parser_tables(table, parser_table_map)
-            if derived_tables:
-                expanded_tables.update(derived_tables)
-            else:
-                # Keep the parser name if we can't expand it
-                expanded_tables.add(table)
+        # Check if this is an ASIM parser (starts with _Im_ or _ASim_)
+        lowered = table.lower() if table else ""
+        if lowered.startswith("_im_") or lowered.startswith("_asim_"):
+            # Keep ASIM parser as-is, don't expand
+            result_tables.add(table)
         else:
-            expanded_tables.add(table)
+            table_normalized = normalize_parser_name(table)
+            if table_normalized in parser_names_normalized or table_normalized in parser_table_map_normalized:
+                # This is a non-ASIM parser, expand recursively to underlying tables
+                derived_tables = expand_parser_tables(table, parser_table_map)
+                if derived_tables:
+                    result_tables.update(derived_tables)
+                else:
+                    # Keep the parser name if we can't expand it
+                    result_tables.add(table)
+            else:
+                result_tables.add(table)
     
-    # Filter expanded tables through is_valid_table_candidate to remove helper functions
-    return {t for t in expanded_tables if is_valid_table_candidate(t)}
+    # Filter tables through is_valid_table_candidate to remove helper functions
+    return {t for t in result_tables if is_valid_table_candidate(t)}
 
 
 def parse_args(default_repo_root: Path) -> argparse.Namespace:
@@ -2486,6 +2710,12 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "content_tables_mapping.csv",
         help="Path for the content items to tables mapping CSV file (default: %(default)s)",
     )
+    parser.add_argument(
+        "--asim-parsers-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "asim_parsers.csv",
+        help="Path for the ASIM parsers CSV file (default: %(default)s)",
+    )
     return parser.parse_args()
 
 
@@ -2513,10 +2743,14 @@ def main() -> None:
     report_parent = report_path.parent
     report_parent.mkdir(parents=True, exist_ok=True)
 
-    # Load ASIM parsers once at startup for global parser expansion
+    # Load ASIM parsers with full metadata for CSV export and parser expansion
     print("Loading ASIM parsers from /Parsers/ASim*/Parsers...")
-    asim_parser_names, asim_parser_table_map, asim_alias_map = load_asim_parsers(repo_root)
-    print(f"  Loaded {len(asim_parser_names)} ASIM parser names, {len(asim_parser_table_map)} parser mappings")
+    asim_parser_records, asim_parser_names, asim_parser_table_map, asim_alias_map = load_asim_parsers_detailed(repo_root)
+    print(f"  Loaded {len(asim_parser_records)} ASIM parser records, {len(asim_parser_names)} parser names, {len(asim_parser_table_map)} parser mappings")
+    
+    # Write ASIM parsers CSV
+    asim_parsers_csv_path = args.asim_parsers_csv.resolve()
+    write_asim_parsers_csv(asim_parser_records, asim_parsers_csv_path)
 
     # Load tables_reference.csv early for use in collection method detection
     tables_reference: Dict[str, Dict[str, str]] = {}
