@@ -4,7 +4,7 @@ The behavior detection rules are organized into 3 data source files containing l
 
 ## File Structure
 
-The `Behaviors-rules/` directory contains exactly 3 markdown files, one for each data source:
+The `Behaviors Rules/` directory contains exactly 3 markdown files, one for each data source:
 
 - `aws_cloudtrail_behaviors.md` - AWS CloudTrail behaviors
 - `gcp_auditlogs_behaviors.md` - GCP Audit Logs behaviors
