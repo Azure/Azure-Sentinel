@@ -96,6 +96,28 @@ jobs:
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Prevent fork modifications to test infrastructure
+        if: github.event.pull_request.head.repo.fork == true
+        run: |
+          log_info() { echo "ℹ️  $1"; }
+          log_error() { echo "❌ $1"; }
+          log_success() { echo "✅ $1"; }
+          
+          log_info "Checking for modifications to asimParsersTest folder in fork PR..."
+          
+          # Get the list of modified files
+          modified_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }})
+          
+          # Check if any files in .script/tests/asimParsersTest/ have been modified
+          if echo "$modified_files" | grep -E "\.script/tests/asimParsersTest/" > /dev/null; then
+            log_error "Fork PRs cannot modify the asimParsersTest test infrastructure folder"
+            log_error "Modified test files detected:"
+            echo "$modified_files" | grep "\.script/tests/asimParsersTest/" | sed 's/^/  - /'
+            exit 1
+          fi
+          
+          log_success "No modifications to asimParsersTest folder detected"
       
       - name: Comment on fork PR for approval guidance
         if: |
