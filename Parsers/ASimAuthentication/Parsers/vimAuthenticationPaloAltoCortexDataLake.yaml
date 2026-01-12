@@ -64,6 +64,12 @@ ParserQuery: |
       "9", "High",
       "10", "High"
   ];
+  let LogonMethod = datatable(FieldDeviceCustomNumber1: long, LogonMethod: string)
+  [
+      1, "Username & Password",
+      2, "Multi factor authentication",
+      3, "Multi factor authentication"
+  ];
   let parser = (
       starttime: datetime=datetime(null), 
       endtime: datetime=datetime(null), 
@@ -89,6 +95,7 @@ ParserQuery: |
           and (array_length(srchostname_has_any) == 0 or AdditionalExtensions has_any(srchostname_has_any))
           and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
           and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source
+      // eventresult filtering done later in the parser
       | extend
           EventResult = iff(Message has "Invalid Certificate", "Failure", "Success"),
           EventType = "Logon"
@@ -100,6 +107,7 @@ ParserQuery: |
       | invoke _ASIM_ResolveDvcFQDN('DeviceName')
       | invoke _ASIM_ResolveSrcFQDN('PanOSSourceDeviceHost')
       | lookup EventSeverityLookup on LogSeverity
+      | lookup LogonMethod on FieldDeviceCustomNumber1
       | extend
           EventStartTime = coalesce(todatetime(start), TimeGenerated),
           SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
@@ -146,7 +154,8 @@ ParserQuery: |
             PanOSSourceDeviceProfile,
             "PanOSSourceDeviceVendor",
             PanOSSourceDeviceVendor
-        )
+        ),
+        TargetUsername = coalesce(PanOSAuthenticatedUserName, DestinationUserName)
       | project-rename
           DvcIpAddr = Computer,
           DvcId = DeviceExternalID,
@@ -176,11 +185,6 @@ ParserQuery: |
           User = TargetUsername,
           IpAddr = SrcIpAddr,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
-          TargetDomainType = case(
-              array_length(split(DestinationUserName, ".")) > 1, "FQDN",
-              array_length(split(DestinationUserName, "\\")) > 1, "Windows",
-              ""
-          ),
           TargetUserIdType = iff(isnotempty(TargetUserId), "UID", ""),
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
       | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
@@ -242,7 +246,6 @@ ParserQuery: |
         User,
         IpAddr,
         DvcIdType,
-        TargetDomainType,
         TargetUserIdType,
         TargetUsernameType,
         EventSchema,
