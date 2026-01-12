@@ -59,7 +59,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if result_attributes:
         kwargs['DocumentVersion'] = result_attributes
     if next_token:
-        kwargs['DocumentFormat'] = next_token
+        kwargs['NextToken'] = next_token
     if max_results:
         kwargs['MaxResults'] = max_results
 
@@ -77,13 +77,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             logging.info(f'Parameters: {kwargs}')
             
             all_entities = []
-            next_token = kwargs.get('DocumentFormat')
+            next_token = kwargs.get('NextToken')
 
             while True:
                 if next_token:
-                    kwargs['DocumentFormat'] = next_token
+                    kwargs['NextToken'] = next_token
                 else:
-                    kwargs.pop('DocumentFormat', None)
+                    kwargs.pop('NextToken', None)
 
                 results = ssm_client.get_inventory(**kwargs)
                 logging.info('Call to get AWS SSM Inventory successful.')
