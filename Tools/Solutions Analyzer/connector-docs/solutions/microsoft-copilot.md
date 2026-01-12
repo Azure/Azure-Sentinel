@@ -35,12 +35,12 @@ The Microsoft Copilot logs connector in Microsoft Sentinel enables the seamless 
 
 **1. Connect Microsoft Copilot audit logs to Microsoft Sentinel**
 
-This connector uses the Office Management API to get your Microsoft Copilot audit logs. The logs will be stored and processed in your existing Microsoft Sentinel workspace. You can find the data in the **LLMActivity** table.
+This connector uses the Office Management API to get your Microsoft Copilot audit logs. The logs will be stored and processed in your existing Microsoft Sentinel workspace. You can find the data in the **CopilotActivity** table.
 - Click 'Connect' to establish connection
 
 | | |
 |--------------------------|---|
-| **Tables Ingested** | `LLMActivity` |
+| **Tables Ingested** | `CopilotActivity` |
 | **Connector Definition Files** | [MicrosoftCopilot_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Copilot/Data%20Connectors/MicrosoftCopilot_ConnectorDefinition.json) |
 
 [→ View full connector details](../connectors/microsoftcopilot.md)
@@ -51,6 +51,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `LLMActivity` | [Microsoft Copilot](../connectors/microsoftcopilot.md) |
+| `CopilotActivity` | [Microsoft Copilot](../connectors/microsoftcopilot.md) |
 
 [← Back to Solutions Index](../solutions-index.md)
