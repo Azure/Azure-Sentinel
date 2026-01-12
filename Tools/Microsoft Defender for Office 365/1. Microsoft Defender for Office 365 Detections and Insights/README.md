@@ -68,10 +68,12 @@ Note: Power BI has no native Microsoft Graph connector; Web.Contents requires ap
   ![keyvault registration fourth step](Images/keyvault4.png)  
   ![keyvault registration fifth step](Images/keyvault5.png)
 
-4) Enable custom connector support in Power BI Desktop
+4) Download the files in this repository. The connector (`KeyVaultConnector.mez`) and PowerBI template (`Microsoft Defender for Office 365 Detection and Insights_v3.pbit`). 
+
+5) Enable custom connector support in Power BI Desktop
 - Follow: [Connector extensibility in Power BI](https://learn.microsoft.com/en-us/power-bi/connect-data/desktop-connector-extensibility#custom-connectors) to deploy the connector:
     *   Copy `KeyVaultConnector.mez` to `Documents\Power BI Desktop\Custom Connectors`.
-    *   Enable "Allow any extension..." in Power BI Options -> Security.
+    *   ⚠️Enable "Allow any extension..." in Power BI Options -> Security.
     
     ![connector setup](Images/1connector.png)
 
