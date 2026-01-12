@@ -75,21 +75,30 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         try:
             logging.info('Calling function to get AWS SSM Inventory.')
             logging.info(f'Parameters: {kwargs}')
-            results = ssm_client.get_inventory(**kwargs)
+            
+            all_entities = []
+            next_token = kwargs.get('DocumentFormat')
 
-            logging.info('Call to get AWS SSM Inventory successful.')
+            while True:
+                if next_token:
+                    kwargs['DocumentFormat'] = next_token
+                else:
+                    kwargs.pop('DocumentFormat', None)
 
-            results = ssm_client.get_inventory(**kwargs)
+                results = ssm_client.get_inventory(**kwargs)
+                logging.info('Call to get AWS SSM Inventory successful.')
+
+                all_entities.extend(results.get("Entities", []))
+
+                next_token = results.get("NextToken")
+                if not next_token:
+                    break
 
             base_url = req.url.split('?')[0]
 
             response = {
-                "value": results.get("Entities", []),
-                "nextLink": (
-                    f"{base_url}?NextToken={results['NextToken']}"
-                    if results.get("NextToken")
-                    else None
-                )
+                "value": all_entities,
+                "nextLink": None
             }
 
             logging.info(f'Response:{response}')
