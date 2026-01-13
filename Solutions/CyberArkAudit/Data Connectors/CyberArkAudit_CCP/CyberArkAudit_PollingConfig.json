@@ -1,0 +1,88 @@
+[
+    {
+        "name": "CyberArk Audit Logs Polling Config",
+        "apiVersion": "2022-12-01-preview",
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "properties": {
+            "connectorDefinitionName": "CyberArkAuditCCPDefinition",
+            "dataType": "CyberArkAuditV2_CL",
+            "dcrConfig": {
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+                "streamName": "Custom-CyberArkAuditV2"
+            },
+            "auth": {
+                "type": "OAuth2",
+                "ClientSecret": "{{clientSecret}}",
+                "ClientId": "{{clientId}}",
+                "TokenEndpoint": "https://{{CyberArkIdentityEndPoint}}/OAuth2/Token/{{OAuth2ServerAppName}}",
+                "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                "TokenEndpointQueryParameters": {},
+                "scope": "isp.audit.events:read",
+                "grantType": "client_credentials"
+            },
+            "request": {
+                "apiEndpoint": "https://{{CyberArkAPIBaseURL}}/api/audits/stream/createQuery",
+                "httpMethod": "POST",
+                "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                "rateLimitQPS": 10,
+                "queryWindowInMin": 5,
+                "retryCount": 3,
+                "timeoutInSeconds": 60,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "x-api-key": "{{AuditAPIKey}}",
+                    "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEF1ZGl0Jml2PTIuMCZ2bj1NaWNyb3NvZnQmaXQ9U0lFTQ=="
+                },
+                "isPostPayloadJson": true,
+                "queryParametersTemplate": "{\r\n  \"query\": {\r\n    \"pageSize\": 500,\r\n    \"selectedFields\": [\r\n      \"tenant_id\",\r\n      \"custom_data\",\r\n      \"arrival_timestamp\",\r\n      \"checksum\",\r\n      \"application_code\",\r\n      \"audit_code\",\r\n      \"timestamp\",\r\n      \"user_id\",\r\n      \"session_id\",\r\n      \"source\",\r\n      \"action_type\",\r\n      \"audit_type\",\r\n      \"component\",\r\n      \"target\",\r\n      \"command\",\r\n      \"message\",\r\n      \"username\",\r\n      \"action\",\r\n      \"uuid\",\r\n      \"icon\",\r\n      \"service_name\",\r\n      \"cloud_roles\",\r\n      \"cloud_workspaces\",\r\n      \"cloud_workspaces_and_roles\",\r\n      \"cloud_assets\",\r\n      \"cloud_identities\",\r\n      \"vaulted_accounts\",\r\n      \"cloud_provider\",\r\n      \"account_name\",\r\n      \"target_platform\",\r\n      \"safe\",\r\n      \"target_account\",\r\n      \"identity_type\"\r\n    ],\r\n    \"filterModel\": {\r\n      \"action\": [{{AuditQueryFilterAction}}],\r\n      \"applicationCode\": [{{AuditQueryFilterApplicationCode}}],\r\n      \"auditType\": [{{AuditQueryFilterAuditType}}]\r\n    }\r\n  }\r\n}"
+            },
+            "response": {
+                "eventsJsonPaths": [
+                    "$"
+                ],
+                "format": "json"
+            },
+            "stepInfo": {
+                "stepType": "Nested",
+                "nextSteps": [
+                    {
+                        "stepId": "CreateQuery",
+                        "stepPlaceholdersParsingKql": "source | project res = parse_json(data)| project cursorRef = tostring(res.cursorRef)"
+                    }
+                ]
+            },
+            "stepCollectorConfigs": {
+                "CreateQuery": {
+                    "request": {
+                        "httpMethod": "POST",
+                        "apiEndpoint": "https://{{CyberArkAPIBaseURL}}/api/audits/stream/results",
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "x-api-key": "{{AuditAPIKey}}",
+                            "x-cybr-telemetry": "aW49TWljcm9zb2Z0IFNlbnRpbmVsIEF1ZGl0Jml2PTIuMCZ2bj1NaWNyb3NvZnQmaXQ9U0lFTQ=="
+                        },
+                        "logResponseContent": true,
+                        "queryParametersTemplate": "{\"cursorRef\":\"$cursorRef$\"}"
+                    },
+                    "response": {
+                        "format": "json",
+                        "eventsJsonPaths": [
+                            "$.data"
+                        ]
+                    },
+                    "Paging": {
+                        "pagingType": "PersistentToken",
+                        "nextPageTokenJsonPath": "$.paging.cursor.cursorRef",
+                        "nextPageParaName": "cursorRef"
+                    }
+                }
+            }
+        }
+    }
+]
