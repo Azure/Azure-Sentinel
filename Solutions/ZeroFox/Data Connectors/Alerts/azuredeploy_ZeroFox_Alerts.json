@@ -1,0 +1,320 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "ZeroFoxAlerts",
+            "minLength": 1,
+            "type": "string"
+        },
+        "SinceDaysAgo": {
+            "type": "int",
+            "defaultValue": 0,
+            "metadata": {
+                "description": "Defines how far back in time alerts are fetched on the first execution. Leave in 0 if you do not need historical alerts"
+            }
+        },
+        "ZeroFoxApiToken": {
+            "type": "securestring",
+            "defaultValue": "<zerofoxApiToken>",
+            "metadata": {
+                "description": "ZeroFox API Token for authentication"
+            }
+        },
+        "WorkspaceResourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "The full ARM Resource ID of the Log Analytics workspace (used for both Sentinel data ingestion and Application Insights telemetry). Find this in Azure Portal: Log Analytics workspace > Settings > Properties > Resource ID. Format: /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}. NOTE: This is NOT the Workspace ID (GUID)."
+            }
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+        "StorageAccountName": "[substring(tolower(variables('FunctionName')), 0, 22)]",
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "DCEName": "[concat('dce-', variables('FunctionName'))]",
+        "DCRName": "[concat('dcr-', variables('FunctionName'))]",
+        "TableName": "ZeroFoxAlertPoller_CL",
+        "StreamName": "Custom-ZeroFoxAlertPoller_CL",
+        "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]",
+                "WorkspaceResourceId": "[parameters('WorkspaceResourceId')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('StorageAccountName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                },
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "cors": {
+                    "corsRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCEName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('DCRName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "streamDeclarations": {
+                    "[variables('StreamName')]": {
+                        "columns": [
+                            {"name": "alert_type", "type": "string"},
+                            {"name": "logs", "type": "string"},
+                            {"name": "offending_content_url", "type": "string"},
+                            {"name": "asset_term", "type": "string"},
+                            {"name": "assignee", "type": "string"},
+                            {"name": "entity", "type": "dynamic"},
+                            {"name": "content_created_at", "type": "datetime"},
+                            {"name": "id", "type": "int"},
+                            {"name": "severity", "type": "int"},
+                            {"name": "perpetrator", "type": "dynamic"},
+                            {"name": "rule_group_id", "type": "int"},
+                            {"name": "asset", "type": "dynamic"},
+                            {"name": "entered_by", "type": "string"},
+                            {"name": "metadata", "type": "string"},
+                            {"name": "status", "type": "string"},
+                            {"name": "rule_name", "type": "string"},
+                            {"name": "last_modified", "type": "datetime"},
+                            {"name": "protected_locations", "type": "string"},
+                            {"name": "darkweb_term", "type": "string"},
+                            {"name": "business_network", "type": "string"},
+                            {"name": "reviewed", "type": "boolean"},
+                            {"name": "escalated", "type": "boolean"},
+                            {"name": "network", "type": "string"},
+                            {"name": "protected_social_object", "type": "string"},
+                            {"name": "notes", "type": "string"},
+                            {"name": "reviews", "type": "string"},
+                            {"name": "rule_id", "type": "int"},
+                            {"name": "tags", "type": "string"}
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('WorkspaceResourceId')]",
+                            "name": "sentinel-workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('StreamName')]"
+                        ],
+                        "destinations": [
+                            "sentinel-workspace"
+                        ],
+                        "transformKql": "source | extend entity_id_d = toint(entity.id), entity_name_s = tostring(entity.name), entity_image_s = tostring(entity.image), entity_labels_s = tostring(entity.labels), entity_entity_group_id_d = toint(entity.entity_group_id), entity_entity_group_name_s = tostring(entity.entity_group_name), entity_term_s = tostring(entity.term), entity_account_s = tostring(entity.account), entity_email_receiver_id_s = tostring(entity.email_receiver_id), perpetrator_name_s = tostring(perpetrator.name), perpetrator_display_name_s = tostring(perpetrator.display_name), perpetrator_id_d = toint(perpetrator.id), perpetrator_url_s = tostring(perpetrator.url), perpetrator_content_s = tostring(perpetrator.content), perpetrator_type_s = tostring(perpetrator.type), perpetrator_timestamp_t = todatetime(perpetrator.timestamp), perpetrator_network_s = tostring(perpetrator.network), asset_id_d = toint(asset.id), asset_name_s = tostring(asset.name), asset_image_s = tostring(asset.image), asset_labels_s = tostring(asset.labels), asset_entity_group_id_d = toint(asset.entity_group_id), asset_entity_group_name_s = tostring(asset.entity_group_name), id_d = toint(id), Severity = toint(severity), rule_group_id_d = toint(rule_group_id), reviewed_b = tobool(reviewed), escalated_b = tobool(escalated), rule_id_d = toint(rule_id), last_modified_t = last_modified | project-rename TimeGenerated = last_modified, alert_type_s = alert_type, logs_s = logs, offending_content_url_s = offending_content_url, asset_term_s = asset_term, assignee_s = assignee, content_created_at_t = content_created_at, entered_by_s = entered_by, metadata_s = metadata, status_s = status, rule_name_s = rule_name, protected_locations_s = protected_locations, darkweb_term_s = darkweb_term, business_network_s = business_network, network_s = network, protected_social_object_s = protected_social_object, notes_s = notes, reviews_s = reviews, tags_s = tags | project TimeGenerated, alert_type_s, logs_s, offending_content_url_s, asset_term_s, assignee_s, entity_id_d, entity_name_s, entity_image_s, entity_labels_s, entity_entity_group_id_d, entity_entity_group_name_s, entity_term_s, content_created_at_t, id_d, Severity, perpetrator_name_s, perpetrator_display_name_s, perpetrator_id_d, perpetrator_url_s, perpetrator_content_s, perpetrator_type_s, perpetrator_timestamp_t, perpetrator_network_s, rule_group_id_d, asset_id_d, asset_name_s, asset_image_s, asset_labels_s, asset_entity_group_id_d, asset_entity_group_name_s, entered_by_s, metadata_s, status_s, rule_name_s, last_modified_t, protected_locations_s, darkweb_term_s, business_network_s, reviewed_b, escalated_b, network_s, protected_social_object_s, notes_s, reviews_s, rule_id_d, entity_account_s, entity_email_receiver_id_s, tags_s",
+                        "outputStream": "[variables('StreamName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.12"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('StorageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "ZeroFoxApiToken": "[parameters('ZeroFoxApiToken')]",
+                        "SinceDaysAgo": "[parameters('SinceDaysAgo')]",
+                        "DCE_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName')), '2022-06-01').logsIngestion.endpoint]",
+                        "DCR_IMMUTABLE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName')), '2022-06-01').immutableId]",
+                        "STREAM_NAME": "[variables('StreamName')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ZeroFoxAlerts-functionapp"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, variables('FunctionName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName'))]"
+            ],
+            "scope": "[concat('Microsoft.Insights/dataCollectionRules/', variables('DCRName'))]",
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('MonitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')), '2018-11-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/azure-webjobs-secrets')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+            "apiVersion": "2019-06-01",
+            "name": "[concat(variables('StorageAccountName'), '/default/', variables('StorageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('StorageAccountName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+            ],
+            "properties": {
+                "shareQuota": 5120
+            }
+        }
+    ],
+    "outputs": {
+        "DataCollectionEndpointUri": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DCEName')), '2022-06-01').logsIngestion.endpoint]"
+        },
+        "DataCollectionRuleImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('DCRName')), '2022-06-01').immutableId]"
+        },
+        "FunctionAppName": {
+            "type": "string",
+            "value": "[variables('FunctionName')]"
+        },
+        "FunctionAppPrincipalId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')), '2018-11-01', 'Full').identity.principalId]"
+        }
+    }
+}
