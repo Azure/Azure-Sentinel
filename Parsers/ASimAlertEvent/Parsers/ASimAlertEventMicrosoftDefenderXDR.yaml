@@ -58,16 +58,21 @@ ParserQuery: |
     AlertEvidence
     | where not(disabled)
     // Mapping Inspection Fields
-    | extend AdditionalFields = todynamic(AdditionalFields)
+    | project-rename
+        AlertName = Title,
+        DetectionMethod = DetectionSource
     | extend 
         EventUid = AlertId,
-        AlertName = Title,
         AlertVerdict_Custom = tostring(AdditionalFields.ThreatAnalysisSummary[0].Verdict),
         AlertVerdictDate_s = todatetime(AdditionalFields.ThreatAnalysisSummary[0].AnalysisDate),
         AttackTactics = iff(Categories has_any (AttackTacticSet), replace_regex(Categories, @"[\[\]\""]", ""), ""),
-        AlertOriginalStatus = tostring(AdditionalFields.LastRemediationState),
-        AlertStatus = iif(isnotempty(AdditionalFields.LastRemediationState), iif(AdditionalFields.LastRemediationState == "Active", "Active", "Closed"), ""),
-        DetectionMethod = DetectionSource
+        AlertOriginalStatus = tostring(AdditionalFields.LastRemediationState)
+    | extend
+        AlertStatus = case(
+            AlertOriginalStatus == "Active", "Active",
+            isempty(AlertOriginalStatus), "",
+            "Closed"
+        )
     | lookup AlertVerdictLookup on AlertVerdict_Custom
     | lookup IndicatorTypeLookup on EntityType
     | lookup IndicatorAssociationLookup on EvidenceRole
@@ -120,19 +125,17 @@ ParserQuery: |
     // Mapping File Entity
     | extend 
         FileName,
-        FileDirectory = FolderPath,
         FilePath = iff(isnotempty(FolderPath) and isnotempty(FileName), strcat(FolderPath, '\\', FileName), FileName),
+        FileMD5 = tostring(AdditionalFields.FileHashes[1].Value),
+        FileSize
+    | project-rename
+        FileDirectory = FolderPath,
         FileSHA1 = SHA1,
         FileSHA256 = SHA256,
-        FileMD5 = tostring(AdditionalFields.FileHashes[1].Value),
-        FileSize = FileSize
-    // Mapping Url Entity
-    | extend 
         Url = RemoteUrl
     // Mapping Registry Entity
     | extend 
         RegistryKey,
-        RegistryValue = RegistryValueName,
         RegistryValueData,
         ValueType = tostring(AdditionalFields.ValueType)
     | lookup RegistryValueTypeLookup on ValueType
@@ -141,8 +144,7 @@ ParserQuery: |
         AppId_s = ApplicationId,
         AppName_s = Application
     // Mapping Email Entity
-    | extend 
-        EmailMessageId = NetworkMessageId,
+    | extend
         EmailSubject
     | extend AdditionalFields = bag_pack(
                                 "AlertVerdictDate",
@@ -176,6 +178,9 @@ ParserQuery: |
                                 "FileDirectory",
                                 FileDirectory
                             )
+    | project-rename
+        RegistryValue = RegistryValueName,
+        EmailMessageId = NetworkMessageId
     // Mapping common event fields
     | extend
         Type = "AlertEvidence",

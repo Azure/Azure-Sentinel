@@ -97,7 +97,6 @@ ParserQuery: |
       AlertEvidence
       | where not(disabled)
       // Mapping Inspection Fields
-      | extend AdditionalFields = todynamic(AdditionalFields)
       | where (isnull(starttime) or Timestamp >= starttime)
           and (isnull(endtime) or Timestamp <= endtime)
           and ((array_length(ipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(LocalIP, ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(tostring(AdditionalFields.Host.IpInterfaces[0].Address), ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(RemoteIP, ipaddr_has_any_prefix)))
@@ -108,16 +107,22 @@ ParserQuery: |
           // ThreatCategory filtering done later in the parser
           // AlertVerdict filtering done later in the parser
           and ((array_length(eventseverity_has_any) == 0)) // EventSeverity detail not available in this parser.
+      | project-rename
+          AlertName = Title,
+          DetectionMethod = DetectionSource
       | extend 
           EventUid = AlertId,
-          AlertName = Title,
           AlertVerdict_Custom = tostring(AdditionalFields.ThreatAnalysisSummary[0].Verdict),
           AlertVerdictDate_s = todatetime(AdditionalFields.ThreatAnalysisSummary[0].AnalysisDate),
           AttackTactics = iff(Categories has_any (AttackTacticSet), replace_regex(Categories, @"[\[\]\""]", ""), ""),
-          AlertOriginalStatus = tostring(AdditionalFields.LastRemediationState),
-          AlertStatus = iif(isnotempty(AdditionalFields.LastRemediationState), iif(AdditionalFields.LastRemediationState == "Active", "Active", "Closed"), ""),
-          DetectionMethod = DetectionSource
+      | extend
+          AlertStatus = case(
+              AlertOriginalStatus == "Active", "Active",
+              isempty(AlertOriginalStatus), "",
+              "Closed"
+          )
       // Filter for AlertVerdict
+      | lookup AlertVerdictLookup on AlertVerdict_Custom
       | where ((array_length(alertverdict_has_any) == 0) or (AlertVerdict has_any (alertverdict_has_any)))
       | lookup IndicatorTypeLookup on EntityType
       | lookup IndicatorAssociationLookup on EvidenceRole
@@ -126,7 +131,6 @@ ParserQuery: |
           ThreatCategory = iif(Categories has_any (ThreatCategorySet), replace(@"[\[\]\""]", "", Categories), "")
       // Filter for ThreatCategory
       | where ((array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any)))
-      | lookup AlertVerdictLookup on AlertVerdict_Custom
       | lookup IndicatorTypeLookup on EntityType
       | lookup IndicatorAssociationLookup on EvidenceRole
       // Mapping Threat Fields
@@ -178,19 +182,17 @@ ParserQuery: |
       // Mapping File Entity
       | extend 
           FileName,
-          FileDirectory = FolderPath,
           FilePath = iff(isnotempty(FolderPath) and isnotempty(FileName), strcat(FolderPath, '\\', FileName), FileName),
-          FileSHA1 = SHA1,
-          FileSHA256 = SHA256,
           FileMD5 = tostring(AdditionalFields.FileHashes[1].Value),
-          FileSize = FileSize
-      // Mapping Url Entity
-      | extend 
-          Url = RemoteUrl
-      // Mapping Registry Entity
+          FileSize
+      | project-rename
+            FileDirectory = FolderPath,
+            FileSHA1 = SHA1,
+            FileSHA256 = SHA256,
+            Url = RemoteUrl
+        // Mapping Registry Entity
       | extend 
           RegistryKey,
-          RegistryValue = RegistryValueName,
           RegistryValueData,
           ValueType = tostring(AdditionalFields.ValueType)
       | lookup RegistryValueTypeLookup on ValueType
@@ -199,8 +201,7 @@ ParserQuery: |
           AppId_s = ApplicationId,
           AppName_s = Application
       // Mapping Email Entity
-      | extend 
-          EmailMessageId = NetworkMessageId,
+      | extend
           EmailSubject
       | extend AdditionalFields = bag_pack(
                                   "AlertVerdictDate",
@@ -234,6 +235,9 @@ ParserQuery: |
                                   "FileDirectory",
                                   FileDirectory
                               )
+      | project-rename
+          RegistryValue = RegistryValueName,
+          EmailMessageId = NetworkMessageId
       // Mapping common event fields
       | extend
           Type = "AlertEvidence",
