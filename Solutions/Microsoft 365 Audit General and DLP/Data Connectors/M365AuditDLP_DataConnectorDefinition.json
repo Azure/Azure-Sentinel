@@ -1,0 +1,93 @@
+{
+  "id": "M365AuditDLPCCP",
+  "title": "Microsoft 365 Audit.DLP",
+  "publisher": "Marko Lauren",
+  "descriptionMarkdown": "Microsoft 365 Audit.DLP connector ingests **DLP events for all workloads** from the Office 365 Management Activity API.\n\nData is ingested to the same **M365AuditGeneral_CL** table with **304 columns** including dedicated DLP schema fields (SharePointMetaData, ExchangeMetaData, EndpointMetaData, ExceptionInfo, PolicyDetails, SensitiveInfoDetectionIsIncluded).\n\n**Prerequisites:** Entra ID app with Office 365 Management API permissions and DLP.All subscription.",
+  "graphQueriesTableName": "M365AuditGeneral_CL",
+  "graphQueries": [
+    {
+      "metricName": "Total DLP events received",
+      "legend": "M365 DLP Events",
+      "baseQuery": "M365AuditGeneral_CL | where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All Microsoft 365 DLP Events",
+      "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| sort by TimeGenerated desc"
+    },
+    {
+      "description": "DLP Events by Workload",
+      "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize count() by Workload\n| render barchart"
+    },
+    {
+      "description": "DLP Policy Violations",
+      "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| where Operation == 'DlpRuleMatch'\n| summarize count() by tostring(PolicyDetails)\n| render barchart"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "M365AuditGeneral_CL",
+      "lastDataReceivedQuery": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriteria": [
+    {
+      "type": "HasDataConnectors"
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Office 365 Management API credentials",
+        "description": "An Entra ID application registration with **Client ID** and **Client Secret**. The application must have **Office 365 Management APIs - ActivityFeed.Read** permission and an active subscription to the **DLP.All** content type. You can reuse the same app as the Audit.General connector."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "1. Register an Entra ID Application",
+      "description": "⚠️ If you already have an app from the Audit.General connector, you can **reuse the same app**. Otherwise:\n\n1. Go to **Microsoft Entra ID** > **App registrations** > **New registration**\n2. Name: `Sentinel-M365Audit` (or your preferred name)\n3. **Supported account types**: Accounts in this organizational directory only\n4. Click **Register**\n5. Note the **Application (client) ID** - you'll need this later\n6. Go to **Certificates & secrets** > **New client secret**\n7. Add a description, set expiration, click **Add**\n8. **Copy the secret Value immediately** - it won't be shown again"
+    },
+    {
+      "title": "2. Configure API Permissions",
+      "description": "⚠️ Audit.DLP requires **ActivityFeed.ReadDlp** permission (different from Audit.General which needs ActivityFeed.Read).\n\n1. In your app registration, go to **API permissions** > **Add a permission**\n2. Select **Office 365 Management APIs**\n3. Choose **Application permissions**\n4. Select **ActivityFeed.ReadDlp**\n5. Click **Add permissions**\n6. Click **Grant admin consent** for your tenant\n7. Verify the permission shows as **Granted**\n\nNote: If sharing the same app with Audit.General connector, add both ActivityFeed.Read and ActivityFeed.ReadDlp permissions."
+    },
+    {
+      "title": "3. Subscribe to DLP.All Content",
+      "description": "Run this PowerShell script to subscribe to the DLP.All content type (required before data flows):\n\n```powershell\n# Replace with your values\n$tenantId = 'YOUR_TENANT_ID'\n$clientId = 'YOUR_CLIENT_ID'\n$clientSecret = 'YOUR_CLIENT_SECRET'\n$publisherId = $tenantId  # Publisher identifier is your tenant ID\n\n# Get OAuth token\n$body = @{\n    grant_type    = 'client_credentials'\n    client_id     = $clientId\n    client_secret = $clientSecret\n    resource      = 'https://manage.office.com'\n}\n$tokenResponse = Invoke-RestMethod -Method Post -Uri \"https://login.microsoftonline.com/$tenantId/oauth2/token\" -Body $body\n$token = $tokenResponse.access_token\n\n# Start subscription\n$headers = @{Authorization = \"Bearer $token\"}\n$subscribeUri = \"https://manage.office.com/api/v1.0/$tenantId/activity/feed/subscriptions/start?contentType=DLP.All&PublisherIdentifier=$publisherId\"\nInvoke-RestMethod -Method Post -Uri $subscribeUri -Headers $headers\n```"
+    },
+    {
+      "title": "4. Connect the Data Connector",
+      "description": "Provide your Entra ID application credentials below. You can use the **same app credentials** as the Audit.General connector. The connector will automatically use your subscription's tenant ID for authentication and API calls.",
+      "instructions": [
+        {
+          "type": "OAuthForm",
+          "parameters": {
+            "clientIdLabel": "Application (Client) ID",
+            "clientSecretLabel": "Client Secret Value",
+            "connectButtonLabel": "Connect",
+            "disconnectButtonLabel": "Disconnect"
+          }
+        }
+      ]
+    }
+  ]
+}
