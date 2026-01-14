@@ -49,7 +49,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             next_token = req_body.get('NextToken')
             max_results = req_body.get('MaxResults')
     
-    logging.info(f'Parsed Parameters - Filters: {filters}, Aggregators: {aggregators}, ResultAttributes: {result_attributes}, NextToken: {next_token}, MaxResults: {max_results}')
+    logging.info(f'Parsed Parameters - Filters: {filters}, Aggregators: {aggregators}, ResultAttributes: {result_attributes}, MaxResults: {max_results}')
     # Set parameter dictionary based on the request parameters
     kwargs = {}
     if filters:
@@ -74,13 +74,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         try:
             logging.info('Calling function to get AWS SSM Inventory.')
-            logging.info(f'Parameters: {kwargs}')
             
             all_entities = []
             next_token = kwargs.get('NextToken')
-            count = 0
             while True:
-                count = count + 1
                 if next_token:
                     kwargs['NextToken'] = next_token
                 else:
@@ -101,8 +98,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 "value": all_entities,
                 "nextLink": None
             }
-            logging.info(f'count: {count}')
-            logging.info(f'Response:{response}')
             return func.HttpResponse(
                 json.dumps(response),
                 headers={"Content-Type": "application/json"},
