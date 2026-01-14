@@ -73,7 +73,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
         try:
-            logging.info('Calling function to get AWS SSM Inventory.')
+            logging.info('Pagination handling.')
             
             all_entities = []
             next_token = kwargs.get('NextToken')
@@ -82,8 +82,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     kwargs['NextToken'] = next_token
                 else:
                     kwargs.pop('NextToken', None)
+                
+                logging.info('Calling function to get AWS SSM Inventory.')
 
                 results = ssm_client.get_inventory(**kwargs)
+                
                 logging.info('Call to get AWS SSM Inventory successful.')
 
                 all_entities.extend(results.get("Entities", []))
@@ -91,6 +94,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 next_token = results.get("NextToken")
                 if not next_token:
                     break
+            
+            logging.info('Pagination handling completed.')
 
             base_url = req.url.split('?')[0]
 
