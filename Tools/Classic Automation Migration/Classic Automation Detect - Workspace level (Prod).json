@@ -1,0 +1,259 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workflows_classic_automation_detect_name": {
+            "defaultValue": "classic-automation-detect-workspace",
+            "type": "String"
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String"
+        },
+        "subscriptionId": {
+            "defaultValue": "[subscription().subscriptionId]",
+            "type": "String",
+            "metadata": {
+                "description": "Subscription ID where the workspace is located (default = current subscription)"
+            }
+        },
+        "workspaceName": {
+            "type": "String",
+            "metadata": {
+                "description": "Log Analytics workspace name hosting Microsoft Sentinel"
+            }
+        },
+        "workspaceResourceGroup": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "String",
+            "metadata": {
+                "description": "Resource group name of the Sentinel workspace (default = current RG)"
+            }
+        }
+    },
+    "variables": {
+        "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('workflows_classic_automation_detect_name'))]",
+        "workspaceScopeId": "[resourceId(parameters('workspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('workflows_classic_automation_detect_name')]",
+            "location": "[parameters('location')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "subscriptionId": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "workspaceName": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "resourceGroup": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "interval": 3,
+                                "frequency": "Week"
+                            },
+                            "evaluatedRecurrence": {
+                                "interval": 3,
+                                "frequency": "Week"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Subscription_Id": {
+                            "runAfter": {
+                                "Analytic_Rules_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@{parameters('subscriptionId')}"
+                        },
+                        "Analytic_Rules_list": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ActionList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Workspace_Name": {
+                            "runAfter": {
+                                "Subscription_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@{parameters('workspaceName')}"
+                        },
+                        "Resource_Group": {
+                            "runAfter": {
+                                "Workspace_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@{parameters('resourceGroup')}"
+                        },
+                        "List_Analytic_Rules": {
+                            "runAfter": {
+                                "Resource_Group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://management.azure.com/subscriptions/@{outputs('Subscription_Id')}/resourceGroups/@{outputs('Resource_Group')}/providers/Microsoft.OperationalInsights/workspaces/@{outputs('Workspace_Name')}/providers/Microsoft.SecurityInsights/alertRules?api-version=2025-09-01",
+                                "method": "GET",
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity"
+                                }
+                            },
+                            "description": "",
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('List_Analytic_Rules')['value']",
+                            "actions": {
+                                "Get_Analytic_Rule_Actions": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://management.azure.com/subscriptions/@{outputs('Subscription_Id')}/resourceGroups/@{outputs('Resource_Group')}/providers/Microsoft.OperationalInsights/workspaces/@{outputs('Workspace_Name')}/providers/Microsoft.SecurityInsights/alertRules/@{items('For_each')['name']}/actions?api-version=2025-09-01",
+                                        "method": "GET",
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Condition": {
+                                    "actions": {
+                                        "Append_to_array_variable": {
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "ActionList",
+                                                "value": {
+                                                    "WorkspaceName": "@{outputs('Workspace_Name')}",
+                                                    "AnalyticRuleName": "@{items('For_each')['properties']['displayName']}",
+                                                    "RuleId": "@{items('For_each')['name']}",
+                                                    "Enabled": "@items('For_each')['properties']['enabled']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_Analytic_Rule_Actions": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Get_Analytic_Rule_Actions')['value'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "List_Analytic_Rules": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Impacted_Analytic_Rules_List_": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('ActionList')",
+                            "description": "Please migrate your 'Classic Automation' playbooks to automation rules.\nFor detailed, step-by-step instructions, refer to the official guide:\nhttps://learn.microsoft.com/en-us/azure/sentinel/automation/migrate-playbooks-to-automation-rules"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "subscriptionId": {
+                        "value": "[parameters('subscriptionId')]"
+                    },
+                    "workspaceName": {
+                        "value": "[parameters('workspaceName')]"
+                    },
+                    "resourceGroup": {
+                        "value": "[parameters('workspaceResourceGroup')]"
+                    },
+                    "$connections": {
+                        "value": {}
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('workspaceScopeId'), 'SentinelReader', parameters('workflows_classic_automation_detect_name'))]",
+            "dependsOn": [
+                "[variables('logicAppResourceId')]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8d289c81-5878-46d4-8554-54e1e3d8b5cb')]",
+                "principalId": "[reference(variables('logicAppResourceId'), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "scope": "[variables('workspaceScopeId')]"
+        }
+    ],
+    "outputs": {
+        "logicAppPrincipalId": {
+            "type": "String",
+            "value": "[reference(variables('logicAppResourceId'), '2019-05-01', 'Full').identity.principalId]"
+        },
+        "workspaceScopeId": {
+            "type": "String",
+            "value": "[variables('workspaceScopeId')]"
+        }
+    }
+}
