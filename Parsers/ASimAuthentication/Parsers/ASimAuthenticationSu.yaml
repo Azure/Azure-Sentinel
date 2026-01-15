@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM parser for Linux su 
-  Version: '0.2.1'
-  LastUpdated: 21 Jul 2023
+  Version: '0.3.0'
+  LastUpdated: Jan 15, 2026
 Product:
   Name: su
 Normalization:
   Schema: Authentication
-  Version: '0.1.2'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
@@ -23,7 +23,7 @@ ParserParams:
 ParserQuery: |
   let parser = (disabled: bool=false)
   {
-      let SyslogProjects = Syslog
+      Syslog
           | project
               TimeGenerated,
               Computer,
@@ -39,31 +39,46 @@ ParserQuery: |
       // -- Successful SU
       // Parses the event "Successful su for <user> by <user>"
       let SuSignInAuthorized=(disabled: bool=false)
-  {
+      {
       SyslogProjects 
           | where not(disabled)
           | where ProcessName == "su" and SyslogMessage startswith "Successful su for"
           | parse SyslogMessage with * "for " TargetUsername: string " by " ActorUsername: string
           | extend
-              EventType = 'Elevation'
+              EventType = 'Logon',
+              EventResult = "Success"
           | project-away SyslogMessage, ProcessName
-  };
+      };
       // 
       // -- SU end
       // Parsers the event "pam_unix(su[-l]:session): session closed for user <user>"
       let SuDisconnect=(disabled: bool=false)
-  {
+      {
       SyslogProjects 
           | where not(disabled)
           | where ProcessName == "su" and SyslogMessage has_all ('pam_unix(su', 'session): session closed for user')
           | parse SyslogMessage with * "for user " TargetUsername: string
           | extend
-              EventType = 'Logoff'
+              EventType = 'Logoff',
+              EventResult = "Success"
           | project-away SyslogMessage, ProcessName
-  };
+      };
+      // Failed SU
+      let SuFailed=(disabled: bool=false)
+      {
+          SyslogProjects
+          | where not(disabled)
+          | where ProcessName == "su" and SyslogMessage startswith "FAILED SU"
+          | parse SyslogMessage with * "to " TargetUsername: string ") " ActorUsername: string " on " *
+          | extend 
+              EventType = "Logon",
+              EventResult = "Failure"
+          | project-away SyslogMessage, ProcessName
+      };
       union isfuzzy=false 
           SuDisconnect(disabled = disabled),
-          SuSignInAuthorized (disabled = disabled)
+          SuSignInAuthorized(disabled = disabled),
+          SuFailed(disabled = disabled)
       | invoke _ASIM_ResolveDvcFQDN ('Computer')
       | extend
           ActingAppId           = tostring(ProcessID),
@@ -74,14 +89,14 @@ ParserQuery: |
           EventCount            = int(1),
           EventEndTime          = TimeGenerated,
           EventProduct          = 'su',
-          EventResult           = 'Success',
           EventSchema           = 'Authentication',
-          EventSchemaVersion    = '0.1.2',
+          EventSchemaVersion    = '0.1.3',
           EventSeverity         = 'Informational',
           EventStartTime        = TimeGenerated,
           EventVendor           = 'Linux',
           TargetDvcOs           = 'Linux',
-          TargetUsernameType    = 'Simple'
+          TargetUsernameType    = 'Simple',
+          Type                  = "Syslog"
       | project-away Computer, ProcessID
       | project-rename 
           DvcId                 = _ResourceId,
@@ -103,6 +118,48 @@ ParserQuery: |
           TargetHostname        = DvcHostname,
           TargetIpAddr          = DvcIpAddr,
           User                  = TargetUsername
+      | project
+          TimeGenerated,
+          EventType,
+          EventResult,
+          DvcHostname,
+          DvcDomain,
+          DvcFQDN,
+          DvcDomainType,
+          ActingAppId,
+          ActingAppType,
+          ActorUsernameType,
+          DvcIdType,
+          DvcOs,
+          EventCount,
+          EventEndTime,
+          EventProduct,
+          EventSchema,
+          EventSchemaVersion,
+          EventSeverity,
+          EventStartTime,
+          EventVendor,
+          TargetDvcOs,
+          TargetUsernameType,
+          Type,
+          DvcId,
+          DvcIpAddr,
+          DvcScopeId,
+          EventUid,
+          Dst,
+          Dvc,
+          IpAddr,
+          TargetDomain,
+          TargetDomainType,
+          TargetDvcId,
+          TargetDvcIdType,
+          TargetDvcScopeId,
+          TargetFQDN,
+          TargetHostname,
+          TargetIpAddr,
+          User,
+          TargetUsername,
+          ActorUsername
   };
   parser
   (
