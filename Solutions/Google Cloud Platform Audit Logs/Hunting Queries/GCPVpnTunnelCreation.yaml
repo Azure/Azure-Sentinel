@@ -1,0 +1,93 @@
+id: 245c0747-db27-460b-b1bf-131042f664b9
+name: List All GCP VPN Tunnels Created
+description: |
+  Lists all Google Cloud VPN tunnel creation operations to identify network connectivity changes and tunnel configurations.
+description-detailed: |
+  This hunting query retrieves all VPN tunnel creation operations from GCP audit logs, providing visibility into network infrastructure changes.
+  Use this query to find VPN tunnels that were created in your GCP environment, including details such as tunnel name, region, IKE version,
+  associated VPN gateways, external gateways, routers, and the principal who performed the action. This helps security teams maintain an
+  inventory of VPN connections, detect unauthorized tunnel creation, identify potential data exfiltration paths, and review network
+  architecture changes for compliance and security auditing purposes.
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+tactics:
+  - Persistence
+  - CommandAndControl
+  - DefenseEvasion
+relevantTechniques:
+  - T1133
+  - T1090
+  - T1562.007
+tags:
+  - Network Security
+  - VPN
+  - Infrastructure Changes
+query: |
+  GCPAuditLogs
+  | where ServiceName == "compute.googleapis.com"
+  | where MethodName has "compute.vpnTunnels.insert"
+  | where GCPResourceType == "vpn_tunnel" and Severity == "NOTICE"
+  | extend AuthzInfoJson = parse_json(AuthorizationInfo)
+  | extend PermissionType = tostring(AuthzInfoJson[0].permissionType)
+  | where PermissionType == "ADMIN_WRITE"
+  | extend 
+      RequestMetadataJson = parse_json(RequestMetadata),
+      RequestJson = parse_json(Request),
+      ResponseJson = parse_json(Response)
+  // Extract all fields in consolidated operation
+  | extend 
+      CallerIP = tostring(RequestMetadataJson.callerIp),
+      TunnelName = tostring(RequestJson.name),
+      Region = extract(@"regions/([^/]+)", 1, tostring(RequestJson.region)),
+      IKEVersion = tostring(RequestJson.ikeVersion),
+      VpnGateway = extract(@"vpnGateways/([^/]+)", 1, tostring(RequestJson.vpnGateway)),
+      ExternalGateway = extract(@"externalVpnGateways/([^/]+)", 1, tostring(RequestJson.peerExternalGateway)),
+      TargetVpnGateway = extract(@"targetVpnGateways/([^/]+)", 1, tostring(RequestJson.targetVpnGateway)),
+      Router = extract(@"routers/([^/]+)", 1, tostring(RequestJson.router)),
+      OperationType = tostring(ResponseJson.operationType),
+      OperationId = tostring(ResponseJson.id)
+  | extend 
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project 
+      TimeGenerated,
+      PrincipalEmail,
+      AccountName,
+      AccountUPNSuffix,
+      CallerIP,
+      ProjectId,
+      TunnelName,
+      Region,
+      IKEVersion,
+      VpnGateway,
+      ExternalGateway,
+      TargetVpnGateway,
+      Router,
+      OperationType,
+      OperationId,
+      ResourceName = GCPResourceName,
+      MethodName,
+      Severity
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIP
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: TunnelName
+      - identifier: InstanceName
+        columnName: ResourceName
+version: 1.0.0

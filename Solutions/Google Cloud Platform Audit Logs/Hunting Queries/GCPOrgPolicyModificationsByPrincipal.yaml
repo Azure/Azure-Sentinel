@@ -1,0 +1,76 @@
+id: 7a3e8c5f-4b9d-4e6a-8c7b-5f2a9d6e8b3c
+name: List GCP Organization Policy Modifications by Principal
+description: |
+  Lists all Google Cloud Platform organization policy deletion and update operations performed by principals (users and service accounts).
+description-detailed: |
+  This hunting query provides visibility into all organization policy modifications across GCP by aggregating operations per principal.
+  Organization policies provide centralized control over cloud resources and enforce security and compliance requirements. Changes to these
+  policies can significantly impact security posture and compliance. Use this query to investigate suspicious changes, and ensure policy
+  modifications are being performed by authorized personnel following proper change management and governance procedures.
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+tags:
+  - Cloud Security
+  - Organization Policy
+  - Compliance
+  - Governance
+query: |
+  GCPAuditLogs
+  | where ServiceName == "orgpolicy.googleapis.com"
+  | where MethodName has_any ("OrgPolicy.DeletePolicy", "OrgPolicy.UpdatePolicy")
+  | extend 
+      RequestMetadataJson = parse_json(RequestMetadata),
+      AuthInfoJson = parse_json(AuthenticationInfo)
+  | extend 
+      PolicyName = split(GCPResourceName, "/")[-1],
+      CallerIP = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      AuthEmail = tostring(AuthInfoJson.principalEmail),
+      OperationType = case(
+          MethodName has "DeletePolicy", "Deleted",
+          MethodName has "UpdatePolicy", "Updated",
+          "Other")
+  | summarize 
+      TotalOperations = count(),
+      OperationTypes = make_set(OperationType, 10),
+      PoliciesAffected = make_set(PolicyName, 100),
+      Projects = make_set(ProjectId, 50),
+      SourceIPs = make_set(CallerIP, 20),
+      FirstOperation = min(TimeGenerated),
+      LastOperation = max(TimeGenerated)
+      by PrincipalEmail
+  | extend 
+      PolicyCount = array_length(PoliciesAffected),
+      ProjectCount = array_length(Projects),
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project 
+      PrincipalEmail,
+      TotalOperations,
+      PolicyCount,
+      ProjectCount,
+      OperationTypes,
+      PoliciesAffected,
+      Projects,
+      SourceIPs,
+      FirstOperation,
+      LastOperation,
+      AccountName,
+      AccountUPNSuffix
+  | sort by TotalOperations desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 1.0.0

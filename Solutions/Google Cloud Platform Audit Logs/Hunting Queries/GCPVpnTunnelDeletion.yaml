@@ -1,0 +1,81 @@
+id: 8f3e4a2b-6c7d-4e8f-9a0b-1c2d3e4f5a6b
+name: List All GCP VPN Tunnels Deleted
+description: |
+  Lists all Google Cloud VPN tunnel deletion operations to identify network connectivity changes and potential security impacts.
+description-detailed: |
+  This hunting query retrieves all VPN tunnel deletion operations from GCP audit logs, providing visibility into network infrastructure removal.
+  Use this query to find VPN tunnels that were deleted from your GCP environment, including details such as tunnel name, region, 
+  and the principal who performed the deletion. VPN tunnel deletion can impact business continuity, indicate cleanup of attack infrastructure,
+  or represent unauthorized removal of legitimate network connections. This helps security teams maintain an audit trail of network changes,
+  detect unauthorized tunnel deletion, identify potential denial of service or defense evasion tactics, and review network architecture
+  changes for compliance and security purposes.
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1489
+  - T1562.001
+tags:
+  - Network Security
+  - VPN
+  - Infrastructure Changes
+query: |
+  GCPAuditLogs
+  | where ServiceName == "compute.googleapis.com"
+  | where MethodName has "compute.vpnTunnels.delete"
+  | where GCPResourceType == "vpn_tunnel" and Severity == "NOTICE"
+  | extend AuthzInfoJson = parse_json(AuthorizationInfo)
+  | extend PermissionType = tostring(AuthzInfoJson[0].permissionType)
+  | where PermissionType == "ADMIN_WRITE"
+  | extend 
+      RequestMetadataJson = parse_json(RequestMetadata),
+      ResponseJson = parse_json(Response)
+  // Extract fields
+  | extend 
+      CallerIP = tostring(RequestMetadataJson.callerIp),
+      TunnelName = extract(@"vpnTunnels/([^/]+)", 1, GCPResourceName),
+      Region = extract(@"regions/([^/]+)", 1, GCPResourceName),
+      OperationType = tostring(ResponseJson.operationType),
+      OperationId = tostring(ResponseJson.id)
+  | extend 
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project 
+      TimeGenerated,
+      PrincipalEmail,
+      AccountName,
+      AccountUPNSuffix,
+      CallerIP,
+      ProjectId,
+      TunnelName,
+      Region,
+      OperationType,
+      OperationId,
+      ResourceName = GCPResourceName,
+      MethodName,
+      Severity
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIP
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: TunnelName
+      - identifier: InstanceName
+        columnName: ResourceName
+version: 1.0.0
