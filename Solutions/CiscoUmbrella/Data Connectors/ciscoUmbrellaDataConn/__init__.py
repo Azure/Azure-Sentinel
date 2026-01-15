@@ -20,6 +20,8 @@ import azure.functions as func
 import re
 
 
+# Increase CSV field size limit to handle large fields in Cisco Umbrella logs
+csv.field_size_limit(10 * 1024 * 1024)  # 10 MB limit
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
