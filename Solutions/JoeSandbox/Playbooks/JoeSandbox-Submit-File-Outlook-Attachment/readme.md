@@ -1,4 +1,4 @@
-# JoeSandbox URL Analysis Playbook
+# JoeSandbox File Analysis Playbook
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ This playbook gets triggered when an new email is recieved in the configured mai
 
 <a name="deployplaybook">
 
-## Links to deploy the DomainTools Iris Enrich Domain Playbook:
+## Links to deploy Playbook:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox_Outlook_Attachment_Analysis%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox_Outlook_Attachment_Analysis%2Fazuredeploy.json)
 
@@ -52,4 +52,5 @@ Authentication methods this connector supports:
 
 ### Post-Deployment instructions.
 - As a best practice, we have used the Sentinel connection in Logic Apps that use "ManagedSecurityIdentity" permissions. Please refer to [this document](https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/what-s-new-managed-identity-for-azure-sentinel-logic-apps/ba-p/2068204) and provide permissions to the Logic App accordingly.
+
 
