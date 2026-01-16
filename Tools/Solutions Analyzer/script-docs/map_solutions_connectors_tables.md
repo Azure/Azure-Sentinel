@@ -100,10 +100,13 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--content-items-csv` | `content_items.csv` | Path for the content items output CSV file |
 | `--content-tables-mapping-csv` | `content_tables_mapping.csv` | Path for the content-to-tables mapping CSV file |
 | `--asim-parsers-csv` | `asim_parsers.csv` | Path for the ASIM parsers CSV file |
+| `--parsers-csv` | `parsers.csv` | Path for the non-ASIM parsers CSV file |
 | `--tables-reference-csv` | `tables_reference.csv` | Path to tables_reference.csv for table metadata |
 | `--mapping-csv` | `solutions_connectors_tables_mapping_simplified.csv` | Path for the simplified mapping CSV file |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
 | `--show-detection-methods` | `False` | Include table_detection_methods column showing how each table was detected |
+| `--skip-marketplace` | `False` | Skip Azure Marketplace availability checking |
+| `--refresh-marketplace` | `False` | Force refresh of marketplace cache (ignore cached results) |
 
 ### Example Usage
 
@@ -238,6 +241,8 @@ Contains one row per unique connector with all connector-specific fields and col
 | `collection_method` | Data collection method (see Collection Method Detection below) |
 | `collection_method_reason` | Explanation of how collection method was determined |
 | `not_in_solution_json` | `true` if connector was found by file scanning but not listed in the Solution JSON |
+| `is_deprecated` | `true` if connector is deprecated |
+| `is_published` | `true` if solution is published on Azure Marketplace |
 
 ### 3. solutions.csv (Solution Details)
 
@@ -262,6 +267,8 @@ Contains one row per solution with all solution-specific metadata. Metadata is s
 | `solution_description` | Full solution description with HTML/markdown formatting from Solution JSON |
 | `solution_dependencies` | Semicolon-separated list of dependent solution IDs from `dependentDomainSolutionIds` |
 | `has_connectors` | `true` if solution has data connectors, `false` otherwise |
+| `is_published` | `true` if solution is published on Azure Marketplace |
+| `marketplace_url` | URL to the solution's Azure Marketplace listing |
 
 **Solution JSON File Selection:**
 
@@ -345,7 +352,30 @@ Contains one row per unique combination of solution, content item, and table. Th
 
 > **Note:** For playbooks, `table_usage` tracks whether the playbook reads from a table (Azure Monitor query), writes to it (Send Data action), or both. Other content types are assumed to only read from tables.
 
-### 8. asim_parsers.csv (ASIM Parser Details)
+### 8. parsers.csv (Parser Details)
+
+Contains one row per parser (both ASIM and non-ASIM) from solution directories and the legacy `/Parsers/*` directories.
+
+| Column | Description |
+|--------|-------------|
+| `parser_name` | Parser function name |
+| `parser_title` | Display title of the parser |
+| `parser_version` | Parser version number |
+| `parser_last_updated` | Last update date |
+| `parser_category` | Parser category/type |
+| `description` | Parser description |
+| `tables` | Semicolon-separated list of source tables used by the parser |
+| `source_file` | Relative path to the source file |
+| `github_url` | Full GitHub URL to the parser definition |
+| `solution_name` | Solution name (empty for legacy parsers) |
+| `solution_folder` | Solution folder path |
+| `location` | Location: `solution` (in Solutions directory) or `legacy` (in top-level /Parsers directory) |
+| `file_type` | File type: `yaml`, `kql`, or `txt` |
+| `discovered` | `true` if parser was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) |
+
+> **Note:** Parsers are collected from both solution `Parsers/` directories and the legacy top-level `/Parsers/*` directories. Legacy parsers are pre-Solutions parsers stored as .txt, .kql, or .yaml files.
+
+### 9. asim_parsers.csv (ASIM Parser Details)
 
 Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. This includes all ASIM (Advanced Security Information Model) parsers with full metadata.
 
@@ -370,7 +400,7 @@ Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. 
 
 > **Note:** ASIM parsers are loaded from YAML files in the `/Parsers/ASim*/Parsers` directories. Union parsers aggregate multiple source parsers and typically have empty `tables` but populated `sub_parsers`. Source parsers reference actual Log Analytics tables.
 
-### 9. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 10. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 
@@ -398,6 +428,47 @@ Contains exceptions and issues encountered during analysis.
 | `table_detection_failed` | Tables detected but validation failed | Connector excluded |
 | `missing_connector_json` | Data Connectors folder exists but contains no valid JSON | Solution has no connector entries |
 | `missing_solution_metadata` | Solution has connectors but no SolutionMetadata.json | Solution appears with empty metadata fields |
+
+## Azure Marketplace Availability
+
+The script checks whether each solution is published on the Azure Marketplace using the Azure Marketplace Catalog API.
+
+### How It Works
+
+1. For each solution, the script constructs a legacy product ID from the `publisher_id` and `offer_id` in `SolutionMetadata.json`
+2. It queries the Azure Marketplace Catalog API at `https://catalogapi.azure.com/offers/{legacy_id}`
+3. If the API returns a valid response, the solution is marked as published and the marketplace URL is stored
+
+### Caching
+
+To avoid excessive API calls on subsequent runs, marketplace availability results are cached locally:
+
+- **Cache Location:** `.cache/marketplace_availability.csv`
+- **Cache Format:** CSV with columns `legacy_id`, `is_published`, `marketplace_url`, `last_checked`
+- **Cache Behavior:** 
+  - If a solution's legacy ID is found in the cache, the cached result is used (no API call)
+  - New solutions not in the cache trigger API calls and are added to the cache
+  - Use `--refresh-marketplace` to force refresh all entries
+
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--skip-marketplace` | Skip marketplace checking entirely (outputs will have empty `is_published` and `marketplace_url` fields) |
+| `--refresh-marketplace` | Force refresh of marketplace cache, ignoring cached results and re-querying all solutions |
+
+### Output Fields
+
+Marketplace availability adds the following fields to the output:
+
+| File | Field | Description |
+|------|-------|-------------|
+| `solutions.csv` | `is_published` | `true` if solution is on Azure Marketplace, `false` otherwise |
+| `solutions.csv` | `marketplace_url` | Direct URL to the Azure Marketplace listing (empty if not published) |
+| `connectors.csv` | `is_published` | `true` if parent solution is published |
+| Main mapping CSV | `is_published` | `true` if parent solution is published |
+
+> **Note:** Solutions without valid `publisher_id` and `offer_id` in `SolutionMetadata.json` cannot be checked and will have empty marketplace fields.
 
 ## Detection Logic
 
