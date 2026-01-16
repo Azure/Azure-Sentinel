@@ -43,6 +43,13 @@ VENDOR_PRODUCT_TABLES = {
     'commonsecuritylog': ('DeviceVendor', 'DeviceProduct'),
 }
 
+# Folders in the Solutions directory that should be excluded (not actual solutions)
+EXCLUDED_SOLUTION_FOLDERS = {
+    'images',       # Contains logo images only
+    'templates',    # Contains solution templates
+    'training',     # Training materials
+}
+
 # ASim tables use EventVendor/EventProduct
 ASIM_TABLE_PREFIXES = ('asim', '_asim', '_im_')
 
@@ -193,583 +200,45 @@ def get_connector_vendor_product_by_table(data: Any) -> Dict[str, Dict[str, Set[
 
 # Token validation sets
 PARSER_NAME_KEYS = {"functionname", "functionalias"}
-NON_TABLE_TOKENS = {
-    # KQL keywords and statements
-    "let",
-    "union",
-    "view",
-    "database",
-    "cluster",
-    "external_table",
-    "materialize",
-    "datatable",
-    "externaldata",
-    "range",
-    "print",
-    "evaluate",
-    
-    # KQL operators
-    "where",
-    "summarize",
-    "extend",
-    "project",
-    "sort",
-    "order",
-    "take",
-    "limit",
-    "top",
-    "count",
-    "distinct",
-    "sample",
-    "join",
-    "lookup",
-    "as",
-    "on",
-    "kind",
-    "mv-expand",
-    "mv-apply",
-    "make-series",
-    "parse",
-    "serialize",
-    "invoke",
-    "render",
-    "search",
-    "find",
-    "facet",
-    "partition",
-    "scan",
-    "fork",
-    "reduce",
-    "consume",
-    "getschema",
-    
-    # KQL scalar functions - Binary
-    "binary_and",
-    "binary_not",
-    "binary_or",
-    "binary_shift_left",
-    "binary_shift_right",
-    "binary_xor",
-    "bitset_count_ones",
-    
-    # KQL scalar functions - Conversion
-    "tobool",
-    "todatetime",
-    "todecimal",
-    "todouble",
-    "toguid",
-    "toint",
-    "tolong",
-    "tostring",
-    "totimespan",
-    "toreal",
-    "tohex",
-    
-    # KQL scalar functions - DateTime/timespan
-    "ago",
-    "datetime_add",
-    "datetime_diff",
-    "datetime_local_to_utc",
-    "datetime_part",
-    "datetime_utc_to_local",
-    "dayofmonth",
-    "dayofweek",
-    "dayofyear",
-    "endofday",
-    "endofmonth",
-    "endofweek",
-    "endofyear",
-    "format_datetime",
-    "format_timespan",
-    "getyear",
-    "hourofday",
-    "make_datetime",
-    "make_timespan",
-    "monthofyear",
-    "now",
-    "startofday",
-    "startofmonth",
-    "startofweek",
-    "startofyear",
-    "unixtime_microseconds_todatetime",
-    "unixtime_milliseconds_todatetime",
-    "unixtime_nanoseconds_todatetime",
-    "unixtime_seconds_todatetime",
-    "weekofyear",
-    
-    # KQL scalar functions - Dynamic/array
-    "array_concat",
-    "array_iff",
-    "array_iif",
-    "array_index_of",
-    "array_length",
-    "array_reverse",
-    "array_rotate_left",
-    "array_rotate_right",
-    "array_shift_left",
-    "array_shift_right",
-    "array_slice",
-    "array_sort_asc",
-    "array_sort_desc",
-    "array_split",
-    "array_sum",
-    "bag_has_key",
-    "bag_keys",
-    "bag_merge",
-    "bag_pack",
-    "bag_pack_columns",
-    "bag_remove_keys",
-    "bag_set_key",
-    "jaccard_index",
-    "pack",
-    "pack_all",
-    "pack_array",
-    "repeat",
-    "set_difference",
-    "set_has_element",
-    "set_intersect",
-    "set_union",
-    "treepath",
-    "zip",
-    "dynamic",
-    
-    # KQL scalar functions - Window
-    "next",
-    "prev",
-    "row_cumsum",
-    "row_number",
-    "row_rank_dense",
-    "row_rank_min",
-    
-    # KQL scalar functions - Flow control
-    "toscalar",
-    
-    # KQL scalar functions - Mathematical
-    "abs",
-    "acos",
-    "asin",
-    "atan",
-    "atan2",
-    "beta_cdf",
-    "beta_inv",
-    "beta_pdf",
-    "cos",
-    "cot",
-    "degrees",
-    "erf",
-    "erfc",
-    "exp",
-    "exp10",
-    "exp2",
-    "gamma",
-    "isfinite",
-    "isinf",
-    "isnan",
-    "log",
-    "log10",
-    "log2",
-    "loggamma",
-    "not",
-    "pi",
-    "pow",
-    "radians",
-    "rand",
-    "round",
-    "sign",
-    "sin",
-    "sqrt",
-    "tan",
-    "welch_test",
-    
-    # KQL scalar functions - Metadata
-    "column_ifexists",
-    "columnifexists",
-    "current_cluster_endpoint",
-    "current_database",
-    "current_principal",
-    "current_principal_details",
-    "current_principal_is_member_of",
-    "cursor_after",
-    "estimate_data_size",
-    "extent_id",
-    "extent_tags",
-    "ingestion_time",
-    
-    # KQL scalar functions - Rounding
-    "bin",
-    "bin_at",
-    "ceiling",
-    "floor",
-    
-    # KQL scalar functions - Conditional
-    "case",
-    "coalesce",
-    "iff",
-    "iif",
-    "max_of",
-    "min_of",
-    
-    # KQL scalar functions - String
-    "base64_encode_tostring",
-    "base64_encode_fromguid",
-    "base64_decode_tostring",
-    "base64_decode_toarray",
-    "base64_decode_toguid",
-    "countof",
-    "extract",
-    "extract_all",
-    "extract_json",
-    "has_any_index",
-    "indexof",
-    "isempty",
-    "isnotempty",
-    "isnotnull",
-    "isnull",
-    "parse_command_line",
-    "parse_csv",
-    "parse_ipv4",
-    "parse_ipv4_mask",
-    "parse_ipv6",
-    "parse_ipv6_mask",
-    "parse_json",
-    "parse_url",
-    "parse_urlquery",
-    "parse_version",
-    "replace_regex",
-    "replace_string",
-    "replace_strings",
-    "punycode_from_string",
-    "punycode_to_string",
-    "reverse",
-    "split",
-    "strcat",
-    "strcat_delim",
-    "strcmp",
-    "strlen",
-    "strrep",
-    "substring",
-    "tolower",
-    "toupper",
-    "translate",
-    "trim",
-    "trim_end",
-    "trim_start",
-    "url_decode",
-    "url_encode",
-    
-    # KQL scalar functions - IPv4/IPv6
-    "ipv4_compare",
-    "ipv4_is_in_range",
-    "ipv4_is_in_any_range",
-    "ipv4_is_match",
-    "ipv4_is_private",
-    "ipv4_netmask_suffix",
-    "ipv4_range_to_cidr_list",
-    "ipv6_compare",
-    "ipv6_is_match",
-    "format_ipv4",
-    "format_ipv4_mask",
-    "ipv6_is_in_range",
-    "ipv6_is_in_any_range",
-    "geo_info_from_ip_address",
-    "has_ipv4",
-    "has_ipv4_prefix",
-    "has_any_ipv4",
-    "has_any_ipv4_prefix",
-    
-    # KQL scalar functions - Type
-    "gettype",
-    
-    # KQL scalar functions - Aggregation (scalar versions)
-    "dcount_hll",
-    "hll_merge",
-    "percentile_tdigest",
-    "percentile_array_tdigest",
-    "percentrank_tdigest",
-    "rank_tdigest",
-    "merge_tdigest",
-    
-    # KQL scalar functions - Hash
-    "hash",
-    "hash_combine",
-    "hash_many",
-    "hash_md5",
-    "hash_sha1",
-    "hash_sha256",
-    "hash_xxhash64",
-    
-    # KQL aggregation functions
-    "any",
-    "arg_max",
-    "arg_min",
-    "avg",
-    "avgif",
-    "count",
-    "countif",
-    "dcount",
-    "dcountif",
-    "make_bag",
-    "make_bag_if",
-    "make_list",
-    "make_list_if",
-    "make_list_with_nulls",
-    "make_set",
-    "make_set_if",
-    "max",
-    "maxif",
-    "min",
-    "minif",
-    "percentile",
-    "percentiles",
-    "percentiles_array",
-    "stdev",
-    "stdevif",
-    "stdevp",
-    "sum",
-    "sumif",
-    "variance",
-    "varianceif",
-    "variancep",
-    "hll",
-    "hll_if",
-    "tdigest",
-    "tdigest_merge",
-    
-    # KQL series functions
-    "series_abs",
-    "series_acos",
-    "series_add",
-    "series_asin",
-    "series_atan",
-    "series_ceiling",
-    "series_cos",
-    "series_divide",
-    "series_equals",
-    "series_exp",
-    "series_floor",
-    "series_greater",
-    "series_greater_equals",
-    "series_less",
-    "series_less_equals",
-    "series_log",
-    "series_multiply",
-    "series_not_equals",
-    "series_pow",
-    "series_sign",
-    "series_sin",
-    "series_subtract",
-    "series_tan",
-    "series_cosine_similarity",
-    "series_decompose",
-    "series_decompose_anomalies",
-    "series_decompose_forecast",
-    "series_dot_product",
-    "series_fill_backward",
-    "series_fill_const",
-    "series_fill_forward",
-    "series_fill_linear",
-    "series_fft",
-    "series_fir",
-    "series_fit_2lines",
-    "series_fit_2lines_dynamic",
-    "series_fit_line",
-    "series_fit_line_dynamic",
-    "series_fit_poly",
-    "series_ifft",
-    "series_iir",
-    "series_magnitude",
-    "series_outliers",
-    "series_pearson_correlation",
-    "series_periods_detect",
-    "series_periods_validate",
-    "series_product",
-    "series_seasonal",
-    "series_stats",
-    "series_stats_dynamic",
-    "series_sum",
-    
-    # KQL geo functions
-    "geo_angle",
-    "geo_azimuth",
-    "geo_closest_point_on_line",
-    "geo_closest_point_on_polygon",
-    "geo_distance_2points",
-    "geo_distance_point_to_line",
-    "geo_distance_point_to_polygon",
-    "geo_from_wkt",
-    "geo_intersects_2lines",
-    "geo_intersects_2polygons",
-    "geo_intersects_line_with_polygon",
-    "geo_intersection_2lines",
-    "geo_intersection_2polygons",
-    "geo_intersection_line_with_polygon",
-    "geo_point_buffer",
-    "geo_point_in_circle",
-    "geo_point_in_polygon",
-    "geo_point_to_geohash",
-    "geo_point_to_s2cell",
-    "geo_point_to_h3cell",
-    "geo_line_buffer",
-    "geo_line_centroid",
-    "geo_line_densify",
-    "geo_line_interpolate_point",
-    "geo_line_length",
-    "geo_line_locate_point",
-    "geo_line_simplify",
-    "geo_line_to_s2cells",
-    "geo_polygon_area",
-    "geo_polygon_buffer",
-    "geo_polygon_centroid",
-    "geo_polygon_densify",
-    "geo_polygon_perimeter",
-    "geo_polygon_simplify",
-    "geo_polygon_to_s2cells",
-    "geo_polygon_to_h3cells",
-    "geo_geohash_to_central_point",
-    "geo_geohash_neighbors",
-    "geo_geohash_to_polygon",
-    "geo_s2cell_to_central_point",
-    "geo_s2cell_neighbors",
-    "geo_s2cell_to_polygon",
-    "geo_h3cell_to_central_point",
-    "geo_h3cell_neighbors",
-    "geo_h3cell_to_polygon",
-    "geo_h3cell_parent",
-    "geo_h3cell_children",
-    "geo_h3cell_level",
-    "geo_h3cell_rings",
-    "geo_simplify_polygons_array",
-    "geo_union_lines_array",
-    "geo_union_polygons_array",
-    
-    # Common false positives from workbook queries
-    "data",
-    "resources",
-    "alertentities",
-    "alerts",
-    
-    # Common variable names used in queries
-    "alldata",
-    "prefiltereddata",
-    "outputs",
-    
-    # Common field names that appear in project-away or other contexts
-    "subscriptionid",
-    "resourceid",
-    "tenantid",
-    
+
+# Minimal blocklist - only tokens that could cause specific issues
+# Most validation is now done via whitelist (tables_reference.csv) + _CL suffix check
+BLOCKED_TOKENS = {
+    # Incomplete or invalid _CL patterns
+    "_cl",
+    "_indicators_cl",
     # Template placeholders
     "{{graphqueriestablename}}",
-    
-    # Common ASIM/KQL field names that are not tables
-    "timegenerated",
-    "timestamp",
-    "url",
-    "srchostname",
-    "dsthostname",
-    "srcipaddr",
-    "dstipaddr",
-    "srcportnumber",
-    "dstportnumber",
-    "eventproduct",
-    "eventvendor",
-    "eventtype",
-    "eventresult",
-    "eventcount",
-    "httpreferrer",
-    "httpuseragent",
-    "httpmethod",
-    "threatfield",
-    "score",
-    "name",
-    "type",
-    "version",
-    "total",
-    "average",
-    
-    # Common let variable names and temporary table names
-    "hourlycount",
-    "webdata",
-    "potentialbeaconingtraffic",
-    "requestedfilename",
-    
-    # Time and type literals
-    "time",
-    "datetime",
-    "timespan",
-    "bool",
-    "int",
-    "long",
-    "real",
-    "string",
-    "guid",
-    "decimal",
-    
-    # Common workbook/query variable names (false positives)
-    "records",
-    "totalrecords",
-    "queryresult",
-    "queryresults",
-    "result",
-    "results",
-    "filtereddata",
-    "filtereddns",
-    "filteredrdp",
-    "filteredvpn",
-    "filtered",
-    "aggregationrecords",
-    "topsubjects",
-    "nxdomainresponses",
-    "unusualqtypes",
-    "unencryptedconnection",
-    "vpncount",
-    "filter_record",
-    "ssl",  # Too generic - likely column alias
-    "x509",  # Too generic - likely column alias
-    "dns",  # Too generic without prefix
-    "http",  # Too generic without prefix
-    "rdp",  # Too generic without prefix
-    "vpn",  # Too generic without prefix
-    "ftp",  # Too generic without prefix
-    "ssh",  # Too generic without prefix
-    "smtp",  # Too generic without prefix
-    "conn",  # Too generic without prefix
-    "files",  # Too generic without prefix
-    
-    # More generic variable patterns
-    "count",
-    "counts",
-    "summary",
-    "details",
-    "info",
-    "items",
-    "list",
-    "logs",
-    "entries",
-    "rows",
-    "events",
-    "metrics",
-    "stats",
-    "statistics",
-    "aggregated",
-    "grouped",
-    "merged",
-    "combined",
-    "joined",
-    "parsed",
-    "extracted",
-    "processed",
-    "raw",
-    "temp",
-    "tmp",
-    "base",
-    "source",
-    "target",
-    "input",
-    "output",
-    "final",
-    "initial",
 }
+
+# Known tables from tables_reference.csv - loaded at runtime
+KNOWN_TABLES_LOWER: Set[str] = set()
+
+
+def load_known_tables(script_dir: Path) -> Set[str]:
+    """
+    Load known table names from tables_reference.csv.
+    
+    Args:
+        script_dir: Path to the directory containing tables_reference.csv
+    
+    Returns:
+        Set of lowercase table names
+    """
+    tables_file = script_dir / "tables_reference.csv"
+    known_tables: Set[str] = set()
+    
+    if tables_file.exists():
+        with open(tables_file, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                table_name = row.get("table_name", "").strip()
+                if table_name:
+                    known_tables.add(table_name.lower())
+    
+    return known_tables
+
+
 PIPE_BLOCK_COMMANDS = {
     "project",
     "project-away",
@@ -786,39 +255,64 @@ PIPE_BLOCK_COMMANDS = {
 
 
 def is_valid_table_candidate(token: Optional[str], *, allow_parser_names: bool = False) -> bool:
+    """
+    Check if a token is a valid table candidate.
+    
+    Uses tables_reference.csv as the authoritative source for known Azure Monitor tables,
+    plus allows custom log tables (ending with _CL) and ASIM parser functions.
+    
+    Args:
+        token: The token to validate
+        allow_parser_names: If True, also allow names ending with _parser
+    
+    Returns:
+        True if the token is a valid table candidate, False otherwise
+    """
     if not isinstance(token, str):
         return False
     cleaned = token.strip()
     if not cleaned:
         return False
     lowered = cleaned.lower()
-    if lowered in NON_TABLE_TOKENS:
+    
+    # Reject tokens in the minimal blocklist
+    if lowered in BLOCKED_TOKENS:
         return False
+    
+    # Reject numeric values and time spans
     if lowered.isdigit():
         return False
     if re.fullmatch(r"\d+[smhd]", lowered):
         return False
     if cleaned[0].isdigit():
         return False
+    
     # Filter out ARM template expressions (e.g., @{if(...), variables('...'), parameters('...'))
     if '@{' in cleaned or '@(' in cleaned:
         return False
     if cleaned.startswith("@") or cleaned.startswith("variables(") or cleaned.startswith("parameters("):
         return False
+    
     # Filter out bracket expressions and ARM parameter references
     if cleaned.startswith("[") or "parameters(" in lowered or "variables(" in lowered:
         return False
+    
     # Filter out Logic App expressions
     if "triggerbody()" in lowered or "body(" in lowered:
         return False
-    # Filter names that start with dot or are just _CL (incomplete table names)
+    
+    # Filter names that start with dot
     if cleaned.startswith("."):
         return False
-    if lowered == "_cl" or lowered == "_indicators_cl":
+    
+    # Filter names that are too short (less than 3 chars)
+    if len(cleaned) < 3:
         return False
-    # Filter names that are too short (less than 3 chars) unless they end in _CL
-    if len(cleaned) < 3 and not lowered.endswith("_cl"):
-        return False
+    
+    # Allow custom log tables (ending with _CL)
+    if lowered.endswith("_cl"):
+        return True
+    
     # Allow ASIM view functions that start with _Im_ or _ASim_ (e.g., _Im_Dns, _ASim_NetworkSession)
     # But exclude ASIM helper functions like _ASIM_GetUsernameType, _ASIM_LookupDnsQueryType
     # Also exclude ASIM empty parsers like _Im_WebSession_Empty, _Im_Dns_Empty
@@ -833,46 +327,32 @@ def is_valid_table_candidate(token: Optional[str], *, allow_parser_names: bool =
         if any(after_prefix.startswith(verb) for verb in helper_verbs):
             return False  # This is a helper function, not a table/view
         return True
-    if lowered.startswith("_") and not cleaned.upper().endswith("_CL"):
+    
+    # Reject other names starting with underscore (except _CL which was handled above)
+    if lowered.startswith("_"):
         return False
+    
+    # Reject parser function names unless explicitly allowed
     if lowered.endswith("_parser") and not allow_parser_names:
         return False
     
-    # Pattern-based detection for common variable naming patterns
-    # These patterns suggest the name is a KQL let statement variable, not a table
+    # Check if the table is in the known tables reference list
+    if KNOWN_TABLES_LOWER and lowered in KNOWN_TABLES_LOWER:
+        return True
     
-    # Reject names that look like variables (camelCase with common suffixes)
-    variable_suffixes = ('count', 'data', 'result', 'results', 'records', 'list', 'items', 
-                         'entries', 'rows', 'logs', 'events', 'info', 'details', 'summary',
-                         'aggregation', 'aggregations', 'stats', 'statistics', 'metrics')
-    for suffix in variable_suffixes:
-        # Check if name ends with suffix (case insensitive) and is camelCase
-        if lowered.endswith(suffix) and len(lowered) > len(suffix):
-            prefix = cleaned[:-len(suffix)]
-            # If the prefix part has no underscore and isn't all lowercase, it's likely a variable
-            if '_' not in prefix and not prefix.islower():
+    # If KNOWN_TABLES_LOWER is not loaded yet (e.g., during module import),
+    # fall back to allowing names that don't look like obvious variables
+    if not KNOWN_TABLES_LOWER:
+        # Basic heuristic: reject obvious KQL variable patterns
+        # This is only used as fallback when tables_reference.csv hasn't been loaded
+        obvious_variable_prefixes = ('filtered', 'aggregated', 'temp', 'tmp', 'my')
+        for prefix in obvious_variable_prefixes:
+            if lowered.startswith(prefix):
                 return False
+        return True
     
-    # Reject names that start with common variable prefixes (case insensitive)
-    variable_prefixes = ('filtered', 'aggregated', 'grouped', 'merged', 'combined', 
-                         'processed', 'parsed', 'extracted', 'all', 'total', 'top', 
-                         'raw', 'temp', 'tmp', 'base', 'source', 'target', 'my')
-    for prefix in variable_prefixes:
-        if lowered.startswith(prefix) and len(lowered) > len(prefix):
-            # If followed by uppercase letter (camelCase), likely a variable
-            rest = cleaned[len(prefix):]
-            if rest and rest[0].isupper():
-                return False
-    
-    # Very short names without underscore or _CL suffix are likely variables
-    # Real Sentinel tables typically have underscores or are known built-in names
-    if len(cleaned) <= 6 and '_' not in cleaned and not lowered.endswith('_cl'):
-        # Allow known short built-in table names
-        known_short_tables = {'syslog', 'usage', 'update', 'event', 'alert', 'anomalies'}
-        if lowered not in known_short_tables:
-            return False
-    
-    return True
+    # Table not in known tables list - reject it
+    return False
 
 
 def is_true_table_name(value: Optional[str]) -> bool:
@@ -1272,13 +752,20 @@ def extract_query_table_tokens(
         if variable_name:
             assigned_variables.add(variable_name)
 
+    # Detect tables in union statements
+    # Union can have tables separated by commas or in parentheses
     if UNION_KEYWORD_PATTERN.search(substituted):
         for match in TOKEN_PATTERN.finditer(substituted):
             candidate = match.group(0)
             lowered = candidate.lower()
+            # Skip union keywords and boolean values
             if lowered in {"union", "isfuzzy", "true", "false"}:
                 continue
-            if lowered.endswith("_cl") and is_valid_table_candidate(candidate):
+            # Skip variable references
+            if lowered in assigned_variables:
+                continue
+            # Accept any valid table candidate (known tables, _CL tables, ASIM views)
+            if is_valid_table_candidate(candidate, allow_parser_names=allow_parser_tokens):
                 tokens.add(candidate)
 
     pipeline_tokens = detect_pipeline_heads(
@@ -1293,6 +780,16 @@ def extract_query_table_tokens(
     # Use [^\S\n]* instead of \s* to match whitespace but not newlines
     inline_pipe_pattern = re.compile(r'^[^\S\n]*([A-Za-z_][A-Za-z0-9_]*)[^\S\n]*\|', re.MULTILINE)
     for match in inline_pipe_pattern.finditer(without_comments):
+        candidate = match.group(1)
+        lowered = candidate.lower()
+        if lowered not in assigned_variables:
+            if is_valid_table_candidate(candidate, allow_parser_names=allow_parser_tokens):
+                tokens.add(candidate)
+    
+    # Detect tables in parentheses followed by pipe: (TableName | ...
+    # This handles patterns like let x = (AzureDiagnostics | where ...)
+    paren_pipe_pattern = re.compile(r'\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n?\s*\|', re.MULTILINE)
+    for match in paren_pipe_pattern.finditer(without_comments):
         candidate = match.group(1)
         lowered = candidate.lower()
         if lowered not in assigned_variables:
@@ -1525,6 +1022,55 @@ def find_connector_readme(solution_dir: Path) -> str:
     Returns:
         Relative path to README file within Data Connectors folder, or empty string
     """
+
+
+def find_solution_json(solution_dir: Path) -> Optional[Dict[str, Any]]:
+    """
+    Find and read the Solution_*.json file from the Data folder.
+    
+    The Solution JSON contains metadata like Name, Logo, Author, Version, Description,
+    and lists of content items. This is more accurate than SolutionMetadata.json for
+    some fields.
+    
+    Args:
+        solution_dir: Path to the solution directory
+    
+    Returns:
+        Parsed JSON content or None if not found
+    """
+    # Check both "Data" and "data" folders (case-insensitive)
+    for data_folder_name in ["Data", "data"]:
+        data_dir = solution_dir / data_folder_name
+        if not data_dir.exists():
+            continue
+        
+        # Find Solution_*.json file
+        for json_path in data_dir.glob("Solution_*.json"):
+            data = read_json(json_path)
+            if data and isinstance(data, dict):
+                return data
+    
+    return None
+
+
+def extract_logo_url(logo_html: str) -> str:
+    """
+    Extract the URL from an HTML img tag.
+    
+    Args:
+        logo_html: HTML img tag like '<img src="https://..." width="75px" height="75px">'
+    
+    Returns:
+        The src URL or empty string if not found
+    """
+    if not logo_html:
+        return ""
+    
+    # Match src="..." or src='...'
+    match = re.search(r'src\s*=\s*["\']([^"\']+)["\']', logo_html, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return ""
     for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
         dc_dir = solution_dir / dc_folder_name
         if not dc_dir.exists():
@@ -1542,17 +1088,39 @@ def find_connector_readme(solution_dir: Path) -> str:
 
 
 def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
+    """
+    Collect solution metadata from both SolutionMetadata.json and Solution_*.json files.
+    
+    The Solution JSON (in Data folder) provides:
+    - Name (official name, may differ from folder name)
+    - Logo (HTML img tag with URL)
+    - Author
+    - Version  
+    - Description
+    
+    The SolutionMetadata.json provides:
+    - publisherId, offerId
+    - firstPublishDate, lastPublishDate
+    - support information
+    - categories
+    """
+    # Read SolutionMetadata.json for publishing metadata
     metadata_path = solution_dir / "SolutionMetadata.json"
     metadata = read_json(metadata_path) if metadata_path.exists() else {}
     if not isinstance(metadata, dict):
         metadata = {}
     
-    # Flatten support object
+    # Read Solution_*.json from Data folder for richer metadata
+    solution_json = find_solution_json(solution_dir)
+    if solution_json is None:
+        solution_json = {}
+    
+    # Flatten support object from SolutionMetadata.json
     support = metadata.get("support", {})
     if not isinstance(support, dict):
         support = {}
     
-    # Flatten author object
+    # Flatten author object from SolutionMetadata.json (legacy)
     author = metadata.get("author", {})
     if not isinstance(author, dict):
         author = {}
@@ -1573,20 +1141,46 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
             solution_readme_file = readme_name
             break
     
+    # Get name from Solution JSON (preferred) or fall back to folder name
+    solution_name = solution_json.get("Name", "") or solution_dir.name
+    
+    # Extract logo URL from HTML img tag
+    logo_html = solution_json.get("Logo", "")
+    logo_url = extract_logo_url(logo_html)
+    
+    # Get author from Solution JSON (preferred) or SolutionMetadata.json
+    solution_author = solution_json.get("Author", "") or author.get("name", "")
+    
+    # Get version from Solution JSON (preferred) or SolutionMetadata.json
+    solution_version = solution_json.get("Version", "") or metadata.get("version", "")
+    
+    # Get description from Solution JSON (strip HTML/markdown for CSV)
+    description = solution_json.get("Description", "")
+    
+    # Get dependencies from Solution JSON
+    dependencies = solution_json.get("dependentDomainSolutionIds", [])
+    if isinstance(dependencies, list):
+        dependencies_str = ";".join(str(d) for d in dependencies if d)
+    else:
+        dependencies_str = ""
+    
     return {
-        "solution_name": solution_dir.name,
+        "solution_name": solution_name,
         "solution_folder": solution_dir.name,
         "solution_publisher_id": metadata.get("publisherId", ""),
         "solution_offer_id": metadata.get("offerId", ""),
         "solution_first_publish_date": metadata.get("firstPublishDate", ""),
         "solution_last_publish_date": metadata.get("lastPublishDate", ""),
-        "solution_version": metadata.get("version", ""),
+        "solution_version": solution_version,
         "solution_support_name": support.get("name", ""),
         "solution_support_tier": support.get("tier", ""),
         "solution_support_link": support.get("link", ""),
-        "solution_author_name": author.get("name", ""),
+        "solution_author_name": solution_author,
         "solution_categories": categories_str,
         "solution_readme_file": solution_readme_file,
+        "solution_logo_url": logo_url,
+        "solution_description": description,
+        "solution_dependencies": dependencies_str,
     }
 
 
@@ -1774,6 +1368,184 @@ def load_asim_parsers(repo_root: Path) -> Tuple[Set[str], Dict[str, Set[str]], D
                 continue
     
     return parser_names, dict(parser_table_map), parser_alias_map
+
+
+def load_asim_parsers_detailed(repo_root: Path) -> Tuple[List[Dict[str, Any]], Set[str], Dict[str, Set[str]], Dict[str, str]]:
+    """
+    Load ASIM parsers from /Parsers/ASim*/Parsers directories with full metadata for CSV export.
+    
+    Returns:
+        - parser_records: List of dicts with all parser metadata for CSV export
+        - parser_names: Set of all ASIM parser names (both ParserName and EquivalentBuiltInParser)
+        - parser_table_map: Dict mapping parser name (lowercased) to tables/sub-parsers it references
+        - parser_alias_map: Dict mapping EquivalentBuiltInParser to ParserName (both lowercased)
+    """
+    try:
+        import yaml
+    except ImportError:
+        print("  Warning: PyYAML not installed, skipping ASIM parser loading")
+        return [], set(), {}, {}
+    
+    parsers_dir = repo_root / "Parsers"
+    parser_records: List[Dict[str, Any]] = []
+    parser_names: Set[str] = set()
+    parser_table_map: Dict[str, Set[str]] = defaultdict(set)
+    parser_alias_map: Dict[str, str] = {}
+    
+    if not parsers_dir.exists():
+        return parser_records, parser_names, parser_table_map, parser_alias_map
+    
+    # Find all ASim* directories
+    asim_dirs = [d for d in parsers_dir.iterdir() if d.is_dir() and d.name.startswith("ASim")]
+    
+    for asim_dir in sorted(asim_dirs):
+        parsers_subdir = asim_dir / "Parsers"
+        if not parsers_subdir.exists():
+            continue
+        
+        # Extract schema name from directory (e.g., "ASimDns" -> "Dns", "ASimNetworkSession" -> "NetworkSession")
+        schema_name = asim_dir.name
+        if schema_name.startswith("ASim"):
+            schema_name = schema_name[4:]  # Remove "ASim" prefix
+        
+        for yaml_path in sorted(list(parsers_subdir.glob("*.yaml")) + list(parsers_subdir.glob("*.yml"))):
+            try:
+                content = yaml_path.read_text(encoding="utf-8")
+                data = yaml.safe_load(content)
+                if not isinstance(data, dict):
+                    continue
+                
+                # Extract all available fields
+                parser_info = data.get("Parser", {}) if isinstance(data.get("Parser"), dict) else {}
+                product_info = data.get("Product", {}) if isinstance(data.get("Product"), dict) else {}
+                normalization_info = data.get("Normalization", {}) if isinstance(data.get("Normalization"), dict) else {}
+                references = data.get("References", []) if isinstance(data.get("References"), list) else []
+                
+                parser_name = data.get("ParserName", "")
+                equivalent_builtin = data.get("EquivalentBuiltInParser", "")
+                parser_query = data.get("ParserQuery", "")
+                sub_parsers = data.get("Parsers", [])  # List of sub-parser references
+                parser_params = data.get("ParserParams", [])
+                description = data.get("Description", "")
+                
+                # Skip if no parser name
+                if not parser_name:
+                    continue
+                
+                parser_names.add(parser_name)
+                parser_name_lower = parser_name.lower()
+                
+                # Extract tables from the parser query
+                tables: Set[str] = set()
+                if parser_query:
+                    tables = extract_query_table_tokens(parser_query, {}, {})
+                    parser_table_map[parser_name_lower].update(tables)
+                
+                # Handle sub-parser references
+                sub_parsers_list = []
+                if isinstance(sub_parsers, list):
+                    for sub_parser in sub_parsers:
+                        if isinstance(sub_parser, str) and sub_parser.strip():
+                            parser_table_map[parser_name_lower].add(sub_parser.strip())
+                            sub_parsers_list.append(sub_parser.strip())
+                
+                # Map the EquivalentBuiltInParser to the ParserName
+                if equivalent_builtin and parser_name:
+                    parser_names.add(equivalent_builtin)
+                    equivalent_lower = equivalent_builtin.lower()
+                    parser_alias_map[equivalent_lower] = parser_name_lower
+                    if parser_name_lower in parser_table_map:
+                        parser_table_map[equivalent_lower] = parser_table_map[parser_name_lower]
+                
+                # Determine parser type
+                parser_type = "source"  # Default - individual source parser
+                if sub_parsers_list:
+                    parser_type = "union"  # Schema-level union parser
+                elif parser_name.lower().endswith("empty") or "empty" in yaml_path.name.lower():
+                    parser_type = "empty"  # Empty placeholder parser
+                
+                # Format references as semicolon-separated list
+                ref_links = []
+                for ref in references:
+                    if isinstance(ref, dict):
+                        title = ref.get("Title", "")
+                        link = ref.get("Link", "")
+                        if title and link:
+                            ref_links.append(f"[{title}]({link})")
+                        elif link:
+                            ref_links.append(link)
+                
+                # Format parser params
+                params_list = []
+                if isinstance(parser_params, list):
+                    for param in parser_params:
+                        if isinstance(param, dict):
+                            param_name = param.get("Name", "")
+                            param_type = param.get("Type", "")
+                            param_default = param.get("Default", "")
+                            if param_name:
+                                params_list.append(f"{param_name}:{param_type}={param_default}")
+                
+                # Build the record for CSV export
+                record = {
+                    "parser_name": parser_name,
+                    "equivalent_builtin": equivalent_builtin,
+                    "schema": normalization_info.get("Schema", schema_name),
+                    "schema_version": normalization_info.get("Version", ""),
+                    "parser_type": parser_type,
+                    "parser_title": parser_info.get("Title", ""),
+                    "parser_version": parser_info.get("Version", ""),
+                    "parser_last_updated": parser_info.get("LastUpdated", ""),
+                    "product_name": product_info.get("Name", ""),
+                    "description": description.strip() if description else "",
+                    "tables": ";".join(sorted(tables)) if tables else "",
+                    "sub_parsers": ";".join(sub_parsers_list) if sub_parsers_list else "",
+                    "parser_params": ";".join(params_list) if params_list else "",
+                    "references": ";".join(ref_links) if ref_links else "",
+                    "source_file": str(yaml_path.relative_to(repo_root)),
+                    "github_url": f"https://github.com/Azure/Azure-Sentinel/blob/master/{yaml_path.relative_to(repo_root).as_posix()}",
+                }
+                
+                parser_records.append(record)
+                    
+            except Exception as e:
+                continue
+    
+    return parser_records, parser_names, dict(parser_table_map), parser_alias_map
+
+
+def write_asim_parsers_csv(parser_records: List[Dict[str, Any]], output_path: Path) -> None:
+    """Write ASIM parser records to CSV file."""
+    if not parser_records:
+        print("  No ASIM parser records to write")
+        return
+    
+    fieldnames = [
+        "parser_name",
+        "equivalent_builtin",
+        "schema",
+        "schema_version",
+        "parser_type",
+        "parser_title",
+        "parser_version",
+        "parser_last_updated",
+        "product_name",
+        "description",
+        "tables",
+        "sub_parsers",
+        "parser_params",
+        "references",
+        "source_file",
+        "github_url",
+    ]
+    
+    with output_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
+        for record in parser_records:
+            writer.writerow(record)
+    
+    print(f"  Wrote {len(parser_records)} ASIM parser records to {output_path}")
 
 
 def normalize_parser_name(name: str) -> str:
@@ -2068,6 +1840,15 @@ def determine_collection_method(
         'Azure Function' not in connector_description):
         all_matches.append(("MMA", "Uses workspace ID/key pattern"))
     
+    # MMA-specific patterns: OmsSolutions and InstallAgentOn* instructions
+    # These are MMA-era patterns that indicate the connector uses the legacy agent
+    if '"solutionName"' in content and 'OmsSolutions' in content:
+        all_matches.append(("MMA", "Uses OmsSolutions (MMA-era technology)"))
+    if '"linkType":' in content and ('InstallAgentOnVirtualMachine' in content or 
+                                      'InstallAgentOnNonAzure' in content or
+                                      'InstallAgentOnLinuxNonAzure' in content):
+        all_matches.append(("MMA", "Uses InstallAgent patterns (MMA-era)"))
+    
     # === PRIORITY 9: REST API patterns ===
     if 'REST API' in connector_title or 'REST API' in connector_description:
         all_matches.append(("REST API", "Title/description mentions REST API"))
@@ -2102,7 +1883,8 @@ def determine_collection_method(
     # Determine final method based on priority
     # Priority order reflects detection order - higher = selected first
     # Title-based AMA/MMA > Azure Function (filename) > CCF (content) > Azure Diagnostics > CCF (name) > Azure Function (content) > Native > AMA/MMA (content) > REST API
-    priority_order = ["Azure Diagnostics", "CCF", "Azure Function", "Native", "AMA", "MMA", "REST API", "Unknown (Custom Log)", "Unknown"]
+    # MMA from content patterns (OmsSolutions, InstallAgent) should take precedence over AMA from table metadata
+    priority_order = ["Azure Diagnostics", "CCF", "Azure Function", "Native", "MMA", "AMA", "REST API", "Unknown (Custom Log)", "Unknown"]
     
     # Special case: If title explicitly indicates AMA/MMA, prioritize that
     if title_indicates_ama:
@@ -2155,7 +1937,57 @@ CONTENT_TYPE_FOLDERS: Dict[str, List[str]] = {
     "playbook": ["Playbooks", "Playbook"],
     "parser": ["Parsers", "Parser"],
     "watchlist": ["Watchlists"],
+    "summary_rule": ["Summary Rules", "Summary rules"],
 }
+
+# Mapping from Solution JSON keys to our internal content types
+# Some Solution JSONs use alternate key names (e.g., "AnalyticsRules" vs "Analytic Rules")
+# so we support multiple keys per content type (case-insensitive matching applied at runtime)
+SOLUTION_JSON_CONTENT_KEYS: Dict[str, List[str]] = {
+    "analytic_rule": ["Analytic Rules", "AnalyticsRules", "Analytics Rules", "analyticRules"],
+    "hunting_query": ["Hunting Queries", "HuntingQueries", "huntingQueries"],
+    "workbook": ["Workbooks", "WorkBooks", "workbooks"],
+    "playbook": ["Playbooks", "playbooks"],
+    "parser": ["Parsers", "parsers"],
+    "watchlist": ["Watchlists", "watchlists"],
+    "data_connector": ["Data Connectors", "DataConnectors", "dataConnectors"],
+    "summary_rule": ["SummaryRules", "Summary Rules", "summaryRules"],
+}
+
+def get_content_items_from_solution_json(solution_json: Optional[Dict[str, Any]]) -> Dict[str, Set[str]]:
+    """
+    Extract the list of content items from a Solution JSON file.
+    
+    The Solution JSON contains lists of content files for each content type.
+    This function extracts and normalizes these file paths for comparison.
+    
+    Args:
+        solution_json: Parsed Solution JSON data, or None if not found
+    
+    Returns:
+        Dictionary mapping content type to set of normalized basenames (lowercase)
+    """
+    if not solution_json:
+        return {}
+    
+    result: Dict[str, Set[str]] = {}
+    
+    for content_type, json_keys in SOLUTION_JSON_CONTENT_KEYS.items():
+        basenames: Set[str] = set()
+        # Try each possible key name for this content type
+        for json_key in json_keys:
+            items = solution_json.get(json_key, [])
+            if items and isinstance(items, list):
+                for item_path in items:
+                    if isinstance(item_path, str) and item_path.strip():
+                        # Normalize: extract basename and lowercase for comparison
+                        basename = os.path.basename(item_path.strip()).lower()
+                        if basename:
+                            basenames.add(basename)
+        if basenames:
+            result[content_type] = basenames
+    
+    return result
 
 
 def read_yaml_safe(path: Path) -> Optional[Dict[str, Any]]:
@@ -2358,6 +2190,22 @@ def extract_content_item_from_workbook(
     # Skip ARM template files (azuredeploy*.json)
     if json_path.name.lower().startswith("azuredeploy"):
         return None
+    
+    # Skip ARM deployment templates - they have $schema field and are NOT actual workbooks
+    # Real workbooks have "version": "Notebook/1.0" at the root level
+    if isinstance(data, dict):
+        # Check for ARM template schema - these are deployment wrappers, not workbook content
+        if "$schema" in data:
+            schema_val = data.get("$schema", "")
+            if isinstance(schema_val, str) and "deploymentTemplate" in schema_val:
+                return None
+        
+        # Verify this is actually a workbook (has "version": "Notebook/..." or contains "items" array)
+        version = data.get("version", "")
+        has_items = "items" in data
+        if not (version.startswith("Notebook/") or has_items):
+            # Not a valid workbook structure
+            return None
     
     # Use filename as workbook name (workbooks don't have reliable metadata)
     name = json_path.stem
@@ -2616,17 +2464,44 @@ def extract_content_item_from_playbook(
     }
 
 
-def collect_content_items(solution_dir: Path, solution_name: str, solution_folder: str) -> List[Dict[str, Any]]:
-    """Collect all content items from a solution directory."""
+def collect_content_items(
+    solution_dir: Path,
+    solution_name: str,
+    solution_folder: str,
+    solution_json: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Collect all content items from a solution directory.
+    
+    Uses file system scanning as the primary discovery method, then checks each
+    discovered item against the Solution JSON to determine if it's documented.
+    Also adds placeholder items for items listed in Solution JSON but not found
+    by file scanning.
+    
+    Args:
+        solution_dir: Path to the solution directory
+        solution_name: Display name of the solution
+        solution_folder: Folder name of the solution
+        solution_json: Optional parsed Solution JSON data for checking documentation status
+    
+    Returns:
+        List of content item dictionaries with 'not_in_solution_json' field indicating items found by scanning but not in Solution JSON
+    """
     content_items: List[Dict[str, Any]] = []
     
+    # Get the set of items listed in Solution JSON for comparison
+    json_items = get_content_items_from_solution_json(solution_json)
+    
     for content_type, folder_names in CONTENT_TYPE_FOLDERS.items():
+        # Get the set of basenames for this content type from Solution JSON
+        json_basenames = json_items.get(content_type, set())
+        
         for folder_name in folder_names:
             content_dir = solution_dir / folder_name
             if not content_dir.exists():
                 continue
             
-            if content_type in ["analytic_rule", "hunting_query", "parser"]:
+            if content_type in ["analytic_rule", "hunting_query", "parser", "summary_rule"]:
                 # YAML-based content
                 for yaml_path in list(content_dir.rglob("*.yaml")) + list(content_dir.rglob("*.yml")):
                     item = extract_content_item_from_yaml(yaml_path, content_type, solution_name, solution_folder)
@@ -2637,6 +2512,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             item["content_file"] = str(rel_path).replace("\\", "/")
                         except ValueError:
                             pass
+                        # Check if item is in Solution JSON
+                        basename_lower = yaml_path.name.lower()
+                        item["not_in_solution_json"] = "true" if basename_lower not in json_basenames else "false"
                         content_items.append(item)
                         
             elif content_type == "workbook":
@@ -2647,6 +2525,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                         continue
                     item = extract_content_item_from_workbook(json_path, solution_name, solution_folder)
                     if item:
+                        # Check if item is in Solution JSON
+                        basename_lower = json_path.name.lower()
+                        item["not_in_solution_json"] = "true" if basename_lower not in json_basenames else "false"
                         content_items.append(item)
                         
             elif content_type == "playbook":
@@ -2665,6 +2546,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                                 item["content_readme_file"] = str(readme_rel).replace("\\", "/")
                         except ValueError:
                             pass
+                        # Check if item is in Solution JSON
+                        basename_lower = json_path.name.lower()
+                        item["not_in_solution_json"] = "true" if basename_lower not in json_basenames else "false"
                         content_items.append(item)
                         
             elif content_type == "watchlist":
@@ -2675,6 +2559,9 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                         name = json_path.stem
                         if isinstance(data, dict):
                             name = data.get("name", name) or data.get("displayName", name)
+                        # Check if item is in Solution JSON
+                        basename_lower = json_path.name.lower()
+                        not_in_json = "true" if basename_lower not in json_basenames else "false"
                         content_items.append({
                             "content_id": "",
                             "content_name": name,
@@ -2692,6 +2579,7 @@ def collect_content_items(solution_dir: Path, solution_name: str, solution_folde
                             "content_query_status": "no_query",  # Watchlists don't have queries
                             "content_event_vendor": "",
                             "content_event_product": "",
+                            "not_in_solution_json": not_in_json,
                             "solution_name": solution_name,
                             "solution_folder": solution_folder,
                         })
@@ -2704,7 +2592,14 @@ def extract_tables_from_content_query(
     parser_names: Set[str],
     parser_table_map: Dict[str, Set[str]],
 ) -> Set[str]:
-    """Extract table names from a content item's KQL query, expanding parser references recursively."""
+    """Extract table names from a content item's KQL query.
+    
+    ASIM parsers (starting with _Im_ or _ASim_) are kept as-is and NOT expanded
+    to their underlying tables. This allows documentation to show which parsers
+    a content item uses rather than the expanded table list.
+    
+    Non-ASIM parsers (e.g., solution-specific parsers) are still expanded.
+    """
     if not query:
         return set()
     
@@ -2712,27 +2607,33 @@ def extract_tables_from_content_query(
     cache: Dict[str, Optional[str]] = {}
     tables = extract_query_table_tokens(query, {}, cache, allow_parser_tokens=True)
     
-    # Expand parser references to actual tables using recursive expansion
+    # Process tables - keep ASIM parsers as-is, expand other parsers
     # Normalize parser names to handle underscore prefix variations
-    expanded_tables: Set[str] = set()
+    result_tables: Set[str] = set()
     parser_names_normalized = {normalize_parser_name(p) for p in parser_names}
     parser_table_map_normalized = {normalize_parser_name(k): v for k, v in parser_table_map.items()}
     
     for table in tables:
-        table_normalized = normalize_parser_name(table)
-        if table_normalized in parser_names_normalized or table_normalized in parser_table_map_normalized:
-            # This is a parser, expand recursively to underlying tables
-            derived_tables = expand_parser_tables(table, parser_table_map)
-            if derived_tables:
-                expanded_tables.update(derived_tables)
-            else:
-                # Keep the parser name if we can't expand it
-                expanded_tables.add(table)
+        # Check if this is an ASIM parser (starts with _Im_ or _ASim_)
+        lowered = table.lower() if table else ""
+        if lowered.startswith("_im_") or lowered.startswith("_asim_"):
+            # Keep ASIM parser as-is, don't expand
+            result_tables.add(table)
         else:
-            expanded_tables.add(table)
+            table_normalized = normalize_parser_name(table)
+            if table_normalized in parser_names_normalized or table_normalized in parser_table_map_normalized:
+                # This is a non-ASIM parser, expand recursively to underlying tables
+                derived_tables = expand_parser_tables(table, parser_table_map)
+                if derived_tables:
+                    result_tables.update(derived_tables)
+                else:
+                    # Keep the parser name if we can't expand it
+                    result_tables.add(table)
+            else:
+                result_tables.add(table)
     
-    # Filter expanded tables through is_valid_table_candidate to remove helper functions
-    return {t for t in expanded_tables if is_valid_table_candidate(t)}
+    # Filter tables through is_valid_table_candidate to remove helper functions
+    return {t for t in result_tables if is_valid_table_candidate(t)}
 
 
 def parse_args(default_repo_root: Path) -> argparse.Namespace:
@@ -2809,13 +2710,26 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "content_tables_mapping.csv",
         help="Path for the content items to tables mapping CSV file (default: %(default)s)",
     )
+    parser.add_argument(
+        "--asim-parsers-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "asim_parsers.csv",
+        help="Path for the ASIM parsers CSV file (default: %(default)s)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
+    global KNOWN_TABLES_LOWER
     # Script is in Tools/Solutions Analyzer, repo root is 2 levels up
     repo_root = Path(__file__).resolve().parents[2]
+    script_dir = Path(__file__).resolve().parent
     args = parse_args(repo_root)
+
+    # Load known tables from tables_reference.csv for whitelist-based table validation
+    KNOWN_TABLES_LOWER = load_known_tables(script_dir)
+    if KNOWN_TABLES_LOWER:
+        print(f"Loaded {len(KNOWN_TABLES_LOWER)} known table names from tables_reference.csv")
 
     solutions_dir = args.solutions_dir.resolve()
     if not solutions_dir.exists() or not solutions_dir.is_dir():
@@ -2829,10 +2743,14 @@ def main() -> None:
     report_parent = report_path.parent
     report_parent.mkdir(parents=True, exist_ok=True)
 
-    # Load ASIM parsers once at startup for global parser expansion
+    # Load ASIM parsers with full metadata for CSV export and parser expansion
     print("Loading ASIM parsers from /Parsers/ASim*/Parsers...")
-    asim_parser_names, asim_parser_table_map, asim_alias_map = load_asim_parsers(repo_root)
-    print(f"  Loaded {len(asim_parser_names)} ASIM parser names, {len(asim_parser_table_map)} parser mappings")
+    asim_parser_records, asim_parser_names, asim_parser_table_map, asim_alias_map = load_asim_parsers_detailed(repo_root)
+    print(f"  Loaded {len(asim_parser_records)} ASIM parser records, {len(asim_parser_names)} parser names, {len(asim_parser_table_map)} parser mappings")
+    
+    # Write ASIM parsers CSV
+    asim_parsers_csv_path = args.asim_parsers_csv.resolve()
+    write_asim_parsers_csv(asim_parser_records, asim_parsers_csv_path)
 
     # Load tables_reference.csv early for use in collection method detection
     tables_reference: Dict[str, Dict[str, str]] = {}
@@ -2864,11 +2782,14 @@ def main() -> None:
     all_content_items: List[Dict[str, Any]] = []
     content_table_mappings: List[Dict[str, str]] = []
     
+    # Track connector documentation status (filename -> not_in_solution_json)
+    connector_not_in_solution_json: Dict[str, str] = {}
+    
     # Track all solutions and identify those without any connectors
     all_solutions_info: Dict[str, Dict[str, str]] = {}
     solutions_without_connectors: Set[str] = set()
 
-    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
+    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
         solution_info = collect_solution_info(solution_dir.resolve())
         
         # Store all solution info for later processing
@@ -2884,11 +2805,15 @@ def main() -> None:
         # Normalize parser names for lookups (handles underscore prefix variations)
         parser_names_lower = {normalize_parser_name(name) for name in parser_names if name}
         
+        # Read Solution JSON for content item comparison
+        solution_json = find_solution_json(solution_dir.resolve())
+        
         # Collect content items for this solution
         solution_content_items = collect_content_items(
             solution_dir.resolve(),
             solution_info["solution_name"],
             solution_info["solution_folder"],
+            solution_json=solution_json,
         )
         
         # Extract tables from content queries and build mappings
@@ -2938,6 +2863,9 @@ def main() -> None:
             item_for_csv = {k: v for k, v in item.items() if k not in ("content_query", "content_write_tables")}
             all_content_items.append(item_for_csv)
         
+        # Get connector files listed in Solution JSON for comparison
+        json_connector_basenames = get_content_items_from_solution_json(solution_json).get("data_connector", set())
+        
         # Support "Data Connectors" (preferred), "DataConnectors", and "Data Connector" (singular) folder naming
         data_connectors_dirs = [
             solution_dir / "Data Connectors",
@@ -2952,6 +2880,13 @@ def main() -> None:
                 continue
             has_data_connectors_dir = True
             for json_path in sorted(data_connectors_dir.rglob("*.json")):
+                # Track connector documentation status
+                basename_lower = json_path.name.lower()
+                not_in_json = "true" if basename_lower not in json_connector_basenames else "false"
+                # Build a unique key using solution folder and relative path
+                connector_file_key = f"{solution_info['solution_folder']}:{json_path.name}"
+                connector_not_in_solution_json[connector_file_key] = not_in_json
+                
                 data = read_json(json_path)
                 if data is None:
                     # Log JSON parsing failure as an issue
@@ -3320,6 +3255,20 @@ def main() -> None:
         # Track connector info for connectors.csv
         connector_id = row_key[12]
         if connector_id and connector_id not in connector_info_map:
+            # Check if any connector file is documented in Solution JSON
+            # Extract filenames from the GitHub URLs and check against our tracking
+            solution_folder = row_key[1]
+            connector_files_list = github_urls
+            is_documented = False
+            for github_url in connector_files_list:
+                # Extract filename from GitHub URL
+                filename = github_url.split('/')[-1] if github_url else ""
+                connector_file_key = f"{solution_folder}:{filename}"
+                if connector_not_in_solution_json.get(connector_file_key) == "false":
+                    is_documented = True
+                    break
+            not_in_json = "false" if is_documented else "true"
+            
             connector_info_map[connector_id] = {
                 'connector_id': connector_id,
                 'connector_publisher': row_key[13],
@@ -3331,6 +3280,7 @@ def main() -> None:
                 'connector_files': ";".join(github_urls),
                 'solution_name': row_key[0],  # First solution name (can be multiple)
                 'solution_folder': row_key[1],  # Solution folder for README lookup
+                'not_in_solution_json': not_in_json,
             }
 
     # Now analyze collection methods for all connectors
@@ -3339,7 +3289,7 @@ def main() -> None:
     connector_vendor_product: Dict[str, Dict[str, Set[str]]] = {}  # connector_id -> {'vendor': set, 'product': set}
     connector_vendor_product_by_table: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {'vendor': set, 'product': set}}
     
-    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
+    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
         for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
             data_connectors_dir = solution_dir / dc_folder_name
             if not data_connectors_dir.exists():
@@ -3446,6 +3396,7 @@ def main() -> None:
             'event_vendor': ';'.join(sorted(vp_info['vendor'])) if vp_info['vendor'] else '',
             'event_product': ';'.join(sorted(vp_info['product'])) if vp_info['product'] else '',
             'event_vendor_product_by_table': json.dumps(vp_by_table_serialized) if vp_by_table_serialized else '',
+            'not_in_solution_json': info.get('not_in_solution_json', 'false'),
         })
     
     # Build solutions data
@@ -3472,6 +3423,9 @@ def main() -> None:
             'solution_author_name': info['solution_author_name'],
             'solution_categories': info['solution_categories'],
             'solution_readme_file': readme_full_path,
+            'solution_logo_url': info.get('solution_logo_url', ''),
+            'solution_description': info.get('solution_description', ''),
+            'solution_dependencies': info.get('solution_dependencies', ''),
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
         })
     
@@ -3653,6 +3607,7 @@ def main() -> None:
         'event_vendor',
         'event_product',
         'event_vendor_product_by_table',
+        'not_in_solution_json',
     ]
     connectors_path = args.connectors_csv.resolve()
     with connectors_path.open("w", encoding="utf-8", newline="") as csvfile:
@@ -3675,6 +3630,9 @@ def main() -> None:
         'solution_author_name',
         'solution_categories',
         'solution_readme_file',
+        'solution_logo_url',
+        'solution_description',
+        'solution_dependencies',
         'has_connectors',
     ]
     solutions_path = args.solutions_csv.resolve()
@@ -3730,6 +3688,7 @@ def main() -> None:
         'content_query_status',
         'content_event_vendor',
         'content_event_product',
+        'not_in_solution_json',
         'solution_name',
         'solution_folder',
     ]
