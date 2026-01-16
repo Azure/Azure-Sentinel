@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 # - Azure CLI installed: https://learn.microsoft.com/cli/azure/install-azure-cli
-# - Cloud Foundry CLI (cf) installed and configured
+# - SAP BTP CLI installed: https://tools.hana.ondemand.com/#cloud-btpcli
 # - Successful run of provision-audit-to-subaccounts.ps1
 # - SAP BTP Solution installed from Content Hub
 # - SAP BTP data connector deployed in the workspace
@@ -120,15 +120,6 @@ if (-not (Test-AzCli)) {
     exit 1
 }
 
-# Check if CF CLI is installed
-if ($credentialSource -eq "CloudFoundry") {
-    if (-not (Test-CfCli)) {
-        Write-Log "Exiting script due to missing CF CLI." -Level "ERROR"
-        exit 1
-    }
-} else {
-    Write-Log "Skipping CF CLI check (using $credentialSource credentials)" -Level "INFO"
-}
 
 # Check Azure login
 try {
@@ -284,35 +275,20 @@ foreach ($subaccount in $subaccounts) {
             continue
         }
         
-        # Discover existing auditlog-management instances
-        $existingInstances = Get-CfServiceInstancesByOffering -ServiceOffering "auditlog-management"
+        # Check if the specified service instance exists (using same approach as provision script)
+        Write-Log "Looking for service instance: $InstanceName" -Level "INFO"
         
-        if ($existingInstances.Count -eq 0) {
-            Write-Log "No auditlog-management service instances found in org '$orgName' space '$spaceName'. Skipping." -Level "ERROR"
-            $failureCount++
-            continue
-        }
-        
-        # Look for instance matching the specified name (default or custom)
-        $matchingInstance = $existingInstances | Where-Object { $_ -eq $InstanceName }
-        
-        if ($matchingInstance) {
-            $instanceName = $matchingInstance
-            Write-Log "Using instance: $instanceName" -Level "INFO"
-        } else {
-            Write-Log "Instance '$InstanceName' not found. Available: $($existingInstances -join ', ')" -Level "ERROR"
-            $failureCount++
-            continue
-        }
-        
-        # Get service keys for this instance and use the newest one (last in list)
-        $existingKeys = @(Get-CfServiceKeys -InstanceName $instanceName)
+        # Get existing service keys to verify instance exists (also needed later)
+        $existingKeys = @(Get-CfServiceKeys -InstanceName $InstanceName)
         
         if ($existingKeys.Count -eq 0) {
-            Write-Log "No service keys found for instance '$instanceName'. Skipping." -Level "ERROR"
+            Write-Log "Service instance '$InstanceName' not found or has no keys in org '$orgName' space '$spaceName'. Skipping." -Level "ERROR"
             $failureCount++
             continue
         }
+        
+        $instanceName = $InstanceName
+        Write-Log "Using instance: $instanceName" -Level "INFO"
         
         # CF returns keys in creation order - use the last one (newest)
         # Ensure we handle both single key (string) and multiple keys (array)

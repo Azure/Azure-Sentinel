@@ -4,15 +4,15 @@
 # The service key contains the necessary credentials to connect SAP BTP Auditlog Management with Microsoft Sentinel for SAP BTP.
 #
 # Prerequisites:
-# - Cloud Foundry CLI (cf) installed and configured
-# - CF login session established (run 'cf login' before executing this script)
+# - SAP BTP CLI installed: https://tools.hana.ondemand.com/#cloud-btpcli
+# - Azure CLI installed (if using Key Vault export): https://learn.microsoft.com/cli/azure/install-azure-cli
 # - Appropriate permissions in SAP BTP to create services in target orgs/spaces
 # - SAP BTP entitlements/quota for 'auditlog-management' service in each subaccount
 # - Sentinel Solution for SAP BTP deployed in your Azure environment
 # - A CSV file named 'subaccounts.csv' with columns: SubaccountId;cf-api-endpoint;cf-org-name;cf-space-name
 #
 # Usage: 
-#   1. Run 'cf login' first to establish authentication
+#   1. Ensure you have CF credentials (username/password)
 #   2. Update 'subaccounts.csv' with your subaccount details
 #   3. Execute this script in PowerShell from the Tools folder:
 #       $securePassword = Read-Host "Enter CF Password" -AsSecureString
@@ -115,12 +115,6 @@ if ($ExportCredentialsToKeyVault) {
 }
 Write-Log "======================================================================="
 
-# Check if CF CLI is installed
-if (-not (Test-CfCli)) {
-    Write-Log "Exiting script due to missing CF CLI." -Level "ERROR"
-    exit 1
-}
-
 # Load subaccounts from CSV using helper function
 $subaccounts = Import-BtpSubaccountsCsv -CsvPath $CsvPath
 if ($null -eq $subaccounts) {
@@ -170,29 +164,9 @@ foreach ($subaccount in $subaccounts) {
         continue
     }
     
-    # Discover existing auditlog-management instances
-    $existingInstances = Get-CfServiceInstancesByOffering -ServiceOffering $ServiceName
-    
-    # Determine which instance to use - always look for exact match first
-    if ($existingInstances.Count -gt 0) {
-        # Look for instance matching the specified name (default or custom)
-        $matchingInstance = $existingInstances | Where-Object { $_ -eq $InstanceName }
-        
-        if ($matchingInstance) {
-            $instanceName = $matchingInstance
-            Write-Log "Using instance: $instanceName" -Level "INFO"
-        } else {
-            # Instance name not found in discovered instances
-            Write-Log "Instance '$InstanceName' not found. Available: $($existingInstances -join ', ')" -Level "WARNING"
-            Write-Log "Will create new instance: $InstanceName" -Level "INFO"
-            $instanceName = $InstanceName
-        }
-    }
-    else {
-        # No existing instances, create new one with configured name
-        $instanceName = $InstanceName
-        Write-Log "No existing auditlog-management instance found. Will create: $instanceName" -Level "INFO"
-    }
+    # Use the specified instance name (consistent with connect script approach)
+    $instanceName = $InstanceName
+    Write-Log "Using instance name: $instanceName" -Level "INFO"
     
     $keyName = "$instanceName-key"
     
@@ -209,29 +183,29 @@ foreach ($subaccount in $subaccounts) {
     Start-Sleep -Seconds 5
     
     # Handle key rotation based on mode
-    $existingKeys = Get-CfServiceKeys -InstanceName $instanceName
+    $existingKeyObjects = Get-CfServiceKeysWithDetails -InstanceName $instanceName
+    $existingKeys = @($existingKeyObjects | ForEach-Object { $_.name })
     $keyExists = $existingKeys -contains $keyName
     
     if ($KeyRotationMode -eq "Cleanup") {
-        # Cleanup mode: Keep only the newest key (last in list), delete all others
+        # Cleanup mode: Keep only the newest key, delete all others
         Write-Log "Running in Cleanup mode: Removing old service keys..."
         
-        if ($existingKeys.Count -gt 1) {
-            # CF returns keys in creation order, last one is newest
-            $newestKey = $existingKeys[-1]
-            $keysToDelete = $existingKeys[0..($existingKeys.Count-2)]
+        if ($existingKeyObjects.Count -gt 1) {
+            # Sort by created_at timestamp, oldest first
+            $sortedKeys = $existingKeyObjects | Sort-Object created_at
+            $keysToDelete = $sortedKeys[0..($sortedKeys.Count-2)]
+            $newestKey = $sortedKeys[-1]
             
-            Write-Log "Keeping newest key: $newestKey" -Level "INFO"
+            Write-Log "Keeping newest key: $($newestKey.name) (created: $($newestKey.created_at))" -Level "INFO"
             Write-Log "Deleting $($keysToDelete.Count) old key(s)..." -Level "INFO"
             
             foreach ($oldKey in $keysToDelete) {
-                Write-Log "Deleting old service key: $oldKey"
-                $deleteResult = cf delete-service-key $instanceName $oldKey -f 2>&1
+                Write-Log "Deleting old service key: $($oldKey.name) (created: $($oldKey.created_at))"
+                $deleted = Remove-CfServiceKey -KeyGuid $oldKey.guid -KeyName $oldKey.name
                 
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Log "Successfully deleted service key '$oldKey'" -Level "SUCCESS"
-                } else {
-                    Write-Log "Failed to delete service key '$oldKey': $deleteResult" -Level "WARNING"
+                if (-not $deleted) {
+                    Write-Log "Failed to delete service key '$($oldKey.name)'" -Level "WARNING"
                 }
             }
             
