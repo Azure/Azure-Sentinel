@@ -24,9 +24,10 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 
 <a name="deployplaybook">
 
-## Links to deploy the DomainTools Iris Enrich Domain Playbook:
+## Links to deploy Playbook:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox-Submit-Url-Sentinel-Incident%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox-Submit-Url-Sentinel-Incident%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox-Submit-Url-Sentinel-Incident%2Fazuredeploy.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox-Submit-Url-Sentinel-Incident%2Fazuredeploy.json)
 
 
 <a name="authentication">
@@ -55,3 +56,4 @@ Authentication methods this connector supports:
 #### b. Configurations in Sentinel:
 - In Azure Sentinel, analytical rules should be configured to trigger an incident with URL indicators.
 - Configure the automation rules to trigger the playbook.
+
