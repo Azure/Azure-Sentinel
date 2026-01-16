@@ -1681,7 +1681,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "List Activities Disabling Data Access Logging for GCP Services",
+                "displayName": "GCP Audit Logs - List Activities Disabling Data Access Logging for GCP Services",
                 "category": "Hunting Queries",
                 "query": "GCPAuditLogs\n| where ServiceName == \"cloudresourcemanager.googleapis.com\"\n| where MethodName == \"SetIamPolicy\"\n| where GCPResourceType == \"project\" and Severity == \"NOTICE\"\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    ServiceDataJson = parse_json(ServiceData),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n| extend PolicyDelta = ServiceDataJson.policyDelta.auditConfigDeltas\n| where isnotempty(PolicyDelta)\n| mv-expand ConfigDelta = PolicyDelta\n| extend \n    Action = tostring(ConfigDelta.action),\n    LogType = tostring(ConfigDelta.logType),\n    ServiceAffected = tostring(ConfigDelta.service)\n| where Action == \"REMOVE\"\n| where LogType in (\"ADMIN_READ\", \"DATA_READ\", \"DATA_WRITE\")\n| extend \n    CallerIP = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent)\n| summarize \n    DisabledLogTypes = make_set(LogType, 10),\n    DisabledServices = make_set(ServiceAffected, 50)\n    by TimeGenerated, PrincipalEmail, CallerIP, UserAgent, ProjectId, \n        GCPResourceName, MethodName, Severity, LogName, InsertId\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project \n    TimeGenerated,\n    DisabledServices,\n    DisabledLogTypes,\n    PrincipalEmail,\n    CallerIP,\n    UserAgent,\n    ProjectId,\n    ResourceName = GCPResourceName,\n    MethodName,\n    Severity,\n    LogName,\n    InsertId,\n    AccountName,\n    AccountUPNSuffix\n| sort by TimeGenerated desc\n",
                 "version": 2,
@@ -1737,7 +1737,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
         "contentKind": "HuntingQuery",
-        "displayName": "List Activities Disabling Data Access Logging for GCP Services",
+        "displayName": "GCP Audit Logs - List Activities Disabling Data Access Logging for GCP Services",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
         "version": "1.0.0"
@@ -1766,7 +1766,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "List All GCP Firewall Operations by Principal",
+                "displayName": "GCP Audit Logs - List All GCP Firewall Operations by Principal",
                 "category": "Hunting Queries",
                 "query": "GCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n| where MethodName has_any (\"compute.firewalls.insert\", \"compute.firewalls.patch\", \"compute.firewalls.delete\", \"compute.firewalls.update\")\n| where GCPResourceType == \"gce_firewall_rule\"\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    RequestJson = parse_json(Request)\n| extend \n    FirewallRuleName = coalesce(\n        extract(@\"firewalls/([^/]+)$\", 1, GCPResourceName),\n        tostring(RequestJson.name)),\n    SourceRanges = RequestJson.sourceRanges,\n    Direction = tostring(RequestJson.direction),\n    CallerIP = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    OperationType = case(\n        MethodName has \"insert\", \"Created\",\n        MethodName has \"patch\", \"Modified\",\n        MethodName has \"update\", \"Updated\",\n        MethodName has \"delete\", \"Deleted\",\n        \"Other\")\n| summarize \n    TotalOperations = count(),\n    OperationTypes = make_set(OperationType, 10),\n    FirewallRulesAffected = make_set(FirewallRuleName, 100),\n    Projects = make_set(ProjectId, 50),\n    SourceIPs = make_set(CallerIP, 20),\n    FirstOperation = min(TimeGenerated),\n    LastOperation = max(TimeGenerated)\n    by PrincipalEmail\n| extend \n    RuleCount = array_length(FirewallRulesAffected),\n    ProjectCount = array_length(Projects),\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project \n    PrincipalEmail,\n    TotalOperations,\n    RuleCount,\n    ProjectCount,\n    OperationTypes,\n    FirewallRulesAffected,\n    Projects,\n    SourceIPs,\n    FirstOperation,\n    LastOperation,\n    AccountName,\n    AccountUPNSuffix\n| sort by TotalOperations desc\n",
                 "version": 2,
@@ -1822,7 +1822,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
         "contentKind": "HuntingQuery",
-        "displayName": "List All GCP Firewall Operations by Principal",
+        "displayName": "GCP Audit Logs - List All GCP Firewall Operations by Principal",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
         "version": "1.0.0"
@@ -1851,7 +1851,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "List GCP Organization Policy Modifications by Principal",
+                "displayName": "GCP Audit Logs - List GCP Organization Policy Modifications by Principal",
                 "category": "Hunting Queries",
                 "query": "GCPAuditLogs\n| where ServiceName == \"orgpolicy.googleapis.com\"\n| where MethodName has_any (\"OrgPolicy.DeletePolicy\", \"OrgPolicy.UpdatePolicy\")\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n| extend \n    PolicyName = split(GCPResourceName, \"/\")[-1],\n    CallerIP = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    OperationType = case(\n        MethodName has \"DeletePolicy\", \"Deleted\",\n        MethodName has \"UpdatePolicy\", \"Updated\",\n        \"Other\")\n| summarize \n    TotalOperations = count(),\n    OperationTypes = make_set(OperationType, 10),\n    PoliciesAffected = make_set(PolicyName, 100),\n    Projects = make_set(ProjectId, 50),\n    SourceIPs = make_set(CallerIP, 20),\n    FirstOperation = min(TimeGenerated),\n    LastOperation = max(TimeGenerated)\n    by PrincipalEmail\n| extend \n    PolicyCount = array_length(PoliciesAffected),\n    ProjectCount = array_length(Projects),\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project \n    PrincipalEmail,\n    TotalOperations,\n    PolicyCount,\n    ProjectCount,\n    OperationTypes,\n    PoliciesAffected,\n    Projects,\n    SourceIPs,\n    FirstOperation,\n    LastOperation,\n    AccountName,\n    AccountUPNSuffix\n| sort by TotalOperations desc\n",
                 "version": 2,
@@ -1907,7 +1907,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
         "contentKind": "HuntingQuery",
-        "displayName": "List GCP Organization Policy Modifications by Principal",
+        "displayName": "GCP Audit Logs - List GCP Organization Policy Modifications by Principal",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
         "version": "1.0.0"
@@ -1936,7 +1936,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "List All GCP VPN Tunnels Created",
+                "displayName": "GCP Audit Logs - List All GCP VPN Tunnels Created",
                 "category": "Hunting Queries",
                 "query": "GCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n| where MethodName has \"compute.vpnTunnels.insert\"\n| where GCPResourceType == \"vpn_tunnel\" and Severity == \"NOTICE\"\n| extend AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend PermissionType = tostring(AuthzInfoJson[0].permissionType)\n| where PermissionType == \"ADMIN_WRITE\"\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    RequestJson = parse_json(Request),\n    ResponseJson = parse_json(Response)\n// Extract all fields in consolidated operation\n| extend \n    CallerIP = tostring(RequestMetadataJson.callerIp),\n    TunnelName = tostring(RequestJson.name),\n    Region = extract(@\"regions/([^/]+)\", 1, tostring(RequestJson.region)),\n    IKEVersion = tostring(RequestJson.ikeVersion),\n    VpnGateway = extract(@\"vpnGateways/([^/]+)\", 1, tostring(RequestJson.vpnGateway)),\n    ExternalGateway = extract(@\"externalVpnGateways/([^/]+)\", 1, tostring(RequestJson.peerExternalGateway)),\n    TargetVpnGateway = extract(@\"targetVpnGateways/([^/]+)\", 1, tostring(RequestJson.targetVpnGateway)),\n    Router = extract(@\"routers/([^/]+)\", 1, tostring(RequestJson.router)),\n    OperationType = tostring(ResponseJson.operationType),\n    OperationId = tostring(ResponseJson.id)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project \n    TimeGenerated,\n    PrincipalEmail,\n    AccountName,\n    AccountUPNSuffix,\n    CallerIP,\n    ProjectId,\n    TunnelName,\n    Region,\n    IKEVersion,\n    VpnGateway,\n    ExternalGateway,\n    TargetVpnGateway,\n    Router,\n    OperationType,\n    OperationId,\n    ResourceName = GCPResourceName,\n    MethodName,\n    Severity\n| sort by TimeGenerated desc\n",
                 "version": 2,
@@ -1992,7 +1992,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('huntingQueryObject4')._huntingQuerycontentId4]",
         "contentKind": "HuntingQuery",
-        "displayName": "List All GCP VPN Tunnels Created",
+        "displayName": "GCP Audit Logs - List All GCP VPN Tunnels Created",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.0')))]",
         "version": "1.0.0"
@@ -2021,7 +2021,7 @@
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "eTag": "*",
-                "displayName": "List All GCP VPN Tunnels Deleted",
+                "displayName": "GCP Audit Logs - List All GCP VPN Tunnels Deleted",
                 "category": "Hunting Queries",
                 "query": "GCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n| where MethodName has \"compute.vpnTunnels.delete\"\n| where GCPResourceType == \"vpn_tunnel\" and Severity == \"NOTICE\"\n| extend AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend PermissionType = tostring(AuthzInfoJson[0].permissionType)\n| where PermissionType == \"ADMIN_WRITE\"\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    ResponseJson = parse_json(Response)\n// Extract fields\n| extend \n    CallerIP = tostring(RequestMetadataJson.callerIp),\n    TunnelName = extract(@\"vpnTunnels/([^/]+)\", 1, GCPResourceName),\n    Region = extract(@\"regions/([^/]+)\", 1, GCPResourceName),\n    OperationType = tostring(ResponseJson.operationType),\n    OperationId = tostring(ResponseJson.id)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project \n    TimeGenerated,\n    PrincipalEmail,\n    AccountName,\n    AccountUPNSuffix,\n    CallerIP,\n    ProjectId,\n    TunnelName,\n    Region,\n    OperationType,\n    OperationId,\n    ResourceName = GCPResourceName,\n    MethodName,\n    Severity\n| sort by TimeGenerated desc\n",
                 "version": 2,
@@ -2077,7 +2077,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('huntingQueryObject5')._huntingQuerycontentId5]",
         "contentKind": "HuntingQuery",
-        "displayName": "List All GCP VPN Tunnels Deleted",
+        "displayName": "GCP Audit Logs - List All GCP VPN Tunnels Deleted",
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.0')))]",
         "version": "1.0.0"
