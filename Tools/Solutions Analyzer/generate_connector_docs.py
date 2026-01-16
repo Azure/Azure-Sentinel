@@ -2619,6 +2619,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 'description': conn.get('connector_description', ''),
                 'collection_method': conn.get('collection_method', ''),
                 'is_published': conn.get('is_published', 'true'),  # Track publication status
+                'is_deprecated': conn.get('is_deprecated', 'false'),  # Track deprecation status
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),  # Track discovered connectors
                 'logo_url': conn.get('solution_logo_url', ''),  # Solution logo for connector display
             }
@@ -2649,13 +2650,12 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write("Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) ")
         f.write("are not managed via Solutions and are therefore not included here.\n\n")
         
-        # Separate deprecated and active connectors
+        # Separate deprecated and active connectors using is_deprecated field
         deprecated_connectors = {}
         active_connectors = {}
         
         for connector_id, info in connectors_map.items():
-            title = info['title']
-            if '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]'):
+            if info.get('is_deprecated', 'false') == 'true':
                 deprecated_connectors[connector_id] = info
             else:
                 active_connectors[connector_id] = info
@@ -2676,17 +2676,30 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         # Statistics section
         f.write("## Statistics\n\n")
         
+        # Compute mutually exclusive categories for cleaner statistics:
+        # - Deprecated: has [Deprecated] in title (regardless of publication status)
+        # - Unpublished: NOT deprecated AND solution not published
+        # - Active: NOT deprecated AND solution IS published
+        
+        # Connectors that are active (not deprecated) AND unpublished
+        unpub_active = set(cid for cid in unpublished_connectors if cid in active_connectors)
+        # Connectors that are deprecated AND unpublished (should still count as deprecated)
+        unpub_deprecated = set(cid for cid in unpublished_connectors if cid in deprecated_connectors)
+        
+        # Total counts (mutually exclusive)
+        total_deprecated = len(deprecated_connectors)
+        total_unpublished = len(unpub_active)  # Only count unpublished non-deprecated as "Unpublished"
+        total_active = len(active_connectors) - len(unpub_active)  # Active minus unpublished active
+        
         # Connectors Statistics table
         in_solution_count = len(connectors_map) - len(discovered_connectors)
         active_in_solution = len(active_connectors) - len([cid for cid in discovered_connectors if cid in active_connectors])
         deprecated_in_solution = len(deprecated_connectors) - len([cid for cid in discovered_connectors if cid in deprecated_connectors])
-        unpub_in_solution = len([cid for cid in unpublished_connectors if cid not in discovered_connectors])
+        unpub_in_solution = len([cid for cid in unpub_active if cid not in discovered_connectors])
         
         discovered_active = len([cid for cid in discovered_connectors if cid in active_connectors])
         discovered_deprecated = len([cid for cid in discovered_connectors if cid in deprecated_connectors])
-        discovered_unpub = len([cid for cid in discovered_connectors if cid in unpublished_connectors])
-        
-        total_active = len(active_connectors) - len([cid for cid in unpublished_connectors if cid in active_connectors])
+        discovered_unpub = len([cid for cid in discovered_connectors if cid in unpub_active])
         
         f.write("### Connectors Overview\n\n")
         f.write("| Metric | Total | Active | Deprecated | Unpublished |\n")
@@ -2694,21 +2707,26 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         f.write(f"| In Solutions | {in_solution_count} | {active_in_solution - unpub_in_solution} | {deprecated_in_solution} | {unpub_in_solution} |\n")
         if discovered_connectors:
             f.write(f"| Discovered* | {len(discovered_connectors)} | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} |\n")
-            f.write(f"| **Total** | **{len(connectors_map)}** | **{len(active_connectors) - len(unpublished_connectors)}** | **{len(deprecated_connectors)}** | **{len(unpublished_connectors)}** |\n")
+            f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** |\n")
         f.write("\n")
         if discovered_connectors:
             f.write("*\\* Discovered connectors are found in solution folders but not listed in Solution JSON definitions.*\n\n")
         
         # Collection Methods table
+        # Use the same mutually exclusive logic as Connectors Overview:
+        # - Deprecated: in deprecated_connectors
+        # - Unpublished: in unpub_active (unpublished AND not deprecated)
+        # - Active: in active_connectors AND not in unpub_active
         collection_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'total': 0, 'active': 0, 'deprecated': 0, 'unpublished': 0})
         for connector_id, info in connectors_map.items():
             method = info.get('collection_method', '') or 'Unknown'
             collection_method_stats[method]['total'] += 1
             if connector_id in deprecated_connectors:
                 collection_method_stats[method]['deprecated'] += 1
-            elif connector_id in unpublished_connectors:
+            elif connector_id in unpub_active:
                 collection_method_stats[method]['unpublished'] += 1
             else:
+                # Active: not deprecated and not unpublished
                 collection_method_stats[method]['active'] += 1
         
         if collection_method_stats:
@@ -3429,13 +3447,16 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
         entries = data['entries']
         first_entry = entries[0]
         
-        # Get additional connector info from connectors_reference (includes not_in_solution_json)
+        # Get additional connector info from connectors_reference (includes not_in_solution_json, is_deprecated)
         connector_ref = connectors_reference.get(connector_id, {})
         
         connector_title = first_entry.get('connector_title', connector_id)
         
-        # Check status flags
-        is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
+        # Check status flags - use is_deprecated from CSV if available, fallback to title check
+        is_deprecated = connector_ref.get('is_deprecated', first_entry.get('is_deprecated', 'false')) == 'true'
+        if not is_deprecated:
+            # Fallback for backwards compatibility if is_deprecated not in CSV
+            is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
         is_published = first_entry.get('is_published', 'true') == 'true'
         not_in_json = connector_ref.get('not_in_solution_json', 'false') == 'true'
         
@@ -5036,10 +5057,16 @@ def generate_docs_readme(
                     all_discovered_connector_ids.add(connector_id)
                     # Also track discovered connectors in a separate map for status tracking
                     if connector_id not in discovered_connectors_map:
+                        connector_title = conn.get('connector_title', connector_id)
+                        # Compute is_deprecated from CSV or fallback to title check
+                        is_deprecated = conn.get('is_deprecated', 'false') == 'true'
+                        if not is_deprecated:
+                            is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
                         discovered_connectors_map[connector_id] = {
-                            'title': conn.get('connector_title', connector_id),
+                            'title': connector_title,
                             'collection_method': conn.get('collection_method', ''),
                             'is_published': conn.get('is_published', 'true'),
+                            'is_deprecated': 'true' if is_deprecated else 'false',
                         }
                 else:
                     all_connector_ids.add(connector_id)
@@ -5048,10 +5075,16 @@ def generate_docs_readme(
                 connector_solutions[connector_id].add(solution_name)
                 
                 if connector_id not in connectors_map:
+                    connector_title = conn.get('connector_title', connector_id)
+                    # Compute is_deprecated from CSV or fallback to title check
+                    is_deprecated = conn.get('is_deprecated', 'false') == 'true'
+                    if not is_deprecated:
+                        is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
                     connectors_map[connector_id] = {
-                        'title': conn.get('connector_title', connector_id),
+                        'title': connector_title,
                         'collection_method': conn.get('collection_method', ''),
                         'is_published': conn.get('is_published', 'true'),
+                        'is_deprecated': 'true' if is_deprecated else 'false',
                     }
             
             # Track unpublished solutions
@@ -5098,8 +5131,7 @@ def generate_docs_readme(
     deprecated_connectors = {}
     active_connectors_map = {}
     for connector_id, info in connectors_map.items():
-        title = info['title']
-        if '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]'):
+        if info.get('is_deprecated', 'false') == 'true':
             deprecated_connectors[connector_id] = info
         else:
             active_connectors_map[connector_id] = info
@@ -5109,8 +5141,7 @@ def generate_docs_readme(
     discovered_unpublished_count = 0
     discovered_active_count = 0
     for connector_id, info in discovered_connectors_map.items():
-        title = info.get('title', '')
-        is_deprecated = '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]')
+        is_deprecated = info.get('is_deprecated', 'false') == 'true'
         is_published = info.get('is_published', 'true') != 'false'
         
         if is_deprecated:
@@ -5590,6 +5621,7 @@ def main() -> None:
             row['event_product'] = connectors_reference[connector_id].get('event_product', '')
             row['event_vendor_product_by_table'] = connectors_reference[connector_id].get('event_vendor_product_by_table', '')
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
+            row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
     
     # Enrich rows with logo/description/author/version/dependencies from solutions CSV
     for row in rows:

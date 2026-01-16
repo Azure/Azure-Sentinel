@@ -413,9 +413,9 @@ Contains exceptions and issues encountered during analysis.
 | `connector_id` | Connector ID (if applicable) |
 | `connector_title` | Connector title (if applicable) |
 | `connector_publisher` | Connector publisher (if applicable) |
-| `connector_file` | GitHub URL to the connector file |
-| `reason` | Issue category (see Issue Types below) |
-| `details` | Detailed description of the issue |
+| `relevant_file` | GitHub URL to the relevant file (connector or content file depending on issue type) |
+| `issue_type` | Issue category (see Issue Types below) |
+| `issue` | Detailed description of the issue |
 
 #### Issue Types and Handling
 

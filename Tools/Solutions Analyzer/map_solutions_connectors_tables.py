@@ -8,7 +8,7 @@ import argparse
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 from urllib.parse import quote
 
 try:
@@ -1009,6 +1009,7 @@ def is_valid_table_candidate(
         return True
     
     # Allow ASIM view functions that start with _Im_ or _ASim_ (e.g., _Im_Dns, _ASim_NetworkSession)
+    # Also allow without underscore prefix (e.g., imDns, ASimNetworkSession, imProcessCreate)
     # But exclude ASIM helper functions like _ASIM_GetUsernameType, _ASIM_LookupDnsQueryType
     # Also exclude ASIM empty parsers like _Im_WebSession_Empty, _Im_Dns_Empty
     if lowered.startswith("_im_") or lowered.startswith("_asim_"):
@@ -1022,6 +1023,14 @@ def is_valid_table_candidate(
         if any(after_prefix.startswith(verb) for verb in helper_verbs):
             return False  # This is a helper function, not a table/view
         return True
+    
+    # Allow ASIM parser functions without underscore prefix (imDns, ASimNetworkSession, imProcessCreate)
+    # These are commonly used view functions that wrap ASIM parsers
+    if lowered.startswith("im") or lowered.startswith("asim"):
+        # Verify it looks like an ASIM parser (has a schema name after prefix)
+        # Examples: imDns, imNetworkSession, ASimProcessEvent, imProcessCreate
+        if len(lowered) > 4:  # At least "im" + something meaningful
+            return True
     
     # Reject other names starting with underscore (except _CL which was handled above)
     if lowered.startswith("_"):
@@ -3501,7 +3510,7 @@ def add_issue(
     connector_id: str = "",
     connector_title: str = "",
     connector_publisher: str = "",
-    connector_file: str = "",
+    relevant_file: str = "",
 ) -> None:
     issues.append({
         "solution_name": solution_name,
@@ -3509,7 +3518,7 @@ def add_issue(
         "connector_id": connector_id,
         "connector_title": connector_title,
         "connector_publisher": connector_publisher,
-        "connector_file": connector_file,
+        "relevant_file": relevant_file,
         "reason": reason,
         "details": details,
     })
@@ -4216,7 +4225,8 @@ def extract_tables_from_content_query(
     query: str,
     parser_names: Set[str],
     parser_table_map: Dict[str, Set[str]],
-) -> Set[str]:
+    return_rejected: bool = False,
+) -> Union[Set[str], Tuple[Set[str], Set[str]]]:
     """Extract table names from a content item's KQL query.
     
     ASIM parsers (starting with _Im_ or _ASim_) are kept as-is and NOT expanded
@@ -4225,9 +4235,19 @@ def extract_tables_from_content_query(
     
     Non-ASIM parsers (e.g., solution-specific parsers) are still expanded to their
     underlying tables so documentation shows actual data sources.
+    
+    Args:
+        query: The KQL query to extract tables from
+        parser_names: Set of known parser names
+        parser_table_map: Mapping of parser names to their underlying tables
+        return_rejected: If True, also return rejected table candidates
+        
+    Returns:
+        If return_rejected is False: Set of valid table names
+        If return_rejected is True: Tuple of (valid tables, rejected candidates)
     """
     if not query:
-        return set()
+        return (set(), set()) if return_rejected else set()
     
     # Build normalized parser names set for validation
     parser_names_normalized = {normalize_parser_name(p) for p in parser_names}
@@ -4245,10 +4265,17 @@ def extract_tables_from_content_query(
     # Process tables - keep ASIM parsers as-is, expand other parsers
     result_tables: Set[str] = set()
     
+    # Helper to check if a name is an ASIM parser/view
+    # Matches: _Im_*, _ASim_*, im*, Im*, asim*, ASim* (with or without underscore prefix)
+    def is_asim_parser(name: str) -> bool:
+        lowered = name.lower() if name else ""
+        return (lowered.startswith("_im_") or lowered.startswith("_asim_") or
+                lowered.startswith("im") or lowered.startswith("asim"))
+    
     for table in tables:
-        # Check if this is an ASIM parser (starts with _Im_ or _ASim_)
         lowered = table.lower() if table else ""
-        if lowered.startswith("_im_") or lowered.startswith("_asim_"):
+        # Check if this is an ASIM parser (with or without underscore prefix)
+        if is_asim_parser(table):
             # Keep ASIM parser as-is, don't expand
             result_tables.add(table)
         else:
@@ -4265,7 +4292,18 @@ def extract_tables_from_content_query(
                 result_tables.add(table)
     
     # Filter tables through is_valid_table_candidate to remove helper functions
-    return {t for t in result_tables if is_valid_table_candidate(t)}
+    valid_tables = {t for t in result_tables if is_valid_table_candidate(t)}
+    
+    if return_rejected:
+        # Filter out ASIM Empty parsers from rejected tables - these are expected infrastructure
+        # patterns used as schema placeholders, not actual unknown tables
+        rejected_tables = {
+            t for t in (result_tables - valid_tables)
+            if not (t.lower().endswith("_empty") and 
+                    (t.lower().startswith("_im_") or t.lower().startswith("_asim_")))
+        }
+        return valid_tables, rejected_tables
+    return valid_tables
 
 
 def parse_args(default_repo_root: Path) -> argparse.Namespace:
@@ -4489,13 +4527,48 @@ def main() -> None:
             # Track table usage for this content item: table_name -> set of usages
             item_table_usage: Dict[str, set] = defaultdict(set)
             
-            # Extract read tables from queries
+            # Extract read tables from queries, also get rejected candidates for logging
             query = item.get("content_query", "")
             if query:
-                tables = extract_tables_from_content_query(query, parser_names, parser_table_map)
+                tables, rejected_tables = extract_tables_from_content_query(
+                    query, parser_names, parser_table_map, return_rejected=True
+                )
                 for table in tables:
                     if is_valid_table_candidate(table):
                         item_table_usage[table].add("read")
+                
+                # Log rejected table candidates as issues
+                if rejected_tables:
+                    # Construct the file path with content type folder for GitHub URL
+                    content_type = item.get("content_type", "")
+                    content_file = item.get("content_file", "")
+                    # Map content_type to its folder name
+                    content_type_folder_map = {
+                        "analytic_rule": "Analytic Rules",
+                        "hunting_query": "Hunting Queries", 
+                        "workbook": "Workbooks",
+                        "playbook": "Playbooks",
+                        "parser": "Parsers",
+                        "watchlist": "Watchlists",
+                        "summary_rule": "Summary Rules",
+                    }
+                    folder_name = content_type_folder_map.get(content_type, "")
+                    if folder_name and content_file:
+                        relevant_file_path = f"{folder_name}/{content_file}"
+                    else:
+                        relevant_file_path = content_file
+                    
+                    add_issue(
+                        issues,
+                        solution_name=item["solution_name"],
+                        solution_folder=item.get("solution_folder", ""),
+                        connector_id="",
+                        connector_title="",
+                        connector_publisher="",
+                        relevant_file=relevant_file_path,
+                        reason="content_unknown_table",
+                        details=f"{item['content_type']} '{item['content_name']}' references unknown tables: {', '.join(sorted(rejected_tables))}",
+                    )
             
             # Extract write tables (from playbooks)
             write_tables_str = item.get("content_write_tables", "")
@@ -4620,7 +4693,9 @@ def main() -> None:
                 # Priority 3: Query analysis from connector JSON
                 query_tables = {k: v for k, v in extract_tables(data).items() if k.lower() != "let"}
                 for tbl_name, tbl_info in query_tables.items():
-                    if is_valid_table_candidate(tbl_name):
+                    # Accept both valid tables and known parser names (parsers will be expanded later)
+                    tbl_name_normalized = normalize_parser_name(tbl_name)
+                    if is_valid_table_candidate(tbl_name) or tbl_name_normalized in parser_names_lower:
                         if tbl_name not in table_map:
                             table_map[tbl_name] = tbl_info
                         else:
@@ -4718,7 +4793,7 @@ def main() -> None:
                                     connector_id=connector_id,
                                     connector_title=connector_title,
                                     connector_publisher=connector_publisher,
-                                    connector_file=relative_path,
+                                    relevant_file=relative_path,
                                     reason="loganalytics_mismatch",
                                     details=f"logAnalyticsTableId '{log_name}' differs from detected table tokens {extracted_names}",
                                 )
@@ -4743,7 +4818,7 @@ def main() -> None:
                                 connector_id=connector_id,
                                 connector_title=connector_title,
                                 connector_publisher=connector_publisher,
-                                connector_file=relative_path,
+                                relevant_file=relative_path,
                                 reason="plural_table_name",
                                 details=f"Plural table name(s) {plural_list} replaced with '{table_name}'.",
                             )
@@ -4800,7 +4875,7 @@ def main() -> None:
                             connector_id=connector_id,
                             connector_title=connector_title,
                             connector_publisher=connector_publisher,
-                            connector_file=relative_path,
+                            relevant_file=relative_path,
                             reason="parser_tables_resolved",
                             details="Parser functions expanded to tables -> " + "; ".join(expansion_messages),
                         )
@@ -4857,7 +4932,7 @@ def main() -> None:
                             connector_id=connector_id,
                             connector_title=connector_title,
                             connector_publisher=connector_publisher,
-                            connector_file=relative_path,
+                            relevant_file=relative_path,
                             reason=reason,
                             details=details,
                         )
@@ -5121,6 +5196,10 @@ def main() -> None:
             if readme_rel_path:
                 connector_readme_file = f"Solutions/{quote(solution_folder)}/{readme_rel_path}"
         
+        # Determine if connector is deprecated based on title
+        connector_title = info['connector_title']
+        is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
+        
         connectors_data.append({
             'connector_id': info['connector_id'],
             'connector_publisher': info['connector_publisher'],
@@ -5139,6 +5218,7 @@ def main() -> None:
             'filter_fields': filter_fields_str,
             'not_in_solution_json': info.get('not_in_solution_json', 'false'),
             'solution_name': info.get('solution_name', ''),
+            'is_deprecated': 'true' if is_deprecated else 'false',
         })
     
     # Check marketplace availability (enabled by default, use --skip-marketplace to disable)
@@ -5405,6 +5485,7 @@ def main() -> None:
         'filter_fields',
         'not_in_solution_json',
         'solution_name',
+        'is_deprecated',
         'is_published',
     ]
     connectors_path = args.connectors_csv.resolve()
@@ -5514,26 +5595,30 @@ def main() -> None:
         "connector_id",
         "connector_title",
         "connector_publisher",
-        "connector_file",
+        "relevant_file",
         "reason",
         "details",
     ]
     
-    # Filter out parser_tables_resolved and add GitHub URLs to connector_file
+    # Filter out parser_tables_resolved and add GitHub URLs to relevant_file
     filtered_issues = []
     for issue in issues:
         if issue.get("reason") == "parser_tables_resolved":
             continue
         # Convert solution_folder to GitHub URL
-        if issue.get("solution_folder"):
-            issue["solution_folder"] = f"{GITHUB_REPO_URL}/Solutions/{quote(issue['solution_folder'])}"
-        # Convert connector_file path to GitHub URL if present
-        if issue.get("connector_file"):
-            solution_name = issue.get("solution_name", "")
-            # Extract original folder name from solution_folder URL or use solution_name
-            folder_name = solution_name
-            normalized = issue["connector_file"].replace("\\", "/")
-            issue["connector_file"] = f"{GITHUB_REPO_URL}/Solutions/{quote(folder_name)}/Data Connectors/{quote(normalized)}"
+        solution_folder_raw = issue.get("solution_folder", "")
+        if solution_folder_raw:
+            issue["solution_folder"] = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_raw)}"
+        # Convert relevant_file path to GitHub URL if present
+        if issue.get("relevant_file"):
+            normalized = issue["relevant_file"].replace("\\", "/")
+            reason = issue.get("reason", "")
+            if reason == "content_unknown_table":
+                # Content files: use the full path from content_file which includes the folder type
+                issue["relevant_file"] = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_raw)}/{quote(normalized)}"
+            else:
+                # Connector files: always in Data Connectors folder
+                issue["relevant_file"] = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_raw)}/Data Connectors/{quote(normalized)}"
         filtered_issues.append(issue)
     
     with report_path.open("w", encoding="utf-8", newline="") as report_file:
