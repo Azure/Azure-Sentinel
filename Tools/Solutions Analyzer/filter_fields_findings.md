@@ -6,8 +6,8 @@ This report summarizes the filter field values extracted from queries across con
 
 | Source Type | Total Items | With Filter Fields | Percentage |
 |-------------|-------------|-------------------|------------|
-| Connectors | 530 | 95 | 17.9% |
-| Content Items | 4864 | 300 | 6.2% |
+| Connectors | 531 | 95 | 17.9% |
+| Content Items | 6577 | 419 | 6.4% |
 | ASIM Parsers | 191 | 74 | 38.7% |
 
 ## Filter Field Patterns Found
@@ -16,22 +16,22 @@ The following table.field combinations were detected in queries:
 
 | Table.Field | Occurrences |
 |-------------|-------------|
-| CommonSecurityLog.DeviceVendor | 192 |
-| CommonSecurityLog.DeviceProduct | 137 |
-| Syslog.SyslogMessage | 96 |
-| SecurityEvent.EventID | 85 |
-| AzureDiagnostics.Category | 58 |
-| Syslog.ProcessName | 29 |
-| AzureDiagnostics.ResourceType | 27 |
-| Event.EventID | 26 |
-| Event.Source | 22 |
-| WindowsEvent.EventID | 19 |
-| Syslog.Facility | 15 |
+| CommonSecurityLog.DeviceVendor | 256 |
+| CommonSecurityLog.DeviceProduct | 182 |
+| SecurityEvent.EventID | 113 |
+| Syslog.SyslogMessage | 107 |
+| AzureDiagnostics.Category | 76 |
+| AzureDiagnostics.ResourceType | 36 |
+| Event.Source | 36 |
+| WindowsEvent.EventID | 35 |
+| Event.EventID | 32 |
+| Syslog.ProcessName | 32 |
+| Syslog.Facility | 19 |
 | WindowsEvent.Provider | 9 |
 | ASimAuditEventLogs.EventVendor | 2 |
+| ASimNetworkSessionLogs.EventProduct | 2 |
 | ASimDnsActivityLogs.EventProduct | 1 |
 | ASimDnsActivityLogs.EventVendor | 1 |
-| ASimNetworkSessionLogs.EventProduct | 1 |
 
 ## Filter Field Format
 
@@ -178,7 +178,83 @@ Total: 95 connectors
 
 ## Content Items with Filter Fields
 
-Total: 300 content items
+Total: 419 content items
+
+### 
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| hunting_query | AD Account Lockout | SecurityEvent.EventID == "4740" | SecurityEvent/ADAccountLockouts.yaml |
+| hunting_query | AD FS Database Local SQL Statements | Event.EventID == "33205"  \|  Event.Source == "MSSQL$MICROSOFT##WID" | SecurityEvent/ADFSDBLocalSqlStatements.yaml |
+| hunting_query | Critical user management operations followed by di | WindowsEvent.EventID == "4688" | MultipleDataSources/CriticalOperationsWithSystemrestore.yaml |
+| hunting_query | Fake computer account authentication attempt | SecurityEvent.EventID in "4624,4625" | SecurityEvent/FakeComputerAccountAuthenticationAttempt.yaml |
+| hunting_query | Large Scale Malware Deployment via GPO Scheduled T | SecurityEvent.EventID == "5145" | SecurityEvent/LargeScaleMalwareDeploymentGPOScheduledTask.yaml |
+| hunting_query | Possible SpringShell Exploitation Attempt (CVE-202 | AzureDiagnostics.Category in "ApplicationGatewayAccessLog,ApplicationGatewayFirewallLog,FrontdoorAccessLog,FrontdoorWebApplicationFirewallLog" | AzureDiagnostics/SpringShellExploitationAttempt.yaml |
+| hunting_query | Potential Local Exploitation for Privilege Escalat | Event.EventID == "1" | SecurityEvent/PotentialLocalExploitationForPrivilegeEscalation.yaml |
+| hunting_query | Potential Process Doppelganging | SecurityEvent.EventID == "4985" | SecurityEvent/PotentialProcessDoppelganging.yaml |
+| hunting_query | RID Hijacking | SecurityEvent.EventID in "4624,4625" | SecurityEvent/RIDHijacking.yaml |
+| hunting_query | Rare firewall rule changes using netsh | Event.Source == "Microsoft-Windows-Sysmon"  \|  SecurityEvent.EventID == "1" | MultipleDataSources/FirewallRuleChanges_using_netsh.yaml |
+| hunting_query | Recon Activity with Interactive Logon Correlation | SecurityEvent.EventID == "4624" | MultipleDataSources/ReconActivitywithInteractiveLogonCorrelation.yaml |
+| hunting_query | Remote Task Creation/Update using Schtasks Process | SecurityEvent.EventID == "4688" | SecurityEvent/RemoteScheduledTaskCreationUpdateviaSchtasks.yaml |
+| hunting_query | SQL Alert Correlation with CommonSecurityLogs and  | CommonSecurityLog.DeviceVendor =~ "Palo Alto Networks" | MultipleDataSources/SQLAlertCorrelationwithCommonSecurityLogsandAuditLogs.yaml |
+| hunting_query | Storage Alert Correlation with CommonSecurityLogs  | CommonSecurityLog.DeviceVendor =~ "Fortinet" | MultipleDataSources/StorageAlertCorrelationwithCommonSecurityLogsandStorageLogs.yaml |
+| hunting_query | Storage Alerts Correlation with CommonSecurityLogs | CommonSecurityLog.DeviceVendor =~ "Fortinet" | MultipleDataSources/StorageAlertCorrelationwithCommonSecurityLogsandAuditLogs.yaml |
+| hunting_query | Suspicious command line tokens in LolBins or LolSc | SecurityEvent.EventID == "4688" | SecurityEvent/hunt_LOLBins.yaml |
+| hunting_query | Windows System Shutdown/Reboot(Sysmon) | Event.EventID == "1"  \|  Event.Source == "Microsoft-Windows-Sysmon" | SecurityEvent/WindowsSystemShutdown-Reboot.yaml |
+| workbook | AIA-Darktrace | CommonSecurityLog.DeviceProduct in "AI Analyst,Enterprise Immune System"  \|  CommonSecurityLog.DeviceVendor == "Darktrace" | AIA-Darktrace.json |
+| workbook | AIVectraDetectWorkbook | CommonSecurityLog.DeviceVendor == "Vectra Networks" | AIVectraDetectWorkbook.json |
+| workbook | AksSecurity | AzureDiagnostics.Category == "kube-audit" | AksSecurity.json |
+| workbook | AzDDoSStandardWorkbook | AzureDiagnostics.Category in "DDoSMitigationFlowLogs,DDoSMitigationReports,DDoSProtectionNotifications" | AzDDoSStandardWorkbook.json |
+| workbook | AzureFirewall | AzureDiagnostics.Category in "AzureFirewallApplicationRule,AzureFirewallNetworkRule"  \|  AzureDiagnostics.ResourceType == "AZUREFIREWALLS" | AzureFirewall.json |
+| workbook | AzureFirewallWorkbook | AzureDiagnostics.Category in "AzureFirewallApplicationRule,AzureFirewallDnsProxy,AzureFirewallNetworkRule"  \|  AzureDiagnostics.ResourceType == "AZUREFIREWALLS" | AzureFirewallWorkbook.json |
+| workbook | AzureKeyVaultWorkbook | AzureDiagnostics.Category == "AuditEvent"  \|  AzureDiagnostics.ResourceType =~ "VAULTS" | AzureKeyVaultWorkbook.json |
+| workbook | AzureOpenAIMonitoring | AzureDiagnostics.Category == "RequestResponse" | AzureOpenAIMonitoring.json |
+| workbook | Barracuda | CommonSecurityLog.DeviceVendor == "Barracuda" | Barracuda.json |
+| workbook | CheckPoint | CommonSecurityLog.DeviceProduct in~ "Anti Malware,Anti-Bot,Anti-Virus,Application Control,DDoS Protector,IPS,Threat Emulation,URL Filtering"  \|  CommonSecurityLog.DeviceVendor == "Check Point" | CheckPoint.json |
+| workbook | Cisco | CommonSecurityLog.DeviceProduct =~ "ASA"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco" | Cisco.json |
+| workbook | CiscoFirepower | CommonSecurityLog.DeviceProduct =~ "Firepower"  \|  CommonSecurityLog.DeviceVendor =~ "Cisco" | CiscoFirepower.json |
+| workbook | CitrixWAF | CommonSecurityLog.DeviceProduct == "NetScaler"  \|  CommonSecurityLog.DeviceVendor == "Citrix" | CitrixWAF.json |
+| workbook | CyberArkEPV | CommonSecurityLog.DeviceProduct == "Vault"  \|  CommonSecurityLog.DeviceVendor == "Cyber-Ark" | CyberArkEPV.json |
+| workbook | DCR-Toolkit | SecurityEvent.EventID == "and test !has" | DCR-Toolkit.json |
+| workbook | Data_Latency_Workbook | CommonSecurityLog.DeviceVendor contains "Cyber-Ark"  \|  CommonSecurityLog.DeviceVendor contains "F5"  \|  CommonSecurityLog.DeviceVendor contains "Forcepoint"  \|  CommonSecurityLog.DeviceVendor contains "Fortinet"  \|  CommonSecurityLog.DeviceVendor contains "Imperva Inc."  \|  CommonSecurityLog.DeviceVendor contains "JSonar"  \|  CommonSecurityLog.DeviceVendor contains "Sonicwall"  \|  CommonSecurityLog.DeviceVendor contains "Trend Micro" | Data_Latency_Workbook.json |
+| workbook | DelineaWorkbook | CommonSecurityLog.DeviceProduct == "Secret Server"  \|  CommonSecurityLog.DeviceVendor == "Delinea Software" | DelineaWorkbook.json |
+| workbook | DoDZeroTrustWorkbook | AzureDiagnostics.Category in "Device,NetworkSecurityGroupEvent,kube-audit"  \|  AzureDiagnostics.Category contains "Device"  \|  AzureDiagnostics.Category contains "SQL"  \|  AzureDiagnostics.ResourceType in "APPLICATIONGATEWAYS,AZUREFIREWALLS,CDNWEBAPPLICATIONFIREWALLPOLICIES,FRONTDOORS,PROFILES,PUBLICIPADDRESSES" | DoDZeroTrustWorkbook.json |
+| workbook | EventAnalyzer | SecurityEvent.EventID in "4656,4657,4658,4660,4661,4663,4664,4670,4671,4673,4674,4690,4691,4698,4699,4700,4701,4702,4715,4719,4817,4902,4904,4905,4906,4907,4908,4912,4985,5031,5039,5051,5140,5142,5143,5144,5148,5149,5150,5151,5154,5155,5156,5157,5158,5159,5168,5888,5889,5890" | EventAnalyzer.json |
+| workbook | ExchangeCompromiseHunting | Event.Source == "Microsoft-Windows-Sysmon"  \|  Event.Source startswith "MSExchange"  \|  SecurityEvent.EventID in "3,4663,4688,5136" | ExchangeCompromiseHunting.json |
+| workbook | ExtraHopDetectionSummary | CommonSecurityLog.DeviceVendor == "ExtraHop" | ExtraHopDetectionSummary.json |
+| workbook | ForcepointCASB | CommonSecurityLog.DeviceProduct in "CASB Admin audit log,Cloud Service Monitoring,SaaS Security Gateway"  \|  CommonSecurityLog.DeviceVendor == "Forcepoint CASB" | ForcepointCASB.json |
+| workbook | ForcepointCloudSecuirtyGatewayworkbook | CommonSecurityLog.DeviceProduct in "Email,Web"  \|  CommonSecurityLog.DeviceVendor == "Forcepoint CSG" | ForcepointCloudSecuirtyGatewayworkbook.json |
+| workbook | ForcepointNGFW | CommonSecurityLog.DeviceProduct == "NGFW"  \|  CommonSecurityLog.DeviceVendor == "Forcepoint" | ForcepointNGFW.json |
+| workbook | ForcepointNGFWAdvanced | CommonSecurityLog.DeviceProduct in "Alert,Audit"  \|  CommonSecurityLog.DeviceVendor in~ "FORCEPOINT,Forcepoint" | ForcepointNGFWAdvanced.json |
+| workbook | Fortigate | CommonSecurityLog.DeviceProduct contains "Fortigate"  \|  CommonSecurityLog.DeviceVendor =~ "Fortinet" | Fortigate.json |
+| workbook | InsecureProtocols | Event.Source =~ "NETLOGON"  \|  SecurityEvent.EventID in "2889,3000,4624,4768,4769,4776,5827,5828,5829,5830,5831" | InsecureProtocols.json |
+| workbook | InvestigationInsights | SecurityEvent.EventID in "1102,4624,4625,4688,4719,4720,4723,4724,4768,4771,4776" | InvestigationInsights.json |
+| workbook | IoTAssetDiscovery | CommonSecurityLog.DeviceVendor == "Fortinet" | IoTAssetDiscovery.json |
+| workbook | Log4jPostCompromiseHunting | AzureDiagnostics.Category in "ApplicationGatewayAccessLog,ApplicationGatewayFirewallLog,FrontdoorAccessLog,FrontdoorWebApplicationFirewallLog"  \|  Syslog.Facility == "user"  \|  Syslog.SyslogMessage has "AUOMS_EXECVE"  \|  Syslog.SyslogMessage has "jndi"  \|  Syslog.SyslogMessage has_any "corba,dns,iiop,ldap,nds,nis,rmi" | Log4jPostCompromiseHunting.json |
+| workbook | MicrosoftSentinelDeploymentandMigrationTracker | CommonSecurityLog.DeviceVendor has "Barracuda"  \|  CommonSecurityLog.DeviceVendor has "Check Point"  \|  CommonSecurityLog.DeviceVendor has "Cisco"  \|  CommonSecurityLog.DeviceVendor has "Citrix"  \|  CommonSecurityLog.DeviceVendor has "CyberArk"  \|  CommonSecurityLog.DeviceVendor has "ExtraHop"  \|  CommonSecurityLog.DeviceVendor has "F5"  \|  CommonSecurityLog.DeviceVendor has "ForgeRock"  \|  CommonSecurityLog.DeviceVendor has "Fortinet"  \|  CommonSecurityLog.DeviceVendor has "Illusive"  \|  CommonSecurityLog.DeviceVendor has "OneIdentity"  \|  CommonSecurityLog.DeviceVendor has "Palo Alto"  \|  CommonSecurityLog.DeviceVendor has "Vectra Networks"  \|  CommonSecurityLog.DeviceVendor has "Zscaler" | MicrosoftSentinelDeploymentandMigrationTracker.json |
+| workbook | OnapsisAlarmsOverview | CommonSecurityLog.DeviceVendor == "Onapsis" | OnapsisAlarmsOverview.json |
+| workbook | OneIdentity | CommonSecurityLog.DeviceProduct == "SPS"  \|  CommonSecurityLog.DeviceVendor == "OneIdentity" | OneIdentity.json |
+| workbook | PaloAltoNetworkThreat | CommonSecurityLog.DeviceProduct has "PAN-OS"  \|  CommonSecurityLog.DeviceVendor =~ "Palo Alto Networks" | PaloAltoNetworkThreat.json |
+| workbook | PaloAltoOverview | CommonSecurityLog.DeviceProduct has "PAN-OS"  \|  CommonSecurityLog.DeviceVendor =~ "Palo Alto Networks" | PaloAltoOverview.json |
+| workbook | SolarWindsPostCompromiseHunting | Event.Source == "Microsoft-Windows-Sysmon"  \|  Event.Source =~ "Microsoft-Windows-SENSE"  \|  SecurityEvent.EventID in "17,18,4624,4662,4670,4688,5145,87" | SolarWindsPostCompromiseHunting.json |
+| workbook | SonicWallFirewall | CommonSecurityLog.DeviceVendor == "SonicWall" | SonicWallFirewall.json |
+| workbook | SysmonThreatHunting | Event.Source contains "sysmon"  \|  SecurityEvent.EventID in "1,10,11,12,13,17,18,22,3,4624,4625,4720,4722,4723,4724,4725,4726,4728,4729,4732,4733,4738,4740,4746,4747,4751,4752,4756,4761,4762,4767,4771,4781,7,8" | SysmonThreatHunting.json |
+| workbook | UnifiSG | CommonSecurityLog.DeviceVendor == "Unifi" | UnifiSG.json |
+| workbook | UserMap | AzureDiagnostics.Category in "ApplicationGatewayFirewallLog,FrontdoorWebApplicationFirewallLog"  \|  AzureDiagnostics.ResourceType == "FRONTDOORS" | UserMap.json |
+| workbook | VeeamSecurityActivites | Syslog.SyslogMessage has "instanceId"  \|  Syslog.SyslogMessage has "predefined_alarm_id" | VeeamSecurityActivites.json |
+| workbook | VeeamSecurityActivities | Syslog.SyslogMessage has "instanceId"  \|  Syslog.SyslogMessage has "predefined_alarm_id" | VeeamSecurityActivities.json |
+| workbook | WebApplicationFirewallFirewallEvents | AzureDiagnostics.ResourceType == "APPLICATIONGATEWAYS" | WebApplicationFirewallFirewallEvents.json |
+| workbook | WebApplicationFirewallGatewayAccessEvents | AzureDiagnostics.ResourceType == "APPLICATIONGATEWAYS" | WebApplicationFirewallGatewayAccessEvents.json |
+| workbook | WebApplicationFirewallOverview | AzureDiagnostics.ResourceType == "APPLICATIONGATEWAYS" | WebApplicationFirewallOverview.json |
+| workbook | WindowsAuditChecker | SecurityEvent.EventID in "4624,4625,4768,4769,4771" | WindowsAuditChecker.json |
+| workbook | WindowsFirewall | SecurityEvent.EventID in "4624,4625" | WindowsFirewall.json |
+| workbook | WindowsFirewallViaAMA | ASimNetworkSessionLogs.EventProduct == "Windows Firewall"  \|  SecurityEvent.EventID in "4624,4625" | WindowsFirewallViaAMA.json |
+| workbook | ZeroTrustStrategyWorkbook | AzureDiagnostics.Category in "Device,NetworkSecurityGroupEvent,kube-audit"  \|  AzureDiagnostics.Category contains "Device"  \|  AzureDiagnostics.Category contains "SQL"  \|  AzureDiagnostics.ResourceType in "APPLICATIONGATEWAYS,AZUREFIREWALLS,CDNWEBAPPLICATIONFIREWALLPOLICIES,FRONTDOORS,PROFILES,PUBLICIPADDRESSES" | ZeroTrustStrategyWorkbook.json |
+| workbook | ZscalerFirewall | CommonSecurityLog.DeviceProduct == "NSSFWlog" | ZscalerFirewall.json |
+| workbook | ZscalerOffice365Apps | CommonSecurityLog.DeviceVendor == "Zscaler" | ZscalerOffice365Apps.json |
+| workbook | ZscalerThreats | CommonSecurityLog.DeviceProduct == "NSSWeblog"  \|  CommonSecurityLog.DeviceVendor == "Zscaler" | ZscalerThreats.json |
+| workbook | ZscalerWebOverview | CommonSecurityLog.DeviceProduct == "NSSWeblog"  \|  CommonSecurityLog.DeviceVendor == "Zscaler" | ZscalerWebOverview.json |
+| workbook | pfsense | CommonSecurityLog.DeviceProduct == "pfsense" | pfsense.json |
 
 ### AI Analyst Darktrace
 
@@ -665,6 +741,59 @@ Total: 300 content items
 | Type | Name | Filter Fields | File |
 |------|------|---------------|------|
 | workbook | SonicWallFirewall | CommonSecurityLog.DeviceVendor == "SonicWall" | [SonicWallFirewall.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SonicWall%20Firewall/Workbooks/SonicWallFirewall.json) |
+
+### Standalone Content
+
+| Type | Name | Filter Fields | File |
+|------|------|---------------|------|
+| analytic_rule | AD account with Don't Expire Password | WindowsEvent.EventID == "4738" | [SecurityEvent/password_never_expires.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/password_never_expires.yaml) |
+| analytic_rule | AdminSDHolder Modifications | SecurityEvent.EventID == "5136" | [SecurityEvent/AdminSDHolder_Modifications.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/AdminSDHolder_Modifications.yaml) |
+| analytic_rule | Application Gateway WAF - SQLi Detection | AzureDiagnostics.Category == "ApplicationGatewayFirewallLog" | [AzureWAF/AppGwWAF-SQLiDetection.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/AzureWAF/AppGwWAF-SQLiDetection.yaml) |
+| analytic_rule | Application Gateway WAF - XSS Detection | AzureDiagnostics.Category == "ApplicationGatewayFirewallLog" | [AzureWAF/AppGwWAF-XSSDetection.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/AzureWAF/AppGwWAF-XSSDetection.yaml) |
+| analytic_rule | Audit policy manipulation using auditpol utility | Event.Source == "Microsoft-Windows-Sysmon"  \|  SecurityEvent.EventID == "1" | [MultipleDataSources/AuditPolicyManipulation_using_auditpol.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/AuditPolicyManipulation_using_auditpol.yaml) |
+| analytic_rule | COM Event System Loading New DLL | Event.EventID in "1,7"  \|  Event.Source =~ "Microsoft-Windows-Sysmon" | [SecurityEvent/COMEventSystemLoadingNewDLL.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/COMEventSystemLoadingNewDLL.yaml) |
+| analytic_rule | Cisco - firewall block but success logon to Micros | CommonSecurityLog.DeviceVendor =~ "Cisco" | [MultipleDataSources/SigninFirewallCorrelation.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/SigninFirewallCorrelation.yaml) |
+| analytic_rule | DSRM Account Abuse | Event.EventID == "13" | [SecurityEvent/DSRMAccountAbuse.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/DSRMAccountAbuse.yaml) |
+| analytic_rule | Email access via active sync | Event.Source == "Microsoft-Windows-Sysmon"  \|  SecurityEvent.EventID in "1,4688" | [MultipleDataSources/EmailAccessviaActiveSync.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/EmailAccessviaActiveSync.yaml) |
+| analytic_rule | Failed AzureAD logons but success logon to host | Syslog.Facility contains "auth"  \|  Syslog.ProcessName != "sudo"  \|  Syslog.SyslogMessage has "Accepted" | [MultipleDataSources/AADHostLoginCorrelation.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/AADHostLoginCorrelation.yaml) |
+| analytic_rule | Failed host logons but success logon to AzureAD | Syslog.Facility contains "auth"  \|  Syslog.ProcessName != "sudo"  \|  Syslog.SyslogMessage has "from"  \|  Syslog.SyslogMessage has_any "Accepted,Disconnected,Disconnecting,[preauth],disconnect"  \|  WindowsEvent.EventID == "4625" | [MultipleDataSources/HostAADCorrelation.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/HostAADCorrelation.yaml) |
+| analytic_rule | Fake computer account created | SecurityEvent.EventID == "4720" | [SecurityEvent/FakeComputerAccountCreated.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/FakeComputerAccountCreated.yaml) |
+| analytic_rule | Fortinet - Beacon pattern detected | CommonSecurityLog.DeviceVendor == "Fortinet" | [CommonSecurityLog/Fortinet-NetworkBeaconPattern.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/CommonSecurityLog/Fortinet-NetworkBeaconPattern.yaml) |
+| analytic_rule | Gain Code Execution on ADFS Server via Remote WMI  | Event.Source == "Microsoft-Windows-Sysmon"  \|  WindowsEvent.EventID in "1,19,20,21,4624,4688" | [MultipleDataSources/GainCodeExecutionADFSviaWMI.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/GainCodeExecutionADFSviaWMI.yaml) |
+| analytic_rule | Group created then added to built in domain local  | WindowsEvent.EventID in "4727,4728,4731,4732,4754,4756" | [SecurityEvent/GroupCreatedAddedToPrivlegeGroup_1h.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/GroupCreatedAddedToPrivlegeGroup_1h.yaml) |
+| analytic_rule | IP with multiple failed Microsoft Entra ID logins  | CommonSecurityLog.DeviceVendor == "Palo Alto Networks" | [MultipleDataSources/AAD_PAVPN_Correlation.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/AAD_PAVPN_Correlation.yaml) |
+| analytic_rule | M365D Alerts Correlation to non-Microsoft Network  | CommonSecurityLog.DeviceProduct startswith "FireWall"  \|  CommonSecurityLog.DeviceProduct startswith "FortiGate"  \|  CommonSecurityLog.DeviceProduct startswith "NSSWeblog"  \|  CommonSecurityLog.DeviceProduct startswith "PAN"  \|  CommonSecurityLog.DeviceProduct startswith "URL"  \|  CommonSecurityLog.DeviceProduct startswith "VPN"  \|  CommonSecurityLog.DeviceVendor has_any "Check Point,Fortinet,Palo Alto Networks,Zscaler" | [MultipleDataSources/SucessfullSiginFromPhingLink.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/SucessfullSiginFromPhingLink.yaml) |
+| analytic_rule | Microsoft Entra ID Health Monitoring Agent Registr | WindowsEvent.EventID in "4656,4663" | [SecurityEvent/AADHealthMonAgentRegKeyAccess.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/AADHealthMonAgentRegKeyAccess.yaml) |
+| analytic_rule | Microsoft Entra ID Health Service Agents Registry  | SecurityEvent.EventID in "4656,4663" | [SecurityEvent/AADHealthSvcAgentRegKeyAccess.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/AADHealthSvcAgentRegKeyAccess.yaml) |
+| analytic_rule | Modification of Accessibility Features | Event.EventID == "1" | [SecurityEvent/AccessibilityFeaturesModification.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/AccessibilityFeaturesModification.yaml) |
+| analytic_rule | Multiple Password Reset by user | Syslog.Facility in "auth,authpriv"  \|  Syslog.SyslogMessage matchesregex ".*password changed for.*"  \|  WindowsEvent.EventID in "4723,4724" | [MultipleDataSources/MultiplePasswordresetsbyUser.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/MultiplePasswordresetsbyUser.yaml) |
+| analytic_rule | Phishing link click observed in Network Traffic | CommonSecurityLog.DeviceProduct startswith "FireWall"  \|  CommonSecurityLog.DeviceProduct startswith "FortiGate"  \|  CommonSecurityLog.DeviceProduct startswith "NSSWeblog"  \|  CommonSecurityLog.DeviceProduct startswith "PAN"  \|  CommonSecurityLog.DeviceProduct startswith "URL"  \|  CommonSecurityLog.DeviceProduct startswith "VPN"  \|  CommonSecurityLog.DeviceVendor has_any "Check Point,Fortinet,Palo Alto Networks,Zscaler" | [MultipleDataSources/PhishinglinkExecutionObserved.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/PhishinglinkExecutionObserved.yaml) |
+| analytic_rule | Possible Resource-Based Constrained Delegation Abu | SecurityEvent.EventID == "5136" | [SecurityEvent/PotenialResourceBasedConstrainedDelegationAbuse.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/PotenialResourceBasedConstrainedDelegationAbuse.yaml) |
+| analytic_rule | Potential Build Process Compromise | WindowsEvent.EventID in "4663,4688" | [SecurityEvent/PotentialBuildProcessCompromise.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/PotentialBuildProcessCompromise.yaml) |
+| analytic_rule | Potential Kerberoasting | WindowsEvent.EventID == "4769" | [SecurityEvent/PotentialKerberoast.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/PotentialKerberoast.yaml) |
+| analytic_rule | RDP Nesting | WindowsEvent.EventID == "4624" | [SecurityEvent/RDP_Nesting.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/RDP_Nesting.yaml) |
+| analytic_rule | Risky user signin observed in non-Microsoft networ | CommonSecurityLog.DeviceProduct startswith "FireWall"  \|  CommonSecurityLog.DeviceProduct startswith "FortiGate"  \|  CommonSecurityLog.DeviceProduct startswith "NSSWeblog"  \|  CommonSecurityLog.DeviceProduct startswith "PAN"  \|  CommonSecurityLog.DeviceProduct startswith "URL"  \|  CommonSecurityLog.DeviceProduct startswith "VPN"  \|  CommonSecurityLog.DeviceVendor has_any "Check Point,Fortinet,Palo Alto Networks,Zscaler" | [MultipleDataSources/RiskyUserIn3Pnetworkactivity.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/RiskyUserIn3Pnetworkactivity.yaml) |
+| analytic_rule | Security Service Registry ACL Modification | WindowsEvent.EventID in "4670,4688" | [MultipleDataSources/SecurityServiceRegistryACLModification.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/MultipleDataSources/SecurityServiceRegistryACLModification.yaml) |
+| analytic_rule | Service Principal Name (SPN) Assigned to User Acco | SecurityEvent.EventID == "5136" | [SecurityEvent/UserPrincipalNameAssignedToUserAccount.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/UserPrincipalNameAssignedToUserAccount.yaml) |
+| analytic_rule | Silk Typhoon New UM Service Child Process | WindowsEvent.EventID == "4688" | [SecurityEvent/SilkTyphoonNewUMServiceChildProcess.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/SilkTyphoonNewUMServiceChildProcess.yaml) |
+| analytic_rule | Silk Typhoon Suspicious UM Service Error | Event.Source startswith "MSExchange" | [SecurityEvent/SilkTyphoonSuspiciousUMServiceError.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/SilkTyphoonSuspiciousUMServiceError.yaml) |
+| analytic_rule | Solorigate Named Pipe | WindowsEvent.EventID in "17,18,5145" | [SecurityEvent/SolorigateNamedPipe.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/SolorigateNamedPipe.yaml) |
+| analytic_rule | User account added to built in domain local or glo | WindowsEvent.EventID in "4728,4732,4756" | [SecurityEvent/UserAccountAddedToPrivlegeGroup_1h.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/UserAccountAddedToPrivlegeGroup_1h.yaml) |
+| analytic_rule | User account created and deleted within 10 mins | WindowsEvent.EventID in "4720,4726" | [SecurityEvent/UserAccountCreatedDeleted_10m.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/UserAccountCreatedDeleted_10m.yaml) |
+| analytic_rule | User account enabled and disabled within 10 mins | WindowsEvent.EventID in "4722,4725" | [SecurityEvent/UserAccountEnabledDisabled_10m.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/SecurityEvent/UserAccountEnabledDisabled_10m.yaml) |
+| analytic_rule | Wazuh - Large Number of Web errors from an IP | CommonSecurityLog.DeviceProduct =~ "Wazuh" | [CommonSecurityLog/Wazuh-Large_Number_of_Web_errors_from_an_IP.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Detections/Analytic%20Rules/CommonSecurityLog/Wazuh-Large_Number_of_Web_errors_from_an_IP.yaml) |
+| hunting_query | Check critical ports opened to the entire internet | AzureDiagnostics.Category == "NetworkSecurityGroupEvent" | [AzureDiagnostics/CriticalPortsOpened.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/AzureDiagnostics/CriticalPortsOpened.yaml) |
+| hunting_query | Disabled accounts using Squid proxy | Syslog.ProcessName contains "squid" | [Syslog/disabled_account_squid_usage.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/Syslog/disabled_account_squid_usage.yaml) |
+| hunting_query | External IP address in Command Line | SecurityEvent.EventID == "4688" | [SecurityEvent/ExternalIPaddressinCommandLine.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/SecurityEvent/ExternalIPaddressinCommandLine.yaml) |
+| hunting_query | Failed Login Attempt by Expired account | SecurityEvent.EventID in "4625,4769,4776" | [MultipleDataSources/LogonwithExpiredAccount.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/MultipleDataSources/LogonwithExpiredAccount.yaml) |
+| hunting_query | RareDNSLookupWithDataTransfer | CommonSecurityLog.DeviceVendor == "Palo Alto Networks" | [MultipleDataSources/RareDNSLookupWithDataTransfer.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Hunting%20Queries/Hunting%20Queries/MultipleDataSources/RareDNSLookupWithDataTransfer.yaml) |
+| summary_rule | FortinetFortigateNetworkSessionIPSummary | CommonSecurityLog.DeviceProduct startswith "FortiGate"  \|  CommonSecurityLog.DeviceVendor == "Fortinet" | [Network/FortinetFortigateNetworkSessionIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/Network/FortinetFortigateNetworkSessionIPSummary.yaml) |
+| summary_rule | FortinetFortigateWebSessionIPSummary | CommonSecurityLog.DeviceProduct startswith "Fortigate"  \|  CommonSecurityLog.DeviceVendor == "Fortinet" | [WebSession/FortinetFortigateWebSessionIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/WebSession/FortinetFortigateWebSessionIPSummary.yaml) |
+| summary_rule | PaloAltoPANOSNetworkSessionIPSummary | CommonSecurityLog.DeviceProduct == "PAN-OS"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks" | [Network/PaloAltoPANOSNetworkSessionIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/Network/PaloAltoPANOSNetworkSessionIPSummary.yaml) |
+| summary_rule | PaloAltoPANOSWebSessionIPSummary | CommonSecurityLog.DeviceProduct == "PAN-OS"  \|  CommonSecurityLog.DeviceVendor == "Palo Alto Networks" | [WebSession/PaloAltoPANOSWebSessionIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/WebSession/PaloAltoPANOSWebSessionIPSummary.yaml) |
+| summary_rule | ZscalarDNSEventsIPSummary | CommonSecurityLog.DeviceProduct == "NSSDNSlog"  \|  CommonSecurityLog.DeviceVendor == "Zscaler" | [DNS/ZscalarDNSEventsIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/DNS/ZscalarDNSEventsIPSummary.yaml) |
+| summary_rule | ZscalarNetworkSessionIPSummary | CommonSecurityLog.DeviceProduct == "NSSFWlog"  \|  CommonSecurityLog.DeviceVendor == "Zscaler" | [Network/ZscalarNetworkSessionIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/Network/ZscalarNetworkSessionIPSummary.yaml) |
+| summary_rule | ZscalarWebSessionIPSummary | CommonSecurityLog.DeviceProduct == "NSSWeblog"  \|  CommonSecurityLog.DeviceVendor == "Zscaler" | [WebSession/ZscalarWebSessionIPSummary.yaml](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Summary%20rules/Summary%20Rule/WebSession/ZscalarWebSessionIPSummary.yaml) |
 
 ### Syslog
 

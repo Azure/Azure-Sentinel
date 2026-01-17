@@ -2097,33 +2097,51 @@ def generate_content_type_letter_page(content_type: str, letter: str, items: Lis
         f.write(" | ".join(letter_links))
         f.write("\n\n")
         
-        # Table header varies by content type
+        # Source legend at top of table
+        f.write("> **Source:** 📦 Solution | 📄 Standalone | 🔗 GitHub Only\n\n")
+        
+        # Table header varies by content type - Source column uses icon+text format
         if content_type == 'analytic_rule':
-            f.write("| Name | Severity | Solution |\n")
-            f.write("|:-----|:---------|:---------|\n")
+            f.write("| Name | Severity | Source |\n")
+            f.write("|:-----|:---------|:-------|\n")
         elif content_type == 'hunting_query':
-            f.write("| Name | Tactics | Solution |\n")
-            f.write("|:-----|:--------|:---------|\n")
+            f.write("| Name | Tactics | Source |\n")
+            f.write("|:-----|:--------|:-------|\n")
         else:
-            f.write("| Name | Solution |\n")
-            f.write("|:-----|:---------|\n")
+            f.write("| Name | Source |\n")
+            f.write("|:-----|:-------|\n")
         
         for item in sorted(items, key=lambda x: x.get('content_name', '').lower()):
             content_name = item.get('content_name', 'Unknown')
-            solution_name = item.get('solution_name', 'Unknown')
+            solution_name = item.get('solution_name', '') or ''
+            content_source = item.get('content_source', 'Solution')
+            
+            # Source display: icon + solution name (as link) or just icon + source type
+            source_icon = {
+                'Solution': '📦',
+                'Standalone': '📄',
+                'GitHub Only': '🔗',
+            }.get(content_source, '')
             
             # Generate link to content page (content pages are in the same folder)
             content_link = get_content_item_link(item, "", show_not_in_json=True)
-            solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+            
+            # Build source column: icon + solution name (linked if solution exists, plain text otherwise)
+            if solution_name and content_source == 'Solution':
+                source_display = f"{source_icon} [{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+            elif solution_name and content_source == 'Standalone':
+                source_display = f"{source_icon} {solution_name}"
+            else:
+                source_display = f"{source_icon} {content_source}"
             
             if content_type == 'analytic_rule':
                 severity = item.get('content_severity', '-') or '-'
-                f.write(f"| {content_link} | {severity} | {solution_link} |\n")
+                f.write(f"| {content_link} | {severity} | {source_display} |\n")
             elif content_type == 'hunting_query':
                 tactics = format_tactics(item.get('content_tactics', '-')) or '-'
-                f.write(f"| {content_link} | {tactics} | {solution_link} |\n")
+                f.write(f"| {content_link} | {tactics} | {source_display} |\n")
             else:
-                f.write(f"| {content_link} | {solution_link} |\n")
+                f.write(f"| {content_link} | {source_display} |\n")
         
         f.write("\n")
         
@@ -2219,37 +2237,55 @@ def generate_content_type_index(content_type: str, items: List[Dict[str, str]],
                 f.write(f"| [{letter}]({type_slug}-{link_letter}.md) | {count} |\n")
             f.write("\n")
         else:
+            # Source legend at top
+            f.write("> **Source:** 📦 Solution | 📄 Standalone | 🔗 GitHub Only\n\n")
+            
             # Full listing with separate tables per letter
             for letter in letters:
                 f.write(f"## {letter}\n\n")
                 
-                # Table header varies by content type
+                # Table header varies by content type - Source column uses icon+text format
                 if content_type == 'analytic_rule':
-                    f.write("| Name | Severity | Solution |\n")
-                    f.write("|:-----|:---------|:---------|\n")
+                    f.write("| Name | Severity | Source |\n")
+                    f.write("|:-----|:---------|:-------|\n")
                 elif content_type == 'hunting_query':
-                    f.write("| Name | Tactics | Solution |\n")
-                    f.write("|:-----|:--------|:---------|\n")
+                    f.write("| Name | Tactics | Source |\n")
+                    f.write("|:-----|:--------|:-------|\n")
                 else:
-                    f.write("| Name | Solution |\n")
-                    f.write("|:-----|:---------|\n")
+                    f.write("| Name | Source |\n")
+                    f.write("|:-----|:-------|\n")
                 
                 for item in sorted(by_letter[letter], key=lambda x: x.get('content_name', '').lower()):
                     content_name = item.get('content_name', 'Unknown')
-                    solution_name = item.get('solution_name', 'Unknown')
+                    solution_name = item.get('solution_name', '') or ''
+                    content_source = item.get('content_source', 'Solution')
+                    
+                    # Source display: icon + solution name (as link) or just icon + source type
+                    source_icon = {
+                        'Solution': '📦',
+                        'Standalone': '📄',
+                        'GitHub Only': '🔗',
+                    }.get(content_source, '')
                     
                     # Generate link to content page (content pages are in the same folder)
                     content_link = get_content_item_link(item, "", show_not_in_json=True)
-                    solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+                    
+                    # Build source column: icon + solution name (linked if solution exists, plain text otherwise)
+                    if solution_name and content_source == 'Solution':
+                        source_display = f"{source_icon} [{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+                    elif solution_name and content_source == 'Standalone':
+                        source_display = f"{source_icon} {solution_name}"
+                    else:
+                        source_display = f"{source_icon} {content_source}"
                     
                     if content_type == 'analytic_rule':
                         severity = item.get('content_severity', '-') or '-'
-                        f.write(f"| {content_link} | {severity} | {solution_link} |\n")
+                        f.write(f"| {content_link} | {severity} | {source_display} |\n")
                     elif content_type == 'hunting_query':
                         tactics = format_tactics(item.get('content_tactics', '-')) or '-'
-                        f.write(f"| {content_link} | {tactics} | {solution_link} |\n")
+                        f.write(f"| {content_link} | {tactics} | {source_display} |\n")
                     else:
-                        f.write(f"| {content_link} | {solution_link} |\n")
+                        f.write(f"| {content_link} | {source_display} |\n")
                 
                 f.write("\n")
             
@@ -2321,39 +2357,58 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
         write_browse_section(f, 'content', "../")
         f.write("---\n\n")
         
-        # Track unpublished content
+        # Track unpublished content and source counts
         unpublished_count_by_type: Dict[str, int] = defaultdict(int)
+        published_count_by_type: Dict[str, int] = defaultdict(int)
+        source_counts: Dict[str, int] = defaultdict(int)
+        source_counts_by_type: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        
         for solution_name, items in content_items_by_solution.items():
-            # Check if solution is unpublished (first connector row)
             for item in items:
-                if item.get('is_published', 'true') == 'false':
-                    content_type = item.get('content_type', 'unknown')
-                    unpublished_count_by_type[content_type] += 1
+                content_type = item.get('content_type', 'unknown')
+                content_source = item.get('content_source', 'Solution')
+                source_counts[content_source] += 1
+                source_counts_by_type[content_type][content_source] += 1
+                # Track published/unpublished only for Solution items
+                if content_source == 'Solution':
+                    if item.get('is_published', 'true') == 'false':
+                        unpublished_count_by_type[content_type] += 1
+                    else:
+                        published_count_by_type[content_type] += 1
         
         total_unpublished = sum(unpublished_count_by_type.values())
-        total_published = total_items - total_unpublished
+        total_published = sum(published_count_by_type.values())
+        total_solution = source_counts.get('Solution', 0)
+        total_standalone = source_counts.get('Standalone', 0)
+        total_github_only = source_counts.get('GitHub Only', 0)
         
         # Statistics section
         f.write("## Statistics\n\n")
+        
+        # Source legend at the top
+        f.write("> **Source Legend:** 📦 Solution (published package) | 📄 Standalone (GitHub with metadata) | 🔗 GitHub Only (no metadata)\n\n")
+        
         f.write("### Content Items Summary\n\n")
-        f.write("| Metric | Total | Published | Unpublished |\n")
-        f.write("|:-------|------:|----------:|------------:|\n")
-        f.write(f"| **Content Items** | **{total_items:,}** | **{total_published:,}** | **{total_unpublished:,}** |\n")
+        f.write("| Metric | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
+        f.write("|:-------|------:|-------------:|---------------:|--------------:|---------------:|\n")
+        f.write(f"| **Content Items** | **{total_items:,}** | {total_published:,} | {total_unpublished:,} | {total_standalone:,} | {total_github_only:,} |\n")
         f.write("\n")
         
         f.write("### Content Items by Type\n\n")
-        f.write("| Type | Total | Published | Unpublished |\n")
-        f.write("|:-----|------:|----------:|------------:|\n")
+        f.write("| Type | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
+        f.write("|:-----|------:|-------------:|---------------:|--------------:|---------------:|\n")
         
         for content_type in type_order:
             if content_type in content_by_type:
                 type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
                 total = len(content_by_type[content_type])
-                unpub = unpublished_count_by_type.get(content_type, 0)
-                pub = total - unpub
+                pub_count = published_count_by_type.get(content_type, 0)
+                unpub_count = unpublished_count_by_type.get(content_type, 0)
+                standalone_count = source_counts_by_type[content_type].get('Standalone', 0)
+                github_only_count = source_counts_by_type[content_type].get('GitHub Only', 0)
                 # Add note for parsers
                 note = "*" if content_type == 'parser' else ""
-                f.write(f"| {type_name}{note} | {total:,} | {pub:,} | {unpub:,} |\n")
+                f.write(f"| {type_name}{note} | {total:,} | {pub_count:,} | {unpub_count:,} | {standalone_count:,} | {github_only_count:,} |\n")
         
         f.write("\n")
         f.write("*\\* Parsers from solution content. See [Parsers](../parsers/parsers-index.md) section for all parsers including legacy.*\n\n")
@@ -5482,8 +5537,13 @@ def main() -> None:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 solution_name = row.get('solution_name', '')
+                content_source = row.get('content_source', 'Solution')
+                # Include all items: group by solution_name, or by content_source if no solution
                 if solution_name:
                     content_items_by_solution[solution_name].append(row)
+                elif content_source == 'GitHub Only':
+                    # Group GitHub Only items under a synthetic key
+                    content_items_by_solution['[GitHub Only]'].append(row)
         total_content = sum(len(items) for items in content_items_by_solution.values())
         print(f"Loaded {total_content} content items from {len(content_items_by_solution)} solutions")
     else:

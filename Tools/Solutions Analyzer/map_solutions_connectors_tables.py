@@ -3528,7 +3528,7 @@ def add_issue(
 # Content Items Extraction (Analytics Rules, Hunting Queries, Workbooks, etc.)
 # ============================================================================
 
-# Content type folder name variations
+# Content type folder name variations (within solution directories)
 CONTENT_TYPE_FOLDERS: Dict[str, List[str]] = {
     "analytic_rule": ["Analytic Rules", "Analytical Rules", "Analytics Rules"],
     "hunting_query": ["Hunting Queries"],
@@ -3538,6 +3538,25 @@ CONTENT_TYPE_FOLDERS: Dict[str, List[str]] = {
     "watchlist": ["Watchlists"],
     "summary_rule": ["Summary Rules", "Summary rules"],
 }
+
+# Standalone content directories at repo root level
+# Maps content type to (directory name, file type: 'yaml', 'json', or 'folder')
+STANDALONE_CONTENT_DIRS: Dict[str, Tuple[str, str]] = {
+    "analytic_rule": ("Detections", "yaml"),
+    "hunting_query": ("Hunting Queries", "yaml"),
+    "workbook": ("Workbooks", "json"),
+    "playbook": ("Playbooks", "folder"),  # Each playbook is a folder
+    "summary_rule": ("Summary rules", "yaml"),
+    "watchlist": ("Watchlists", "folder"),  # Each watchlist is a folder
+}
+
+# Patterns that indicate a stub file (content moved to solutions)
+STUB_FILE_PATTERNS = [
+    r"moved\s+to\s+(new\s+)?location",
+    r"as\s+part\s+of\s+content\s+migration",
+    r"this\s+file\s+(is|has\s+been)\s+moved",
+    r"content\s+has\s+been\s+migrated",
+]
 
 # Mapping from Solution JSON keys to our internal content types
 # Some Solution JSONs use alternate key names (e.g., "AnalyticsRules" vs "Analytic Rules")
@@ -3679,6 +3698,97 @@ def extract_queries_from_workbook(data: Dict[str, Any]) -> List[str]:
     
     traverse(data)
     return queries
+
+
+def is_stub_file(data: Dict[str, Any]) -> bool:
+    """
+    Check if a YAML file is a stub pointing to content moved to a solution.
+    
+    Stub files typically have:
+    - Minimal fields (usually just id, name, description, version)
+    - Description containing phrases like "moved to new location" or "content migration"
+    - No query field
+    
+    Args:
+        data: Parsed YAML data
+        
+    Returns:
+        True if this is a stub file that should be ignored
+    """
+    if not isinstance(data, dict):
+        return False
+    
+    # Check if it has a query - if it does, it's not a stub
+    if data.get("query"):
+        return False
+    
+    # Check description for stub patterns
+    description = data.get("description", "")
+    if isinstance(description, str):
+        desc_lower = description.lower()
+        for pattern in STUB_FILE_PATTERNS:
+            if re.search(pattern, desc_lower, re.IGNORECASE):
+                return True
+    
+    return False
+
+
+def extract_yaml_metadata(data: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Extract metadata section from a YAML content file.
+    
+    The metadata section indicates the content is a standalone Content Hub item.
+    Format:
+        metadata:
+            source:
+                kind: Community|Solution
+            author:
+                name: Author Name
+            support:
+                tier: Community|Partner|Microsoft
+            categories:
+                domains: [ "Security - Others" ]
+    
+    Args:
+        data: Parsed YAML data
+        
+    Returns:
+        Dict with extracted metadata fields, empty if no metadata section
+    """
+    result = {
+        "metadata_source_kind": "",
+        "metadata_author": "",
+        "metadata_support_tier": "",
+        "metadata_categories": "",
+    }
+    
+    metadata = data.get("metadata")
+    if not isinstance(metadata, dict):
+        return result
+    
+    # Extract source kind
+    source = metadata.get("source")
+    if isinstance(source, dict):
+        result["metadata_source_kind"] = source.get("kind", "")
+    
+    # Extract author
+    author = metadata.get("author")
+    if isinstance(author, dict):
+        result["metadata_author"] = author.get("name", "")
+    
+    # Extract support tier
+    support = metadata.get("support")
+    if isinstance(support, dict):
+        result["metadata_support_tier"] = support.get("tier", "")
+    
+    # Extract categories
+    categories = metadata.get("categories")
+    if isinstance(categories, dict):
+        domains = categories.get("domains", [])
+        if isinstance(domains, list):
+            result["metadata_categories"] = ";".join(str(d) for d in domains)
+    
+    return result
 
 
 def extract_content_item_from_yaml(
@@ -4221,6 +4331,222 @@ def collect_content_items(
     return content_items
 
 
+def collect_standalone_content_items(repo_root: Path) -> List[Dict[str, Any]]:
+    """
+    Collect standalone content items from top-level repository directories.
+    
+    These are content items that exist outside of Solutions:
+    - Detections/ - Analytic rules
+    - Hunting Queries/ - Hunting queries  
+    - Workbooks/ - Workbook definitions
+    - Playbooks/ - Playbook folders
+    - Summary rules/ - Summary rules
+    - Watchlists/ - Watchlist folders
+    
+    Items with a metadata section are marked as "Standalone" (Content Hub items).
+    Items without metadata are marked as "GitHub Only".
+    Stub files (pointing to items moved to solutions) are skipped.
+    
+    Args:
+        repo_root: Path to repository root
+        
+    Returns:
+        List of content item dictionaries with content_source field
+    """
+    content_items: List[Dict[str, Any]] = []
+    
+    for content_type, (dir_name, file_type) in STANDALONE_CONTENT_DIRS.items():
+        content_dir = repo_root / dir_name
+        if not content_dir.exists():
+            continue
+        
+        if file_type == "yaml":
+            # Process YAML files (Detections, Hunting Queries, Summary Rules)
+            for yaml_path in list(content_dir.rglob("*.yaml")) + list(content_dir.rglob("*.yml")):
+                # Skip README files and templates
+                if yaml_path.name.lower().startswith("readme") or yaml_path.name.lower() == "query_template.md":
+                    continue
+                
+                data = read_yaml_safe(yaml_path)
+                if not data or not isinstance(data, dict):
+                    continue
+                
+                # Skip stub files
+                if is_stub_file(data):
+                    continue
+                
+                # Extract the content item
+                # Calculate relative path from content directory
+                try:
+                    rel_path = yaml_path.relative_to(content_dir)
+                    content_folder = str(rel_path.parent).replace("\\", "/") if rel_path.parent != Path(".") else ""
+                except ValueError:
+                    content_folder = ""
+                
+                item = extract_content_item_from_yaml(
+                    yaml_path, content_type, 
+                    solution_name="",  # No solution
+                    solution_folder=""
+                )
+                if not item:
+                    continue
+                
+                # Extract metadata to determine if Standalone or GitHub Only
+                metadata = extract_yaml_metadata(data)
+                has_metadata = bool(metadata.get("metadata_source_kind") or metadata.get("metadata_author"))
+                
+                # Set content source
+                item["content_source"] = "Standalone" if has_metadata else "GitHub Only"
+                
+                # Add metadata fields
+                item["metadata_source_kind"] = metadata.get("metadata_source_kind", "")
+                item["metadata_author"] = metadata.get("metadata_author", "")
+                item["metadata_support_tier"] = metadata.get("metadata_support_tier", "")
+                item["metadata_categories"] = metadata.get("metadata_categories", "")
+                
+                # Set standalone-specific fields
+                item["content_file"] = str(yaml_path.relative_to(content_dir)).replace("\\", "/")
+                item["content_github_url"] = f"{GITHUB_REPO_URL}/{dir_name}/{quote(str(yaml_path.relative_to(content_dir)).replace(chr(92), '/'))}"
+                item["not_in_solution_json"] = ""  # Not applicable for standalone
+                # Only set solution_name for Standalone items with metadata
+                item["solution_name"] = "Standalone Content" if has_metadata else ""
+                item["solution_folder"] = dir_name if has_metadata else ""
+                
+                content_items.append(item)
+                
+        elif file_type == "json":
+            # Process JSON files (Workbooks)
+            for json_path in content_dir.glob("*.json"):
+                # Skip README and metadata files
+                if json_path.name.lower().startswith("readme") or json_path.name.lower() == "workbooksmetadata.json":
+                    continue
+                
+                item = extract_content_item_from_workbook(
+                    json_path,
+                    solution_name="",
+                    solution_folder=""
+                )
+                if not item:
+                    continue
+                
+                # Workbooks don't have YAML metadata - check for metadata JSON
+                # Mark as GitHub Only by default (no metadata section in JSON workbooks)
+                item["content_source"] = "GitHub Only"
+                item["metadata_source_kind"] = ""
+                item["metadata_author"] = ""
+                item["metadata_support_tier"] = ""
+                item["metadata_categories"] = ""
+                item["content_github_url"] = f"{GITHUB_REPO_URL}/{dir_name}/{quote(json_path.name)}"
+                item["not_in_solution_json"] = ""
+                # GitHub Only items don't belong to a specific solution
+                item["solution_name"] = ""
+                item["solution_folder"] = ""
+                
+                content_items.append(item)
+                
+        elif file_type == "folder":
+            # Process folder-based content (Playbooks, Watchlists)
+            for item_folder in content_dir.iterdir():
+                if not item_folder.is_dir():
+                    continue
+                
+                # Skip hidden folders and template folders
+                if item_folder.name.startswith(".") or item_folder.name.lower() == "templates":
+                    continue
+                
+                if content_type == "playbook":
+                    # Look for azuredeploy.json or other Logic App JSON files
+                    json_files = list(item_folder.rglob("*.json"))
+                    for json_path in json_files:
+                        item = extract_content_item_from_playbook(
+                            json_path,
+                            solution_name="",
+                            solution_folder=""
+                        )
+                        if not item:
+                            continue
+                        
+                        # Playbooks have metadata in their ARM template
+                        # Check for metadata section
+                        data = read_json(json_path)
+                        has_metadata = False
+                        if isinstance(data, dict) and "metadata" in data:
+                            meta = data["metadata"]
+                            if isinstance(meta, dict) and (meta.get("title") or meta.get("author")):
+                                has_metadata = True
+                                item["metadata_author"] = meta.get("author", {}).get("name", "") if isinstance(meta.get("author"), dict) else ""
+                                item["metadata_support_tier"] = meta.get("support", {}).get("tier", "") if isinstance(meta.get("support"), dict) else ""
+                        
+                        item["content_source"] = "Standalone" if has_metadata else "GitHub Only"
+                        item["metadata_source_kind"] = ""
+                        item["metadata_categories"] = ""
+                        
+                        try:
+                            rel_path = json_path.relative_to(content_dir)
+                            item["content_file"] = str(rel_path).replace("\\", "/")
+                            item["content_github_url"] = f"{GITHUB_REPO_URL}/{dir_name}/{quote(str(rel_path).replace(chr(92), '/'))}"
+                        except ValueError:
+                            item["content_github_url"] = ""
+                        
+                        item["not_in_solution_json"] = ""
+                        # Only set solution_name for Standalone items with metadata
+                        item["solution_name"] = "Standalone Content" if has_metadata else ""
+                        item["solution_folder"] = dir_name if has_metadata else ""
+                        
+                        content_items.append(item)
+                        
+                elif content_type == "watchlist":
+                    # Look for JSON files in watchlist folders
+                    json_files = list(item_folder.glob("*.json"))
+                    for json_path in json_files:
+                        data = read_json(json_path)
+                        if not data:
+                            continue
+                        
+                        name = item_folder.name
+                        if isinstance(data, dict):
+                            name = data.get("name", name) or data.get("displayName", name)
+                        
+                        try:
+                            rel_path = json_path.relative_to(content_dir)
+                            content_file = str(rel_path).replace("\\", "/")
+                            github_url = f"{GITHUB_REPO_URL}/{dir_name}/{quote(str(rel_path).replace(chr(92), '/'))}"
+                        except ValueError:
+                            content_file = json_path.name
+                            github_url = ""
+                        
+                        content_items.append({
+                            "content_id": "",
+                            "content_name": name,
+                            "content_type": "watchlist",
+                            "content_description": "",
+                            "content_file": content_file,
+                            "content_readme_file": "",
+                            "content_severity": "",
+                            "content_status": "",
+                            "content_kind": "",
+                            "content_tactics": "",
+                            "content_techniques": "",
+                            "content_required_connectors": "",
+                            "content_query": "",
+                            "content_query_status": "no_query",
+                            "content_event_vendor": "",
+                            "content_event_product": "",
+                            "content_filter_fields": "",
+                            "content_source": "GitHub Only",
+                            "content_github_url": github_url,
+                            "metadata_source_kind": "",
+                            "metadata_author": "",
+                            "metadata_support_tier": "",
+                            "metadata_categories": "",
+                            "not_in_solution_json": "",
+                            "solution_name": "",
+                            "solution_folder": "",
+                        })
+    
+    return content_items
+
+
 def extract_tables_from_content_query(
     query: str,
     parser_names: Set[str],
@@ -4601,6 +4927,15 @@ def main() -> None:
             
             # Remove query and write_tables from output to keep CSV manageable
             item_for_csv = {k: v for k, v in item.items() if k not in ("content_query", "content_write_tables")}
+            
+            # Mark solution-sourced content items
+            item_for_csv["content_source"] = "Solution"
+            item_for_csv["content_github_url"] = ""  # Will be empty for solution items (use solution_folder)
+            item_for_csv["metadata_source_kind"] = ""
+            item_for_csv["metadata_author"] = ""
+            item_for_csv["metadata_support_tier"] = ""
+            item_for_csv["metadata_categories"] = ""
+            
             all_content_items.append(item_for_csv)
         
         # Get connector files listed in Solution JSON for comparison
@@ -5265,6 +5600,56 @@ def main() -> None:
         for row in rows:
             row['is_published'] = 'true'
     
+    # Collect standalone content items from top-level directories
+    print("\nCollecting standalone content items from top-level directories...")
+    standalone_items = collect_standalone_content_items(repo_root)
+    
+    # Add is_published status to standalone items (standalone items are not in marketplace)
+    for item in standalone_items:
+        item['is_published'] = ''  # Not applicable for standalone items
+    
+    # Extract table mappings from standalone content items
+    for item in standalone_items:
+        query = item.get('content_query', '')
+        write_tables = item.get('content_write_tables', [])
+        if query or write_tables:
+            # Extract read tables from query using global parsers
+            read_tables, _ = extract_tables_from_content_query(
+                query, global_parser_names, global_parser_table_map, return_rejected=True
+            )
+            for table in read_tables:
+                content_table_mappings.append({
+                    "solution_name": item.get("solution_name", "Standalone Content"),
+                    "content_type": item.get("content_type", ""),
+                    "content_id": item.get("content_id", ""),
+                    "content_name": item.get("content_name", ""),
+                    "content_file": item.get("content_file", ""),
+                    "table_name": table,
+                    "table_usage": "read",
+                    "is_published": "",  # Not applicable
+                })
+            # Add write tables
+            for table in write_tables:
+                usage = "read/write" if table in read_tables else "write"
+                content_table_mappings.append({
+                    "solution_name": item.get("solution_name", "Standalone Content"),
+                    "content_type": item.get("content_type", ""),
+                    "content_id": item.get("content_id", ""),
+                    "content_name": item.get("content_name", ""),
+                    "content_file": item.get("content_file", ""),
+                    "table_name": table,
+                    "table_usage": usage,
+                    "is_published": "",
+                })
+        
+        # Remove query and write_tables from output for CSV
+        item.pop('content_query', None)
+        item.pop('content_write_tables', None)
+    
+    # Merge standalone items with solution content items
+    all_content_items.extend(standalone_items)
+    print(f"  Added {len(standalone_items)} standalone content items")
+    
     # Build solutions data
     solutions_data: List[Dict[str, str]] = []
     for solution_name, info in sorted(all_solutions_info.items()):
@@ -5560,6 +5945,7 @@ def main() -> None:
         'content_description',
         'content_file',
         'content_readme_file',
+        'content_github_url',
         'content_severity',
         'content_status',
         'content_kind',
@@ -5570,6 +5956,11 @@ def main() -> None:
         'content_event_vendor',
         'content_event_product',
         'content_filter_fields',
+        'content_source',
+        'metadata_source_kind',
+        'metadata_author',
+        'metadata_support_tier',
+        'metadata_categories',
         'not_in_solution_json',
         'solution_name',
         'solution_folder',
@@ -5577,7 +5968,7 @@ def main() -> None:
     ]
     content_items_path = args.content_items_csv.resolve()
     with content_items_path.open("w", encoding="utf-8", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=content_items_fieldnames, quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(csvfile, fieldnames=content_items_fieldnames, quoting=csv.QUOTE_ALL, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(all_content_items)
     
@@ -5673,6 +6064,18 @@ def main() -> None:
     for ctype, count in sorted(content_type_counts.items(), key=lambda x: -x[1]):
         pct = (count / len(all_content_items) * 100) if all_content_items else 0
         print(f"  {ctype:30} {count:4} ({pct:.1f}%)")
+
+    # Print content source distribution (Solution vs Standalone vs GitHub Only)
+    content_source_counts: Dict[str, int] = defaultdict(int)
+    for item in all_content_items:
+        source = item.get('content_source', 'Unknown')
+        content_source_counts[source] += 1
+    
+    print(f"\nContent Source Distribution ({len(all_content_items)} items):")
+    print("-" * 50)
+    for source, count in sorted(content_source_counts.items(), key=lambda x: -x[1]):
+        pct = (count / len(all_content_items) * 100) if all_content_items else 0
+        print(f"  {source:30} {count:4} ({pct:.1f}%)")
 
     # Generate filter fields findings report
     filter_fields_report_path = args.output.parent / "filter_fields_findings.md"

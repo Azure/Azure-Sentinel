@@ -182,6 +182,34 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 
 ## Version History
 
+### v7.3 - Standalone Content Items
+
+**Standalone Content Collection:**
+- Collects content items from top-level repository directories (not part of Solutions):
+  - `Detections/` - Analytic rules (YAML)
+  - `Hunting Queries/` - Hunting queries (YAML)
+  - `Workbooks/` - Workbooks (JSON)
+  - `Playbooks/` - Playbooks (folders with azuredeploy.json)
+  - `Summary rules/` - Summary rules (YAML)
+  - `Watchlists/` - Watchlists (folders with watchlist.json)
+- Added 1,709 standalone content items to documentation
+
+**Content Source Classification:**
+- New `content_source` column classifies content items by origin:
+  - **Solution**: Content from Solutions/ folder (74% of items)
+  - **Standalone**: Top-level content with YAML metadata section (6.6% of items)
+  - **GitHub Only**: Top-level content without metadata (19.3% of items)
+- Statistics output now includes Content Source Distribution breakdown
+
+**YAML Metadata Extraction:**
+- Extracts `metadata` section from YAML files to determine Standalone vs GitHub Only classification
+- New columns: `metadata_source_kind`, `metadata_author`, `metadata_support_tier`, `metadata_categories`
+- `content_github_url`: Direct GitHub URL for standalone content items
+
+**Stub File Detection:**
+- Automatically skips stub files (content that has been moved to Solutions)
+- Detects patterns like "moved to new location", "content migration", "file has been moved"
+
 ### v7.2 - Parser Documentation and Table Integration
 
 **New Parser Documentation:**
