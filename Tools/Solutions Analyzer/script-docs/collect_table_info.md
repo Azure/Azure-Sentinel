@@ -42,12 +42,15 @@ python collect_table_info.py --skip-details
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--output` | `tables_reference.csv` | Path for the output CSV file |
+| `--output`, `-o` | Script directory | Output directory for CSV and report files |
 | `--skip-details` | `False` | Skip fetching details from individual table pages (faster but less data) |
-| `--max-details` | None | Maximum number of table detail pages to fetch (for testing) |
+| `--max-details` | `0` (all) | Maximum number of table detail pages to fetch (0=all, useful for testing) |
+| `--refresh-cache` | `False` | Clear cache and fetch fresh content |
+| `--skip-cache` | `False` | Skip cache for this run only |
 | `--cache-ttl` | `604800` | Cache time-to-live in seconds (default: 1 week) |
-| `--clear-cache` | `False` | Clear all cached files before running |
+| `--cache-dir` | `.cache` | Directory for cache files |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
+| `--quiet`, `-q` | `False` | Suppress verbose output |
 
 ## Output Files
 
@@ -64,8 +67,10 @@ Comprehensive CSV with table metadata:
 | `collection_method` | Data collection method (from resource_types or overrides) |
 | `solutions` | Associated Log Analytics solutions |
 | `resource_types` | Azure resource types that emit to this table |
+| `table_type` | Table type (e.g., Microsoft, Azure, Custom) |
 | `source_azure_monitor` | Whether table is in Azure Monitor reference |
 | `source_defender_xdr` | Whether table is in Defender XDR schema |
+| `xdr_only` | Whether table is only available in Defender XDR (not in Azure Monitor) |
 | `source_feature_support` | Whether table has feature support info |
 | `source_ingestion_api` | Whether table supports ingestion API |
 | `azure_monitor_doc_link` | Link to Azure Monitor documentation |

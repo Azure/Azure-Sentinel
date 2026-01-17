@@ -117,15 +117,33 @@ def generate_markdown_report(
     
     # Count connectors by collection method
     method_counts: Dict[str, int] = defaultdict(int)
+    # Count published/unpublished solutions
+    published_solutions = 0
+    unpublished_solutions = 0
+    # Count deprecated connectors
+    deprecated_connectors = 0
+    
     for sol_data in solutions_with_connectors.values():
+        sol_info = sol_data['solution_info']
+        is_published = sol_info.get('is_published', '').lower() == 'true'
+        if is_published:
+            published_solutions += 1
+        else:
+            unpublished_solutions += 1
         for conn in sol_data['connectors']:
             method = conn.get('collection_method', 'Unknown')
             method_counts[method] += 1
+            if conn.get('is_deprecated', '').lower() == 'true':
+                deprecated_connectors += 1
     
     lines.append("## Summary")
     lines.append("")
     lines.append(f"- **Total Solutions with Connectors:** {total_solutions}")
+    lines.append(f"  - Published on Azure Marketplace: {published_solutions}")
+    lines.append(f"  - Not yet published: {unpublished_solutions}")
     lines.append(f"- **Total Connectors:** {total_connectors}")
+    if deprecated_connectors > 0:
+        lines.append(f"  - Deprecated: {deprecated_connectors}")
     lines.append("")
     
     lines.append("### Collection Method Distribution")
@@ -141,8 +159,8 @@ def generate_markdown_report(
     # Table of all solutions with connectors
     lines.append("## Solutions Overview")
     lines.append("")
-    lines.append("| Solution | # Connectors | Publisher | Support | Category |")
-    lines.append("|----------|--------------|-----------|---------|----------|")
+    lines.append("| Solution | # Connectors | Publisher | Support | Category | Notes |")
+    lines.append("|----------|--------------|-----------|---------|----------|-------|")
     
     for sol_name in sorted(solutions_with_connectors.keys(), key=str.lower):
         sol_data = solutions_with_connectors[sol_name]
@@ -160,7 +178,27 @@ def generate_markdown_report(
             sol_link = f"[{sol_name}]({solution_folder})"
         else:
             sol_link = sol_name
-        lines.append(f"| {sol_link} | {conn_count} | {publisher} | {support} | {categories} |")
+        # Build notes column
+        notes = []
+        is_published = sol_info.get('is_published', '').lower() == 'true'
+        if not is_published:
+            notes.append("⚠️ Not published")
+        # Check if any connectors are deprecated
+        deprecated_count = sum(1 for c in sol_data['connectors'] if c.get('is_deprecated', '').lower() == 'true')
+        if deprecated_count > 0:
+            if deprecated_count == conn_count:
+                notes.append("🚫 All connectors deprecated")
+            else:
+                notes.append(f"🚫 {deprecated_count} deprecated")
+        notes_str = ", ".join(notes) if notes else ""
+        lines.append(f"| {sol_link} | {conn_count} | {publisher} | {support} | {categories} | {notes_str} |")
+    lines.append("")
+    
+    # Legend
+    lines.append("### Notes Legend")
+    lines.append("")
+    lines.append("- ⚠️ **Not published**: Solution is not yet available on the Azure Marketplace")
+    lines.append("- 🚫 **Deprecated**: Connector is deprecated and may be removed in future updates")
     lines.append("")
     
     # Write the markdown file
@@ -181,11 +219,14 @@ def generate_csv_export(
         'support_tier',
         'categories',
         'version',
+        'is_published',
         'connector_count',
         'connector_id',
         'connector_title',
         'collection_method',
+        'is_deprecated',
         'tables',
+        'reason',
         'solution_github_link',
         'connector_github_link'
     ]
@@ -196,7 +237,19 @@ def generate_csv_export(
         sol_info = sol_data['solution_info']
         connectors = sol_data['connectors']
         
+        is_published = sol_info.get('is_published', '').lower() == 'true'
+        
         for conn in connectors:
+            is_deprecated = conn.get('is_deprecated', '').lower() == 'true'
+            
+            # Build reason field
+            reasons = []
+            if not is_published:
+                reasons.append("Solution not published on Azure Marketplace")
+            if is_deprecated:
+                reasons.append("Connector is deprecated")
+            reason = "; ".join(reasons) if reasons else ""
+            
             row = {
                 'solution_name': sol_name,
                 'solution_folder': sol_info.get('solution_folder', ''),
@@ -204,11 +257,14 @@ def generate_csv_export(
                 'support_tier': sol_info.get('solution_support_tier', ''),
                 'categories': sol_info.get('solution_categories', ''),
                 'version': sol_info.get('solution_version', ''),
+                'is_published': 'true' if is_published else 'false',
                 'connector_count': len(connectors),
                 'connector_id': conn.get('connector_id', ''),
                 'connector_title': conn.get('connector_title', ''),
                 'collection_method': conn.get('collection_method', ''),
+                'is_deprecated': 'true' if is_deprecated else 'false',
                 'tables': conn.get('tables', ''),
+                'reason': reason,
                 'solution_github_link': sol_info.get('solution_folder', ''),
                 'connector_github_link': conn.get('connector_files', '')
             }

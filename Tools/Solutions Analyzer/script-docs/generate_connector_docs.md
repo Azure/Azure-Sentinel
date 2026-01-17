@@ -106,6 +106,8 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--content-tables-csv` | `content_tables_mapping.csv` | Path to content-to-tables mapping CSV file |
 | `--solutions-csv` | `solutions.csv` | Path to solutions CSV file with logo/description |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for additional_information and other doc-only fields |
+| `--asim-parsers-csv` | `asim_parsers.csv` | Path to ASIM parsers CSV file |
+| `--parsers-csv` | `parsers.csv` | Path to parsers CSV file |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
 ## Output Structure
@@ -127,10 +129,16 @@ connector-docs/
 │   ├── hunting-queries.md       # Hunting queries index
 │   ├── playbooks.md             # Playbooks index
 │   ├── workbooks.md             # Workbooks index
-│   ├── parsers.md               # Parsers index
 │   ├── watchlists.md            # Watchlists index
 │   ├── summary-rules.md         # Summary rules index
 │   └── {solution}-{name}-*.md   # Individual content item pages
+├── parsers/                     # Parser documentation
+│   ├── parsers-index.md         # All parsers organized by solution
+│   └── {parser-name}.md         # Individual parser pages
+├── asim/                        # ASIM parser documentation
+│   ├── asim-index.md            # ASIM parsers organized by schema
+│   ├── asim-products-index.md   # ASIM parsers organized by product
+│   └── {parser-name}.md         # Individual ASIM parser pages
 ├── solutions/                   # Individual solution pages
 │   ├── 1password.md
 │   ├── aws-cloudfront.md
