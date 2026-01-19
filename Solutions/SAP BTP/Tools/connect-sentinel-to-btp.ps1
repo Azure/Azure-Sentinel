@@ -47,6 +47,12 @@ param(
     [SecureString]$CfPassword,
     
     [Parameter(Mandatory=$false)]
+    [int]$PollingFrequencyMinutes = 1,
+    
+    [Parameter(Mandatory=$false)]
+    [int]$IngestDelayMinutes = 20,
+    
+    [Parameter(Mandatory=$false)]
     [string]$ApiVersion = "2025-09-01"
 )
 
@@ -97,19 +103,78 @@ catch {
     exit 1
 }
 
-# Set Azure subscription context
-try {
-    $setSubResult = az account set --subscription $SubscriptionId 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "Failed to set Azure subscription: $setSubResult" -Level "ERROR"
-        exit 1
-    }
-    Write-Log "Set Azure subscription context to: $SubscriptionId" -Level "SUCCESS"
-}
-catch {
-    Write-Log "Failed to set Azure subscription context: $_" -Level "ERROR"
+# Get workspace details for DCE/DCR setup
+Write-Log "======================================================================="
+Write-Log "Setting up Data Collection Endpoint (DCE) and Data Collection Rule (DCR)"
+Write-Log "======================================================================="
+
+$workspaceDetails = Get-SentinelWorkspaceDetails `
+    -SubscriptionId $SubscriptionId `
+    -ResourceGroupName $ResourceGroupName `
+    -WorkspaceName $WorkspaceName
+
+if ($null -eq $workspaceDetails) {
+    Write-Log "Failed to get workspace details. Exiting." -Level "ERROR"
     exit 1
 }
+
+# First try to find existing DCR - if found, we can get DCE from its properties
+# DCE naming pattern (e.g., ASI-{guid}) differs from DCR naming pattern
+$dcrInfo = Get-OrCreateDataCollectionRule `
+    -SubscriptionId $SubscriptionId `
+    -ResourceGroupName $ResourceGroupName `
+    -WorkspaceShortId $workspaceDetails.ShortId `
+    -WorkspaceResourceId $workspaceDetails.ResourceId `
+    -Location $workspaceDetails.Location
+
+$dceInfo = $null
+
+if ($null -ne $dcrInfo -and -not [string]::IsNullOrWhiteSpace($dcrInfo.DataCollectionEndpointId)) {
+    # DCR exists - get DCE details from the DCR's referenced endpoint
+    Write-Log "Found existing DCR with DCE reference, retrieving DCE details..."
+    $dceInfo = Get-DataCollectionEndpointById -DataCollectionEndpointId $dcrInfo.DataCollectionEndpointId
+}
+
+if ($null -eq $dceInfo) {
+    # DCE not found via DCR - create new DCE first, then create DCR
+    Write-Log "No existing DCE found, creating new Data Collection Endpoint..."
+    
+    $dceInfo = Get-OrCreateDataCollectionEndpoint `
+        -SubscriptionId $SubscriptionId `
+        -ResourceGroupName $ResourceGroupName `
+        -WorkspaceShortId $workspaceDetails.ShortId `
+        -Location $workspaceDetails.Location
+    
+    if ($null -eq $dceInfo) {
+        Write-Log "Failed to get or create DCE. Exiting." -Level "ERROR"
+        exit 1
+    }
+    
+    # Now create DCR with the new DCE
+    $dcrInfo = Get-OrCreateDataCollectionRule `
+        -SubscriptionId $SubscriptionId `
+        -ResourceGroupName $ResourceGroupName `
+        -WorkspaceShortId $workspaceDetails.ShortId `
+        -WorkspaceResourceId $workspaceDetails.ResourceId `
+        -DataCollectionEndpointId $dceInfo.ResourceId `
+        -Location $workspaceDetails.Location
+    
+    if ($null -eq $dcrInfo) {
+        Write-Log "Failed to get or create DCR. Exiting." -Level "ERROR"
+        exit 1
+    }
+}
+
+# Build DcrConfig for connections
+$dcrConfig = @{
+    DataCollectionEndpoint = $dceInfo.LogsIngestionEndpoint
+    DataCollectionRuleImmutableId = $dcrInfo.ImmutableId
+}
+
+Write-Log "DCE/DCR setup completed successfully" -Level "SUCCESS"
+Write-Log "  DCE Name: $($dceInfo.Name)"
+Write-Log "  DCE Logs Ingestion: $($dceInfo.LogsIngestionEndpoint)"
+Write-Log "  DCR Immutable ID: $($dcrInfo.ImmutableId)"
 
 # Load subaccounts from CSV using helper function
 $subaccounts = Import-BtpSubaccountsCsv -CsvPath $CsvPath
@@ -123,8 +188,8 @@ $failureCount = 0
 $currentApiEndpoint = $null
 
 foreach ($subaccount in $subaccounts) {
+    $subaccountName = $subaccount.SubaccountName
     $subaccountId = $subaccount.SubaccountId
-    $subaccountName = $subaccount.DisplayName
     $apiEndpoint = $subaccount.'cf-api-endpoint'
     $orgName = $subaccount.'cf-org-name'
     $spaceName = $subaccount.'cf-space-name'
@@ -185,18 +250,17 @@ foreach ($subaccount in $subaccounts) {
     Write-Log "  API URL: $($btpCredentials.ApiUrl)" -Level "SUCCESS"
     Write-Log "  Subdomain: $($btpCredentials.Subdomain)" -Level "SUCCESS"
     
-    # Generate connection name from subdomain or subaccount ID
-    $connectionName = Get-BtpConnectionName -BtpCredentials $btpCredentials -SubaccountId $subaccountId
-    
-    # Create Sentinel SAP BTP connection
+    # Create Sentinel SAP BTP connection with DCR configuration
     $connectionCreated = New-SentinelBtpConnection `
         -SubscriptionId $SubscriptionId `
         -ResourceGroupName $ResourceGroupName `
         -WorkspaceName $WorkspaceName `
-        -ConnectionName $connectionName `
+        -ConnectionName $subaccountName `
         -BtpCredentials $btpCredentials `
         -SubaccountId $subaccountId `
-        -SubaccountName $subaccountName `
+        -DcrConfig $dcrConfig `
+        -PollingFrequencyMinutes $PollingFrequencyMinutes `
+        -IngestDelayMinutes $IngestDelayMinutes `
         -ApiVersion $ApiVersion
     
     if ($connectionCreated) {
