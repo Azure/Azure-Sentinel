@@ -230,11 +230,11 @@
                   "Custom-BigIDDSPMCatalog_CL": {
                     "columns": [
                       {
-                        "name": "case",
+                        "name": "dspmCase",
                         "type": "dynamic"
                       },
                       {
-                        "name": "affectedObjects",
+                        "name": "expand",
                         "type": "dynamic"
                       },
                       {
@@ -260,8 +260,18 @@
                     "destinations": [
                       "clv2ws1"
                     ],
-                    "transformKql": "source | extend TimeGenerated = now(), EventType = 'catalog', EventVendor = 'BigID', EventProduct = 'DSPM'",
+                    "transformKql": "source | extend TimeGenerated = now()",
                     "outputStream": "Custom-BigIDDSPMCatalog_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-BigIDDSPMCatalog_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project IngestionTime=now(), TimeGenerated=todatetime(expand.created_date), AssetID=tostring(expand.fullyQualifiedName), Provider='BigID', FeedType='Snapshot', CreatedDateTime=todatetime(expand.created_date), AssetOwner=expand.owner, AssetName=tostring(expand.objectName), AssetPath=tostring(expand.fullObjectName), AssetSize=tostring(expand.sizeInBytes), AssetSource=tostring(expand.type), AssetType=tostring(expand.objectType), Workload=tostring(expand.source), Location=tostring(datasource.location), Classification=tostring(expand.attribute), ClassificationLastScanDateTime=todatetime(expand.last_scanned), LastModifiedDateTime=todatetime(expand.updated_at), Risks=tostring(dspmCase.caseLabel)",
+                    "outputStream": "Custom-BigIDDSPMAssetStore_CL"
                   }
                 ]
               }
@@ -283,16 +293,281 @@
                       "description": "The timestamp (UTC) reflecting the time in which the event was generated."
                     },
                     {
-                      "name": "case",
+                      "name": "dspmCase",
                       "type": "dynamic"
                     },
                     {
-                      "name": "affectedObjects",
+                      "name": "expand",
                       "type": "dynamic"
                     },
                     {
                       "name": "datasource",
                       "type": "dynamic"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "BigIDDSPMAssetStore_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "BigIDDSPMAssetStore_CL",
+                  "columns": [
+                    {
+                      "name": "IngestionTime",
+                      "type": "datetime",
+                      "description": "The date and time that the line was written to the store. This is used when there are multiple lines for each file, such as when a change is detected, or if 24 hours have passed since the last store line was added."
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": true,
+                      "description": "Time the asset information was collected (snapshot or the changefeed of that asset was taken)"
+                    },
+                    {
+                      "name": "AssetID",
+                      "type": "string",
+                      "description": "Unique identifier of the Asset. E.g. device ID, Document ID etc."
+                    },
+                    {
+                      "name": "CreatedDateTime",
+                      "type": "datetime",
+                      "description": "Date and time the Asset was created."
+                    },
+                    {
+                      "name": "AssetOwner",
+                      "type": "dynamic",
+                      "description": "Owner of the asset: e.g. File owner (from filesystem metadata). AccountUpn"
+                    },
+                    {
+                      "name": "AssetName",
+                      "type": "string",
+                      "description": "Name of the Asset"
+                    },
+                    {
+                      "name": "AssetType",
+                      "type": "string",
+                      "description": "Type of the asset: File, Site, Mailbox etc."
+                    },
+                    {
+                      "name": "AssetPermissions",
+                      "type": "dynamic",
+                      "description": "Permission strings on the assets"
+                    },
+                    {
+                      "name": "AdditionalFields",
+                      "type": "dynamic",
+                      "description": "Additional unmapped information about the event in JSON array format"
+                    },
+                    {
+                      "name": "Provider",
+                      "type": "string",
+                      "description": "The vendor who is providing this information: Microsoft/3P Providers etc."
+                    },
+                    {
+                      "name": "AssetSource",
+                      "type": "string",
+                      "description": "The source which generates the information: Microsoft, Snowflake, Salesforce etc."
+                    },
+                    {
+                      "name": "AADTenantID",
+                      "type": "string",
+                      "description": "Customer AAD Tenant ID"
+                    },
+                    {
+                      "name": "Workload",
+                      "type": "string",
+                      "description": "The workload within the source which is generating this information: Azure, M365 etc."
+                    },
+                    {
+                      "name": "SubWorkload",
+                      "type": "string",
+                      "description": "Sub workload within the Workload which is generating this information: Exchange, SharePoint, Teams in M365"
+                    },
+                    {
+                      "name": "Location",
+                      "type": "string",
+                      "description": "Location of the resolved IP (city/region/country), source from which it came from."
+                    },
+                    {
+                      "name": "Region",
+                      "type": "string",
+                      "description": "Geographical information"
+                    },
+                    {
+                      "name": "Classification",
+                      "type": "string",
+                      "description": "Sensitive Data classification: PII, HIPAA, Financial Data, etc. MIP classification and confidence level"
+                    },
+                    {
+                      "name": "ClassificationLastScanDateTime",
+                      "type": "datetime",
+                      "description": "Last time an asset was scanned to derive the classification. This is necessary to understand the darkdata on the Purview side."
+                    },
+                    {
+                      "name": "IsProtectedByDlp",
+                      "type": "bool",
+                      "description": "Whether the asset is protected by any DLP policy"
+                    },
+                    {
+                      "name": "Risks",
+                      "type": "string",
+                      "description": "All the documented issues or risks attached to the asset."
+                    },
+                    {
+                      "name": "IdentityDirectorySource",
+                      "type": "string",
+                      "description": "e.g Azure Active Directory, Okta etc."
+                    },
+                    {
+                      "name": "LastAccessDateTime",
+                      "type": "datetime",
+                      "description": "Last date and time the asset was accessed."
+                    },
+                    {
+                      "name": "LastModifiedDateTime",
+                      "type": "datetime",
+                      "description": "Last date and time the asset was modified."
+                    },
+                    {
+                      "name": "IsAssetRemoved",
+                      "type": "bool",
+                      "description": "Signifies if the asset is deleted or not?"
+                    },
+                    {
+                      "name": "FeedType",
+                      "type": "string",
+                      "description": "Signifies \"Changefeed\" or \"Snapshot\""
+                    },
+                    {
+                      "name": "SensitivityLabel",
+                      "type": "string",
+                      "description": "Whether the file is digitally signed, and if so, whether the signature is valid."
+                    },
+                    {
+                      "name": "ThreatDetected",
+                      "type": "bool",
+                      "description": "True/False if flagged as malicious."
+                    },
+                    {
+                      "name": "ThreatCategory",
+                      "type": "string",
+                      "description": "Type of threat: phishing, malware hosting, etc)."
+                    },
+                    {
+                      "name": "ThreatName",
+                      "type": "string",
+                      "description": "Name of detected threat family (e.g. malware name)."
+                    },
+                    {
+                      "name": "RelatedIndicators",
+                      "type": "string",
+                      "description": "Related IOCs (file hashes, IPs, domains)."
+                    },
+                    {
+                      "name": "RequestSourceIP",
+                      "type": "string",
+                      "description": "(If network-delivered) Source IP associated with the file event."
+                    },
+                    {
+                      "name": "RequestDestinationIP",
+                      "type": "string",
+                      "description": "(If network-related) Destination IP."
+                    },
+                    {
+                      "name": "AssetPath",
+                      "type": "string",
+                      "description": "Fully qualified path of the asset: Filepath or site path."
+                    },
+                    {
+                      "name": "InternalUserWithPermissionCount",
+                      "type": "int",
+                      "description": "Total number of permissions assigned to internal users within an organization. De-duped count of users (preferred)"
+                    },
+                    {
+                      "name": "ExternalUserWithPermissionCount",
+                      "type": "int",
+                      "description": "Total number of permissions assigned to external users outside an organization. De-duped count of users (preferred)"
+                    },
+                    {
+                      "name": "DeviceName",
+                      "type": "string",
+                      "description": "Fully qualified domain name (FQDN) of the device or the host name of the file."
+                    },
+                    {
+                      "name": "UserName",
+                      "type": "string",
+                      "description": "Account associated with the file action."
+                    },
+                    {
+                      "name": "AssetSize",
+                      "type": "string",
+                      "description": "Size of the file in bytes."
+                    },
+                    {
+                      "name": "MD5",
+                      "type": "string",
+                      "description": "MD5 hash of the file."
+                    },
+                    {
+                      "name": "SHA1",
+                      "type": "string",
+                      "description": "SHA1 hash of the file."
+                    },
+                    {
+                      "name": "SHA256",
+                      "type": "string",
+                      "description": "SHA-256 of the file, if this field is usually not populated — use the SHA1 column when available."
+                    },
+                    {
+                      "name": "Extension",
+                      "type": "string",
+                      "description": "File extension (e.g., .exe, .docx)"
+                    },
+                    {
+                      "name": "SignatureStatus",
+                      "type": "string",
+                      "description": "The \"signature status\" of a file indicates whether its digital signature is valid, invalid, or has a recoverable error, confirming the file's integrity and the sender's identity after being signed with a digital certificate"
+                    },
+                    {
+                      "name": "DomainName",
+                      "type": "string",
+                      "description": "Fully qualified domain (e.g., malicious-site.com)"
+                    },
+                    {
+                      "name": "Subdomain",
+                      "type": "string",
+                      "description": "Subdomain accessed (e.g., login.malicious-site.com)"
+                    },
+                    {
+                      "name": "TopLevelDomain",
+                      "type": "string",
+                      "description": "Extracted TLD (e.g., .com, .org)"
+                    },
+                    {
+                      "name": "IPAddress",
+                      "type": "string",
+                      "description": "IP address resolved for the domain (IPv4/IPv6)."
+                    },
+                    {
+                      "name": "URL",
+                      "type": "string",
+                      "description": "Full URL requested (path, query string included)."
+                    },
+                    {
+                      "name": "ISP",
+                      "type": "string",
+                      "description": "Internet Service Provider hosting the site."
+                    },
+                    {
+                      "name": "ASN",
+                      "type": "string",
+                      "description": "Autonomous System Number of the hosting provider."
                     }
                   ]
                 }
@@ -577,7 +852,7 @@
                   "OffsetParaName": "offset"
                 },
                 "shouldJoinNestedData": true,
-                "joinedDataStepName": "case",
+                "joinedDataStepName": "dspmCase",
                 "stepInfo": {
                   "stepType": "Nested",
                   "nextSteps": [
@@ -620,7 +895,7 @@
                   },
                   "fetchObjectsDetails": {
                     "shouldJoinNestedData": true,
-                    "joinedDataStepName": "affectedObjects",
+                    "joinedDataStepName": "expand",
                     "request": {
                       "httpMethod": "GET",
                       "apiEndpoint": "[[concat('https://',parameters('bigidFqdn'),'/api/v1/data-catalog/')]",
@@ -641,6 +916,9 @@
                       "format": "json"
                     }
                   }
+                },
+                "extra": {
+                  "nestedTransformName": "/ASI/Microsoft/MvExpandTransformer"
                 }
               }
             }
