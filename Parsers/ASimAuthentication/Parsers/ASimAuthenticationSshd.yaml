@@ -24,27 +24,37 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (disabled:bool=false) {
+    let LogonMethodLookup = datatable(Method: string, LogonMethod: string)
+    [
+        'password', 'Username & password',
+        'publickey', 'PKI',
+        'keyboard-interactive/pam',  'Keyboard Interactive/PAM'
+    ];
     let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, ProcessID, HostIP, Type, _ItemId, _ResourceId, _SubscriptionId;
     //
     // -- Successful login 
     let SSHDAccepted=(disabled:bool=false) { 
-        // -- Parse events with the format "Accepted (password|none|publickey)  for <User> from <IP address> port <port> ssh2"
+        // -- Parse events with the format "Accepted (password|none|publickey|etc.)  for <User> from <IP address> port <port> ssh2"
         SyslogProjects 
         | where not(disabled)
         | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
-        | parse SyslogMessage with "Accepted " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | parse SyslogMessage with "Accepted " Method: string " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
         | extend
             EventCount    = int(1),
             EventResult   = 'Success',
             EventSeverity = 'Informational',
             EventType     = 'Logon',
-            LogonMethod   = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
-        | project-away SyslogMessage, ProcessName
+        | lookup LogonMethodLookup on Method
+        | extend LogonMethod = case(
+            isnotempty(LogonMethod), LogonMethod,
+            SyslogMessage has "key RSA", "PKI",
+            "Other")
+        | project-away SyslogMessage, ProcessName, Method
     };
     //
     // -- Failed login - incorrect password
     let SSHDFailed=(disabled:bool=false) {
-        // -- Parse events with the format "Failed (password|none|publickey) for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
+        // -- Parse events with the format "Failed (password|none|publickey|etc.) for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
         // -- Or a number of such events message repeated <n> times: [ <message> ]
         SyslogProjects 
         | where not(disabled)
@@ -52,7 +62,7 @@ ParserQuery: |
             SyslogMessage startswith 'Failed' 
             or (SyslogMessage startswith 'message repeated' and SyslogMessage has 'Failed')
         )
-        | parse SyslogMessage with * "Failed " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | parse SyslogMessage with * "Failed " Method: string " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
         | parse SyslogMessage with "message repeated" EventCount:int " times:" * 
         | extend
             EventCount         = toint(coalesce(EventCount,1)),
@@ -60,8 +70,12 @@ ParserQuery: |
             EventResultDetails = iff (SyslogMessage has 'publickey', 'Incorrect key', 'Incorrect password'),
             EventSeverity      = 'Low' ,
             EventType          = 'Logon',
-            LogonMethod        = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
-        | project-away SyslogMessage, ProcessName
+        | lookup LogonMethodLookup on Method
+        | extend LogonMethod = case(
+            isnotempty(LogonMethod), LogonMethod,
+            SyslogMessage has "key RSA", "PKI",
+            "Other")
+        | project-away SyslogMessage, ProcessName, Method
     };
     //
     // -- Logoff - Timeout
@@ -193,7 +207,6 @@ ParserQuery: |
     // -- Aliases
     | extend
         Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr),
-        Dvc                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr),
         IpAddr                = SrcIpAddr,
         Src                   = SrcIpAddr,
         TargetDomain          = DvcDomain,
@@ -206,6 +219,7 @@ ParserQuery: |
         TargetIpAddr          = DvcIpAddr,
         User                  = TargetUsername,
         Application           = TargetAppName
+    | extend Dvc = Dst
     };
     parser (
         disabled=disabled
