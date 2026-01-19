@@ -1,0 +1,154 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "string",
+            "defaultValue": "pb-tacitred-to-sentinelone"
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
+        },
+        "TacitRed_ApiKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "TacitRed API Key for authentication"
+            }
+        },
+        "TacitRed_Domain": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional domain filter for TacitRed findings"
+            }
+        },
+        "SentinelOne_ApiToken": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "SentinelOne API Token"
+            }
+        },
+        "SentinelOne_BaseUrl": {
+            "type": "string",
+            "defaultValue": "https://usea1-001.sentinelone.net",
+            "metadata": {
+                "description": "SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "state": "Enabled",
+                "parameters": {
+                    "TacitRed_ApiKey": {
+                        "value": "[parameters('TacitRed_ApiKey')]"
+                    },
+                    "TacitRed_Domain": {
+                        "value": "[parameters('TacitRed_Domain')]"
+                    },
+                    "SentinelOne_ApiToken": {
+                        "value": "[parameters('SentinelOne_ApiToken')]"
+                    },
+                    "SentinelOne_BaseUrl": {
+                        "value": "[parameters('SentinelOne_BaseUrl')]"
+                    }
+                },
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "TacitRed_ApiUrl": {
+                            "type": "string",
+                            "defaultValue": "https://app.tacitred.com/api/v1/findings"
+                        },
+                        "TacitRed_ApiKey": {
+                            "type": "string",
+                            "defaultValue": ""
+                        },
+                        "TacitRed_Domain": {
+                            "type": "string",
+                            "defaultValue": ""
+                        },
+                        "SentinelOne_BaseUrl": {
+                            "type": "string",
+                            "defaultValue": "https://usea1-001.sentinelone.net"
+                        },
+                        "SentinelOne_ApiToken": {
+                            "type": "string",
+                            "defaultValue": ""
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "type": "Recurrence",
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 6,
+                                "timeZone": "UTC"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_TacitRed_Findings": {
+                            "type": "Http",
+                            "inputs": {
+                                "method": "GET",
+                                "uri": "@{parameters('TacitRed_ApiUrl')}?types[]=compromised_credentials&domains[]=@{encodeUriComponent(parameters('TacitRed_Domain'))}&date_from=@{formatDateTime(addDays(utcNow(), -7), 'yyyy-MM-dd')}&page=1&page_size=100",
+                                "headers": {
+                                    "accept": "application/json",
+                                    "User-Agent": "Microsoft-Sentinel-TacitRed/1.0",
+                                    "Authorization": "@{parameters('TacitRed_ApiKey')}"
+                                }
+                            },
+                            "runAfter": {}
+                        },
+                        "For_each_Finding": {
+                            "type": "Foreach",
+                            "foreach": "@body('Get_TacitRed_Findings')?['results']",
+                            "runAfter": {
+                                "Get_TacitRed_Findings": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "actions": {
+                                "Post_IOC_to_SentinelOne": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "method": "POST",
+                                        "uri": "@{parameters('SentinelOne_BaseUrl')}/web/api/v2.1/threat-intelligence/iocs",
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "Authorization": "ApiToken @{parameters('SentinelOne_ApiToken')}"
+                                        },
+                                        "body": {
+                                            "data": [
+                                                {
+                                                    "value": "@{coalesce(item()?['finding']?['supporting_data']?['site_domain'], item()?['finding']?['supporting_data']?['domain'])}",
+                                                    "type": "DNS",
+                                                    "source": "TacitRed",
+                                                    "method": "EQUALS",
+                                                    "validUntil": "@{addDays(utcNow(), 90)}",
+                                                    "externalId": "@{coalesce(item()?['finding']?['uid'], string(item()?['activity_id']))}",
+                                                    "description": "TacitRed: @{coalesce(item()?['finding']?['supporting_data']?['stealer'], 'Unknown Stealer')} | Credential: @{coalesce(item()?['finding']?['supporting_data']?['credential'], 'N/A')} | Compromised: @{coalesce(item()?['finding']?['supporting_data']?['date_compromised'], item()?['time'])} | Machine: @{coalesce(item()?['finding']?['supporting_data']?['machine_name'], 'Unknown')} (@{coalesce(item()?['finding']?['supporting_data']?['os'], 'Unknown OS')}) | URL: @{coalesce(item()?['finding']?['supporting_data']?['compromised_url'], 'N/A')}"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                }
+            }
+        }
+    ]
+}
