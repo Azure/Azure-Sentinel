@@ -36,6 +36,82 @@ These standard tables integrate natively with the Microsoft Sentinel Solution fo
 | `SAPCC_DCR.json` | Data Collection Rule template with SAP data streams |
 | `destinations-sample.csv` | Sample CSV file showing expected destination format |
 
+## Architecture
+
+### Script Execution Flow
+
+**Cloud Foundry Mode:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    connect-sentinel-to-integration-suite.ps1                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  1. Validate Azure CLI login                                                 │
+│  2. Validate CF CLI login                                                    │
+│  3. Call provision-sap-cpi-runtime.ps1 ──────────────────────────────────┐  │
+│  4. Import destinations.csv                                               │  │
+│  5. Create/Get DCE and DCR (shared)                                       │  │
+│  6. Loop: Create connection for each destination                          │  │
+└──────────────────────────────────────────────────────────────────────────┼──┘
+                                                                           │
+                                         ┌─────────────────────────────────┘
+                                         │
+                                         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     provision-sap-cpi-runtime.ps1                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  • Create service instance (if not exists)                                   │
+│  • Create service key (if not exists)                                        │
+│  • Retrieve and return credentials                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Direct Mode:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    connect-sentinel-to-integration-suite.ps1                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  1. Validate Azure CLI login                                                 │
+│  2. Use direct credentials (parameters or service key file)                  │
+│  3. Import destinations.csv                                                  │
+│  4. Create/Get DCE and DCR (shared)                                          │
+│  5. Loop: Create connection for each destination                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Microsoft Sentinel                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────────┐  │
+│  │ Data Connectors │───▶│ DCE             │───▶│ Log Analytics Tables    │  │
+│  │ (per destination)│    │ (Shared)        │    │ - ABAPAuditLog          │  │
+│  │ SAP-Dest1       │    └────────┬────────┘    │ - ABAPChangeDocsLog     │  │
+│  │ SAP-Dest2       │             │             │ - ABAPUserDetails       │  │
+│  │ SAP-DestN       │             ▼             │ - ABAPAuthorizationDet. │  │
+│  └────────┬────────┘     ┌───────────────┐     │ - SentinelHealth        │  │
+│           │              │ SAPCC-DCR     │────▶└─────────────────────────┘  │
+│           │              │ (Shared)      │                                   │
+│           │              └───────────────┘                                   │
+└───────────┼──────────────────────────────────────────────────────────────────┘
+            │
+            │ HTTPS (OAuth2) + rfcDestinationName header
+            ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SAP Integration Suite                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ /http/microsoft/sentinel/sap-log-trigger                            │    │
+│  │ (Integration Flow)                                                   │    │
+│  └────────────────────────────────┬────────────────────────────────────┘    │
+│                                   │ RFC (routed by destination header)       │
+│                    ┌──────────────┼──────────────┐                           │
+│                    ▼              ▼              ▼                           │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                             │
+│  │ SAP ERP 1  │  │ SAP ERP 2  │  │ SAP S/4    │  (Multiple backends)        │
+│  └────────────┘  └────────────┘  └────────────┘                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Prerequisites
 
 ### Azure Requirements (Required for all modes)
@@ -168,7 +244,7 @@ az login --tenant "<microsoft-entra-tenant-id>"
 az account set --subscription "<subscription-id>"
 
 # Step 2: Prepare credentials (secure input)
-$clientSecret = Read-Host "Enter Client Secret" -AsSecureString
+$secret = Read-Host "Enter Client Secret" -AsSecureString
 
 # Step 3: Run the connection script with direct credentials
 .\connect-sentinel-to-integration-suite.ps1 `
@@ -179,18 +255,8 @@ $clientSecret = Read-Host "Enter Client Secret" -AsSecureString
     -IntegrationServerUrl "https://tenant.it-cpi023-rt.hana.ondemand.com" `
     -TokenEndpoint "https://oauthasservices-xxx.ae1.hana.ondemand.com/oauth2/api/v1/token" `
     -ClientId "your-client-id" `
-    -ClientSecret $clientSecret
-```
-
-**Or using a service key file:**
-
-```powershell
-.\connect-sentinel-to-integration-suite.ps1 `
-    -SubscriptionId "<subscription-id>" `
-    -ResourceGroupName "<resource-group>" `
-    -WorkspaceName "<sentinel-workspace-name>" `
-    -DestinationsCsvPath ".\destinations.csv" `
-    -ServiceKeyPath ".\my-service-key.json"
+    -ClientSecret $secret `
+    -AuthType "OAuth2WithBasicHeader"
 ```
 
 ---
@@ -310,7 +376,7 @@ cf target -o <org> -s <space>
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `DestinationsCsvPath` | `.\destinations.csv` | Path to destinations CSV file |
-| `ConnectionPrefix` | `SAP-` | Prefix for connection names (connections named `{prefix}{DestinationName}`) |
+| `ConnectionPrefix` | `SAP` | Prefix for connection names (connections named `{prefix}{DestinationName}`) |
 
 **Integration Suite Service Instance:**
 | Parameter | Default | Description |
@@ -323,82 +389,6 @@ cf target -o <org> -s <space>
 |-----------|---------|-------------|
 | `ApiPathSuffix` | `/microsoft/sentinel/sap-log-trigger` | API path suffix after `/http` |
 | `ApiVersion` | `2025-07-01-preview` | Azure Management API version |
-
-## Architecture
-
-### Script Execution Flow
-
-**Cloud Foundry Mode:**
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    connect-sentinel-to-integration-suite.ps1                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  1. Validate Azure CLI login                                                 │
-│  2. Validate CF CLI login                                                    │
-│  3. Call provision-sap-cpi-runtime.ps1 ──────────────────────────────────┐  │
-│  4. Import destinations.csv                                               │  │
-│  5. Create/Get DCE and DCR (shared)                                       │  │
-│  6. Loop: Create connection for each destination                          │  │
-└──────────────────────────────────────────────────────────────────────────┼──┘
-                                                                           │
-                                         ┌─────────────────────────────────┘
-                                         │
-                                         ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     provision-sap-cpi-runtime.ps1                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  • Create service instance (if not exists)                                   │
-│  • Create service key (if not exists)                                        │
-│  • Retrieve and return credentials                                           │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Direct Mode:**
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    connect-sentinel-to-integration-suite.ps1                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  1. Validate Azure CLI login                                                 │
-│  2. Use direct credentials (parameters or service key file)                  │
-│  3. Import destinations.csv                                                  │
-│  4. Create/Get DCE and DCR (shared)                                          │
-│  5. Loop: Create connection for each destination                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Microsoft Sentinel                                 │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────────┐  │
-│  │ Data Connectors │───▶│ DCE             │───▶│ Log Analytics Tables    │  │
-│  │ (per destination)│    │ (Shared)        │    │ - ABAPAuditLog          │  │
-│  │ SAP-Dest1       │    └────────┬────────┘    │ - ABAPChangeDocsLog     │  │
-│  │ SAP-Dest2       │             │             │ - ABAPUserDetails       │  │
-│  │ SAP-DestN       │             ▼             │ - ABAPAuthorizationDet. │  │
-│  └────────┬────────┘     ┌───────────────┐     │ - SentinelHealth        │  │
-│           │              │ SAPCC-DCR     │────▶└─────────────────────────┘  │
-│           │              │ (Shared)      │                                   │
-│           │              └───────────────┘                                   │
-└───────────┼──────────────────────────────────────────────────────────────────┘
-            │
-            │ HTTPS (OAuth2) + rfcDestinationName header
-            ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        SAP Integration Suite                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ /http/microsoft/sentinel/sap-log-trigger                            │    │
-│  │ (Integration Flow)                                                   │    │
-│  └────────────────────────────────┬────────────────────────────────────┘    │
-│                                   │ RFC (routed by destination header)       │
-│                    ┌──────────────┼──────────────┐                           │
-│                    ▼              ▼              ▼                           │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐                             │
-│  │ SAP ERP 1  │  │ SAP ERP 2  │  │ SAP S/4    │  (Multiple backends)        │
-│  └────────────┘  └────────────┘  └────────────┘                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
 
 ## Troubleshooting
 
@@ -437,10 +427,9 @@ cf target -o <org> -s <space>
 1. **Check connector health:**
    ```kusto
    SentinelHealth
-   | where SentinelResourceType == "Data connector"
-   | where SentinelResourceName contains "SAP-"
+   | where SentinelResourceName startswith "ApiPolling-SAP"
    | order by TimeGenerated desc
-   | take 10
+   | take 10;
    ```
 
 2. **Check SAP audit logs:**
@@ -449,66 +438,6 @@ cf target -o <org> -s <space>
    | order by TimeGenerated desc
    | take 10
    ```
-
-## Security Considerations
-
-### Cloud Foundry Mode
-
-1. **No Stored Secrets**
-   - Credentials are retrieved at runtime via CF CLI
-   - Service key secrets are never stored in files or scripts
-   - Fresh credentials are obtained each execution
-
-2. **Cloud Foundry Authentication**
-   - CF CLI session provides secure credential retrieval
-   - Use SSO login when possible: `cf login --sso`
-   - Session expires after inactivity - re-login as needed
-
-3. **Service Key Rotation**
-   - Rotate Integration Suite service keys periodically
-   - Re-run the script to update connections with new credentials
-   - Old service keys can be deleted via CF CLI after rotation
-
-### Direct Mode
-
-1. **Secure Secret Handling**
-   - Use SecureString for `-ClientSecret` parameter
-   - Example: `$secret = Read-Host "Enter Client Secret" -AsSecureString`
-   - Never pass plain text secrets via command line
-
-2. **Service Key Files**
-   - If using `-ServiceKeyPath`, ensure file permissions are restrictive
-   - Do not commit service key files to version control
-   - Consider using Azure Key Vault or similar for production environments
-
-3. **Credential Rotation**
-   - Rotate OAuth credentials periodically
-   - Re-run the script with new credentials to update connections
-   - Sentinel stores credentials encrypted; updates require re-running the script
-
-### General Security
-
-1. **Network Security**
-   - Consider Azure Private Link for Integration Suite connectivity
-   - Review firewall rules for inbound connections
-   - Use SAP Cloud Connector for on-premise SAP backends
-
-2. **Azure RBAC**
-   - Use minimal required permissions for running the script
-   - Review who has access to the Sentinel workspace
-
-## Comparison with SAP BTP Tool
-
-| Aspect | SAP BTP Tool | SAP Integration Suite Tool |
-|--------|--------------|---------------------------|
-| **Topology** | Multiple subaccounts via CSV | Multiple destinations via CSV |
-| **BTP Service** | `auditlog-management` | `SAP Process Integration Runtime` |
-| **Connector Definition** | `SAPBTPAuditEvents` | `SAPCC` |
-| **Data Tables** | Custom `SAPBTPAuditLog_CL` | Standard Microsoft SAP tables |
-| **Credential Retrieval** | CF CLI per subaccount | Dual-mode: CF CLI or Direct |
-| **Secret Storage** | None (runtime retrieval) | None (CF) or SecureString (Direct) |
-| **SAP NEO Support** | No | Yes (Direct Mode) |
-| **Use Case** | BTP platform audit logs | SAP backend data via Integration Suite |
 
 ## Contributing
 

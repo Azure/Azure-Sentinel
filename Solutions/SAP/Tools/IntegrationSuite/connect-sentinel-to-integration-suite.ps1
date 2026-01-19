@@ -9,6 +9,10 @@
 # - Direct Mode: Supply credentials directly for SAP NEO or other environments
 # - Processes destinations.csv to create connections for each SAP backend
 # - Uses shared DCE/DCR across all connections
+# - Supports multiple authentication types:
+#   - OAuth2: Standard OAuth2 with credentials in request body (default for CF)
+#   - OAuth2WithBasicHeader: OAuth2 with credentials in Basic Auth header (default for NEO)
+#   - Basic: True HTTP Basic Auth without OAuth (username/password on every request)
 #
 # Prerequisites:
 # - Azure CLI installed: https://learn.microsoft.com/cli/azure/install-azure-cli
@@ -22,14 +26,14 @@
 # - Cloud Foundry CLI installed: https://docs.cloudfoundry.org/cf-cli/install-go-cli.html
 # - CF CLI logged in: cf login && cf target -o <org> -s <space>
 #
-# Usage (CF Mode - credentials retrieved at runtime):
+# Usage (CF Mode - credentials retrieved at runtime and defaulted to OAuth2):
 #   .\connect-sentinel-to-integration-suite.ps1 `
 #       -SubscriptionId "<azure-sub-id>" `
 #       -ResourceGroupName "<rg-name>" `
 #       -WorkspaceName "<sentinel-workspace-name>" `
 #       -DestinationsCsvPath ".\destinations.csv"
 #
-# Usage (Direct Mode - for SAP NEO or direct credential supply):
+# Usage (Direct Mode with OAuth2 - for SAP NEO):
 #   $secret = Read-Host "Enter Client Secret" -AsSecureString
 #   .\connect-sentinel-to-integration-suite.ps1 `
 #       -SubscriptionId "<azure-sub-id>" `
@@ -39,7 +43,20 @@
 #       -IntegrationServerUrl "https://tenant.it-cpi023-rt.cfapps.eu20.hana.ondemand.com" `
 #       -TokenEndpoint "https://oauthasservices-xxx.hana.ondemand.com/oauth2/api/v1/token" `
 #       -ClientId "sb-xxx" `
-#       -ClientSecret $secret
+#       -ClientSecret $secret `
+#       -AuthType "OAuth2WithBasicHeader"
+#
+# Usage (Direct Mode with Basic Auth - no OAuth):
+#   $secret = Read-Host "Enter Password" -AsSecureString
+#   .\connect-sentinel-to-integration-suite.ps1 `
+#       -SubscriptionId "<azure-sub-id>" `
+#       -ResourceGroupName "<rg-name>" `
+#       -WorkspaceName "<sentinel-workspace-name>" `
+#       -DestinationsCsvPath ".\destinations.csv" `
+#       -IntegrationServerUrl "https://tenant.it-cpi023-rt.cfapps.eu20.hana.ondemand.com" `
+#       -ClientId "username" `
+#       -ClientSecret $secret `
+#       -AuthType "Basic"
 
 # Parameters
 param(
@@ -83,6 +100,11 @@ param(
     
     [Parameter(Mandatory=$false, HelpMessage="Name of the service key for the CPI instance")]
     [string]$KeyName = "cpi-sentinel-integration-key",
+    
+    # Authentication Type (for direct credentials mode)
+    [Parameter(Mandatory=$false, HelpMessage="Authentication type: OAuth2, OAuth2WithBasicHeader, or Basic")]
+    [ValidateSet("OAuth2", "OAuth2WithBasicHeader", "Basic")]
+    [string]$AuthType = "OAuth2",
     
     # Optional Configuration
     [Parameter(Mandatory=$false, HelpMessage="API path suffix after /http (default: /microsoft/sentinel/sap-log-trigger)")]
@@ -136,6 +158,9 @@ $useDirectCredentials = $false
 $credentials = $null
 
 # Check if direct credentials are provided
+# For Basic auth, TokenEndpoint is not required
+$tokenEndpointRequired = $AuthType -ne "Basic"
+
 if (-not [string]::IsNullOrWhiteSpace($ServiceKeyPath)) {
     # Service key file provided
     $useDirectCredentials = $true
@@ -145,7 +170,7 @@ if (-not [string]::IsNullOrWhiteSpace($ServiceKeyPath)) {
     $credentials = Get-IntegrationSuiteCredentials -ServiceKeyPath $ServiceKeyPath
 }
 elseif (-not [string]::IsNullOrWhiteSpace($IntegrationServerUrl) -and
-        -not [string]::IsNullOrWhiteSpace($TokenEndpoint) -and
+        (-not $tokenEndpointRequired -or -not [string]::IsNullOrWhiteSpace($TokenEndpoint)) -and
         -not [string]::IsNullOrWhiteSpace($ClientId) -and
         $null -ne $ClientSecret) {
     # Direct credentials provided via parameters
@@ -153,13 +178,20 @@ elseif (-not [string]::IsNullOrWhiteSpace($IntegrationServerUrl) -and
     Write-Log "======================================================================="
     Write-Log "Using Direct Credentials Mode (Parameters)"
     Write-Log "======================================================================="
-    Write-Log "This mode supports SAP NEO and other non-CF environments"
+    Write-Log "Authentication Type: $AuthType"
+    if ($AuthType -eq "Basic") {
+        Write-Log "This mode uses HTTP Basic Auth (username/password on every request)"
+    }
+    else {
+        Write-Log "This mode supports SAP NEO and other non-CF environments"
+    }
     
     $credentials = Get-IntegrationSuiteCredentials `
         -ClientId $ClientId `
         -ClientSecret $ClientSecret `
         -IntegrationServerUrl $IntegrationServerUrl `
-        -TokenEndpoint $TokenEndpoint
+        -TokenEndpoint $TokenEndpoint `
+        -AuthType $AuthType
 }
 
 if ($useDirectCredentials) {
@@ -168,8 +200,11 @@ if ($useDirectCredentials) {
         exit 1
     }
     Write-Log "Credentials validated successfully" -Level "SUCCESS"
+    Write-Log "  Authentication Type: $($credentials.AuthType)"
     Write-Log "  Integration Server URL: $($credentials.IntegrationServerUrl)"
-    Write-Log "  Token Endpoint: $($credentials.TokenEndpoint)"
+    if ($credentials.AuthType -ne "Basic") {
+        Write-Log "  Token Endpoint: $($credentials.TokenEndpoint)"
+    }
     Write-Log "  Client ID: $($credentials.ClientId)"
 }
 else {

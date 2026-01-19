@@ -53,6 +53,10 @@ function Get-AzureAccessToken {
 }
 
 # Function to parse Integration Suite service key credentials
+# AuthType parameter controls authentication method:
+#   - "OAuth2" (default for CF): OAuth2 with credentials in request body
+#   - "OAuth2WithBasicHeader": OAuth2 with credentials in Basic Auth header (for SAP NEO)
+#   - "Basic": True HTTP Basic Auth without OAuth (username/password on every request)
 function Get-IntegrationSuiteCredentials {
     param(
         [Parameter(Mandatory=$false)]
@@ -71,17 +75,24 @@ function Get-IntegrationSuiteCredentials {
         [string]$IntegrationServerUrl,
         
         [Parameter(Mandatory=$false)]
-        [string]$TokenEndpoint
+        [string]$TokenEndpoint,
+        
+        [Parameter(Mandatory=$false)]
+        [ValidateSet("OAuth2", "OAuth2WithBasicHeader", "Basic")]
+        [string]$AuthType = "OAuth2WithBasicHeader"
     )
     
     try {
         # If direct parameters are provided, use them
-        if (-not [string]::IsNullOrWhiteSpace($ClientId) -and 
-            $null -ne $ClientSecret -and 
+        # For Basic auth, TokenEndpoint is not required
+        $tokenEndpointRequired = $AuthType -ne "Basic"
+        
+        if (-not [string]::IsNullOrWhiteSpace($ClientId) -and
+            $null -ne $ClientSecret -and
             -not [string]::IsNullOrWhiteSpace($IntegrationServerUrl) -and
-            -not [string]::IsNullOrWhiteSpace($TokenEndpoint)) {
+            (-not $tokenEndpointRequired -or -not [string]::IsNullOrWhiteSpace($TokenEndpoint))) {
             
-            Write-Log "Using directly provided credentials"
+            Write-Log "Using directly provided credentials with AuthType: $AuthType"
             
             # Convert SecureString to plain text for validation only
             $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClientSecret)
@@ -93,7 +104,7 @@ function Get-IntegrationSuiteCredentials {
                 ClientSecret = $plainSecret
                 IntegrationServerUrl = $IntegrationServerUrl.TrimEnd('/')
                 TokenEndpoint = $TokenEndpoint
-                UseBasicAuth = $true  # Direct credentials (non-CF) require Basic Auth header
+                AuthType = $AuthType  # Authentication type: OAuth2, OAuth2WithBasicHeader, or Basic
             }
         }
         
@@ -161,7 +172,7 @@ function Get-IntegrationSuiteCredentials {
             ClientSecret = $oauth.clientsecret
             IntegrationServerUrl = $oauth.url.TrimEnd('/')
             TokenEndpoint = $oauth.tokenurl
-            UseBasicAuth = $false  # CF service keys use standard OAuth2 (credentials in body)
+            AuthType = "OAuth2"  # CF service keys use standard OAuth2 (credentials in body)
         }
     }
     catch {
@@ -526,13 +537,6 @@ function New-IntegrationSuiteConnectionRequestBody {
         # Build API endpoint for SAP log trigger
         $apiEndpoint = "$($Credentials.IntegrationServerUrl)/http$ApiPathSuffix"
         
-        # Build token endpoint - always add grant_type to query string for SAP OAuth servers
-        $tokenEndpoint = $Credentials.TokenEndpoint
-        if (-not $tokenEndpoint.Contains("grant_type")) {
-            $separator = if ($tokenEndpoint.Contains("?")) { "&" } else { "?" }
-            $tokenEndpoint = "$tokenEndpoint${separator}grant_type=client_credentials"
-        }
-        
         # Build headers including optional RFC destination
         $requestHeaders = @{
             "Accept" = "application/json"
@@ -542,49 +546,73 @@ function New-IntegrationSuiteConnectionRequestBody {
             $requestHeaders["rfcDestinationName"] = $RfcDestinationName
         }
         
-        # Determine auth configuration based on UseBasicAuth flag
-        # SAP NEO/direct credentials require Basic Auth header (JwtToken with IsCredentialsInHeaders)
-        # CF service keys use standard OAuth2 (credentials in request body)
+        # Determine auth configuration based on AuthType
+        # Supported types:
+        #   - "OAuth2": Standard OAuth2 with credentials in request body (default for CF)
+        #   - "OAuth2WithBasicHeader": OAuth2 with credentials in Basic Auth header (for SAP NEO)
+        #   - "Basic": True HTTP Basic Auth without OAuth (username/password on every request)
         $authConfig = $null
-        if ($Credentials.UseBasicAuth -eq $true) {
-            Write-Log "Using JwtToken auth with Basic Auth header (for SAP NEO/direct credentials)"
-            # JwtToken auth type with IsCredentialsInHeaders sends credentials as Basic Auth header
-            # This is required for SAP NEO OAuth servers that don't accept credentials in the body
-            # Per MS docs examples, include both key and value properties
-            $authConfig = @{
-                type = "JwtToken"
-                userName = @{
-                    key = "client_id"
-                    value = $Credentials.ClientId
+        $authType = if ($Credentials.AuthType) { $Credentials.AuthType } else { "OAuth2" }
+        
+        switch ($authType) {
+            "Basic" {
+                Write-Log "Using Basic auth (HTTP Basic Authentication on every request)"
+                # True Basic Auth - sends username/password as Basic Auth header on every API request
+                # No token endpoint needed - credentials are sent directly with each request
+                $authConfig = @{
+                    type = "Basic"
+                    userName = $Credentials.ClientId
+                    password = $Credentials.ClientSecret
                 }
-                password = @{
-                    key = "client_secret"
-                    value = $Credentials.ClientSecret
-                }
-                TokenEndpoint = $tokenEndpoint
-                IsCredentialsInHeaders = $true
-                IsJsonRequest = $false
-                JwtTokenJsonPath = '$.access_token'
-                Headers = @{
-                    "Accept" = "application/json"
-                    "Content-Type" = "application/x-www-form-urlencoded"
-                }
-                RequestTimeoutInSeconds = 30
             }
-        }
-        else {
-            Write-Log "Using OAuth2 auth with credentials in body (for CF service keys)"
-            $authConfig = @{
-                type = "OAuth2"
-                ClientId = $Credentials.ClientId
-                ClientSecret = $Credentials.ClientSecret
-                GrantType = "client_credentials"
-                TokenEndpoint = $tokenEndpoint
-                TokenEndpointHeaders = @{
-                    "Accept" = "application/json"
-                    "Content-Type" = "application/x-www-form-urlencoded"
+            "OAuth2WithBasicHeader" {
+                Write-Log "Using OAuth2 auth with Basic Auth header for token endpoint (for SAP NEO)"
+                # OAuth2 with credentials in Basic Auth header
+                # This is required for SAP NEO OAuth servers that don't accept credentials in the body
+                
+                # Build token endpoint - add grant_type to query string for SAP OAuth servers
+                $tokenEndpoint = $Credentials.TokenEndpoint
+                if (-not [string]::IsNullOrWhiteSpace($tokenEndpoint) -and -not $tokenEndpoint.Contains("grant_type")) {
+                    $separator = if ($tokenEndpoint.Contains("?")) { "&" } else { "?" }
+                    $tokenEndpoint = "$tokenEndpoint${separator}grant_type=client_credentials"
                 }
-                TokenEndpointQueryParameters = @{}
+                
+                $authConfig = @{
+                    type = "OAuth2"
+                    ClientId = $Credentials.ClientId
+                    ClientSecret = $Credentials.ClientSecret
+                    GrantType = "client_credentials"
+                    TokenEndpoint = $tokenEndpoint
+                    IsClientSecretInHeader = $true
+                    TokenEndpointHeaders = @{
+                        "Accept" = "application/json"
+                    }
+                    TokenEndpointQueryParameters = @{}
+                }
+            }
+            default {
+                # "OAuth2" - Standard OAuth2 with credentials in body
+                Write-Log "Using OAuth2 auth with credentials in body (for CF service keys)"
+                
+                # Build token endpoint - add grant_type to query string for SAP OAuth servers
+                $tokenEndpoint = $Credentials.TokenEndpoint
+                if (-not [string]::IsNullOrWhiteSpace($tokenEndpoint) -and -not $tokenEndpoint.Contains("grant_type")) {
+                    $separator = if ($tokenEndpoint.Contains("?")) { "&" } else { "?" }
+                    $tokenEndpoint = "$tokenEndpoint${separator}grant_type=client_credentials"
+                }
+                
+                $authConfig = @{
+                    type = "OAuth2"
+                    ClientId = $Credentials.ClientId
+                    ClientSecret = $Credentials.ClientSecret
+                    GrantType = "client_credentials"
+                    TokenEndpoint = $tokenEndpoint
+                    TokenEndpointHeaders = @{
+                        "Accept" = "application/json"
+                        "Content-Type" = "application/x-www-form-urlencoded"
+                    }
+                    TokenEndpointQueryParameters = @{}
+                }
             }
         }
         
@@ -625,8 +653,11 @@ function New-IntegrationSuiteConnectionRequestBody {
         }
         
         Write-Log "Built connection request body with DCR configuration"
+        Write-Log "  Auth Type: $authType"
         Write-Log "  API Endpoint: $apiEndpoint"
-        Write-Log "  Token Endpoint: $tokenEndpoint"
+        if ($authType -ne "Basic") {
+            Write-Log "  Token Endpoint: $tokenEndpoint"
+        }
         
         return $body
     }
@@ -670,8 +701,12 @@ function New-SentinelIntegrationSuiteConnection {
             Write-Log "  Original name '$ConnectionName' was sanitized for URL compliance" -Level "WARNING"
         }
         
-        # Validate credentials
-        $requiredFields = @('ClientId', 'ClientSecret', 'TokenEndpoint', 'IntegrationServerUrl')
+        # Validate credentials - TokenEndpoint is only required for OAuth2 auth types
+        $authType = if ($Credentials.AuthType) { $Credentials.AuthType } else { "OAuth2" }
+        $requiredFields = @('ClientId', 'ClientSecret', 'IntegrationServerUrl')
+        if ($authType -ne "Basic") {
+            $requiredFields += 'TokenEndpoint'
+        }
         foreach ($field in $requiredFields) {
             if ([string]::IsNullOrWhiteSpace($Credentials.$field)) {
                 Write-Log "Invalid $field - cannot create connection" -Level "ERROR"
