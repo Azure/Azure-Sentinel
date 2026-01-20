@@ -10,9 +10,8 @@
 # - Processes destinations.csv to create connections for each SAP backend
 # - Uses shared DCE/DCR across all connections
 # - Supports multiple authentication types:
-#   - OAuth2: Standard OAuth2 with credentials in request body (default for CF)
-#   - OAuth2WithBasicHeader: OAuth2 with credentials in Basic Auth header (default for NEO)
-#   - Basic: True HTTP Basic Auth without OAuth (username/password on every request)
+#   - OAuth2: Standard OAuth2 with credentials in request body (default)
+#   - Basic: HTTP Basic Auth without OAuth (username/password on every request)
 #
 # Prerequisites:
 # - Azure CLI installed: https://learn.microsoft.com/cli/azure/install-azure-cli
@@ -33,7 +32,7 @@
 #       -WorkspaceName "<sentinel-workspace-name>" `
 #       -DestinationsCsvPath ".\destinations.csv"
 #
-# Usage (Direct Mode with OAuth2 - for SAP NEO):
+# Usage (Direct Mode with OAuth2):
 #   $secret = Read-Host "Enter Client Secret" -AsSecureString
 #   .\connect-sentinel-to-integration-suite.ps1 `
 #       -SubscriptionId "<azure-sub-id>" `
@@ -41,10 +40,10 @@
 #       -WorkspaceName "<sentinel-workspace-name>" `
 #       -DestinationsCsvPath ".\destinations.csv" `
 #       -IntegrationServerUrl "https://tenant.it-cpi023-rt.cfapps.eu20.hana.ondemand.com" `
-#       -TokenEndpoint "https://oauthasservices-xxx.hana.ondemand.com/oauth2/api/v1/token" `
+#       -TokenEndpoint "https://tenant.authentication.eu20.hana.ondemand.com/oauth/token" `
 #       -ClientId "sb-xxx" `
 #       -ClientSecret $secret `
-#       -AuthType "OAuth2WithBasicHeader"
+#       -AuthType "OAuth2"
 #
 # Usage (Direct Mode with Basic Auth - no OAuth):
 #   $secret = Read-Host "Enter Password" -AsSecureString
@@ -102,8 +101,8 @@ param(
     [string]$KeyName = "cpi-sentinel-integration-key",
     
     # Authentication Type (for direct credentials mode)
-    [Parameter(Mandatory=$false, HelpMessage="Authentication type: OAuth2, OAuth2WithBasicHeader, or Basic")]
-    [ValidateSet("OAuth2", "OAuth2WithBasicHeader", "Basic")]
+    [Parameter(Mandatory=$false, HelpMessage="Authentication type: OAuth2 or Basic")]
+    [ValidateSet("OAuth2", "Basic")]
     [string]$AuthType = "OAuth2",
     
     # Optional Configuration

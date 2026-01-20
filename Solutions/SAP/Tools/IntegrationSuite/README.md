@@ -246,7 +246,7 @@ az account set --subscription "<subscription-id>"
 # Step 2: Prepare credentials (secure input)
 $secret = Read-Host "Enter Client Secret" -AsSecureString
 
-# Step 3: Run the connection script with direct credentials
+# Step 3a: Run the connection script with direct credentials - OAuth2 with Basic Header
 .\connect-sentinel-to-integration-suite.ps1 `
     -SubscriptionId "<subscription-id>" `
     -ResourceGroupName "<resource-group>" `
@@ -257,6 +257,17 @@ $secret = Read-Host "Enter Client Secret" -AsSecureString
     -ClientId "your-client-id" `
     -ClientSecret $secret `
     -AuthType "OAuth2WithBasicHeader"
+
+# Step 3b: Run the connection script with direct credentials - Basic Auth
+.\connect-sentinel-to-integration-suite.ps1 `
+    -SubscriptionId "<subscription-id>" `
+    -ResourceGroupName "<resource-group>" `
+    -WorkspaceName "<sentinel-workspace-name>" `
+    -DestinationsCsvPath ".\destinations.csv" `
+    -IntegrationServerUrl "https://tenant.it-cpi023-rt.hana.ondemand.com" `
+    -ClientId "your-username" `
+    -ClientSecret $secret `
+    -AuthType "Basic"
 ```
 
 ---

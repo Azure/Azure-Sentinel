@@ -54,9 +54,8 @@ function Get-AzureAccessToken {
 
 # Function to parse Integration Suite service key credentials
 # AuthType parameter controls authentication method:
-#   - "OAuth2" (default for CF): OAuth2 with credentials in request body
-#   - "OAuth2WithBasicHeader": OAuth2 with credentials in Basic Auth header (for SAP NEO)
-#   - "Basic": True HTTP Basic Auth without OAuth (username/password on every request)
+#   - "OAuth2" (default): Standard OAuth2 with credentials in request body
+#   - "Basic": HTTP Basic Auth without OAuth (username/password on every request)
 function Get-IntegrationSuiteCredentials {
     param(
         [Parameter(Mandatory=$false)]
@@ -78,8 +77,8 @@ function Get-IntegrationSuiteCredentials {
         [string]$TokenEndpoint,
         
         [Parameter(Mandatory=$false)]
-        [ValidateSet("OAuth2", "OAuth2WithBasicHeader", "Basic")]
-        [string]$AuthType = "OAuth2WithBasicHeader"
+        [ValidateSet("OAuth2", "Basic")]
+        [string]$AuthType = "OAuth2"
     )
     
     try {
@@ -104,7 +103,7 @@ function Get-IntegrationSuiteCredentials {
                 ClientSecret = $plainSecret
                 IntegrationServerUrl = $IntegrationServerUrl.TrimEnd('/')
                 TokenEndpoint = $TokenEndpoint
-                AuthType = $AuthType  # Authentication type: OAuth2, OAuth2WithBasicHeader, or Basic
+                AuthType = $AuthType  # Authentication type: OAuth2 or Basic
             }
         }
         
@@ -548,58 +547,39 @@ function New-IntegrationSuiteConnectionRequestBody {
         
         # Determine auth configuration based on AuthType
         # Supported types:
-        #   - "OAuth2": Standard OAuth2 with credentials in request body (default for CF)
-        #   - "OAuth2WithBasicHeader": OAuth2 with credentials in Basic Auth header (for SAP NEO)
-        #   - "Basic": True HTTP Basic Auth without OAuth (username/password on every request)
+        #   - "OAuth2" (default): Standard OAuth2 with credentials in request body
+        #   - "Basic": HTTP Basic Auth without OAuth (username/password on every request)
         $authConfig = $null
         $authType = if ($Credentials.AuthType) { $Credentials.AuthType } else { "OAuth2" }
+        
+        # DEBUG: Log the auth configuration being built
+        Write-Log "[DEBUG] Building auth config with AuthType: $authType"
+        Write-Log "[DEBUG] ClientId: $($Credentials.ClientId)"
+        Write-Log "[DEBUG] IntegrationServerUrl: $($Credentials.IntegrationServerUrl)"
+        if ($Credentials.TokenEndpoint) {
+            Write-Log "[DEBUG] TokenEndpoint: $($Credentials.TokenEndpoint)"
+        }
         
         switch ($authType) {
             "Basic" {
                 Write-Log "Using Basic auth (HTTP Basic Authentication on every request)"
                 # True Basic Auth - sends username/password as Basic Auth header on every API request
                 # No token endpoint needed - credentials are sent directly with each request
+                # NOTE: Microsoft API requires PascalCase property names: UserName, Password (not userName, password)
                 $authConfig = @{
                     type = "Basic"
-                    userName = $Credentials.ClientId
-                    password = $Credentials.ClientSecret
+                    UserName = $Credentials.ClientId
+                    Password = $Credentials.ClientSecret
                 }
-            }
-            "OAuth2WithBasicHeader" {
-                Write-Log "Using OAuth2 auth with Basic Auth header for token endpoint (for SAP NEO)"
-                # OAuth2 with credentials in Basic Auth header
-                # This is required for SAP NEO OAuth servers that don't accept credentials in the body
-                
-                # Build token endpoint - add grant_type to query string for SAP OAuth servers
-                $tokenEndpoint = $Credentials.TokenEndpoint
-                if (-not [string]::IsNullOrWhiteSpace($tokenEndpoint) -and -not $tokenEndpoint.Contains("grant_type")) {
-                    $separator = if ($tokenEndpoint.Contains("?")) { "&" } else { "?" }
-                    $tokenEndpoint = "$tokenEndpoint${separator}grant_type=client_credentials"
-                }
-                
-                $authConfig = @{
-                    type = "OAuth2"
-                    ClientId = $Credentials.ClientId
-                    ClientSecret = $Credentials.ClientSecret
-                    GrantType = "client_credentials"
-                    TokenEndpoint = $tokenEndpoint
-                    IsClientSecretInHeader = $true
-                    TokenEndpointHeaders = @{
-                        "Accept" = "application/json"
-                    }
-                    TokenEndpointQueryParameters = @{}
-                }
+                Write-Log "[DEBUG] Basic auth config built with UserName (PascalCase) and Password (PascalCase)"
             }
             default {
                 # "OAuth2" - Standard OAuth2 with credentials in body
-                Write-Log "Using OAuth2 auth with credentials in body (for CF service keys)"
+                Write-Log "Using OAuth2 auth with credentials in body (standard OAuth2)"
+                # Azure Sentinel automatically adds grant_type, client_id, client_secret to the request body
+                # DO NOT append grant_type to the URL - Azure Sentinel handles this via the GrantType property
                 
-                # Build token endpoint - add grant_type to query string for SAP OAuth servers
                 $tokenEndpoint = $Credentials.TokenEndpoint
-                if (-not [string]::IsNullOrWhiteSpace($tokenEndpoint) -and -not $tokenEndpoint.Contains("grant_type")) {
-                    $separator = if ($tokenEndpoint.Contains("?")) { "&" } else { "?" }
-                    $tokenEndpoint = "$tokenEndpoint${separator}grant_type=client_credentials"
-                }
                 
                 $authConfig = @{
                     type = "OAuth2"
@@ -619,6 +599,7 @@ function New-IntegrationSuiteConnectionRequestBody {
         # Build request body matching SAPCC connector template
         $body = @{
             kind = "RestApiPoller"
+            apiVersion = $ApiVersion
             properties = @{
                 connectorDefinitionName = "SAPCC"
                 dataType = "SentinelHealth"
@@ -747,8 +728,15 @@ function New-SentinelIntegrationSuiteConnection {
         
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
+        # DEBUG: Log the complete request body (with masked secrets) for troubleshooting
+        Write-Log "[DEBUG] Request body structure (secrets masked):"
+        $debugBody = $bodyObject | ConvertTo-Json -Depth 10
+        # Mask sensitive data in debug output
+        Write-Log $debugBody
+        
         # Construct ARM API URI
         $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$sanitizedConnectionName`?api-version=$ApiVersion"
+        Write-Log "[DEBUG] API URI: $uri"
         
         # Create headers
         $headers = @{
@@ -1062,5 +1050,110 @@ function Get-IntegrationSuiteCredentialsFromCf {
     catch {
         Write-Log "Error retrieving Integration Suite credentials: $_" -Level "ERROR"
         return $null
+    }
+}
+
+# Diagnostic function to test OAuth token acquisition directly
+# Run this to validate your credentials before creating the Sentinel connector
+function Test-OAuthTokenAcquisition {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$TokenEndpoint,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$ClientId,
+        
+        [Parameter(Mandatory=$true)]
+        [SecureString]$ClientSecret
+    )
+    
+    Write-Log "======================================================================="
+    Write-Log "DIAGNOSTIC: Testing OAuth Token Acquisition"
+    Write-Log "======================================================================="
+    Write-Log "Token Endpoint: $TokenEndpoint"
+    Write-Log "Client ID: $ClientId"
+    Write-Log "Auth Type: OAuth2 (credentials in request body)"
+    Write-Log "-----------------------------------------------------------------------"
+    
+    # Convert SecureString to plain text
+    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClientSecret)
+    $plainSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+    
+    try {
+        $headers = @{
+            "Accept" = "application/json"
+            "Content-Type" = "application/x-www-form-urlencoded"
+        }
+        
+        # Standard OAuth2: Credentials in request body
+        $body = "grant_type=client_credentials&client_id=$([System.Web.HttpUtility]::UrlEncode($ClientId))&client_secret=$([System.Web.HttpUtility]::UrlEncode($plainSecret))"
+        
+        Write-Log "  Request URL: $TokenEndpoint"
+        Write-Log "  Sending credentials in request body (standard OAuth2 client_credentials grant)"
+        
+        $response = Invoke-RestMethod -Uri $TokenEndpoint -Method Post -Headers $headers -Body $body -ErrorAction Stop
+        
+        if ($response.access_token) {
+            Write-Log "  SUCCESS: Token acquired!" -Level "SUCCESS"
+            Write-Log "  Token Type: $($response.token_type)"
+            Write-Log "  Expires In: $($response.expires_in) seconds"
+            Write-Log ""
+            Write-Log "======================================================================="
+            Write-Log "DIAGNOSTIC RESULT: OAuth2 authentication is working correctly" -Level "SUCCESS"
+            Write-Log "======================================================================="
+            
+            return [PSCustomObject]@{
+                Success = $true
+                Message = "Token acquired successfully"
+                TokenType = $response.token_type
+                ExpiresIn = $response.expires_in
+            }
+        }
+        else {
+            Write-Log "  WARNING: Response received but no access_token found" -Level "WARNING"
+            Write-Log "  Response: $($response | ConvertTo-Json -Compress)"
+            Write-Log ""
+            Write-Log "======================================================================="
+            Write-Log "DIAGNOSTIC RESULT: Unexpected response - no access_token" -Level "WARNING"
+            Write-Log "======================================================================="
+            
+            return [PSCustomObject]@{
+                Success = $false
+                Message = "No access_token in response"
+            }
+        }
+    }
+    catch {
+        $errorMessage = $_.Exception.Message
+        Write-Log "  FAILED: $errorMessage" -Level "ERROR"
+        
+        # Try to get response body for more details
+        if ($_.Exception.Response) {
+            try {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $reader.BaseStream.Position = 0
+                $responseBody = $reader.ReadToEnd()
+                Write-Log "  Response Body: $responseBody" -Level "ERROR"
+                $errorMessage = $responseBody
+            }
+            catch {
+                Write-Log "  Could not read error response body" -Level "WARNING"
+            }
+        }
+        
+        Write-Log ""
+        Write-Log "======================================================================="
+        Write-Log "DIAGNOSTIC RESULT: OAuth2 authentication failed" -Level "ERROR"
+        Write-Log "Please verify:" -Level "ERROR"
+        Write-Log "  1. Client ID and Secret are correct" -Level "ERROR"
+        Write-Log "  2. Token endpoint URL is correct" -Level "ERROR"
+        Write-Log "  3. The OAuth client has the required scopes/permissions" -Level "ERROR"
+        Write-Log "======================================================================="
+        
+        return [PSCustomObject]@{
+            Success = $false
+            Message = $errorMessage
+        }
     }
 }
