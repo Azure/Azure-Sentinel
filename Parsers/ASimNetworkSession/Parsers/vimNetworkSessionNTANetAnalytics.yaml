@@ -143,7 +143,14 @@ ParserQuery: |
       SrcInterfaceName = SrcNic,
       DstInterfaceName = DestNic
   // Map other values
-  | extend SrcIpAddr = iff(isnotempty(SrcIp), SrcIp, split(SrcPublicIps, '|')[0])
+  | extend SrcPublicIpsList = split(replace_string(SrcPublicIps, " ", "|"), "|")
+  | mv-apply Ips = SrcPublicIpsList to typeof(string) on (
+      extend length = strlen(Ips)
+      | where length >= 7 // Max string length of a IPv4 address is 7 (1.2.3.4)
+      | summarize SrcPublicIpsList = make_list(Ips)
+  )
+  | extend AdditionalFields = bag_pack("SrcIpAddresses", SrcPublicIpsList)
+  | extend SrcIpAddr = iff(isnotempty(SrcIp), SrcIp, SrcPublicIpsList[0])
   | extend 
       NetworkPackets = SrcPackets + DstPackets,
       NetworkBytes = SrcBytes + DstBytes,
@@ -181,6 +188,7 @@ ParserQuery: |
       EventEndTime,
       EventSchema,
       TimeGenerated,
+      AdditionalFields,
       SrcIpAddr,
       DstIpAddr,
       SrcHostname,
