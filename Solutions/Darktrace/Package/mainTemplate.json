@@ -16,16 +16,17 @@
     },
     "workspace-location": {
       "type": "string",
-      "defaultValue": "",
+      "defaultValue": "[resourceGroup().location]",
       "metadata": {
         "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
       }
     },
     "workspace": {
-      "defaultValue": "",
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup",
+        "strongType": "Microsoft.OperationalInsights/workspaces"
       }
     },
     "workbook1-name": {
@@ -61,9 +62,9 @@
     "_analyticRulecontentId3": "[variables('analyticRulecontentId3')]",
     "analyticRuleId3": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId3'))]",
     "analyticRuleTemplateSpecName3": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId3')))]",
-    "uiConfigId1": "DarktraceRESTConnector",
+    "uiConfigId1": "DarktraceActiveAISecurityPlatform",
     "_uiConfigId1": "[variables('uiConfigId1')]",
-    "dataConnectorContentId1": "DarktraceRESTConnector",
+    "dataConnectorContentId1": "DarktraceActiveAISecurityPlatform",
     "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
     "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
     "_dataConnectorId1": "[variables('dataConnectorId1')]",
@@ -130,6 +131,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "@{workbookKey=DarktraceWorkbook; logoFileName=Darktrace.svg; description=The Darktrace Workbook visualises Model Breach and AI Analyst data received by the Darktrace Data Connector and visualises events across the network, SaaS, IaaS and Email.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.1; title=Darktrace; templateRelativePath=DarktraceWorkbook.json; subtitle=; provider=Darktrace}.description",
                 "parentId": "[variables('workbookId1')]",
@@ -316,6 +318,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Darktrace Analytics Rule 1",
                 "parentId": "[variables('analyticRuleId1')]",
@@ -469,6 +472,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId2'),'/'))))]",
+              "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Darktrace Analytics Rule 2",
                 "parentId": "[variables('analyticRuleId2')]",
@@ -618,6 +622,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId3'),'/'))))]",
+              "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Darktrace Analytics Rule 3",
                 "parentId": "[variables('analyticRuleId3')]",
@@ -686,55 +691,59 @@
               "properties": {
                 "connectorUiConfig": {
                   "id": "[variables('_uiConfigId1')]",
-                  "title": "Darktrace Connector for Microsoft Sentinel REST API",
+                  "title": "Darktrace Active AI Security Platform",
                   "publisher": "Darktrace",
-                  "descriptionMarkdown": "The Darktrace REST API connector pushes real-time events from Darktrace to Microsoft Sentinel and is designed to be used with the Darktrace Solution for Microsoft Sentinel. The connector writes logs to a custom log table titled \"darktrace_model_alerts_CL\"; Model Breaches, AI Analyst Incidents, System Alerts and Email Alerts can be ingested - additional filters can be set up on the Darktrace System Configuration page. Data is pushed to Microsoft Sentinel from Darktrace masters.",
+                  "descriptionMarkdown": "The Darktrace Active AI Security Platform data connector is used to push real-time events from Darktrace to Microsoft Sentinel. The following data can be sent from Darktrace by using this data connector: Darktrace Incidents, Darktrace Model Alerts, Darktrace / EMAIL logs, Darktrace Response Actions, Darktrace / ASM logs, and Darktrace System Status Alerts.",
                   "graphQueries": [
                     {
                       "metricName": "Total data received",
-                      "legend": "darktrace_model_alerts_CL",
-                      "baseQuery": "darktrace_model_alerts_CL"
+                      "legend": "All Darktrace Alerts",
+                      "baseQuery": "union DarktraceModelAlerts_CL, DarktraceIncidents_CL, DarktraceASM_CL, DarktraceEMAIL_CL, DarktraceResponseActions_CL, DarktraceSystemStatusAlerts_CL"
                     }
                   ],
                   "sampleQueries": [
                     {
-                      "description": "Look for Test Alerts",
-                      "query": "darktrace_model_alerts_CL\n            | where modelName_s == \"Unrestricted Test Model\""
-                    },
-                    {
-                      "description": "Return Top Scoring Darktrace Model Breaches",
-                      "query": "darktrace_model_alerts_CL\n            | where dtProduct_s ==\"Policy Breach\"\n            | project-rename SrcIpAddr=SourceIP\n            | project-rename SrcHostname=hostname_s\n            | project-rename DarktraceLink=breachUrl_s\n           | project-rename ThreatRiskLevel=score_d\n            | project-rename NetworkRuleName=modelName_s\n            | project TimeGenerated, NetworkRuleName, SrcHostname, SrcIpAddr, ThreatRiskLevel\n            | top 10 by ThreatRiskLevel desc"
-                    },
-                    {
-                      "description": "Return AI Analyst Incidents",
-                      "query": "darktrace_model_alerts_CL\n            | where dtProduct_s == \"AI Analyst\"\n            | project-rename  EventStartTime=startTime_s\n            | project-rename EventEndTime = endTime_s\n            | project-rename NetworkRuleName=title_s\n            | project-rename CurrentGroup=externalId_g //externalId is the Current Group ID from Darktrace\n            | project-rename ThreatCategory=dtProduct_s\n            | extend ThreatRiskLevel=score_d //This is the event score, which is different from the GroupScore\n            | project-rename SrcHostname=hostname_s\n            | project-rename DarktraceLink=url_s\n            | project-rename Summary=summary_s\n            | project-rename GroupScore=groupScore_d\n            | project-rename GroupCategory=groupCategory_s\n            | project-rename SrcDeviceName=bestDeviceName_s"
-                    },
-                    {
-                      "description": "Return System Health Alerts",
-                      "query": "  darktrace_model_alerts_CL\n            | where dtProduct_s == \"System Alert\""
-                    },
-                    {
-                      "description": "Return email Logs for a specific external sender (example@test.com)",
-                      "query": "darktrace_model_alerts_CL\n             | where dtProduct_s == 'Antigena Email'\n        | where from_s == 'example@test.com'"
+                      "description": "Last 10 Model Alerts",
+                      "query": "DarktraceModelAlerts_CL\n | take 10"
                     }
                   ],
                   "dataTypes": [
                     {
-                      "name": "darktrace_model_alerts_CL",
-                      "lastDataReceivedQuery": "darktrace_model_alerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "name": "DarktraceASM_CL",
+                      "lastDataReceivedQuery": "DarktraceASM_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DarktraceEMAIL_CL",
+                      "lastDataReceivedQuery": "DarktraceEMAIL_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DarktraceIncidents_CL",
+                      "lastDataReceivedQuery": "DarktraceIncidents_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DarktraceModelAlerts_CL",
+                      "lastDataReceivedQuery": "DarktraceModelAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DarktraceResponseActions_CL",
+                      "lastDataReceivedQuery": "DarktraceResponseActions_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DarktraceSystemStatusAlerts_CL",
+                      "lastDataReceivedQuery": "DarktraceSystemStatusAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriterias": [
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "darktrace_model_alerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                        "union DarktraceModelAlerts_CL, DarktraceIncidents_CL, DarktraceASM_CL, DarktraceEMAIL_CL, DarktraceResponseActions_CL, DarktraceSystemStatusAlerts_CL  | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
                       ]
                     }
                   ],
                   "availability": {
                     "status": 1,
-                    "isPreview": false
+                    "isPreview": true
                   },
                   "permissions": {
                     "resourceProvider": [
@@ -762,49 +771,41 @@
                     "customs": [
                       {
                         "name": "Darktrace Prerequisites",
-                        "description": "To use this Data Connector a Darktrace master running v5.2+ is required.\n Data is sent to the [Azure Monitor HTTP Data Collector API](https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api) over HTTPs from Darktrace masters, therefore outbound connectivity from the Darktrace master to Microsoft Sentinel REST API is required."
+                        "description": "To use this Data Connector a Darktrace master running v7.1+ is required.\n Data is sent to Azure Monitor Logs with [Logs ingestion API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal) over HTTPs from Darktrace masters, therefore outbound connectivity from the Darktrace master to Microsoft is required."
                       },
                       {
                         "name": "Filter Darktrace Data",
                         "description": "During configuration it is possible to set up additional filtering on the Darktrace System Configuration page to constrain the amount or types of data sent."
                       },
                       {
-                        "name": "Try the Darktrace Sentinel Solution",
-                        "description": "You can get the most out of this connector by installing the Darktrace Solution for Microsoft Sentinel. This will provide workbooks to visualise alert data and analytics rules to automatically create alerts and incidents from Darktrace Model Breaches and AI Analyst incidents."
+                        "name": "Entra App",
+                        "description": "An Entra app needs to be registered to authenticate against the Log Ingestion API. See [the Log ingestion tutorial to learn more about Entra App creation, registration and credential configuration.](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal)"
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "description": "1. Detailed setup instructions can be found on the Darktrace Customer Portal: https://customerportal.darktrace.com/product-guides/main/microsoft-sentinel-introduction\n 2. Take note of the Workspace ID and the Primary key. You will need to enter these details on your Darktrace System Configuration page.\n ",
+                      "title": "",
+                      "description": "This Data Connector uses the Microsoft Log Ingestion API to push Darktrace alerts into Microsoft Sentinel."
+                    },
+                    {
+                      "title": "",
+                      "description": "Detailed setup instructions can be found on the Darktrace Customer Portal.\n",
                       "instructions": [
                         {
                           "parameters": {
                             "fillWith": [
-                              "WorkspaceId"
+                              "WorkspaceName"
                             ],
-                            "label": "Workspace ID"
-                          },
-                          "type": "CopyableLabel"
-                        },
-                        {
-                          "parameters": {
-                            "fillWith": [
-                              "PrimaryKey"
-                            ],
-                            "label": "Primary Key"
+                            "label": "Workspace Name"
                           },
                           "type": "CopyableLabel"
                         }
                       ]
-                    },
-                    {
-                      "description": "1. Perform the following steps on the Darktrace System Configuration page:\n 2. Navigate to the System Configuration Page (Main Menu > Admin > System Config)\n 3. Go into Modules configuration and click on the \"Microsoft Sentinel\" configuration card\n 4. Select \"HTTPS (JSON)\" and hit \"New\"\n 5. Fill in the required details and select appropriate filters\n 6. Click \"Verify Alert Settings\" to attempt authentication and send out a test alert\n 7. Run a \"Look for Test Alerts\" sample query to validate that the test alert has been received",
-                      "title": "Darktrace Configuration"
                     }
                   ],
                   "metadata": {
-                    "id": "169a86e6-a4e2-4abc-a5c0-eece5d013204",
+                    "id": "E8134523-075A-4269-8D92-3CC0688E7C40",
                     "version": "1.0.0",
                     "kind": "dataConnector",
                     "source": {
@@ -827,6 +828,7 @@
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "location": "[parameters('workspace-location')]",
               "properties": {
                 "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
                 "contentId": "[variables('_dataConnectorContentId1')]",
@@ -852,283 +854,213 @@
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2022-01-01-preview",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
-      "dependsOn": [
-        "[variables('_dataConnectorId1')]"
-      ],
-      "location": "[parameters('workspace-location')]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/DarktraceModelAlerts_CL')]",
       "properties": {
-        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
-        "contentId": "[variables('_dataConnectorContentId1')]",
-        "kind": "DataConnector",
-        "version": "[variables('dataConnectorVersion1')]",
-        "source": {
-          "kind": "Solution",
-          "name": "Darktrace",
-          "sourceId": "[variables('_solutionId')]"
-        },
-        "author": {
-          "name": "Darktrace"
-        },
-        "support": {
-          "tier": "Partner",
-          "name": "Darktrace",
-          "link": "https://www.darktrace.com/en/contact/"
+        "schema": {
+          "name": "DarktraceModelAlerts_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "alertTime", "type": "datetime" },
+            { "name": "alertUrl", "type": "string" },
+            { "name": "modelName", "type": "string" },
+            { "name": "score", "type": "int" },
+            { "name": "deviceHostname", "type": "string" },
+            { "name": "sourceIp", "type": "string" },
+            { "name": "destIp", "type": "string" },
+            { "name": "message", "type": "string" }
+          ]
         }
       }
     },
     {
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
-      "apiVersion": "2021-03-01-preview",
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "location": "[parameters('workspace-location')]",
-      "kind": "GenericUI",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/DarktraceASM_CL')]",
       "properties": {
-        "connectorUiConfig": {
-          "title": "Darktrace Connector for Microsoft Sentinel REST API",
-          "publisher": "Darktrace",
-          "descriptionMarkdown": "The Darktrace REST API connector pushes real-time events from Darktrace to Microsoft Sentinel and is designed to be used with the Darktrace Solution for Sentinel. The connector writes logs to a custom log table titled \"darktrace_model_alerts_CL\"; Model Breaches, AI Analyst Incidents, System Alerts and Email Alerts can be ingested - additional filters can be set up on the Darktrace System Configuration page. Data is pushed to Sentinel from Darktrace masters.",
-          "graphQueries": [
-            {
-              "metricName": "Total data received",
-              "legend": "darktrace_model_alerts_CL",
-              "baseQuery": "darktrace_model_alerts_CL"
-            }
-          ],
-          "dataTypes": [
-            {
-              "name": "darktrace_model_alerts_CL",
-              "lastDataReceivedQuery": "darktrace_model_alerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-            }
-          ],
-          "connectivityCriterias": [
-            {
-              "type": "IsConnectedQuery",
-              "value": [
-                "darktrace_model_alerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-              ]
-            }
-          ],
-          "sampleQueries": [
-            {
-              "description": "Look for Test Alerts",
-              "query": "darktrace_model_alerts_CL\n            | where modelName_s == \"Unrestricted Test Model\""
-            },
-            {
-              "description": "Return Top Scoring Darktrace Model Breaches",
-              "query": "darktrace_model_alerts_CL\n            | where dtProduct_s ==\"Policy Breach\"\n            | project-rename SrcIpAddr=SourceIP\n            | project-rename SrcHostname=hostname_s\n            | project-rename DarktraceLink=breachUrl_s\n           | project-rename ThreatRiskLevel=score_d\n            | project-rename NetworkRuleName=modelName_s\n            | project TimeGenerated, NetworkRuleName, SrcHostname, SrcIpAddr, ThreatRiskLevel\n            | top 10 by ThreatRiskLevel desc"
-            },
-            {
-              "description": "Return AI Analyst Incidents",
-              "query": "darktrace_model_alerts_CL\n            | where dtProduct_s == \"AI Analyst\"\n            | project-rename  EventStartTime=startTime_s\n            | project-rename EventEndTime = endTime_s\n            | project-rename NetworkRuleName=title_s\n            | project-rename CurrentGroup=externalId_g //externalId is the Current Group ID from Darktrace\n            | project-rename ThreatCategory=dtProduct_s\n            | extend ThreatRiskLevel=score_d //This is the event score, which is different from the GroupScore\n            | project-rename SrcHostname=hostname_s\n            | project-rename DarktraceLink=url_s\n            | project-rename Summary=summary_s\n            | project-rename GroupScore=groupScore_d\n            | project-rename GroupCategory=groupCategory_s\n            | project-rename SrcDeviceName=bestDeviceName_s"
-            },
-            {
-              "description": "Return System Health Alerts",
-              "query": "  darktrace_model_alerts_CL\n            | where dtProduct_s == \"System Alert\""
-            },
-            {
-              "description": "Return email Logs for a specific external sender (example@test.com)",
-              "query": "darktrace_model_alerts_CL\n             | where dtProduct_s == 'Antigena Email'\n        | where from_s == 'example@test.com'"
-            }
-          ],
-          "availability": {
-            "status": 1,
-            "isPreview": false
-          },
-          "permissions": {
-            "resourceProvider": [
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "read and write permissions are required.",
-                "providerDisplayName": "Workspace",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "write": true,
-                  "read": true,
-                  "delete": true
-                }
-              },
-              {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                  "action": true
-                }
-              }
-            ],
-            "customs": [
-              {
-                "name": "Darktrace Prerequisites",
-                "description": "To use this Data Connector a Darktrace master running v5.2+ is required.\n Data is sent to the [Azure Monitor HTTP Data Collector API](https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api) over HTTPs from Darktrace masters, therefore outbound connectivity from the Darktrace master to Microsoft Sentinel REST API is required."
-              },
-              {
-                "name": "Filter Darktrace Data",
-                "description": "During configuration it is possible to set up additional filtering on the Darktrace System Configuration page to constrain the amount or types of data sent."
-              },
-              {
-                "name": "Try the Darktrace Sentinel Solution",
-                "description": "You can get the most out of this connector by installing the Darktrace Solution for Microsoft Sentinel. This will provide workbooks to visualise alert data and analytics rules to automatically create alerts and incidents from Darktrace Model Breaches and AI Analyst incidents."
-              }
-            ]
-          },
-          "instructionSteps": [
-            {
-              "description": "1. Detailed setup instructions can be found on the Darktrace Customer Portal: https://customerportal.darktrace.com/product-guides/main/microsoft-sentinel-introduction\n 2. Take note of the Workspace ID and the Primary key. You will need to enter these details on your Darktrace System Configuration page.\n ",
-              "instructions": [
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "WorkspaceId"
-                    ],
-                    "label": "Workspace ID"
-                  },
-                  "type": "CopyableLabel"
-                },
-                {
-                  "parameters": {
-                    "fillWith": [
-                      "PrimaryKey"
-                    ],
-                    "label": "Primary Key"
-                  },
-                  "type": "CopyableLabel"
-                }
-              ]
-            },
-            {
-              "description": "1. Perform the following steps on the Darktrace System Configuration page:\n 2. Navigate to the System Configuration Page (Main Menu > Admin > System Config)\n 3. Go into Modules configuration and click on the \"Microsoft Sentinel\" configuration card\n 4. Select \"HTTPS (JSON)\" and hit \"New\"\n 5. Fill in the required details and select appropriate filters\n 6. Click \"Verify Alert Settings\" to attempt authentication and send out a test alert\n 7. Run a \"Look for Test Alerts\" sample query to validate that the test alert has been received",
-              "title": "Darktrace Configuration"
-            }
-          ],
-          "id": "[variables('_uiConfigId1')]"
+        "schema": {
+          "name": "DarktraceASM_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "action", "type": "string" },
+            { "name": "alertTime", "type": "datetime" },
+            { "name": "alertTitle", "type": "string" },
+            { "name": "assetName", "type": "string" },
+            { "name": "rating", "type": "string" },
+            { "name": "state", "type": "string" }
+          ]
         }
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2022-01-01-preview",
-      "location": "[parameters('workspace-location')]",
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/DarktraceEMAIL_CL')]",
       "properties": {
-        "version": "2.0.1",
-        "kind": "Solution",
-        "contentSchemaVersion": "2.0.0",
-        "contentId": "[variables('_solutionId')]",
-        "parentId": "[variables('_solutionId')]",
-        "source": {
-          "kind": "Solution",
-          "name": "Darktrace",
-          "sourceId": "[variables('_solutionId')]"
-        },
-        "author": {
-          "name": "Darktrace"
-        },
-        "support": {
-          "name": "Darktrace",
-          "tier": "Partner",
-          "link": "https://www.darktrace.com/en/contact/"
-        },
-        "dependencies": {
-          "operator": "AND",
-          "criteria": [
-            {
-              "kind": "Workbook",
-              "contentId": "[variables('_workbookContentId1')]",
-              "version": "[variables('workbookVersion1')]"
-            },
-            {
-              "kind": "AnalyticsRule",
-              "contentId": "[variables('analyticRulecontentId1')]",
-              "version": "[variables('analyticRuleVersion1')]"
-            },
-            {
-              "kind": "AnalyticsRule",
-              "contentId": "[variables('analyticRulecontentId2')]",
-              "version": "[variables('analyticRuleVersion2')]"
-            },
-            {
-              "kind": "AnalyticsRule",
-              "contentId": "[variables('analyticRulecontentId3')]",
-              "version": "[variables('analyticRuleVersion3')]"
-            },
-            {
-              "kind": "DataConnector",
-              "contentId": "[variables('_dataConnectorContentId1')]",
-              "version": "[variables('dataConnectorVersion1')]"
-            }
-          ]
-        },
-        "firstPublishDate": "2022-05-02",
-        "providers": [
-          "Darktrace"
-        ],
-        "categories": {
-          "domains": [
-            "Security - Threat Protection"
+        "schema": {
+          "name": "DarktraceEMAIL_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "actions", "type": "dynamic" },
+            { "name": "alertTime", "type": "datetime" },
+            { "name": "anomalyScore", "type": "int" },
+            { "name": "from", "type": "string" },
+            { "name": "recipients", "type": "dynamic" },
+            { "name": "subject", "type": "string" },
+            { "name": "url", "type": "string" }
           ]
         }
-      },
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/DarktraceIncidents_CL')]",
+      "properties": {
+        "schema": {
+          "name": "DarktraceIncidents_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "aiaScore", "type": "int" },
+            { "name": "bestAssetName", "type": "string" },
+            { "name": "currentGroup", "type": "string" },
+            { "name": "deviceHostname", "type": "string" },
+            { "name": "deviceIp", "type": "string" },
+            { "name": "groupCategory", "type": "string" },
+            { "name": "groupScore", "type": "int" },
+            { "name": "incidentEventTime", "type": "datetime" },
+            { "name": "incidentEventTitle", "type": "string" },
+            { "name": "summary", "type": "string" },
+            { "name": "url", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/DarktraceResponseActions_CL')]",
+      "properties": {
+        "schema": {
+          "name": "DarktraceResponseActions_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "action", "type": "string" },
+            { "name": "alertTime", "type": "datetime" },
+            { "name": "deviceHostname", "type": "string" },
+            { "name": "deviceIp", "type": "string" },
+            { "name": "model", "type": "string" },
+            { "name": "score", "type": "int" },
+            { "name": "state", "type": "string" },
+            { "name": "url", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('workspace'), '/DarktraceSystemStatusAlerts_CL')]",
+      "properties": {
+        "schema": {
+          "name": "DarktraceSystemStatusAlerts_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "alertTime", "type": "datetime" },
+            { "name": "friendlyModelName", "type": "string" },
+            { "name": "message", "type": "string" },
+            { "name": "priority", "type": "string" },
+            { "name": "severity", "type": "int" },
+            { "name": "status", "type": "string" },
+            { "name": "url", "type": "string" }
+          ]
+        }
+      }
     },
     {
       "type": "Microsoft.Insights/dataCollectionEndpoints",
-      "apiVersion": "2021-09-01-preview",
-      "name": "darktrace-log-ingestion-dce",
-      "location": "[parameters('location')]",
-      "properties": {
-        "networkAccess": {
-          "publicNetworkAccess": "Enabled"
-        }
-      }
+      "apiVersion": "2022-06-01",
+      "name": "darktrace-dce",
+      "location": "[parameters('workspace-location')]",
+      "properties": {}
     },
     {
       "type": "Microsoft.Insights/dataCollectionRules",
-      "apiVersion": "2021-09-01-preview",
-      "name": "darktrace-log-ingestion-dcr",
-      "location": "[parameters('location')]",
+      "apiVersion": "2022-06-01",
+      "name": "darktrace-dcr",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'darktrace-dce')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'DarktraceModelAlerts_CL')]"
+      ],
       "properties": {
-        "dataFlows": [
-          {
-            "streams": [ "Custom-Darktrace" ],
-            "destinations": [ "la-destination" ]
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'darktrace-dce')]",
+        "streamDeclarations": {
+          "Custom-DarktraceModelAlerts": {
+            "columns": [
+              { "name": "TimeGenerated", "type": "datetime" },
+              { "name": "alertTime", "type": "datetime" },
+              { "name": "alertUrl", "type": "string" },
+              { "name": "modelName", "type": "string" },
+              { "name": "score", "type": "int" },
+              { "name": "deviceHostname", "type": "string" },
+              { "name": "sourceIp", "type": "string" },
+              { "name": "destIp", "type": "string" },
+              { "name": "message", "type": "string" }
+            ]
           }
-        ],
+        },
         "destinations": {
           "logAnalytics": [
             {
-              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
-              "name": "la-destination"
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "workspace"
             }
           ]
-        }
+        },
+        "dataFlows": [
+          {
+            "streams": [ "Custom-DarktraceModelAlerts" ],
+            "destinations": [ "workspace" ],
+            "transformKql": "source",
+            "outputStream": "Custom-DarktraceModelAlerts_CL"
+          }
+        ]
       }
-    },
-    {
-      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-      "apiVersion": "2018-11-30",
-      "name": "darktrace-log-ingestion-app",
-      "location": "[parameters('location')]"
     }
   ],
   "outputs": {
-    "dceUrl": {
+    "workspaceId": {
       "type": "string",
-      "value": "[reference('darktrace-log-ingestion-dce').properties.logsIngestion.endpoint]"
+      "value": "[reference(variables('workspaceResourceId'), '2021-06-01').customerId]"
     },
-    "dcrId": {
+    "workspaceName": {
       "type": "string",
-      "value": "[resourceId('Microsoft.Insights/dataCollectionRules', 'darktrace-log-ingestion-dcr')]"
+      "value": "[parameters('workspace')]"
     },
-    "clientId": {
+    "dceEndpoint": {
       "type": "string",
-      "value": "[reference('darktrace-log-ingestion-app').clientId]"
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'darktrace-dce'), '2022-06-01').logsIngestion.endpoint]"
     },
-    "clientSecret": {
+    "dcrImmutableId": {
       "type": "string",
-      "value": "Generated via Key Vault or manual step"
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'darktrace-dcr'), '2022-06-01').immutableId]"
+    },
+    "streamName": {
+      "type": "string",
+      "value": "Custom-DarktraceModelAlerts"
+    },
+    "customTables": {
+      "type": "array",
+      "value": [
+        "DarktraceModelAlerts_CL",
+        "DarktraceASM_CL",
+        "DarktraceEMAIL_CL",
+        "DarktraceIncidents_CL",
+        "DarktraceResponseActions_CL",
+        "DarktraceSystemStatusAlerts_CL"
+      ]
     }
   }
 }
