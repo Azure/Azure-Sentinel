@@ -1,0 +1,107 @@
+id: dfdffdc7-929f-4c7e-8f48-30e5ffddb067
+name: GCP Audit Logs - Detect Bulk VM Snapshot Deletion
+description: |
+  'Detects bulk deletion of Google Cloud VM snapshots within a short time period, which may indicate data destruction or defense evasion activities.
+  VM snapshots are critical for backup and disaster recovery. Bulk deletion of snapshots can prevent recovery from incidents and may indicate
+  malicious activity such as ransomware, data destruction, or an attempt to cover tracks after a security breach.
+  Adversaries may delete snapshots to maximize damage, prevent forensic investigation, or hinder recovery efforts.
+  This rule triggers when multiple snapshots are deleted by the same user within a 1-minute window.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1485
+  - T1490
+  - T1562.001
+tags:
+  - GCP 
+  - Compute
+  - Data Destruction
+  - Cloud Security
+query: |
+  // Update these thresholds if noisy in your environment
+  let SnapshotDeletionThreshold = 10;
+  let TimeWindow = 1m;
+  GCPAuditLogs
+  | where ServiceName == "compute.googleapis.com"
+  | where MethodName has "compute.snapshots.delete"
+  | where GCPResourceType == "gce_snapshot" and Severity == "NOTICE"
+  | extend 
+      AuthzInfoJson = parse_json(AuthorizationInfo),
+      RequestMetadataJson = parse_json(RequestMetadata),
+      ResponseJson = parse_json(Response)
+  | extend PermissionType = tostring(AuthzInfoJson[0].permissionType)
+  | where PermissionType == "ADMIN_WRITE"
+  | extend 
+      CallerIpAddress = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      SnapshotName = extract(@"snapshots/([^/]+)", 1, GCPResourceName),
+      OperationType = tostring(ResponseJson.operationType),
+      OperationId = tostring(ResponseJson.id)
+  | summarize 
+      SnapshotCount = count(),
+      SnapshotList = make_set(SnapshotName, 100),
+      FirstDeletion = min(TimeGenerated),
+      LastDeletion = max(TimeGenerated),
+      OperationIds = make_set(OperationId, 100),
+      CallerIPs = make_set(CallerIpAddress, 10)
+      by PrincipalEmail, ProjectId, UserAgent
+  | where SnapshotCount >= SnapshotDeletionThreshold
+  | extend DeletionTimeSpan = LastDeletion - FirstDeletion
+  | where DeletionTimeSpan <= TimeWindow
+  | extend 
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project 
+      TimeGenerated = FirstDeletion,
+      PrincipalEmail,
+      ProjectId,
+      SnapshotCount,
+      SnapshotList,
+      FirstDeletion,
+      LastDeletion,
+      DeletionTimeSpan,
+      CallerIPs,
+      UserAgent,
+      OperationIds,
+      AccountName,
+      AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectId
+customDetails:
+  ProjectId: ProjectId
+  SnapshotCount: SnapshotCount
+  SnapshotList: SnapshotList
+  FirstDeletion: FirstDeletion
+  LastDeletion: LastDeletion
+  DeletionTimeSpan: DeletionTimeSpan
+  CallerIPs: CallerIPs
+  UserAgent: UserAgent
+alertDetailsOverride:
+  alertDisplayNameFormat: "Bulk VM Snapshot Deletion: {{SnapshotCount}} snapshots deleted by {{PrincipalEmail}} in {{ProjectId}}"
+  alertDescriptionFormat: |-
+    User {{PrincipalEmail}} deleted {{SnapshotCount}} VM snapshots in project {{ProjectId}} within a short time period. 
+    This may indicate ransomware, data destruction, or defense evasion activity. Verify authorization, check remaining snapshots, review IP addresses, and investigate for compromise.
+version: 1.0.0
+kind: Scheduled
