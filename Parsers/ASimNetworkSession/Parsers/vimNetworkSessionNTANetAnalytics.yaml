@@ -91,12 +91,14 @@ ParserQuery: |
   // Pre-filter Event result
   | where eventresult == "*" or (eventresult == "Success" and EventResult == "Success") or (eventresult == "Failure" and EventResult == "Failure")
   // Pre-filter IPs
-  | extend temp_SrcMatch = has_any_ipv4_prefix(SrcIp, src_or_any) or has_any_ipv4_prefix(SrcPublicIps, src_or_any), temp_DstMatch = has_any_ipv4_prefix(DestIp, dst_or_any)
+  | extend temp_SrcMatch = has_any_ipv4_prefix(SrcIp, src_or_any), temp_DstMatch = has_any_ipv4_prefix(DestIp, dst_or_any)
+  | extend temp_SrcPublicMatch = has_any_ipv4_prefix(SrcPublicIps, src_or_any), temp_DstPublicMatch = has_any_ipv4_prefix(DestPublicIps, dst_or_any)
   | extend ASimMatchingIpAddr = case(
     array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
     temp_SrcMatch and temp_DstMatch, "Both",
     temp_SrcMatch, "SrcIpAddr",
     temp_DstMatch, "DstIpAddr",
+    temp_SrcPublishMatch or temp_DstPublicMatch, "AdditionalFields"
     "No match"
   )
   | where ASimMatchingIpAddr != "No match"
@@ -143,14 +145,24 @@ ParserQuery: |
       SrcInterfaceName = SrcNic,
       DstInterfaceName = DestNic
   // Map other values
+  | extend DestPublicIpsList = split(replace_string(DestPublicIps, " ", "|"), "|")
+  | mv-apply Ips = DestPublicIpsList to typeof(string) on (
+      extend length = strlen(Ips)
+      | where length >= 7 // Max string length of a IPv4 address is 7 (1.2.3.4)
+      | summarize DestPublicIpsList = make_list(Ips)
+  )
   | extend SrcPublicIpsList = split(replace_string(SrcPublicIps, " ", "|"), "|")
   | mv-apply Ips = SrcPublicIpsList to typeof(string) on (
       extend length = strlen(Ips)
       | where length >= 7 // Max string length of a IPv4 address is 7 (1.2.3.4)
       | summarize SrcPublicIpsList = make_list(Ips)
   )
-  | extend AdditionalFields = bag_pack("SrcIpAddresses", SrcPublicIpsList)
-  | extend SrcIpAddr = iff(isnotempty(SrcIp), SrcIp, SrcPublicIpsList[0])
+  | extend AdditionalFields = bag_pack(
+    "SrcIpAddresses", SrcPublicIpsList,
+    "DstIpAddresses", DestPublicIpsList)
+  | extend
+    SrcIpAddr = iff(isnotempty(SrcIp), SrcIp, SrcPublicIpsList[0]),
+    DstIpAddr = iff(isnotempty(DestIp), DestIp, DestPublicIpsList[0])
   | extend 
       NetworkPackets = SrcPackets + DstPackets,
       NetworkBytes = SrcBytes + DstBytes,
