@@ -29,6 +29,24 @@ When a new Azure Sentinel Incident is created, this playbook gets triggered and 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox-Submit-Url-Sentinel-Incident%2Fazuredeploy.json) 
 [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FJoeSandbox%2FPlaybooks%2FJoeSandbox-Submit-Url-Sentinel-Incident%2Fazuredeploy.json)
 
+- Click on Deploy to Azure
+- It will redirect to configuration page
+
+![url_playbook](Images/url_playbook.png)
+
+- Please provide the values accordingly
+
+|       Fields       | Description                                                |
+|:---------------------|:-----------------------------------------------------------
+| Subscription		| Select the appropriate Azure Subscription                  | 
+| Resource Group 	| Select the appropriate Resource Group                      |
+| Region			| Based on Resource Group this will be uto populated         |
+| Playbook Name		| Please provide a playbook name, if needed                  |
+| Workspace ID		| Please provide Log Analytics Workspace ID                  |
+| Function App Name		| Please provide the JoeSandbox enrichment function app name |
+
+- Once you provide the above values, please click on `Review + create` button.
+
 
 <a name="authentication">
 
@@ -56,4 +74,5 @@ Authentication methods this connector supports:
 #### b. Configurations in Sentinel:
 - In Azure Sentinel, analytical rules should be configured to trigger an incident with URL indicators.
 - Configure the automation rules to trigger the playbook.
+
 
