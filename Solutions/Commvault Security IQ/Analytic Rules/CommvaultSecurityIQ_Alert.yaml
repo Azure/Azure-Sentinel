@@ -4,6 +4,7 @@ description: |
   'This query identifies Alerts from Commvault Cloud.'
 severity: Medium
 status: Available
+enabled: true
 requiredDataConnectors:
   - connectorId: CommvaultSecurityIQ_CL
     datatypes:
@@ -16,8 +17,13 @@ tactics:
   - DefenseEvasion
   - Impact
 customDetails:
-  User: username_s
-  Client: originating_client_s
+  Client: ClientMachine
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Alert from Commvault Cloud for Event ID :  {{id_d}} '
+  alertDescriptionFormat: 'Alert from Commvault Cloud for Event ID :  {{id_d}} . Event Description : {{Description}}  . Check the event description on Commvault Command Center for more details.'
+  alertDynamicProperties: []
 relevantTechniques:
   - T1578
   - T1531
@@ -27,9 +33,25 @@ tags:
   - Threat Intelligence
   - Ransomware
 query: |
-    CommvaultSecurityIQ_CL
-    | where strlen( originating_client_s ) > 0
+    let CommvaultData = union isfuzzy=true
+        (CommvaultSecurityIQ_CL | where TimeGenerated > ago(5m)),
+        (datatable(TimeGenerated:datetime, eventCodeString_s:string, Event_Code_s:string, description_s:string, Description_s:string, id_d:real, Event_Id_s:string)[]);
+    CommvaultData
+    | where isnotempty(TimeGenerated)
+    | where eventCodeString_s in ("7:211", "7:212", "7:293", "7:269", "14:337", "14:338", "69:59", "7:333", "69:60", "35:5575")
+        or Event_Code_s in ("7:211", "7:212", "7:293", "7:269", "14:337", "14:338", "69:59", "7:333", "69:60", "35:5575")
+    | extend Description = coalesce(description_s, Description_s, "")
+    | extend EventId = coalesce(tostring(toint(id_d)), Event_Id_s, "")
+    | extend ClientMachine = case(
+        Description contains "on the machine", extract(@"on the machine \[([^\]]+)\]", 1, Description),
+        Description contains "on client", extract(@"on client \[([^\]]+)\]", 1, Description),
+        Description contains "for client", extract(@"for client \[([^\]]+)\]", 1, Description),
+        Description contains "client", extract(@"client \[([^\]]+)\]", 1, Description),
+        Description contains "machine", extract(@"machine \[([^\]]+)\]", 1, Description),
+        "Unknown"
+    )
+    | project TimeGenerated, eventCodeString_s, Event_Code_s, EventId, Description, ClientMachine, Event_Id_s, id_d
     | take 1000
 entityMappings: null
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled

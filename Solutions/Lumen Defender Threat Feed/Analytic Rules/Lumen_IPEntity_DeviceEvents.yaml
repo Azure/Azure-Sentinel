@@ -1,0 +1,54 @@
+id: fa566691-42a2-4136-6a8b-ffa3ea510000
+name: Lumen TI IPAddress in DeviceEvents
+displayName: Lumen TI IPAddress in DeviceEvents
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DeviceEvents.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: LumenThreatFeedConnector
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+queryFrequency: 4h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: true
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d;  // Data lookback for DeviceEvents
+  let ioc_lookBack = 14d; // TI lookback
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';
+  IP_Indicators
+  | join kind=innerunique (
+      DeviceEvents
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend DE_ipEntity = RemoteIP
+      | extend DeviceEvents_TimeGenerated = TimeGenerated
+    ) on $left.TI_ipEntity == $right.DE_ipEntity
+  | where DeviceEvents_TimeGenerated < ValidUntil
+  | summarize arg_max(DeviceEvents_TimeGenerated, *), StartTime = min(DeviceEvents_TimeGenerated), EndTime = max(DeviceEvents_TimeGenerated) by Id, DE_ipEntity
+  | project timestamp = EndTime, StartTime, EndTime, DeviceName, RemoteIP, ActionType, ReportId, Id, Tags, ValidUntil, Confidence, TI_ipEntity, DE_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DE_ipEntity
+version: 1.0.0
+kind: Scheduled

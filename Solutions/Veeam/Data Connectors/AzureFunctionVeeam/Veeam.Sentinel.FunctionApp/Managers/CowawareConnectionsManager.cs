@@ -31,7 +31,9 @@ namespace Sentinel.Managers
 
             _logger.LogInformation($"No client for \"{covewareId}\" was found, creating it..");
 
-            client = new CovewareClientImpl(covewareId, _secretsManager, _logger);
+            var baseUrl = await _secretsManager.GetCovewareAuthUrlAsync(covewareId);
+
+            client = new CovewareClientImpl(baseUrl, covewareId, _secretsManager, _logger);
 
             _idToClient[covewareId] = client;
 

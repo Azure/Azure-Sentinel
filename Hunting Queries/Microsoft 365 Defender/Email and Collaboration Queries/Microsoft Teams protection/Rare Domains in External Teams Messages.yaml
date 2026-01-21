@@ -1,0 +1,60 @@
+id: d4dd8c3f-d62b-4078-9dc7-8520c3adf1d5
+name: Rare Domains in External Teams Messages
+description: Detects rare domains (seen in fewer than 3 Teams messages) appearing in external Microsoft Teams threads within the last 24 hours.
+description-detailed: >
+  This query detects uncommon domains shared through external Microsoft Teams 
+  message threads. Domains are classified as "rare" if they appear in fewer than 3 
+  messages across your entire Teams environment, then filtered to show only those 
+  appearing in external (cross-organization) threads. Results include sender 
+  information, full URLs, and any user click actions from Teams, helping analysts 
+  identify potential phishing attempts or social engineering targeting external 
+  collaboration channels.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - MessageEvents
+  - MessageUrlInfo
+  - UrlClickEvents
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1566
+  - T1204
+query: |
+  let lookback = 1d;
+  // External Teams messages 
+  let externalMsgs =
+    MessageEvents
+    | where Timestamp > ago(lookback) and IsExternalThread == true
+    | project MsgTime = Timestamp, TeamsMessageId, SenderEmailAddress, ME_ReportId = ReportId;
+  // URLs found in Teams messages 
+  let urlsInMsgs =
+    MessageUrlInfo
+    | where Timestamp > ago(lookback)
+    | project MUI_Time = Timestamp, TeamsMessageId, Url, UrlDomain, MUI_ReportId = ReportId;
+  // Clicks coming from Teams 
+  let clicks =
+    UrlClickEvents
+    | where Timestamp > ago(lookback) and Workload == "Teams"
+    | project ClickTime = Timestamp, Url, Clicker = AccountUpn, ClickAction = ActionType, UCE_ReportId = ReportId;
+  // Define "rare" domains in the period 
+  let rareDomains =
+    urlsInMsgs
+    | summarize msgCount = dcount(TeamsMessageId) by UrlDomain
+    | where msgCount < 3;
+  rareDomains
+    | join kind=inner (urlsInMsgs) on UrlDomain
+    | join kind=leftouter (externalMsgs) on TeamsMessageId
+    | join kind=leftouter (clicks) on Url
+    | project
+        Timestamp = coalesce(ClickTime, MUI_Time, MsgTime),
+        UrlDomain,
+        Url,
+        SenderEmailAddress,
+        Clicker,
+        ClickTime,
+        ClickAction,
+        TeamsMessageId,
+        ReportId = coalesce(UCE_ReportId, MUI_ReportId, ME_ReportId)
+version: 1.0.0

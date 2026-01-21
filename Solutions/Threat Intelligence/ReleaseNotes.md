@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.3       | 19-11-2025                     | Updated **Analytical Rule** to include the missing column. |
 | 3.1.2       | 26-06-2025                     | Updated TI Map IP Entity to CommonSecurityLog **Analytical Rules** to exclude private ips |
 | 3.1.1       | 22-01-2025                     | Fixed feature flag configs for PMDTI, MDTI, and UploadAPI based on the new FeatureStates. Fix api-version and documentation link for UploadAPI. |
 | 3.1.0       | 15-01-2025                     | Updated feature flags for PMDTI and MDTI for GA, and Upload API for PP. |

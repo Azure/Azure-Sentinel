@@ -147,7 +147,7 @@ resource dceCovewareFindingsMetricsPublisher 'Microsoft.Authorization/roleAssign
 }
 
 resource dcrSession 'Microsoft.Insights/dataCollectionRules@2022-06-01' existing = {
-  name: 'VeeamSessionDCR'
+  name: 'VeeamSessionsDCR'
 }
 
 resource dcrSessionMetricsPublisher 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
@@ -160,7 +160,7 @@ resource dcrSessionMetricsPublisher 'Microsoft.Authorization/roleAssignments@202
 }
 
 resource dceSession 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' existing = {
-  name: 'VeeamSessionDCE'
+  name: 'VeeamSessionsDCE'
 }
 
 resource dceSessionMetricsPublisher 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {

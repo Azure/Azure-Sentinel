@@ -1,0 +1,63 @@
+id: bc8a262a-5db3-4ac1-8757-519ed36ed929
+name: Lumen TI IPAddress in CommonSecurityLog
+displayName: Lumen TI IPAddress in CommonSecurityLog
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in CommonSecurityLog.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: LumenThreatFeedConnector
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 4h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: true
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let IPRegex = '[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}';
+  let dt_lookBack = 1h; // Look back 1 hour for CommonSecurityLog events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+  // Fetch threat intelligence indicators related to IP addresses
+  let IP_Indicators = ThreatIntelIndicators
+   | where TimeGenerated >= ago(ioc_lookBack)
+   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+   | where IsActive == true and ValidUntil > now()
+   | where SourceSystem == 'Lumen'
+   | where ObservableKey == "ipv4-addr:value"
+   | extend TI_ipEntity = ObservableValue
+   | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+  // Perform a join between IP indicators and CommonSecurityLog events
+  IP_Indicators
+   | join kind=innerunique (
+       CommonSecurityLog
+       | where TimeGenerated >= ago(dt_lookBack)
+       | extend MessageIP = extract(IPRegex, 0, Message)
+       | extend CS_ipEntity = iff(isnotempty(SourceIP), SourceIP, DestinationIP)
+       | extend CS_ipEntity = iff(isempty(CS_ipEntity) and isnotempty(MessageIP), MessageIP, CS_ipEntity)
+       | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+   )
+   on $left.TI_ipEntity == $right.CS_ipEntity
+   | where CommonSecurityLog_TimeGenerated < ValidUntil
+   | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, CS_ipEntity
+   | project timestamp = CommonSecurityLog_TimeGenerated, SourceIP, DestinationIP, MessageIP, Message, DeviceVendor, DeviceProduct, Id, Tags, ValidUntil, Confidence, TI_ipEntity, CS_ipEntity, LogSeverity, DeviceAction, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CS_ipEntity
+version: 1.0.0
+kind: Scheduled

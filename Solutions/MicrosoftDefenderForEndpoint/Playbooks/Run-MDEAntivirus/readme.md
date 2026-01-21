@@ -32,26 +32,37 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 2. You will need to grant Machine.Scan, Machine.Read.All, and Machine.ReadWrite.All permissions to the managed identity.  Run the following code replacing the managed identity object id.  You find the managed identity object id on the Identity blade under Settings for the Logic App.
 ```powershell
+Install-Module Microsoft.Graph -Scope CurrentUser -Force -AllowClobber
+Import-Module Microsoft.Graph
+
+# Connect to Microsoft Graph using Managed Identity
+Connect-MgGraph -Identity
+ 
+# Get the Managed Identity Service Principal
 $MIGuid = "<Enter your managed identity guid here>"
-$MI = Get-AzureADServicePrincipal -ObjectId $MIGuid
-
+$MI = Get-MgServicePrincipal -ServicePrincipalId $MIGuid
+ 
+# Get the MDE Service Principal
 $MDEAppId = "fc780465-2017-40d4-a0c5-307022471b92"
-$PermissionName = "Machine.Scan" 
-
-$MDEServicePrincipal = Get-AzureADServicePrincipal -Filter "appId eq '$MDEAppId'"
+$MDEServicePrincipal = Get-MgServicePrincipal -Filter "appId eq '$MDEAppId'"
+ 
+# Assign "Machine.Scan" permission
+$PermissionName = "Machine.Scan"
 $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
-New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
--ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
-
+New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $MI.Id `
+    -PrincipalId $MI.Id -ResourceId $MDEServicePrincipal.Id -AppRoleId $AppRole.Id
+ 
+# Assign "Machine.Read.All" permission
 $PermissionName = "Machine.Read.All"
 $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
-New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
--ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
-
+New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $MI.Id `
+    -PrincipalId $MI.Id -ResourceId $MDEServicePrincipal.Id -AppRoleId $AppRole.Id
+ 
+# Assign "Machine.ReadWrite.All" permission
 $PermissionName = "Machine.ReadWrite.All"
 $AppRole = $MDEServicePrincipal.AppRoles | Where-Object {$_.Value -eq $PermissionName -and $_.AllowedMemberTypes -contains "Application"}
-New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.ObjectId `
--ResourceId $MDEServicePrincipal.ObjectId -Id $AppRole.Id
+New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $MI.Id `
+    -PrincipalId $MI.Id -ResourceId $MDEServicePrincipal.Id -AppRoleId $AppRole.Id
 
 ```
 
