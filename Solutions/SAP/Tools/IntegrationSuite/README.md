@@ -4,6 +4,8 @@ This directory contains PowerShell scripts to connect Microsoft Sentinel to SAP 
 
 ## Overview
 
+This onboarding script is primarily intended for the **agentless data connector for SAP ERP** but works equally well for community extensions that follow the same integration pattern.
+
 The SAP Integration Suite connector uses the `SAPCC` connector definition to ingest SAP data into standard Microsoft SAP tables:
 
 | Table | Description |
@@ -244,21 +246,9 @@ az login --tenant "<microsoft-entra-tenant-id>"
 az account set --subscription "<subscription-id>"
 
 # Step 2: Prepare credentials (secure input)
-$secret = Read-Host "Enter Client Secret" -AsSecureString
+$secret = Read-Host "Enter Secret" -AsSecureString
 
-# Step 3a: Run the connection script with direct credentials - OAuth2 with Basic Header
-.\connect-sentinel-to-integration-suite.ps1 `
-    -SubscriptionId "<subscription-id>" `
-    -ResourceGroupName "<resource-group>" `
-    -WorkspaceName "<sentinel-workspace-name>" `
-    -DestinationsCsvPath ".\destinations.csv" `
-    -IntegrationServerUrl "https://tenant.it-cpi023-rt.hana.ondemand.com" `
-    -TokenEndpoint "https://oauthasservices-xxx.ae1.hana.ondemand.com/oauth2/api/v1/token" `
-    -ClientId "your-client-id" `
-    -ClientSecret $secret `
-    -AuthType "OAuth2WithBasicHeader"
-
-# Step 3b: Run the connection script with direct credentials - Basic Auth
+# Step 3: Run the connection script with direct credentials - Basic Auth
 .\connect-sentinel-to-integration-suite.ps1 `
     -SubscriptionId "<subscription-id>" `
     -ResourceGroupName "<resource-group>" `
