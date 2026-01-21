@@ -22,7 +22,7 @@ These standard tables integrate natively with the Microsoft Sentinel Solution fo
 
 - **Dual-mode credential support**:
   - **Cloud Foundry Mode**: Credentials retrieved at runtime via CF CLI (no stored secrets)
-  - **Direct Mode**: Supply credentials directly for SAP NEO or other environments
+  - **Direct Mode**: Supply credentials directly via params
 - **CSV-based destination management**: Process multiple SAP destinations from a CSV file
 - **Automatic connection naming**: Connections are named `{ConnectionPrefix}-{DestinationName}`
 - **Shared infrastructure**: Single DCE/DCR shared across all connections
@@ -143,7 +143,7 @@ Required only when using **Cloud Foundry Mode** (runtime credential retrieval):
    - Service instance creation/read permissions
    - Service key creation/read permissions
 
-### Direct Mode Prerequisites (SAP NEO and other environments)
+### Direct Mode Prerequisites
 
 For **Direct Mode** (credentials supplied via parameters), you need:
 - OAuth Client ID and Secret from your SAP Integration Suite service
@@ -190,19 +190,6 @@ The service key from SAP BTP "SAP Process Integration Runtime" service looks lik
 }
 ```
 
-### SAP NEO Environment
-
-For SAP NEO environments, the OAuth endpoints have a different structure:
-
-| Parameter | Example Value |
-|-----------|--------------|
-| `IntegrationServerUrl` | `https://tenant.it-cpi023-rt.hana.ondemand.com` |
-| `TokenEndpoint` | `https://oauthasservices-xxx.ae1.hana.ondemand.com/oauth2/api/v1/token` |
-| `ClientId` | Your OAuth client ID |
-| `ClientSecret` | Your OAuth client secret |
-
-> **Note**: SAP NEO uses a different OAuth2 API path (`/oauth2/api/v1/token`) compared to CF environments (`/oauth/token`).
-
 ## Usage
 
 ### Cloud Foundry Mode (Recommended for BTP Multi-Cloud)
@@ -236,9 +223,9 @@ This will:
 
 ---
 
-### Direct Mode (For SAP NEO or Manual Credentials)
+### Direct Mode (Manual Credentials)
 
-Use this mode for SAP NEO environments or when you want to supply credentials directly:
+Use this mode when you want to supply credentials directly:
 
 ```powershell
 # Step 1: Login to Azure
