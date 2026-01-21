@@ -2561,13 +2561,41 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         
         # Statistics section (combined with Overview data)
         f.write("## Statistics\n\n")
-        f.write("| Metric | Total | Published | Unpublished |\n")
-        f.write("|:-------|------:|----------:|------------:|\n")
-        f.write(f"| Solutions | {len(solutions)} | {published_solutions_count} | {len(unpublished_solutions)} |\n")
-        f.write(f"| With Connectors | {solutions_with_connectors} | {solutions_with_connectors_published} | {solutions_with_connectors_unpublished} |\n")
-        f.write(f"| With Content | {solutions_with_content} | {solutions_with_content_published} | {solutions_with_content_unpublished} |\n")
-        f.write(f"| Unique Connectors | {len(all_connector_ids)} | | |\n")
-        f.write(f"| Tables Used | {tables_in_solutions} | | |\n")
+        
+        # Count by support tier
+        support_tier_counts: Dict[str, int] = defaultdict(int)
+        with_connectors_by_tier: Dict[str, int] = defaultdict(int)
+        with_content_by_tier: Dict[str, int] = defaultdict(int)
+        
+        for sol_name, connectors in solutions.items():
+            tier = connectors[0].get('solution_support_tier', '') if connectors else ''
+            tier = tier if tier else 'Unknown'
+            support_tier_counts[tier] += 1
+            
+            # Check if has real connector
+            has_real_connector = any(
+                c.get('connector_id', '') and 
+                str(c.get('connector_id', '')).strip() and 
+                str(c.get('connector_id', '')).strip().lower() != 'nan' and
+                c.get('not_in_solution_json', 'false') != 'true'
+                for c in connectors
+            )
+            if has_real_connector:
+                with_connectors_by_tier[tier] += 1
+            
+            if sol_name in content_items_by_solution:
+                with_content_by_tier[tier] += 1
+        
+        # Order tiers: Microsoft, Partner, Community, Unknown
+        tier_order = ['Microsoft', 'Partner', 'Community', 'Unknown']
+        
+        f.write("| Metric | Total | Published | Unpublished | Microsoft | Partner | Community |\n")
+        f.write("|:-------|------:|----------:|------------:|----------:|--------:|----------:|\n")
+        f.write(f"| Solutions | **{len(solutions)}** | {published_solutions_count} | {len(unpublished_solutions)} | {support_tier_counts.get('Microsoft', 0)} | {support_tier_counts.get('Partner', 0)} | {support_tier_counts.get('Community', 0)} |\n")
+        f.write(f"| With Connectors | **{solutions_with_connectors}** | {solutions_with_connectors_published} | {solutions_with_connectors_unpublished} | {with_connectors_by_tier.get('Microsoft', 0)} | {with_connectors_by_tier.get('Partner', 0)} | {with_connectors_by_tier.get('Community', 0)} |\n")
+        f.write(f"| With Content | **{solutions_with_content}** | {solutions_with_content_published} | {solutions_with_content_unpublished} | {with_content_by_tier.get('Microsoft', 0)} | {with_content_by_tier.get('Partner', 0)} | {with_content_by_tier.get('Community', 0)} |\n")
+        f.write(f"| Unique Connectors | **{len(all_connector_ids)}** | | | | | |\n")
+        f.write(f"| Tables Used | **{tables_in_solutions}** | | | | | |\n")
         f.write("\n")
         
         f.write("---\n\n")
@@ -2677,6 +2705,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 'is_deprecated': conn.get('is_deprecated', 'false'),  # Track deprecation status
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),  # Track discovered connectors
                 'logo_url': conn.get('solution_logo_url', ''),  # Solution logo for connector display
+                'support_tier': conn.get('solution_support_tier', ''),  # Support tier for statistics
             }
         
         # Collect all tables for each connector
@@ -2756,13 +2785,25 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         discovered_deprecated = len([cid for cid in discovered_connectors if cid in deprecated_connectors])
         discovered_unpub = len([cid for cid in discovered_connectors if cid in unpub_active])
         
+        # Count by support tier
+        tier_counts: Dict[str, int] = defaultdict(int)
+        tier_in_solution: Dict[str, int] = defaultdict(int)
+        tier_discovered: Dict[str, int] = defaultdict(int)
+        for cid, info in connectors_map.items():
+            tier = info.get('support_tier', '') or 'Unknown'
+            tier_counts[tier] += 1
+            if cid in discovered_connectors:
+                tier_discovered[tier] += 1
+            else:
+                tier_in_solution[tier] += 1
+        
         f.write("### Connectors Overview\n\n")
-        f.write("| Metric | Total | Active | Deprecated | Unpublished |\n")
-        f.write("|:-------|------:|-------:|-----------:|------------:|\n")
-        f.write(f"| In Solutions | {in_solution_count} | {active_in_solution - unpub_in_solution} | {deprecated_in_solution} | {unpub_in_solution} |\n")
+        f.write("| Metric | Total | Active | Deprecated | Unpublished | Microsoft | Partner | Community |\n")
+        f.write("|:-------|------:|-------:|-----------:|------------:|----------:|--------:|----------:|\n")
+        f.write(f"| In Solutions | **{in_solution_count}** | {active_in_solution - unpub_in_solution} | {deprecated_in_solution} | {unpub_in_solution} | {tier_in_solution.get('Microsoft', 0)} | {tier_in_solution.get('Partner', 0)} | {tier_in_solution.get('Community', 0)} |\n")
         if discovered_connectors:
-            f.write(f"| Discovered* | {len(discovered_connectors)} | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} |\n")
-            f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** |\n")
+            f.write(f"| Discovered* | **{len(discovered_connectors)}** | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} | {tier_discovered.get('Microsoft', 0)} | {tier_discovered.get('Partner', 0)} | {tier_discovered.get('Community', 0)} |\n")
+            f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** | **{tier_counts.get('Microsoft', 0)}** | **{tier_counts.get('Partner', 0)}** | **{tier_counts.get('Community', 0)}** |\n")
         f.write("\n")
         if discovered_connectors:
             f.write("*\\* Discovered connectors are found in solution folders but not listed in Solution JSON definitions.*\n\n")
@@ -2783,23 +2824,32 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             else:
                 # Active: not deprecated and not unpublished
                 collection_method_stats[method]['active'] += 1
+            # Track support tier per method
+            tier = info.get('support_tier', '') or 'Unknown'
+            collection_method_stats[method][f'tier_{tier}'] = collection_method_stats[method].get(f'tier_{tier}', 0) + 1
         
         if collection_method_stats:
             f.write("### Collection Methods\n\n")
-            f.write("| Collection Method | Total | Active | Deprecated | Unpublished |\n")
-            f.write("|:-----------------|------:|-------:|-----------:|------------:|\n")
+            f.write("| Collection Method | Total | Active | Deprecated | Unpublished | Microsoft | Partner | Community |\n")
+            f.write("|:-----------------|------:|-------:|-----------:|------------:|----------:|--------:|----------:|\n")
             
             sorted_methods = sorted(collection_method_stats.items(), key=lambda x: x[1]['total'], reverse=True)
             
             for method, stats in sorted_methods:
-                f.write(f"| {method} | {stats['total']} | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
+                ms_count = stats.get('tier_Microsoft', 0)
+                partner_count = stats.get('tier_Partner', 0)
+                community_count = stats.get('tier_Community', 0)
+                f.write(f"| {method} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} | {ms_count} | {partner_count} | {community_count} |\n")
             
             # Totals row
             total_all = sum(s['total'] for s in collection_method_stats.values())
             total_active_cm = sum(s['active'] for s in collection_method_stats.values())
             total_deprecated_cm = sum(s['deprecated'] for s in collection_method_stats.values())
             total_unpub_cm = sum(s['unpublished'] for s in collection_method_stats.values())
-            f.write(f"| **Total** | **{total_all}** | **{total_active_cm}** | **{total_deprecated_cm}** | **{total_unpub_cm}** |\n")
+            total_ms = sum(s.get('tier_Microsoft', 0) for s in collection_method_stats.values())
+            total_partner = sum(s.get('tier_Partner', 0) for s in collection_method_stats.values())
+            total_community = sum(s.get('tier_Community', 0) for s in collection_method_stats.values())
+            f.write(f"| **Total** | **{total_all}** | **{total_active_cm}** | **{total_deprecated_cm}** | **{total_unpub_cm}** | **{total_ms}** | **{total_partner}** | **{total_community}** |\n")
             f.write("\n")
             f.write("*Active = Published and not deprecated.*\n\n")
         
