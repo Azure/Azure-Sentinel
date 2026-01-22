@@ -2,10 +2,12 @@
 
 This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
 
-1. **[`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md)** - Extracts and maps data connector definitions to their ingestion tables, producing CSV reports with solution metadata
-2. **[`collect_table_info.py`](script-docs/collect_table_info.md)** - Collects comprehensive table metadata from Microsoft Azure Monitor documentation
-3. **[`generate_connector_docs.py`](script-docs/generate_connector_docs.md)** - Generates browsable markdown documentation from the CSV data with AI-rendered setup instructions and enriched table information
-4. **[`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md)** - Generates summary reports of solutions with connectors in markdown and CSV formats
+| Script | Purpose | Key Output |
+|--------|---------|------------|
+| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv` |
+| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory (including `asim/` and `parsers/` subdirectories) |
+| [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
 
 ## Prerequisites
 
@@ -36,22 +38,23 @@ pip install requests json5 pyyaml
 
 ## Quick Start
 
-**Pre-generated files are already available in this directory:**
+**Pre-generated CSV files are already available in this directory:**
 - [`solutions_connectors_tables_mapping.csv`](solutions_connectors_tables_mapping.csv) - Main mapping of connectors to tables with full metadata
 - [`connectors.csv`](connectors.csv) - All connectors with collection method analysis
 - [`solutions.csv`](solutions.csv) - All solutions with metadata
 - [`tables.csv`](tables.csv) - All tables with solution/connector references
 - [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
-- [`asim_parsers.csv`](asim_parsers.csv) - **NEW:** All ASIM parsers with metadata, source tables, and sub-parser references
+- [`parsers.csv`](parsers.csv) - All parsers (ASIM and non-ASIM) with source tables, solution references, and discovered status
+- [`asim_parsers.csv`](asim_parsers.csv) - ASIM parsers with metadata, source tables, and sub-parser references
 - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
 - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
 - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor documentation
 
-**📍 Connector Reference Documentation (External Repository):**
+**Pre-generated Reference Documentation (External Repository):**
 
 > **Note:** The generated documentation has been moved to a separate repository to reduce the size of the Azure-Sentinel repo.
 > 
-> 🔗 **Full documentation:** [https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs](https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs)
+> 🔗 **Full documentation:** [https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs/readme.md](https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs/readme.md)
 
 | Documentation | Direct Link |
 |:--------------|:------------|
@@ -59,11 +62,9 @@ pip install requests json5 pyyaml
 | **Connectors Index** | [View Connectors](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
 | **Tables Index** | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
 | **Content Index** | [View Content Items](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content/content-index.md) |
-| **ASIM Index** | [View ASIM Parsers](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-index.md) |
-
-You can also generate documentation locally using the `--output-dir` parameter (see below).
-
-The documentation includes AI-rendered setup instructions extracted from connector UI definitions.
+| **Parsers Index** | [View Parsers](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/parsers/parsers-index.md) |
+| **ASIM Parsers Index** | [View ASIM Parsers](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-index.md) |
+| **ASIM Products Index** | [View ASIM supported products](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-products-index.md) |
 
 ## Running the Scripts
 
@@ -93,64 +94,77 @@ python generate_connector_docs.py --output-dir "path/to/output"
 
 | Option | Description |
 |:-------|:------------|
+| `--input <path>` | Path to input CSV file (default: solutions_connectors_tables_mapping.csv) |
+| `--connectors-csv <path>` | Path to connectors CSV file with collection methods (default: connectors.csv) |
+| `--tables-csv <path>` | Path to tables reference CSV file from Azure Monitor docs (default: tables_reference.csv) |
+| `--tables-overrides-csv <path>` | Path to tables CSV with solution-specific overrides (default: tables.csv) |
 | `--output-dir <path>` | Output directory for generated documentation (default: connector-docs/) |
-| `--skip-input-generation` | Skip running input CSV generation scripts |
-| `--solutions <name1> <name2>` | Generate docs only for specific solutions |
-| `--solutions-dir <path>` | Path to Solutions directory for reading additional markdown |
+| `--solutions <name1> <name2>` | Generate docs only for specific solutions (default: all) |
+| `--solutions-dir <path>` | Path to Solutions directory for reading ReleaseNotes.md and connector README files |
+| `--content-items-csv <path>` | Path to content items CSV file (default: content_items.csv) |
+| `--content-tables-csv <path>` | Path to content-to-tables mapping CSV file (default: content_tables_mapping.csv) |
+| `--solutions-csv <path>` | Path to solutions CSV file with logo/description (default: solutions.csv) |
+| `--overrides-csv <path>` | Path to overrides CSV file for additional_information (default: solution_analyzer_overrides.csv) |
 | `--asim-parsers-csv <path>` | Path to ASIM parsers CSV file (default: asim_parsers.csv) |
-
-### Quick Reference
-
-| Script | Purpose | Key Output |
-|--------|---------|------------|
-| [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `asim_parsers.csv` |
-| [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory (including `asim/` subdirectory) |
-| [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
+| `--parsers-csv <path>` | Path to parsers CSV file (default: parsers.csv) |
+| `--skip-input-generation` | Skip running input CSV generation scripts |
 
 ## Data Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Azure Monitor Documentation                      │
-│   (tables-category, tables-feature-support, Defender XDR schema)    │
-└─────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-                    ┌──────────────────────────┐
-                    │   collect_table_info.py  │
-                    └──────────────────────────┘
-                                   │
-                                   ▼
-                      ┌────────────────────────┐
-                      │  tables_reference.csv  │
-                      └────────────────────────┘
-                                   │
-┌─────────────────────────────┐    │
-│   Azure-Sentinel Solutions  │    │
-│   (Solutions/ directory)    │    │
-└─────────────────────────────┘    │
-              │                    │
-              ▼                    ▼
-   ┌───────────────────────────────────────┐
-   │   map_solutions_connectors_tables.py  │
-   └───────────────────────────────────────┘
-              │
-              ▼
-   ┌─────────────────────────────────────┐
-   │  connectors.csv, tables.csv,        │
-   │  solutions.csv, mapping CSVs        │
-   └─────────────────────────────────────┘
-              │
-              ▼
-   ┌───────────────────────────────────────┐
-   │      generate_connector_docs.py       │
-   └───────────────────────────────────────┘
-              │
-              ▼
-   ┌───────────────────────────────────────┐
-   │   connector-docs/ (Markdown docs)     │
-   └───────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                        Azure Monitor Documentation                              │
+│      (tables-category, tables-feature-support, Defender XDR schema)            │
+└────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+                         ┌──────────────────────────┐
+                         │   collect_table_info.py  │
+                         └──────────────────────────┘
+                                        │
+                                        ▼
+                           ┌────────────────────────┐
+                           │  tables_reference.csv  │
+                           └────────────────────────┘
+                                        │
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                         Azure-Sentinel Repository                               │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────────────────┐   │
+│  │    Solutions/    │  │     Parsers/     │  │   Parsers/ASim*/Parsers/    │   │
+│  │  (connectors,    │  │ (legacy parsers) │  │      (ASIM parsers)         │   │
+│  │   content items, │  └──────────────────┘  └─────────────────────────────┘   │
+│  │   parsers)       │                                                          │
+│  └──────────────────┘                                                          │
+└────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+              ┌───────────────────────────────────────┐
+              │   map_solutions_connectors_tables.py  │
+              └───────────────────────────────────────┘
+                                        │
+                                        ▼
+              ┌───────────────────────────────────────┐
+              │  connectors.csv, tables.csv,          │
+              │  solutions.csv, content_items.csv,    │
+              │  parsers.csv, asim_parsers.csv,       │
+              │  content_tables_mapping.csv           │
+              └───────────────────────────────────────┘
+                                        │
+                                        ▼
+              ┌───────────────────────────────────────┐
+              │      generate_connector_docs.py       │
+              └───────────────────────────────────────┘
+                                        │
+                                        ▼
+              ┌───────────────────────────────────────┐
+              │   connector-docs/ (Markdown docs)     │
+              │   ├── solutions/                      │
+              │   ├── connectors/                     │
+              │   ├── tables/                         │
+              │   ├── content/                        │
+              │   ├── parsers/                        │
+              │   └── asim/                           │
+              └───────────────────────────────────────┘
 ```
 
 ## Override System
@@ -167,6 +181,87 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 ---
 
 ## Version History
+
+### v7.3 - Standalone Content Items
+
+**Standalone Content Collection:**
+- Collects content items from top-level repository directories (not part of Solutions):
+  - `Detections/` - Analytic rules (YAML)
+  - `Hunting Queries/` - Hunting queries (YAML)
+  - `Workbooks/` - Workbooks (JSON)
+  - `Playbooks/` - Playbooks (folders with azuredeploy.json)
+  - `Summary rules/` - Summary rules (YAML)
+  - `Watchlists/` - Watchlists (folders with watchlist.json)
+- Added 1,709 standalone content items to documentation
+
+**Content Source Classification:**
+- New `content_source` column classifies content items by origin:
+  - **Solution**: Content from Solutions/ folder (74% of items)
+  - **Standalone**: Top-level content with YAML metadata section (6.6% of items)
+  - **GitHub Only**: Top-level content without metadata (19.3% of items)
+- Statistics output now includes Content Source Distribution breakdown
+
+**YAML Metadata Extraction:**
+- Extracts `metadata` section from YAML files to determine Standalone vs GitHub Only classification
+- New columns: `metadata_source_kind`, `metadata_author`, `metadata_support_tier`, `metadata_categories`
+- `content_github_url`: Direct GitHub URL for standalone content items
+
+**Stub File Detection:**
+- Automatically skips stub files (content that has been moved to Solutions)
+- Detects patterns like "moved to new location", "content migration", "file has been moved"
+
+### v7.2 - Parser Documentation and Table Integration
+
+**New Parser Documentation:**
+- **Parser Index Page** (`parsers/parsers-index.md`): Browse all 570 parsers organized by solution with quick statistics
+- **Individual Parser Pages**: Dedicated documentation pages for each parser with:
+  - Source tables extracted from parser queries
+  - GitHub source file links
+  - Solution references and product information
+  - Parser type (ASIM vs non-ASIM)
+- **ASIM Products Index** (`asim/asim-products-index.md`): View ASIM parsers organized by product/vendor
+- **Parsers CSV** (`parsers.csv`): Complete parser catalog with 570 entries including solution parsers and 35 legacy parsers
+- Parsers marked as "discovered" when found in solution folders but not listed in Solution JSON
+
+**Parser-Table Integration:**
+- Table pages now include **Parsers** section showing all parsers using that table
+- Both ASIM and non-ASIM parsers are listed on table pages
+- Fixed GitHub URL encoding for paths containing spaces
+
+**Improved Parser-to-Table Resolution:**
+- Fixed table extraction from solution-specific parsers (not just ASIM parsers)
+- Added support for legacy parsers in the top-level `/Parsers/*` directories (pre-Solutions parsers)
+- Parser expansion now works for union parsers that reference sub-parsers
+- Fixed parser name normalization to handle file extensions (.kql, .yaml, etc.)
+- Added support for both "Parsers" and "Parser" folder naming conventions in solutions
+
+**Coverage Improvements:**
+- Analytic rules with detected tables: 99.7% (up from ~65%)
+- Hunting queries with detected tables: 98.5%
+- Content-table mappings nearly doubled through proper parser expansion
+
+### v7.1 - Azure Marketplace Availability
+
+**Marketplace Publication Status:**
+- Added Azure Marketplace availability checking for all solutions
+- Solutions not yet published on Azure Marketplace are marked with ⚠️ (unpublished) icon
+- Deprecated connectors are marked with 🚫 icon
+- Statistics now show published/unpublished breakdown
+- Marketplace results are cached locally in `.cache/marketplace_availability.csv` for fast subsequent runs
+
+**New CSV Fields:**
+- `is_published`: Boolean indicating if solution is available on Azure Marketplace (in all CSVs)
+- `marketplace_url`: Direct URL to Azure Marketplace listing (in solutions.csv)
+
+**New/Changed Command Line Arguments for map_solutions_connectors_tables.py:**
+- Marketplace checking is now **enabled by default** (uses cached results for speed)
+- `--skip-marketplace`: Skip marketplace availability checking
+- `--refresh-marketplace`: Force refresh of marketplace cache, ignoring cached results
+
+**Documentation Improvements:**
+- Unpublished solutions show ⚠️ icon in titles and table cells with explanatory footnote
+- Deprecated connectors show 🚫 icon in titles and table cells with explanatory footnote
+- Quick Statistics table now shows published/unpublished counts separately
 
 ### v7.0 - ASIM Parser Documentation
 
