@@ -66,6 +66,13 @@ def main(mytimer: func.TimerRequest) -> None:
             logging.info('Script is running too long. Saving progress and exit.')
             return
     
+    if 'activity' in log_types:
+        state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_activity_logs_last_ts.txt')
+        process_activity_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'administrator' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_admin_logs_last_ts.txt')
         process_admin_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
@@ -90,7 +97,7 @@ def main(mytimer: func.TimerRequest) -> None:
 def get_log_types():
     res = str(os.environ.get('CISCO_DUO_LOG_TYPES', ''))
     if not res:
-        res = 'trust_monitor,authentication,administrator,telephony,offline_enrollment'
+        res = 'trust_monitor,authentication,administrator,telephony,offline_enrollment,activity'
     return [x.lower().strip() for x in res.split(',')]
 
 
@@ -290,86 +297,6 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
         events = None    
     return events
     
-def process_tele_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
-    limit = 1000
-    logging.info('Start processing telephony logs')
-
-    logging.info('Getting last timestamp')
-    mintime = state_manager.get()
-    if mintime:
-        logging.info('Last timestamp is {}'.format(mintime))
-        mintime = int(mintime) + 1
-    else:
-        logging.info('Last timestamp is not known. Getting data for last 24h')
-        mintime = int(time.time() - 86400)
-    
-    last_ts = None
-
-    events = get_tele_logs(admin_api, mintime)
-
-    for event in events:
-        last_ts = event['timestamp']
-        sentinel.send(event)
-    
-    sentinel.flush()
-
-    if last_ts:
-        logging.info('Saving telephony logs last timestamp {}'.format(last_ts))
-        state_manager.post(str(last_ts))
-
-    while len(events) == limit:
-        mintime = last_ts
-        mintime += 1
-        logging.info('Making telephony logs request: mintime={}'.format(mintime))
-        try:
-            events = admin_api.get_telephony_log(mintime)
-        except Exception as ex:                
-            logging.info('Error while getting telephony logs - {}'.format(ex))
-            if ex.status == 429:
-                logging.info('429 exception occurred, trying retry after 60 seconds')
-                time.sleep(60)
-                events = admin_api.get_telephony_log(mintime)
-        
-        if(events is not None):
-            logging.info('Obtained {} tele events'.format(len(events)))
-    
-        else:
-            logging.info('Events returned as null in telephony logs')
-
-        for event in events:
-            last_ts = event['timestamp']
-            sentinel.send(event)
-    
-        sentinel.flush()
-
-        if last_ts:
-            logging.info('Saving telephony logs last timestamp {}'.format(last_ts))
-            state_manager.post(str(last_ts))
-
-        if check_if_script_runs_too_long(start_ts):
-            logging.info('Script is running too long. Saving progress and exit.')
-            return
-
-        
-def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
-    limit = 1000
-    logging.info('Making telephony logs request: mintime={}'.format(mintime))
-    try:
-        events = admin_api.get_telephony_log(mintime)
-    except Exception as err:
-        logging.info('Error while getting telephony logs - {}'.format(err))
-        if err.status == 429:
-            logging.info('429 exception occurred, trying retry after 60 seconds')
-            time.sleep(60)
-            events = admin_api.get_telephony_log(mintime)
-    
-    if(events is not None):
-        logging.info('Obtained {} tele events'.format(len(events)))
-    else:
-        logging.info('Error while getting telephony logs')  
-        events = None
-    return events  
-
 
 def process_offline_enrollment_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
     limit = 1000
@@ -470,3 +397,137 @@ def check_if_script_runs_too_long(start_ts):
     max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
     return duration > max_duration
 
+
+def process_activity_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+    limit = 1000
+    logging.info('Start processing activity logs')
+
+    logging.info('Getting last timestamp')
+    mintime = state_manager.get()
+    if mintime:
+        logging.info('Last timestamp is {}'.format(mintime))
+        mintime = int(mintime) + 1
+    else:
+        logging.info('Last timestamp is not known. Getting data for last 24h')
+        mintime = int(time.time() - 86400) * 1000
+
+    maxtime = int(time.time() - 120) * 1000
+    diff = maxtime - mintime
+    maxwindow = int(MAX_SYNC_WINDOW_PER_RUN_MINUTES) * 60000
+    if diff > maxwindow:
+        maxtime = mintime + maxwindow
+        logging.warn('Ingestion is lagging for activity logs, limiting synchronization window to {}'.format(maxwindow))
+
+    next_offset = None
+    while True:
+        events, next_offset = get_activity_logs(admin_api, mintime, maxtime, limit, next_offset)
+        for event in events:
+            sentinel.send(event)
+        sentinel.flush()
+        logging.info('Saving activity logs last timestamp {}'.format(maxtime))
+        state_manager.post(str(maxtime))
+        if not events:
+            break
+        if len(events) < limit or check_if_script_runs_too_long(start_ts):
+            if check_if_script_runs_too_long(start_ts):
+                logging.info('Script is running too long. Saving progress and exit.')
+            break
+
+def get_activity_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit=1000, next_offset=None):
+    logging.info('Making activity logs request: mintime={}, maxtime={}, next_offset={}'.format(mintime, maxtime, next_offset))
+    try:
+        params = {
+            'api_version': 2,
+            'mintime': mintime,
+            'maxtime': maxtime,
+            'limit': str(limit),
+            'sort': 'ts:asc'
+        }
+        if next_offset:
+            params['next_offset'] = next_offset
+        res = admin_api.get_activity_logs(**params)
+    except Exception as err:
+        logging.info('Error while getting activity logs- {}'.format(err))
+        if hasattr(err, 'status') and err.status == 429:
+            logging.info('429 exception occurred, trying retry after 60 seconds')
+            time.sleep(60)
+            res = admin_api.get_activity_logs(**params)
+        else:
+            return [], None
+
+    if res is not None:
+        events = res.get('items', [])
+        next_offset = res.get('metadata', {}).get('next_offset')
+        logging.info('Obtained {} activity events'.format(len(events)))
+    else:
+        logging.info('Error while getting activity logs')
+        events = []
+        next_offset = None
+    return events, next_offset
+
+
+def process_tele_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+    limit = 1000
+    logging.info('Start processing telephony v2 logs')
+    logging.info('Getting last timestamp')
+    mintime = state_manager.get()
+    if mintime:
+        logging.info('Last timestamp is {}'.format(mintime))
+        mintime = int(mintime) + 1
+    else:
+        logging.info('Last timestamp is not known. Getting data for last 24h')
+        mintime = int(time.time() - 86400) * 1000
+
+    maxtime = int(time.time() - 120) * 1000
+    diff = maxtime - mintime
+    maxwindow = int(MAX_SYNC_WINDOW_PER_RUN_MINUTES) * 60000
+    if diff > maxwindow:
+        maxtime = mintime + maxwindow
+        logging.warn('Ingestion is lagging for telephony logs v2, limiting synchronization window to {}'.format(maxwindow))
+
+    next_offset = None
+    while True:
+        events, next_offset = get_tele_logs(admin_api, mintime, maxtime, limit, next_offset)
+        for event in events:
+            sentinel.send(event)
+        sentinel.flush()
+        logging.info('Saving telephony logs v2 last timestamp {}'.format(maxtime))
+        state_manager.post(str(maxtime))
+        if not events:
+            break
+        if len(events) < limit or check_if_script_runs_too_long(start_ts):
+            if check_if_script_runs_too_long(start_ts):
+                logging.info('Script is running too long. Saving progress and exit.')
+            break
+
+def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit=1000, next_offset=None):
+    logging.info('Making telephony logs v2 request: mintime={}, maxtime={}, next_offset={}'.format(mintime, maxtime, next_offset))
+    try:
+        params = {
+            'api_version': 2,
+            'mintime': mintime,
+            'maxtime': maxtime,
+            'limit': str(limit),
+            'sort': 'ts:asc'
+        }
+        if next_offset:
+            params['next_offset'] = next_offset
+        res = admin_api.get_telephony_log(**params)
+    except Exception as err:
+        logging.info('Error while getting telephony logs v2 {}'.format(err))
+        if hasattr(err, 'status') and err.status == 429:
+            logging.info('429 exception occurred, trying retry after 60 seconds')
+            time.sleep(60)
+            res = admin_api.get_telephony_log(**params)
+        else:
+            return [], None
+
+    if res is not None:
+        events = res.get('items', [])
+        next_offset = res.get('metadata', {}).get('next_offset')
+        logging.info('Obtained {} tele events v2'.format(len(events)))
+    else:
+        logging.info('Error while getting telephony logs v2')
+        events = []
+        next_offset = None
+    return events, next_offset

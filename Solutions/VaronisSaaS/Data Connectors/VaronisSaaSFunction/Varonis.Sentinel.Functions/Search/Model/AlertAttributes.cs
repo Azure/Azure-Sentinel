@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Varonis.Sentinel.Functions.Search.Model
+﻿namespace Varonis.Sentinel.Functions.Search.Model
 {
     public static class AlertAttributes
     {

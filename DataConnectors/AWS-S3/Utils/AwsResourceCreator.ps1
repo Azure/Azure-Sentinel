@@ -83,13 +83,20 @@ function New-ArnRole
         
         # Determine if this role already exists before continuing
         Write-Log "Executing: aws iam get-role --role-name $roleName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
-        aws iam get-role --role-name $roleName 2>&1| Out-Null
+        
+        if ($roleName.Contains('OIDC_')) {
+            aws iam get-role --role-name $roleName 2>&1| Out-Null
+        } else {
+            aws iam get-role --role-name "OIDC_$roleName" 2>&1| Out-Null
+            $script:roleName = "OIDC_$roleName"
+            Write-Log -Message "Using role name: $roleName with OIDC prefix because OpenID Connect authentication is being used." -LogFileName $LogFileName -Severity Information -Indent 2
+        }
 
         # If there was an error the role does not already exist, so it must be created.
         $isRuleNotExist = $lastexitcode -ne 0
+        Write-Log -Message "isRuleNotExist: $isRuleNotExist" -LogFileName $LogFileName -Severity Verbose
         if ($isRuleNotExist)
         {
-            $script:roleName = "OIDC_$roleName"
             Write-Log -Message "Using role name: $roleName with OIDC prefix because OpenID Connect authentication is being used." -LogFileName $LogFileName -Severity Information -Indent 2
 
             Write-Output "`n`n"
@@ -157,8 +164,9 @@ function New-S3Bucket
                 }
                 else
                 {
+                    $locationConfig = "{""LocationConstraint"":""$regionConfiguration""}"
                     Write-Log "Executing: aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1" -LogFileName $LogFileName -Severity Verbose
-                    $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration LocationConstraint=$regionConfiguration 2>&1
+                    $tempForOutput = aws s3api create-bucket --bucket $bucketName --create-bucket-configuration $locationConfig 2>&1
                     Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
                 }
                     

@@ -259,7 +259,7 @@ namespace Helios2Sentinel
             var kvUri = $"https://{IncidentProducer.keyVaultName}.vault.azure.net";
             try
             {
-                var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());
+                var secretClient = new SecretClient(new Uri(kvUri), new DefaultAzureCredential());  // CodeQL [SM05137] DefaultAzureCredential should only be used in dev environment. In production, use ClientSecretCredential or ManagedIdentityCredential.
                 return secretClient.GetSecret(secretName).Value.Value;
             }
             catch  (Exception ex)

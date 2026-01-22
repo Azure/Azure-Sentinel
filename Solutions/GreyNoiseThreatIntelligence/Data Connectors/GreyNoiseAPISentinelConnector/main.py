@@ -9,7 +9,7 @@ from collections import namedtuple
 import azure.functions as func
 import msal
 import requests
-from greynoise import GreyNoise
+from greynoise.api import APIConfig, GreyNoise
 from requests.adapters import HTTPAdapter
 from requests_ratelimiter import LimiterSession
 from urllib3.util import Retry
@@ -57,8 +57,10 @@ class GreuNoiseSentinelUpdater(object):
 
         # Setup GreyNoise Session
         self.session = GreyNoise(
-            api_key=greynoise_setup.api_key,
-            integration_name="azuresentinel-consumer-v1.0",
+            APIConfig(
+                api_key=greynoise_setup.api_key,
+                integration_name="azuresentinel-consumer-v1.0",
+            )
         )
         self.gn_stix_generator = GreyNoiseStixGenerator()
 
@@ -129,17 +131,17 @@ class GreuNoiseSentinelUpdater(object):
             Returns:
                 A response object."""
         status_retry = 0
-        url = "https://sentinelus.azure-api.net/{0}/threatintelligence:upload-indicators".format(self.msal_workspace_id)
+        url = "https://api.ti.sentinel.azure.com/workspaces/{0}/threat-intelligence-stix-objects:upload".format(self.msal_workspace_id)
         headers = {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer {0}'.format(token)
         }
         params = {
-            'api-version': '2022-07-01'
+            'api-version': '2024-02-01-preview'
         }
         payload = {
-            'SourceSystem': 'GreyNoise',
-            'Value': indicators
+            'sourcesystem': 'GreyNoise',
+            'stixobjects': indicators
         }
 
         try:
@@ -173,13 +175,16 @@ class GreuNoiseSentinelUpdater(object):
             logging.error('Cannot upload indicators to Azure Sentinel, exiting.')
             sys.exit(1)
         
-        # Check for submission errors
-        if response.json().get('errors') != []:
-                logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
-                                'the rest of the indicator failed and we can continue.')
-                logging.warning('Error: ' + json.loads(response.json()).get('error'))
- 
-        return response.json()
+        try:
+            # Check for submission errors
+            if response.json().get('errors') != []:
+                    logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
+                                    'the rest of the indicator failed and we can continue.')
+                    logging.warning('Error: ' + json.loads(response.json()).get('error'))
+    
+            return response.json()
+        except requests.exceptions.JSONDecodeError:
+            return []
     
     def chunks(self, l: list, chunk_size: int):
         """Yield successive n-sized chunks from list."""
@@ -228,13 +233,13 @@ class GreuNoiseSentinelUpdater(object):
 
                 # this protects from bad / invalid queries
                 # and exits out before proceeding
-                if payload["count"] == 0:
+                if payload["request_metadata"]["count"] == 0:
                     logging.info("GreyNoise Query return no results, exiting")
                     sys.exit(1)
 
                 # Capture the total number of indicators available
-                elif payload["count"] and payload_size is None:
-                    payload_size = int(payload["count"])
+                elif payload["request_metadata"]["count"] and payload_size is None:
+                    payload_size = int(payload["request_metadata"]["count"])
                     logging.info("Total Indicators found: %s results" % payload_size)
 
                 # Loop to generate STIX objects and upload to Sentinel
@@ -257,8 +262,8 @@ class GreuNoiseSentinelUpdater(object):
 
                 # the scroll is for pagination but does not always exist because
                 # we have consumed all the IPs
-                scroll = payload.get("scroll")
-                complete = payload["complete"]
+                scroll = payload["request_metadata"].get("scroll")
+                complete = payload["request_metadata"]["complete"]
 
                 addresses = len(payload["data"])
                 total_addresses += addresses
@@ -279,7 +284,7 @@ class GreuNoiseSentinelUpdater(object):
                     break
                 elif (
                     self.greynoise_size != 0
-                    and self.greynoise_size < int(payload["count"])  # noqa: W503
+                    and self.greynoise_size < int(payload["request_metadata"]["count"])  # noqa: W503
                     and self.greynoise_size <= total_addresses # noqa: W503
                 ):
                     break
@@ -407,3 +412,4 @@ def main(mytimer: func.TimerRequest) -> None:
     g.consume_ips()
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)
+    

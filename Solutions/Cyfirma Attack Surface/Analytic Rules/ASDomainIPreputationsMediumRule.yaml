@@ -1,0 +1,118 @@
+id: 70f137e4-e4ef-4635-92de-10c4f5b0fcd0
+name: CYFIRMA - Attack Surface - Malicious Domain/IP Reputation Medium Rule
+description: |
+  "This alert is raised when CYFIRMA detects a critical reputation score for an IP address linked to your infrastructure. 
+  The IP has been previously associated with hacking activity and web application attacks. 
+  Denied outbound traffic to a foreign country from a known Microsoft data center IP suggests potential misuse or compromise of cloud infrastructure."
+version: 1.0.0
+kind: Scheduled
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CyfirmaAttackSurfaceAlertsConnector
+    dataTypes:
+      - CyfirmaASDomainIPReputationAlerts_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - CommandAndControl
+  - Reconnaissance
+  - Impact
+  - DefenseEvasion
+  - Exfiltration
+relevantTechniques:
+  - T1566
+  - T1071
+  - T1090
+  - T1595
+  - T1499
+  - T1036
+  - T1041
+query: |
+  // Medium Severity - Malicious Domain/IP Reputation Detected
+  let timeFrame = 5m;
+  CyfirmaASDomainIPReputationAlerts_CL
+  | where severity == 'High' and TimeGenerated between (ago(timeFrame) .. now())
+  | extend
+      FirstSeen=first_seen,
+      LastSeen=last_seen,
+      RiskScore=risk_score,
+      Domain=sub_domain,
+      TopDomain=top_domain,
+      NetworkIP=ip,
+      AlertUID=alert_uid,
+      UID=uid,
+      Categories=categories,
+      IPversion=ip_version,
+      ISP=isp,
+      ThreatActors=threat_actors,
+      Country=country,
+      LastUsersReported=last_users_reported,
+      ProviderName='CYFIRMA',
+      ProductName='DeCYFIR/DeTCT'
+  | project
+      TimeGenerated,
+      Domain,
+      TopDomain,
+      RiskScore,
+      FirstSeen,
+      LastSeen,
+      NetworkIP,
+      AlertUID,
+      UID,
+      Categories,
+      IPversion,
+      ISP,
+      ThreatActors,
+      Country,
+      LastUsersReported,
+      ProviderName,
+      ProductName
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: TopDomain
+      - identifier: DnsDomain
+        columnName: Domain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkIP
+customDetails:
+  TimeGenerated: TimeGenerated
+  RiskScore: RiskScore
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+  LastUsersReported: LastUsersReported
+  AlertUID: AlertUID
+  UID: UID
+  Categories: Categories
+  IPversion: IPversion
+  ThreatActors: ThreatActors
+  Country: Country
+  ISP: ISP
+alertDetailsOverride:
+  alertDisplayNameFormat: "CYFIRMA - Medium Severity Malicious Domain/IP Reputation Alert - Domain: {{Domain}}, IP: {{NetworkIP}} "
+  alertDescriptionFormat: "CYFIRMA - Medium Severity Malicious Domain/IP Reputation Alert - Domain: {{Domain}}, IP: {{NetworkIP}} "
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

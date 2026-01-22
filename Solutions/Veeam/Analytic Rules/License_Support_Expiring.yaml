@@ -1,0 +1,46 @@
+id: 3caa6e6d-a3e2-4776-be97-15d20e2675ed
+name: License Support Expiring
+description: Detects when the Veeam support contract expires shortly.
+severity: Low
+status: Available
+requiredDataConnectors:
+- connectorId: Syslog
+  dataTypes:
+  - Syslog
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+queryFrequency: 3h
+queryPeriod: 3h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+tactics:
+- Impact
+relevantTechniques:
+- T1489
+query: "let license_editions_lookup = union isfuzzy=true (datatable(Edition:string,\
+  \ EditionDescription:string)[]), (_GetWatchlist(\"license_editions_lookup\")); \n\
+  let license_types_lookup = union isfuzzy=true (datatable(Type:string, TypeDescription:string)[]),\
+  \ (_GetWatchlist(\"license_types_lookup\")); \nVeeam_GetSecurityEvents\n| where\
+  \ instanceId == 24040\n| extend Edition = extract(\"Edition=\\\"([^\\\"]*)\\\"\"\
+  , 1, SyslogMessage)\n| lookup kind=leftouter (license_editions_lookup) \n    on\
+  \ $left.Edition == $right.Edition\n| extend Type = extract(\"Type=\\\"([^\\\"]*)\\\
+  \"\", 1, SyslogMessage)\n| lookup kind=leftouter (license_types_lookup) \n    on\
+  \ $left.Type == $right.Type\n| extend TenantID = extract(\"TenantID=\\\"([^\\\"\
+  ]*)\\\"\", 1, SyslogMessage)\n| extend DaysLeft = extract(\"DaysLeft=\\\"([^\\\"\
+  ]*)\\\"\", 1, SyslogMessage)\n| extend SupportLeft = extract(\"SupportLeft=\\\"\
+  ([^\\\"]*)\\\"\", 1, SyslogMessage)\n| project\n    Date = format_datetime(TimeGenerated,\
+  \ 'dd.MM.yyyy HH:mm'),\n    DataSource = original_host,\n    EventId = instanceId,\n\
+  \    [\"License Edition\"] = EditionDescription,\n    [\"License Type\"] = TypeDescription,\n\
+  \    [\"Days Left\"] = DaysLeft,\n    [\"Days of Support Left\"] = SupportLeft,\n\
+  \    MessageDetails = Description,\n    Severity = SeverityDescription\n"
+version: 1.0.0
+kind: Scheduled
+customDetails:
+  Date: Date
+  VbrHostName: DataSource
+  EventId: EventId
+  MessageDetails: MessageDetails
+  Severity: Severity

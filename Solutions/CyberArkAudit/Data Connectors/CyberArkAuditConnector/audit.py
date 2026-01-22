@@ -155,7 +155,10 @@ def get_query_data() -> dict:
                 "target_platform",
                 "safe",
                 "target_account",
-                "identity_type"
+                "identity_type",
+                "access_method",
+                "account_id",
+                "correlation_id"
             ],
         }
     }

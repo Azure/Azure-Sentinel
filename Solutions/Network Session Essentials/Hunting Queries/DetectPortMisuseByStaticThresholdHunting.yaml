@@ -74,61 +74,162 @@ relevantTechniques:
   - T1203
 
 query: |
-  let lookback = 10m; 
+  let lookback = 20m; 
   let mapping = _GetWatchlist('NetworkSession_Monitor_Configuration')
-  | where Type == "Hunting" and ThresholdType == "Static" and Severity != "Disabled"  
-  | extend Ports = split(Ports,","),
-          App = split(App,","),
-          Protocol = split(Protocol,","),
-          Direction = split(Direction,","),
-          Action = split(Action,",")
-  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Threshold, Severity, Tactic, Name, Description
-  | mv-expand Ports
-  | mv-expand App
-  | mv-expand Protocol
-  | mv-expand Direction
-  | mv-expand Action
-  | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action), Threshold = toint(Threshold)
-  ;
-  let nosummary = materialize(
-                union isfuzzy=true 
-                  (
-                      NetworkCustomAnalytics_protocol_CL 
-                      | project v = int(2)
-                  ),
-                  (
-                      print int(1) 
-                      | project v = print_0
-                  )
-                  | summarize maxv = max(v)
-                  | extend nosum = (maxv > 1)
-                );
-  let allData = union isfuzzy=true 
-      (
-          (datatable(exists:int, nosum:bool)[1,false] | join (nosummary) on nosum) | join (
-          _Im_NetworkSession(starttime=bin(now(-10m),10m), endtime=bin(now(),10m))
-          | where TimeGenerated > bin(now(-10m),10m)
-          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
-          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
-          ) on exists
-          | project-away exists, maxv, nosum*
-      ),
-      (
+      | where Type == "Hunting" and ThresholdType == "Static" and Severity != "Disabled"  
+      | extend
+          Ports = split(Ports, ","),
+          App = split(App, ","),
+          Protocol = split(Protocol, ","),
+          Direction = split(Direction, ","),
+          Action = split(Action, ",")
+      | project
+          Ports,
+          App,
+          Protocol,
+          Direction,
+          Action,
+          Type,
+          ThresholdType,
+          Threshold,
+          Severity,
+          Tactic,
+          Name,
+          Description
+      | mv-expand Ports
+      | mv-expand App
+      | mv-expand Protocol
+      | mv-expand Direction
+      | mv-expand Action
+      | extend
+          Ports = tostring(Ports),
+          App = tostring(App),
+          Protocol = tostring(Protocol),
+          Direction = tostring(Direction),
+          Action = tostring(Action),
+          Threshold = toint(Threshold);
+  let NetworkSummary_Protocol = materialize(
+      union isfuzzy=true 
+          (
+          NetworkSummary_Protocol_CL
+          | project v = int(2)
+          ),
+          (
+          print int(1) 
+          | project v = print_0
+          )
+      | summarize maxv = max(v)
+      | extend
+          NetworkSummary_Protocol_Exists = (maxv > 1),
+          NetworkCustomAnalyticsExists = false
+      );
+  let NetworkCustomAnalytics = materialize(
+      union isfuzzy=true 
+          (
           NetworkCustomAnalytics_protocol_CL
-          | where EventTime_t == toscalar(NetworkCustomAnalytics_protocol_CL | summarize max(EventTime_t))
-          | project-rename NetworkProtocol=NetworkProtocol_s, DstPortNumber=DstPortNumber_d, DstAppName=DstAppName_s, NetworkDirection=NetworkDirection_s, DvcAction=DvcAction_s, Count=count__d, EventTime=EventTime_t
-          | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber)
-      )
+          | project v = int(2)
+          ),
+          (
+          print int(1) 
+          | project v = print_0
+          )
+      | summarize maxv = max(v)
+      | extend
+          NetworkCustomAnalyticsExists = (maxv > 1),
+          NetworkSummary_Protocol_Exists = false
+      );
+  let allData = union isfuzzy=true 
+          (
+          (datatable(
+      exists: int,
+      NetworkSummary_Protocol_Exists: bool,
+      NetworkCustomAnalyticsExists: bool
+  )[
+      1, false, false
+  ]
+          | join (NetworkSummary_Protocol) on NetworkSummary_Protocol_Exists
+          | join (NetworkCustomAnalytics) on NetworkCustomAnalyticsExists
+          )
+          | join (
+              _Im_NetworkSession(starttime=bin(now(-20m), 20m), endtime=bin(now(), 20m))
+              | where TimeGenerated > bin(now(-20m), 20m)
+              | summarize Count=count()
+                  by
+                  NetworkProtocol,
+                  DstPortNumber,
+                  DstAppName,
+                  NetworkDirection,
+                  DvcAction,
+                  bin(TimeGenerated, 20m)
+              | extend
+                  EventTime = TimeGenerated,
+                  Count = toint(Count),
+                  DstPortNumber = toint(DstPortNumber),
+                  exists=int(1)
+              )
+              on exists
+          | project-away exists*, maxv, NetworkSummary_Protocol_Exists*, NetworkCustomAnalyticsExists*
+          ),
+          (
+          (datatable(exists: int, NetworkSummary_Protocol_Exists: bool)[1, false]
+          | join (NetworkSummary_Protocol) on NetworkSummary_Protocol_Exists
+          )
+          | join (
+              NetworkCustomAnalytics_protocol_CL
+              | where EventTime_t == toscalar(NetworkCustomAnalytics_protocol_CL
+                  | summarize max(EventTime_t))
+              | project
+                  NetworkProtocol=NetworkProtocol_s,
+                  DstPortNumber=DstPortNumber_d,
+                  DstAppName=DstAppName_s,
+                  NetworkDirection=NetworkDirection_s,
+                  DvcAction=DvcAction_s,
+                  Count=count__d,
+                  EventTime=EventTime_t,
+                  TimeGenerated,
+                  Type
+              | extend Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+              )
+              on exists
+          | project-away exists*, maxv, NetworkSummary_Protocol_Exists*, NetworkCustomAnalyticsExists*
+          ),
+          (
+          NetworkSummary_Protocol_CL
+          | where EventTime == toscalar(NetworkSummary_Protocol_CL
+              | summarize max(EventTime))
+          | project
+              NetworkProtocol,
+              DstPortNumber,
+              DstAppName,
+              NetworkDirection,
+              DvcAction,
+              Count=count_,
+              EventTime,
+              TimeGenerated,
+              Type
+          | extend Count = toint(Count), DstPortNumber = toint(DstPortNumber)
+          )
+      | project-away exists*, maxv*, NetworkSummary_Protocol_Exists*, NetworkCustomAnalyticsExists*
   ;
   allData
-        | where isnotempty(DstPortNumber)
-        | summarize Sum=sum(Count) by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction 
-        | join kind=inner ['mapping'] where Ports has tostring(DstPortNumber)
-        | where Sum > Threshold         
-                  and (Protocol == "*" or Protocol has NetworkProtocol)
-                  and (Direction == "*" or Direction has NetworkDirection)
-                  and (Action == "*" or Action has DvcAction)
-        | project Name, Description, NetworkProtocol, DstPortNumber, NetworkDirection, DvcAction, Severity, Tactic
-        | summarize NetworkProtocols=make_set_if(NetworkProtocol,isnotempty(NetworkProtocol),20), 
-                    NetworkDirections=make_set_if(NetworkDirection,isnotempty(NetworkDirection),5), 
-                    DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10) by Name, Severity, Tactic, DstPortNumber, Description
+  | where isnotempty(DstPortNumber)
+  | summarize Sum=sum(Count) by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction 
+  | join kind=inner ['mapping'] where Ports has tostring(DstPortNumber)
+  | where Sum > Threshold         
+      and (Protocol == "*" or Protocol has NetworkProtocol)
+      and (Direction == "*" or Direction has NetworkDirection)
+      and (Action == "*" or Action has DvcAction)
+  | project
+      Name,
+      Description,
+      NetworkProtocol,
+      DstPortNumber,
+      NetworkDirection,
+      DvcAction,
+      Severity,
+      Tactic
+  | summarize
+      NetworkProtocols=make_set_if(NetworkProtocol, isnotempty(NetworkProtocol), 20), 
+      NetworkDirections=make_set_if(NetworkDirection, isnotempty(NetworkDirection), 5), 
+      DvcActions=make_set_if(DvcAction, isnotempty(DvcAction), 10)
+      by Name, Severity, Tactic, DstPortNumber, Description

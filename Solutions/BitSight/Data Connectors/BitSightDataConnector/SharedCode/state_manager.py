@@ -10,7 +10,9 @@ class StateManager:
     def __init__(self, connection_string, file_path, share_name='bitsight-checkpoints'):
         """Initialize the share_cli and file_client."""
         self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
-        self.file_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=file_path)
+        self.file_cli = ShareFileClient.from_connection_string(
+            conn_str=connection_string, share_name=share_name, file_path=file_path
+        )
 
     def post(self, marker_text: str):
         """Post method for posting the data to azure storage."""

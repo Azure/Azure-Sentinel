@@ -20,6 +20,16 @@ This playbook can be configured to run automatically when a SOC Insight Incident
 1. User must have a valid Infoblox API Key.
 2. User must have a valid Workspace ID.
 3. User must have a valid Workspace Key.
+4. User must have created an analytics rule from a rule template.
+5. Configure the associated automation rule as specified below:
+    * Go to Microsoft Sentinel → *select your workspace* → Automation → Create → Automation rule
+    * Set Automation rule name
+    * Condition → If:
+        1. Incident provider → Select Microsoft Sentinel
+        2. Analytic rule name → Select Analytic rule name created using step 4
+    * Action → Select Run playbook
+    * Select Infoblox-SOC-Get-Insight-Details playbook
+    * Click on Apply
 
 ### Deployment instructions<a name="Deployment-instructions"></a>
 
@@ -27,10 +37,12 @@ This playbook can be configured to run automatically when a SOC Insight Incident
 2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
     * Infoblox API Key: Enter valid value for API Key
-    * Workspace ID: Enter value for Workspace ID,use same Workspace ID for Authorization
-    * Workspace Key: Enter value for Workspace Key,use same Workspace Key for Authorization
+    * Assets Data Ingestion: Provide true if you want to enable Assets data ingestion from SOC Insights. Default is false, Allowed values are true and false.
+    * Comments Data Ingestion: Provide true if you want to enable Comments data ingestion from SOC Insights. Default is false, Allowed values are true and false.
+    * Events Data Ingestion: Provide true if you want to enable Events data ingestion from SOC Insights. Default is false, Allowed values are true and false.
+    * Indicators Data Ingestion: Provide true if you want to enable Indicators data ingestion from SOC Insights. Default is false, Allowed values are true and false.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Get%20Insight%20Details%2Fazuredeploy.json)[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Get%20Insight%20Details%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Get%20Insight%20Details%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2FPlaybooks%2FInfoblox%20SOC%20Get%20Insight%20Details%2Fazuredeploy.json)
 
 ### Post-Deployment instructions<a name="Post-Deployment-instructions"></a>
 
@@ -49,7 +61,8 @@ Once deployment is complete, authorize each connection.
 
 Assign role to this playbook
 
-1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add","2. Add role assignment
+1. Go to Log Analytics Workspace → *select your workspace* → Access Control → Add
+2. Add role assignment
 3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role
 4. Members: select managed identity for assigned access to and add your logic app as member
 5. Click on review+assign

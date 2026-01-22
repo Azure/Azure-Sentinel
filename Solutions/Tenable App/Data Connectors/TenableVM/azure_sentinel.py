@@ -1,64 +1,50 @@
-import re
-import base64
-import hmac
-import hashlib
+"""This file contains MicrosoftSentinel class which is used to post data into log analytics workspace."""
+
+from azure.core.exceptions import HttpResponseError, ClientAuthenticationError
 import logging
-import requests
-from datetime import datetime
 
 
-class AzureSentinel:
+logs_starts_with = "TenableVM"
+function_name = "azure_sentinel"
 
-    def __init__(self, workspace_id, workspace_key, log_type, log_analytics_url=""):
-        self._workspace_id = workspace_id
-        self._workspace_key = workspace_key
-        self._log_type = log_type
-        if ((log_analytics_url in (None, "") or str(log_analytics_url).isspace())):
-            log_analytics_url = "https://" + self._workspace_id + ".ods.opinsights.azure.com"
 
-        pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
-        if not re.match(pattern, str(log_analytics_url)):
-            raise Exception("Invalid Log Analytics Uri.")
-        self._log_analytics_url = log_analytics_url
+class MicrosoftSentinel:
+    """MicrosoftSentinel class is used to post data into log Analytics workspace."""
 
-    def build_signature(self, date, content_length, method, content_type, resource):
-        x_headers = "x-ms-date:" + date
-        string_to_hash = method + "\n" + \
-            str(content_length) + "\n" + content_type + \
-            "\n" + x_headers + "\n" + resource
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-        decoded_key = base64.b64decode(self._workspace_key)
-        encoded_hash = base64.b64encode(hmac.new(
-            decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
-        authorization = "SharedKey {}:{}".format(
-            self._workspace_id, encoded_hash)
-        return authorization
+    def __init__(self, azure_ingestion_client) -> None:
+        """Intialize instance variables for MicrosoftSentinel class."""
+        self._ingestion_client = azure_ingestion_client
 
-    def post_data(self, body):
-        logging.info("constructing post to send to Azure Sentinel.")
-        method = "POST"
-        content_type = "application/json"
-        resource = "/api/logs"
-        rfc1123date = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-        content_length = len(body)
-        logging.info("build signature.")
-        signature = self.build_signature(
-            rfc1123date, content_length, method, content_type, resource)
-        logging.info("signature built.")
-        uri = self._log_analytics_url + resource + "?api-version=2016-04-01"
-        headers = {
-            "content-type": content_type,
-            "Authorization": signature,
-            "Log-Type": self._log_type,
-            "x-ms-date": rfc1123date
-        }
-        logging.info("sending post to Azure Sentinel.")
-        response = requests.post(uri, data=body, headers=headers)
-        logging.info(response.status_code)
-        if (response.status_code >= 200 and response.status_code <= 299):
-            return response.status_code
-        else:
-            logging.warning("Events are not processed into Azure. Response code: {}".format(
-                response.status_code))
+    def post_data(self, events, table_name, dcr_rule_id):
+        """Post the given events into the specified table in Log Analytics workspace.
+
+        Args:
+            events (list): A list of events to be posted into log analytics workspace.
+            table_name (str): The name of the table in Log Analytics workspace.
+            dcr_rule_id (str): The rule id of the data collection rule.
+        Raises:
+            ClientAuthenticationError: If the provided credentials are invalid or expired.
+            HttpResponseError: If any error occurs while uploading events to sentinel.
+            Exception: If any unexpected error occurs while uploading events to sentinel.
+        """
+        try:
+            if not isinstance(events, list):
+                events = list(events)
+            dcr_stream = "Custom-{}".format(table_name)
+            self._ingestion_client.upload(rule_id=dcr_rule_id, stream_name=dcr_stream, logs=events)
+        except ClientAuthenticationError as error:
+            logging.error(
+                f"{logs_starts_with} {function_name}: Error while uploading events to sentinel due "
+                f"to expired or invalid credentials, Error: {error}.")
             raise Exception(
-                f"Sending to Azure Sentinel failed with status code {response.status_code}")
+                f"Error while uploading events to sentinel due to expired or invalid credentials, Error: {error}.")
+        except HttpResponseError as error:
+            logging.error(
+                f"{logs_starts_with} {function_name}: Http Response Error while uploading events to sentinel, Error: {error}.")
+            raise Exception(
+                f"Http Response Error while uploading events to sentinel, Error: {error}.")
+        except Exception as error:
+            logging.error(
+                f"{logs_starts_with} {function_name}: Unexpected Error while uploading events to sentinel, Error: {error}.")
+            raise Exception(
+                f"Unexpected Error while uploading events to sentinel, Error: {error}.")

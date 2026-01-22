@@ -1,0 +1,68 @@
+id: 014ffc5c-0ba5-49f9-989c-3833e0d1c2b8
+name: Quarantine Spam Reason trend
+description: |
+  This query visualises the amount of spam emails that are quarantined, summarized daily by the detection method
+description-detailed: |
+  This query visualises the amount of spam emails that are quarantined, summarized daily by the detection method
+  Query is also included as part of the Defender for Office 365 solution in Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-2-build-custom-email-security-reports-and-dashboards-with-workbooks-in-micr/4411303
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let TimeStart = startofday(ago(30d));
+  let TimeEnd = startofday(now());
+  let baseQuery = EmailEvents
+  | where TimeGenerated >= TimeStart
+  | where DetectionMethods has "Spam" and DeliveryLocation == "Quarantine";
+  let timerange = 
+  baseQuery
+  | summarize minTime = min(Timestamp), maxTime = max(Timestamp);
+  let ml=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Advanced filter'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "Advanced filter";
+  let gf=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'General filter'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "General filter";
+  let bl=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'BulkFilter'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "BulkFilter";
+  let mx=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Mixed analysis detection'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "Mixed analysis detection";
+  let frp=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Fingerprint matching'
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "Fingerprint matching";
+  let umr=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'URL malicious reputation' 
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "URL malicious reputation";
+  let dr=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'Domain reputation' 
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "Domain reputation";
+  let ipr=baseQuery
+  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
+  | where Spam has 'IP reputation' 
+  | make-series Count= count() default = 0 on Timestamp from TimeStart to TimeEnd step 1d 
+  | extend Details = "IP reputation";
+  union ml,gf,bl,mx,frp,umr,dr,ipr
+  | project Count, Details, Timestamp
+  | render timechart
+version: 1.0.0

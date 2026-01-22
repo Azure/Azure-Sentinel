@@ -2,7 +2,6 @@ from azure.storage.fileshare import ShareClient
 from azure.storage.fileshare import ShareFileClient
 from azure.core.exceptions import ResourceNotFoundError
 
-
 class StateManager:
     def __init__(self, connection_string, share_name='funcstatemarkershare', file_path='funcstatemarkerfile'):
         self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)

@@ -20,7 +20,7 @@ class MicrosoftSentinel:
         Authenticate with microsoft sentinel.
 
         Raises:
-            DataminrPulseException: Custom cofense Exception
+            DataminrPulseException: Custom Dataminr Exception
 
         Returns:
             String: Bearer token
@@ -41,7 +41,7 @@ class MicrosoftSentinel:
                 "client_id": consts.AZURE_CLIENT_ID,
                 "client_secret": consts.AZURE_CLIENT_SECRET,
                 "grant_type": "client_credentials",
-                "resource": "https://management.azure.com",
+                "resource": consts.AUTH_RESOURCE_URL
             }
             response = requests.post(url=azure_auth_url, data=body, timeout=10)
             if response.status_code >= 200 and response.status_code <= 299:

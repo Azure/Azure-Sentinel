@@ -5,8 +5,8 @@ More information about Recorded Future Intelligence Solution for Microsoft Senti
 ## RecordedFuture-Alert-Importer
 Type: **Alerting**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. \
-Connectors used: ***recordedfuturev2***, ***azuresentinel***, ***azureloganalyticsdatacollector*** and ***azuremonitorlogs*** see [Connector authorization](../readme.md#connectors-authorization) for guidance.
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connector-authorization) section. \
+Connectors used: ***recordedfuturev2***, ***azuresentinel***, ***azureloganalyticsdatacollector*** and ***azuremonitorlogs*** see [Connector authorization](../readme.md#connector-authorization) for guidance.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FAlerts%2FRecordedFuture-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FAlerts%2FRecordedFuture-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -22,8 +22,8 @@ The Alert importer playbook can create sentinel incidents when receiving alerts.
 ## RecordedFuture-Playbook-Alert-Importer
 Type: **Alerting**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. \
-Connectors used: ***recordedfuturev2***, ***azuresentinel*** and ***azureloganalyticsdatacollector*** see [Connector authorization](../readme.md#connectors-authorization) for guidance. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connector-authorization) section. \
+Connectors used: ***recordedfuturev2***, ***azuresentinel*** and ***azureloganalyticsdatacollector*** see [Connector authorization](../readme.md#connector-authorization) for guidance.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FAlerts%2FRecordedFuture-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FAlerts%2FRecordedFuture-Playbook-Alert-Importer%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>

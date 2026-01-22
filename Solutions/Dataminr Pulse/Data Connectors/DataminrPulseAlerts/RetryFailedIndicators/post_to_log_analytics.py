@@ -76,12 +76,11 @@ def post_data(body, log_type):
             "Error while generating signature for posting data into log analytics."
         )
     uri = (
-        "https://"
-        + consts.WORKSPACE_ID
-        + ".ods.opinsights.azure.com"
+        consts.LOG_ANALYTICS_URL
         + resource
         + "?api-version=2016-04-01"
     )
+    applogger.debug("uri: {}".format(uri))
 
     headers = {
         "content-type": content_type,

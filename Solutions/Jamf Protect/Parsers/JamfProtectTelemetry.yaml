@@ -1,8 +1,8 @@
 id: d941b837-88fa-4c77-a4d8-76af0044cac0
 Function:
   Title: Parser for Jamf Protect Telemetry Events
-  Version: '3.2.4'
-  LastUpdated: '2025-03-25'
+  Version: '3.3.0'
+  LastUpdated: '2025-09-02'
 Category: Microsoft Sentinel Parser
 FunctionName: JamfProtectTelemetry
 FunctionAlias: JamfProtectTelemetry
@@ -111,6 +111,14 @@ FunctionQuery: |
                     "Entries from a log file have been collected",
                     eventTypeHuman == "gatekeeper_user_override",
                     "Gatekeeper controls were overridden",
+                    eventTypeHuman == "network_connect",
+                    "A network connection has been established",
+                    eventTypeHuman == "tcc_modify",
+                    "A Transparency Consent and Control (TCC) permission is granted or revoked",
+                    eventTypeHuman == "pty_grant",
+                    "A pseudoterminal control device is granted",
+                    eventTypeHuman == "pty_close",
+                    "A pseudoterminal control device is closed",
                     "No reason yet defined for this event"
                 ),
         EventType = case(
@@ -206,6 +214,14 @@ FunctionQuery: |
                     "MalwareRemediated",
                     eventTypeHuman == "xp_malware_remediated",
                     "GatekeeperOverride",
+                    eventTypeHuman == "network_connect",
+                    "EndpointNetworkSession",
+                    eventTypeHuman == "tcc_modify",
+                    "Set",
+                    eventTypeHuman == "pty_grant",
+                    "Other",
+                    eventTypeHuman == "pty_close",
+                    "Other",
                     ""
                 ),
         EventSubType = case(
@@ -259,6 +275,14 @@ FunctionQuery: |
                     "Interactive",
                     eventTypeHuman == "sudo",
                     "Interactive",
+                    eventTypeHuman == "network_connect",
+                    "Interactive",
+                    eventTypeHuman == "tcc_modify",
+                    "System Settings",
+                    eventTypeHuman == "pty_grant",
+                    "Other",
+                    eventTypeHuman == "pty_close",
+                    "Other",
                     ""
                 )
     // Jamf Protect Telemetry - Event Process
@@ -303,11 +327,16 @@ FunctionQuery: |
         TargetBinaryIsESClient = tobool(eventContext.is_es_client),
         TargetBinaryIsPlatformBinary = tobool(eventContext.is_platform_binary),
         TargetUserId = tostring(eventContext.audit_token.euid),
-        ActingProcessId = tostring(eventContext.parent_audit_token.pid),
-        ActingProcessGuid = tostring(eventContext.parent_audit_token.uuid),
-        ActorUserId = tostring(eventContext.parent_audit_token.euid),
-        ParentProcessId = tostring(eventContext.responsible_audit_token.pid),
-        ParentProcessGuid = tostring(eventContext.responsible_audit_token.uuid)
+        TargetProcessUsername = tostring(eventContext.audit_token.e_username),
+        ResponsibleProcessId = tostring(eventContext.responsible_audit_token.pid),
+        ResponsibleProcessGuid = tostring(eventContext.responsible_audit_token.uuid),
+        ResponsibleUserId = tostring(eventContext.responsible_audit_token.euid),
+        ResponsibleUsername = tostring(eventContext.responsible_audit_token.e_username),
+        ResponsibleProcessName = tostring(eventContext.responsible_audit_token.exec_path),
+        ParentProcessId = tostring(eventContext.parent_audit_token.pid),
+        ParentProcessGuid = tostring(eventContext.parent_audit_token.uuid),
+        ParentUsername = tostring(eventContext.parent_audit_token.e_username),
+        ParentProcessName = tostring(eventContext.parent_audit_token.exec_path)
     // Jamf Protect Telemetry - Revealing Code Signing flags
     | extend TargetProcessCodesignFlags = 
                                                 iif(isnotempty(eventContext.codesigning_flags),
@@ -426,7 +455,7 @@ FunctionQuery: |
                             )
     // Event Specific - btm_launch_item_add & btm_launch_item_remove
     | extend BtmItem = iif(
-                        eventTypeHuman in ("btm_launch_item_add", "btm_launch_item_remove", "remount"),
+                        eventTypeHuman in ("btm_launch_item_add", "btm_launch_item_remove"),
                         bag_pack(
         "btm_executable_path",
         iff(isnotempty(event[eventTypeHuman].executable_path), event[eventTypeHuman].executable_path, ""),
@@ -503,7 +532,33 @@ FunctionQuery: |
         "volume_file_system_type",
         iff(isnotempty(event[eventTypeHuman].statfs.f_fstypename), event[eventTypeHuman].statfs.f_fstypename, ""),
         "volume_size",
-        iff(isnotempty(event[eventTypeHuman].statfs.f_bsize), event[eventTypeHuman].statfs.f_bsize, "")
+        iff(isnotempty(event[eventTypeHuman].statfs.f_bsize), event[eventTypeHuman].statfs.f_bsize, ""),
+        "bus_type",
+        iff(isnotempty(event[eventTypeHuman].device.bus_name), event[eventTypeHuman].device.bus_name, ""),
+        "product_id",
+        iff(isnotempty(event[eventTypeHuman].device.product_id), event[eventTypeHuman].device.product_id, ""),
+        "product_name",
+        iff(isnotempty(event[eventTypeHuman].device.product_name), event[eventTypeHuman].device.product_name, ""),
+        "vendor_id",
+        iff(isnotempty(event[eventTypeHuman].device.vendor_id), event[eventTypeHuman].device.vendor_id, ""),
+        "vendor_name",
+        iff(isnotempty(event[eventTypeHuman].device.vendor_name), event[eventTypeHuman].device.vendor_name, ""),
+        "device_type",
+        iff(isnotempty(event[eventTypeHuman].device.device_type), event[eventTypeHuman].device.device_type, ""),
+        "is_removable",
+        iff(isnotempty(event[eventTypeHuman].device.is_removable), event[eventTypeHuman].device.is_removable, ""),
+        "is_writable",
+        iff(isnotempty(event[eventTypeHuman].device.is_writable), event[eventTypeHuman].device.is_writable, ""),
+        "is_encrypted",
+        iff(isnotempty(event[eventTypeHuman].device.is_encrypted), event[eventTypeHuman].device.is_encrypted, ""),
+        "is_network_volume",
+        iff(isnotempty(event[eventTypeHuman].device.is_network_volume), event[eventTypeHuman].device.is_network_volume, ""),
+        "serial_number",
+        iff(isnotempty(event[eventTypeHuman].device.serial_number), event[eventTypeHuman].device.serial_number, ""),
+        "media_name",
+        iff(isnotempty(event[eventTypeHuman].device.media_name), event[eventTypeHuman].device.media_name, ""),
+        "volume_name",
+        iff(isnotempty(event[eventTypeHuman].device.volume_name), event[eventTypeHuman].device.volume_name, "")
     ),
                             dynamic(null)
                         )
@@ -734,6 +789,177 @@ FunctionQuery: |
     ),
                             dynamic(null)
                         )
+    // Event Specific - TCC_MODIFY
+    | extend TCC_Modify = iif(
+                            eventTypeHuman == "tcc_modify",
+                            bag_pack(
+        "tcc_service",
+        iff(isnotempty(event[eventTypeHuman].service), event[eventTypeHuman].service, ""),
+        "tcc_identity",
+        iff(isnotempty(event[eventTypeHuman].identity), event[eventTypeHuman].identity, ""),
+        "tcc_identity_type",
+        iff(isnotempty(event[eventTypeHuman].identity_type), event[eventTypeHuman].identity_type, ""),
+        "tcc_right", 
+        iff(
+        isnotempty(event[eventTypeHuman].right),
+        case(
+        event[eventTypeHuman].right == 0,
+        "denied",
+        event[eventTypeHuman].right == 1,
+        "unknown",
+        event[eventTypeHuman].right == 2,
+        "allowed",
+        event[eventTypeHuman].right == 3,
+        "limited",
+        event[eventTypeHuman].right == 4,
+        "add_modify_added",
+        event[eventTypeHuman].right == 5,
+        "session_pid",
+        event[eventTypeHuman].right == 6,
+        "learn_more",
+        "Unknown"
+    ),
+        "" 
+    ),
+        "tcc_reason", 
+        iff(
+        isnotempty(event[eventTypeHuman].reason),
+        case(
+        event[eventTypeHuman].reason == 0,
+        "none",
+        event[eventTypeHuman].reason == 1,
+        "error",
+        event[eventTypeHuman].reason == 2,
+        "user_consent",
+        event[eventTypeHuman].reason == 3,
+        "user_set",
+        event[eventTypeHuman].reason == 4,
+        "system_set",
+        event[eventTypeHuman].reason == 5,
+        "service_policy",
+        event[eventTypeHuman].reason == 6,
+        "mdm_policy",
+        event[eventTypeHuman].reason == 7,
+        "service_override_policy",
+        event[eventTypeHuman].reason == 8,
+        "missing_usage_string",
+        event[eventTypeHuman].reason == 9,
+        "prompt_timeout",
+        event[eventTypeHuman].reason == 10,
+        "preflight_unknown",
+        event[eventTypeHuman].reason == 11,
+        "entitled",
+        event[eventTypeHuman].reason == 12,
+        "app_type_policy",
+        event[eventTypeHuman].reason == 13,
+        "prompt_cancel",
+        "Unknown"
+    ),
+        "" 
+    ),
+        "tcc_update_type", 
+        iff(
+        isnotempty(event[eventTypeHuman].update_type),
+        case(
+        event[eventTypeHuman].update_type == 0,
+        "unknown",
+        event[eventTypeHuman].update_type == 1,
+        "create",
+        event[eventTypeHuman].update_type == 2,
+        "modify",
+        event[eventTypeHuman].update_type == 3,
+        "delete",
+        "Unknown"
+    ),
+        "" 
+    )
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - network_connect
+    | extend network_connect = iif(
+                            eventTypeHuman == "network_connect",
+                            bag_pack(
+        "tcc_service",
+        iff(isnotempty(event[eventTypeHuman].service), event[eventTypeHuman].service, ""),
+        "Dst",
+        iff(isnotempty(event[eventTypeHuman].remote_hostname), event[eventTypeHuman].remote_hostname, ""),
+        "DstIpAddr",
+        iff(isnotempty(event[eventTypeHuman].remote_endpoint.host), event[eventTypeHuman].remote_endpoint.host, ""),
+        "DstPortNumber",
+        iff(isnotempty(event[eventTypeHuman].remote_endpoint.port), event[eventTypeHuman].remote_endpoint.port, ""),
+        "SrcIpAddr",
+        iff(isnotempty(event[eventTypeHuman].local_endpoint.host), event[eventTypeHuman].local_endpoint.host, ""),
+        "SrcPortNumber",
+        iff(isnotempty(event[eventTypeHuman].local_endpoint.port.host), event[eventTypeHuman].local_endpoint.port.host, ""),
+        "NetworkProtocol", 
+        iff(
+        isnotempty(event[eventTypeHuman].socket_protocol),
+        case(
+        event[eventTypeHuman].socket_protocol == 0,
+        "icmp",
+        event[eventTypeHuman].socket_protocol == 6,
+        "tcp",
+        event[eventTypeHuman].socket_protocol == 17,
+        "udp",
+        event[eventTypeHuman].socket_protocol == 41,
+        "ip6in4",
+        event[eventTypeHuman].socket_protocol == 58,
+        "icmp6",
+        event[eventTypeHuman].socket_protocol == 255,
+        "ipproto_raw",
+        "Unknown"
+    ),
+        "" 
+    ),
+        "network_socket_type", 
+        iff(
+        isnotempty(event[eventTypeHuman].socket_type),
+        case(
+        event[eventTypeHuman].socket_type == 1,
+        "sock_stream",
+        event[eventTypeHuman].socket_type == 2,
+        "sock_dgram",
+        event[eventTypeHuman].socket_type == 3,
+        "sock_raw",
+        event[eventTypeHuman].socket_type == 4,
+        "sock_rdm",
+        event[eventTypeHuman].socket_type == 5,
+        "sock_seqpacket",
+        event[eventTypeHuman].socket_type == 6,
+        "service_policy",
+        "Unknown"
+    ),
+        "" 
+    ),
+        "network_socket_family", 
+        iff(
+        isnotempty(event[eventTypeHuman].socket_family),
+        case(
+        event[eventTypeHuman].socket_family == 1,
+        "af_unix",
+        event[eventTypeHuman].socket_family == 2,
+        "af_inet",
+        event[eventTypeHuman].socket_family == 30,
+        "af_inet6",
+        "Unknown"
+    ),
+        "" 
+    )
+    ),
+                                dynamic(null)
+                            )
+    // Event Specific - pty_grand & pty_close
+    | extend pty = iif(
+                            eventTypeHuman in ("pty_grant", "pty_close"),
+                            bag_pack(
+        "dev",
+        iff(isnotempty(event[eventTypeHuman].dev), event[eventTypeHuman].dev, ""),
+        "dev",
+        iff(isnotempty(event[eventTypeHuman].dev), event[eventTypeHuman].dev, "")
+    ),
+                                dynamic(null)
+                            )
     | project-away
     action,
     event,

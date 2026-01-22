@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Varonis.Sentinel.Functions
+﻿namespace Varonis.Sentinel.Functions
 {
     internal static class Constants
     {

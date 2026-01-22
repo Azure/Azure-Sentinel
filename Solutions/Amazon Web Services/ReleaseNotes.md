@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.7       | 28-07-2025                     | Fix ChangeToVPC **Analytic Rule** to ensure it excludes changes to API Gateway |
+| 3.0.6       | 13-06-2025                     | Updated Amazon Web Services S3 Data connector to include details for the default output format. |
 | 3.0.5       | 10-02-2025                     | Repackaged to fix ccp grid showing only 1 record and rename of file   |
 | 3.0.4       | 13-12-2024                     | Updated title of **Analytic Rule** - AWS_LogTampering.yaml   |
 | 3.0.3       | 27-05-2024                     | Updated **Hunting Query** AWS_FailedBruteForceS3Bucket.yaml and **Analytic Rules** for missing TTP   |

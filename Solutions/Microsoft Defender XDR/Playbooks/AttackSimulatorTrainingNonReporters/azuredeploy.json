@@ -1,0 +1,745 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":  {
+        "title":  "Create an Attack Simulator training simulation for users who did not report a phishing attempt",
+        "description":  "This playbook creates an educational Attack Simulator 'How-To Guide' simulation for end-users who failed to report a message as phishing (e.g. reported as junk, deleted the email, etc.) to the SOC.",
+        "prerequisites":  "None",
+        "postDeployment":  [
+            "1. The Service Principal that was created for the Managed Identity still requires Graph API permissions (SecurityIncident.Read.All, SecurityAlert.Read.All, ThreatHunting.Read.All and AttackSimulation.ReadWrite.All) to run sucessfully. Use the included 'addGraphPermission.ps1' PowerShell script to add these automatically."
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime": "2025-08-18T00:00:00.000Z",
+        "entities":  [
+        ],
+        "tags": [ "MDO", "Phishing", "AttackSimulator" ],
+        "support":  {
+            "tier":  "microsoft"
+        },
+        "author":  {
+            "name":  "Jonathan Devere-Ellery, Microsoft"
+        }
+    },
+    "parameters": {
+        "WorkflowName": {
+            "defaultValue": "TriggerASTNonReporting",
+            "type": "String"
+        },
+        "EmailAddress": {
+            "defaultValue": "itsecurity@contoso.com",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "SentinelApiName": "[concat('azuresentinel-', parameters('WorkflowName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('SentinelApiName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('SentinelApiName')]",
+                "statuses": [
+                    {
+                        "status": "Ready"
+                    }
+                ],
+                "customParameterValues": {},
+                "createdTime": "2024-09-09T10:16:08.4704633Z",
+                "changedTime": "2024-09-09T10:16:08.4704633Z",
+                "api": {
+                    "name": "azuresentinel",
+                    "displayName": "Microsoft Sentinel",
+                    "description": "Cloud-native SIEM with a built-in AI so you can focus on what matters most",
+                    "iconUri": "https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1759/1.0.1759.4267/azuresentinel/icon.png",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "testLinks": [],
+                "parameterValueType": "Alternative"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('WorkflowName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('SentinelApiName'))]"
+            ],
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Declare_Network_Message_ID_Variable": {
+                            "runAfter": {
+                                "Declare_Reporting_Users_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Network Message IDs",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Declare_Non-Reporting_Users": {
+                            "runAfter": {
+                                "Declare_Network_Message_ID_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "NonReportingUsers",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Declare_Reporting_Users_Variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Reporting Users",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Loop_to_get_reporters_and_message_ids": {
+                            "foreach": "@outputs('Parse_JSON')?['body']?['alerts']",
+                            "actions": {
+                                "Is_Report_Alert": {
+                                    "actions": {
+                                        "For_each_evidence": {
+                                            "foreach": "@item()?['evidence']",
+                                            "actions": {
+                                                "Is_Mailbox_Evidence": {
+                                                    "actions": {
+                                                        "Add_Reporting_User": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "Reporting Users",
+                                                                "value": "@item()?['primaryAddress']"
+                                                            }
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {}
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@item()?['@odata.type']",
+                                                                    "#microsoft.graph.security.mailboxEvidence"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Is_Message_Evidence": {
+                                                    "actions": {
+                                                        "Add_to_reported_messages_if_not_already": {
+                                                            "actions": {
+                                                                "Add_to_reported_Network_Message_Ids": {
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "Network Message IDs",
+                                                                        "value": "@item()?['networkMessageId']"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else": {
+                                                                "actions": {}
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "not": {
+                                                                            "contains": [
+                                                                                "@variables('Network Message IDs')",
+                                                                                "@item()?['networkMessageId']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Is_Mailbox_Evidence": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {}
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@item()?['@odata.type']",
+                                                                    "#microsoft.graph.security.analyzedMessageEvidence"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@item()?['title']",
+                                                    "Email reported by user as malware or phish"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Defender_Incident_ID": {
+                            "runAfter": {
+                                "Declare_Non-Reporting_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DefenderIncidentID",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['object']?['properties']?['providerIncidentId']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Get_Incident": {
+                            "runAfter": {
+                                "Get_Defender_Incident_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://graph.microsoft.com/beta/security/incidents/@{variables('DefenderIncidentID')}?$expand=alerts",
+                                "method": "GET",
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://graph.microsoft.com"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Get_Incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Incident')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "alerts": {
+                                            "items": {
+                                                "properties": {
+                                                    "actorDisplayName": {},
+                                                    "additionalData": {},
+                                                    "alertPolicyId": {},
+                                                    "alertWebUrl": {
+                                                        "type": "string"
+                                                    },
+                                                    "assignedTo": {},
+                                                    "category": {
+                                                        "type": "string"
+                                                    },
+                                                    "classification": {},
+                                                    "comments": {
+                                                        "type": "array"
+                                                    },
+                                                    "createdDateTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "detectionSource": {
+                                                        "type": "string"
+                                                    },
+                                                    "detectorId": {
+                                                        "type": "string"
+                                                    },
+                                                    "determination": {},
+                                                    "evidence": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "@@odata.type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "clusterBy": {
+                                                                    "type": "string"
+                                                                },
+                                                                "clusterByValue": {
+                                                                    "type": "string"
+                                                                },
+                                                                "createdDateTime": {
+                                                                    "type": "string"
+                                                                },
+                                                                "detailedRoles": {
+                                                                    "type": "array"
+                                                                },
+                                                                "networkMessageId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "networkMessageIds": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "remediationStatus": {
+                                                                    "type": "string"
+                                                                },
+                                                                "remediationStatusDetails": {},
+                                                                "roles": {
+                                                                    "type": "array"
+                                                                },
+                                                                "tags": {
+                                                                    "type": "array"
+                                                                },
+                                                                "verdict": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "@@odata.type",
+                                                                "createdDateTime",
+                                                                "verdict",
+                                                                "remediationStatus",
+                                                                "remediationStatusDetails",
+                                                                "roles",
+                                                                "detailedRoles",
+                                                                "tags"
+                                                            ],
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "firstActivityDateTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "incidentId": {
+                                                        "type": "string"
+                                                    },
+                                                    "incidentWebUrl": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastActivityDateTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastUpdateDateTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "mitreTechniques": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "productName": {
+                                                        "type": "string"
+                                                    },
+                                                    "providerAlertId": {
+                                                        "type": "string"
+                                                    },
+                                                    "recommendedActions": {
+                                                        "type": "string"
+                                                    },
+                                                    "resolvedDateTime": {},
+                                                    "serviceSource": {
+                                                        "type": "string"
+                                                    },
+                                                    "severity": {
+                                                        "type": "string"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "systemTags": {
+                                                        "type": "array"
+                                                    },
+                                                    "tenantId": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatDisplayName": {},
+                                                    "threatFamilyName": {},
+                                                    "title": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "providerAlertId",
+                                                    "incidentId",
+                                                    "status",
+                                                    "severity",
+                                                    "classification",
+                                                    "determination",
+                                                    "serviceSource",
+                                                    "detectionSource",
+                                                    "productName",
+                                                    "detectorId",
+                                                    "tenantId",
+                                                    "title",
+                                                    "description",
+                                                    "recommendedActions",
+                                                    "category",
+                                                    "assignedTo",
+                                                    "alertWebUrl",
+                                                    "incidentWebUrl",
+                                                    "actorDisplayName",
+                                                    "threatDisplayName",
+                                                    "threatFamilyName",
+                                                    "mitreTechniques",
+                                                    "createdDateTime",
+                                                    "lastUpdateDateTime",
+                                                    "firstActivityDateTime",
+                                                    "lastActivityDateTime",
+                                                    "systemTags",
+                                                    "alertPolicyId",
+                                                    "additionalData",
+                                                    "comments",
+                                                    "evidence"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "assignedTo": {},
+                                        "classification": {
+                                            "type": "string"
+                                        },
+                                        "comments": {
+                                            "type": "array"
+                                        },
+                                        "createdDateTime": {
+                                            "type": "string"
+                                        },
+                                        "customTags": {
+                                            "type": "array"
+                                        },
+                                        "description": {},
+                                        "determination": {
+                                            "type": "string"
+                                        },
+                                        "displayName": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "incidentWebUrl": {
+                                            "type": "string"
+                                        },
+                                        "lastModifiedBy": {
+                                            "type": "string"
+                                        },
+                                        "lastUpdateDateTime": {
+                                            "type": "string"
+                                        },
+                                        "recommendedActions": {},
+                                        "recommendedHuntingQueries": {
+                                            "type": "array"
+                                        },
+                                        "redirectIncidentId": {},
+                                        "resolvingComment": {},
+                                        "severity": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "systemTags": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "tenantId": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Loop_to_get_non-reporting_users": {
+                            "foreach": "@variables('Network Message IDs')",
+                            "actions": {
+                                "Run_Hunting_Query_to_find_non_reporting_users": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://graph.microsoft.com/beta/security/runHuntingQuery",
+                                        "method": "POST",
+                                        "body": {
+                                            "Query": "EmailEvents | where NetworkMessageId == \"@{items('Loop_to_get_non-reporting_users')}\" | project RecipientEmailAddress"
+                                        },
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity",
+                                            "audience": "https://graph.microsoft.com"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Parse_AH_Results": {
+                                    "runAfter": {
+                                        "Run_Hunting_Query_to_find_non_reporting_users": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Run_Hunting_Query_to_find_non_reporting_users')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {
+                                                    "type": "string"
+                                                },
+                                                "results": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "RecipientEmailAddress": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "RecipientEmailAddress"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "name",
+                                                            "type"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "For_each": {
+                                    "foreach": "@outputs('Parse_AH_Results')?['body']?['results']",
+                                    "actions": {
+                                        "If_recipient_has_not_reported_the_message": {
+                                            "actions": {
+                                                "Add_recipient_to_non_reported_users": {
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "NonReportingUsers",
+                                                        "value": "@item()?['RecipientEmailAddress']"
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('Reporting Users')",
+                                                                "@item()?['RecipientEmailAddress']"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_AH_Results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Loop_to_get_reporters_and_message_ids": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Create_a_Simulation_if_there_were_Non_Reporters": {
+                            "actions": {
+                                "Create_How_To_guide_Simulation_against_non_reporters": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://graph.microsoft.com/beta/security/attackSimulation/simulations",
+                                        "method": "POST",
+                                        "body": {
+                                            "attackTechnique": "PhishTraining",
+                                            "createdBy": {
+                                                "email": "[parameters('EmailAddress')]"
+                                            },
+                                            "displayName": "Educate phish non-reporters",
+                                            "durationInDays": "3",
+                                            "includedAccountTarget": {
+                                                "accountTargetEmails": "@variables('NonReportingUsers')",
+                                                "type": "addressBook"
+                                            },
+                                            "landingPage@odata.bind": "https://graph.microsoft.com/beta/security/attacksimulation/landingPages/1cdfcb49-1065-46a6-b1c3-672071e20a6b",
+                                            "loginPage@odata.bind": "https://graph.microsoft.com/beta/security/attacksimulation/loginPages/3d96ca8a-ef5b-446d-9801-3a9484daf5b1",
+                                            "payload@odata.bind": "https://graph.microsoft.com/v1.0/security/attacksimulation/payloads/46b2a4ab-ad84-4ca0-8ace-1032cc0a4801",
+                                            "status": "scheduled",
+                                            "trainingSetting": {
+                                                "settingType": "noTraining"
+                                            }
+                                        },
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity",
+                                            "audience": "https://graph.microsoft.com"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Loop_to_get_non-reporting_users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greaterOrEquals": [
+                                            "@length(variables('NonReportingUsers'))",
+                                            1
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/connections/', variables('SentinelApiName'))]",
+                                "connectionName": "[variables('SentinelApiName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

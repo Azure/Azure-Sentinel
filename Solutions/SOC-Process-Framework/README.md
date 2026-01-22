@@ -43,10 +43,22 @@ Currently the only Playbook in this solution is the Get-SOCActions Playbook for 
 <a name="postdeployment">
 
 ### Post-Deployment Instructions
-After deploying this Solution and its associated playbook, you must authorize the connections leveraged within the Playbook before running.
+**1. After deploying the playbook, you must authorize the connections leveraged and assign permissions**
 
 1. Visit the playbook resource.
 2. Under "Development Tools" (located on the left), click "API Connections".
 3. Ensure each connection has been authorized.
+
+**2. Assign Microsoft Sentinel Responder Role to Playbook**
+
+This playbook uses a managed identity, which must have the Microsoft Sentinel Responder role assigned in the Sentinel instances to enable adding actions.
+
+1. Select the Playbook resource.
+2. In the left menu, click Identity.
+3. Under Permissions, click Azure role assignments.
+4. Click Add role assignment (Preview).
+5. Use the drop-down lists to select the resource group that your Sentinel Workspace is in. If multiple workspaces are used in different resource groups consider selecting subscription as a scope instead.
+6. In the Role drop-down list, select the role 'Microsoft Sentinel Responder'.
+7. Click Save to assign the role.
 
 **Note: If you've deployed the [SOC Process Framework Playbook](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SOC Process Framework/Playbooks/Get-SOCActions/azuredeploy.json) playbook, you will only need to authorize the Microsoft Sentinel connection.**

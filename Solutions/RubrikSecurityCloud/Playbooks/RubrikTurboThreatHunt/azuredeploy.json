@@ -1,0 +1,1924 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Rubrik Turbo Threat Hunt",
+        "description": "This playbook fetches the object mapped with incident and starts turbo threat hunt.",
+        "prerequisites": [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. Rubrik custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "4. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
+            "a. Create a Key Vault with unique name",
+            "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively",
+            "5. Obtain Teams GroupId and ChannelId",
+            "a. Create a Team with public channel.",
+            "b. Click on three dots (...) present on right side of the your newly created teams channel and Get link to the channel.",
+            "c. copy the text from the link between /channel and /, decode it using online url decoder and copy it to use as channelId.",
+            "d. copy the text of groupId parameter from link to use as groupId. "
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection like keyvault.",
+            "1. Click the connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Assign Role to add comment into incident**",
+            "Assign role to this playbook.",
+            "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add",
+            "2. Add role assignment",
+            "3. Assignment type: Job function roles -> Add 'Microsoft Sentinel Contributor' as a Role",
+            "4. Members: select managed identity for assigned access to and add your logic app as member",
+            "5. Click on review+assign",
+            "**c. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft sentinel, analytical rules should be configured to trigger an incident.",
+            "2. To manually run the playbook on a particular incident follow the below steps:",
+            "a. Go to Microsoft Sentinel -> <your workspace> -> Incidents",
+            "b. Select an incident.",
+            "c. In the right pane, click on Actions, and from the dropdown select the 'Run Playbook' option.",
+            "d. Click on the Run button beside this playbook."
+        ],
+        "prerequisitesDeployTemplateFile": "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
+        "lastUpdateTime": "2025-07-02T00:00:00.000Z",
+        "entities": [
+            "account",
+            "url"
+        ],
+        "tags": [
+            "ThreatHunt",
+            "Security",
+            "Rubrik"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Rubrik"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RubrikTurboThreatHunt",
+            "type": "string"
+        },
+        "API Hostname": {
+            "type": "String",
+            "defaultValue": "rubrik-tme-rdp.my.rubrik.com",
+            "metadata": {
+                "description": "Hostname of the RubrikApi instance."
+            }
+        },
+        "Rubrik Connector name": {
+            "defaultValue": "RubrikCustomConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Rubrik Custom Connector name"
+            }
+        },
+        "keyvaultName": {
+            "defaultValue": "RubrikSentinelKeyVault",
+            "type": "string"
+        },
+        "tenantId": {
+            "type": "string"
+        },
+        "TeamsGroupId": {
+            "defaultValue": "TeamsGroupId",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Group where the adaptive card will be posted"
+            }
+        },
+        "TeamsChannelId": {
+            "defaultValue": "TeamsChannelId",
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Channel where the adaptive card will be posted"
+            }
+        },
+        "PollingInterval": {
+            "type": "Int",
+            "defaultValue": 5,
+            "metadata": {
+                "description": "Time Interval in minutes for checking hunt status (Ex: 5)"
+            }
+        },
+        "PollingTimeout": {
+            "type": "Int",
+            "defaultValue": 720,
+            "metadata": {
+                "description": "Time limit in minutes for checking hunt status (Ex: 720)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]",
+        "RubrikCustomConnectorConnectionName": "[concat('RubrikCustomConnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        },
+                        "Polling_Timeout": {
+                            "defaultValue": "[parameters('PollingTimeout')]",
+                            "type": "Int"
+                        },
+                        "Polling_Interval": {
+                            "defaultValue": "[parameters('PollingInterval')]",
+                            "type": "Int"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "ClientId": {
+                            "runAfter": {
+                                "Initialize_Rubrik_Hunt_Link": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Incident_Comment_Count": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Failed_Status": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Hourly_Time_List": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientId')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "ClientSecret": {
+                            "runAfter": {
+                                "ClientId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientSecret')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_End_Date": {
+                            "runAfter": {
+                                "Get_7_Days_Ago_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "End_Date",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Time": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Start_Time",
+                                        "type": "string",
+                                        "value": "@{triggerBody()?['object']?['properties']?['createdTimeUtc']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Object_ID": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Object_ID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Start_Date": {
+                            "runAfter": {
+                                "Get_7_Days_Ago_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Start_Date",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(string(body('Get_7_Days_Ago_Time')), 'yyyy-MM-dd')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Access_Token": {
+                            "runAfter": {
+                                "Is_Authentication_Failed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Access_Token",
+                                        "type": "string",
+                                        "value": "@{body('Authentication')?['access_token']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_Message_Of_API": {
+                            "runAfter": {
+                                "Get_7_Days_Ago_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Error_Message",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Is_Authentication_Failed": {
+                            "actions": {
+                                "Terminate_Due_To_Authentication_Failed": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Authentication": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@outputs('Authentication')?['statusCode']",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialization_Threat_Hunt_Status": {
+                            "runAfter": {
+                                "Get_7_Days_Ago_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Threat_Hunt_Status",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Base_URL",
+                                        "type": "string",
+                                        "value": "[concat('https://', parameters('API Hostname'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Object_Type": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Object_Type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_User_Agent": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "User_Agent",
+                                        "type": "string",
+                                        "value": "MSFTSentinel-3.5.0"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_Each_Alerts": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "Parse_JSON_For_Alert": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_Each_Alerts')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "ClusterIdentifier": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "ClusterName": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "For_Each_Cluster_Name": {
+                                    "foreach": "@body('Parse_JSON_For_Alert')?['ClusterName']",
+                                    "actions": {
+                                        "Set_Object_Type": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Object_Type",
+                                                "value": "@items('For_Each_Cluster_Name')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_For_Alert": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "For_Each_Cluster_ID": {
+                                    "foreach": "@body('Parse_JSON_For_Alert')?['ClusterIdentifier']",
+                                    "actions": {
+                                        "Set_Object_ID": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Object_ID",
+                                                "value": "@item()"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_Each_Cluster_Name": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "ClientSecret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Condition_To_Check_Object_ID_And_Object_Type": {
+                            "actions": {
+                                "Terminate_Due_Empty_Object_ID_Or_Object_Type": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "404",
+                                            "message": "Object ID or Object Type is not mapped with Incident"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Alerts": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@or(empty(variables('Object_ID')), empty(variables('Object_Type')))",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_Input_To_Start_Turbo_Threat_Hunt": {
+                            "runAfter": {
+                                "Initialize_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "notificationUrl": "@listCallbackUrl()",
+                                    "body": {
+                                        "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.3\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"Large\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Start a Threat Hunt - Turbo Hunt\",\n            \"horizontalAlignment\": \"Center\",\n            \"style\": \"heading\",\n            \"color\": \"Accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Parameters to start a Turbo Threat hunt\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"separator\": true,\n            \"id\": \"info\"\n        },\n\t\t{\n            \"type\": \"TextBlock\",\n            \"text\": \"Object Type = @{variables('Object_Type')}\\n\\nObject ID = @{variables('Object_ID')}\\n\\nIncident Start Time =@{variables('Incident_Start_Time')}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"File Hashes to scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip1\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"File hash\",\n            \"isRequired\": true,\n             \"errorMessage\": \"Please provide File hash\",\n             \"label\": \"required\",\n             \"isMultiline\": true,\n            \"placeholder\": \"Enter comma-separated file hashes (MD5, SHA1, or SHA256)\"\n        },\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"Threat Hunt Name\",\n            \"wrap\": true,\n            \"separator\": true,\n            \"weight\": \"Bolder\",\n            \"id\": \"Ip16\"\n        },\n        {\n            \"type\": \"Input.Text\",\n            \"id\": \"Threat Hunt Name\",\n            \"isRequired\": true,\n            \"label\": \"required\",\n            \"errorMessage\": \"Please provide Threat Hunt Name\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Time Range\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip2\"\n        },\n        {\n            \"type\": \"Input.ChoiceSet\",\n            \"choices\": [\n                {\n                    \"title\": \"All snapshots (Scan all snapshots of each object.)\",\n                    \"value\": \"All\"\n                },\n                {\n                    \"title\": \"Most recent snapshot only (For each object, only scan the most recent snapshot.)\",\n                    \"value\": \"Most recent\"\n                },\n               {\n                  \"title\": \"Custom time range (Scan all snapshots of each object taken during a specific time range.)\",\n                   \"value\": \"Custom\"\n               }\n            ],\n            \"id\": \"Time Range\",\n            \"value\": \"All\",\n            \"style\": \"expanded\"\n        },\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"Below Input arguments are required only if Custom time range is selected above.\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"separator\": true,\n            \"id\": \"ip21\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Scan from Date\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip4\"\n        },\n        {\n            \"type\": \"Input.Date\",\n            \"id\": \"Start Date\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Scan from Time\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip35\"\n        },\n        {\n            \"type\": \"Input.ChoiceSet\",\n            \"choices\": @{variables('Hourly_Time_List')},\n            \"id\": \"Start Time\",\n            \"value\": \"00:00\",\n            \"style\": \"compact\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Scan to Date\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip5\"\n        },\n        {\n            \"type\": \"Input.Date\",\n            \"id\": \"End Date\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Scan to Time\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip36\"\n        },\n        {\n            \"type\": \"Input.ChoiceSet\",\n            \"choices\": @{variables('Hourly_Time_List')},\n            \"id\": \"End Time\",\n            \"value\": \"00:00\",\n            \"style\": \"compact\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Max Snapshots per Object\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip20\"\n        },\n        {\n            \"type\": \"Input.Number\",\n            \"id\": \"Max Snapshots per Object\",\n            \"value\": \"10\"\n        },\n       {\n            \"type\": \"TextBlock\",\n            \"text\": \"Limit for start hunt (if no matches found in specified time range)\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip9\"\n        },\n        {\n            \"type\": \"Input.Number\",\n            \"id\": \"Loop Limit\",\n            \"value\": \"1\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Time Delta to update the date range of scan\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"Ip6\"\n        },\n        {\n            \"type\": \"Input.Number\",\n            \"id\": \"Time Delta\",\n            \"label\": \"In days\",\n            \"value\": \"5\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit Answer\",\n            \"data\": {\n                \"id\": \"LoginVal\"\n            },\n            \"style\": \"positive\",\n            \"id\": \"Submit\"\n        }\n    ]\n}",
+                                        "updateMessage": "Thanks for your response!",
+                                        "recipient": {
+                                            "groupId": "[parameters('TeamsGroupId')]",
+                                            "channelId": "[parameters('TeamsChannelId')]"
+                                        }
+                                    }
+                                },
+                                "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                            }
+                        },
+                        "Initialize_Scan_Config": {
+                            "runAfter": {
+                                "Initialize_Status_Code": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_End_Date": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Start_Date": [
+                                    "Succeeded"
+                                ],
+                                "Initialization_Threat_Hunt_Status": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Error_Message_Of_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Scan_Config",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Switch_Case_For_Time_Range": {
+                            "runAfter": {
+                                "Get_Input_To_Start_Turbo_Threat_Hunt": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Does_Scan_For_All_Snapshots": {
+                                    "case": "All",
+                                    "actions": {
+                                        "Set_Scan_Config_For_All_Snapshots": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Scan_Config",
+                                                "value": {
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Does_Scan_For_Most_Recent_Snapshot": {
+                                    "case": "Most recent",
+                                    "actions": {
+                                        "Set_Scan_Config_For_Most_Recent_Snapshot": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Scan_Config",
+                                                "value": {
+                                                    "maxSnapshotsPerObject": 1
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Does_Scan_For_Custom_Time_Range": {
+                                    "case": "Custom",
+                                    "actions": {
+                                        "Set_Scan_Config_For_Custom_Time_Range": {
+                                            "runAfter": {
+                                                "Condition_To_Check_Start_Date_Is_Provided": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Scan_Config",
+                                                "value": {
+                                                    "maxSnapshotsPerObject": "@if(or(empty(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Max Snapshots per Object']), lessOrEquals(int(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Max Snapshots per Object']), 0)), 10, int(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Max Snapshots per Object']))",
+                                                    "startTime": "@variables('Start_Date')",
+                                                    "endTime": "@variables('End_Date')"
+                                                }
+                                            }
+                                        },
+                                        "Condition_To_Check_Limit_Is_Provided": {
+                                            "actions": {
+                                                "Set_Loop_Limit": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Loop_Limit",
+                                                        "value": "@int(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Loop Limit'])"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_Scan_Config_For_Custom_Time_Range": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@ body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']",
+                                                            "Loop Limit"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "greaterOrEquals": [
+                                                            "@int(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Loop Limit'])",
+                                                            1
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Check_Start_Date_Is_Provided": {
+                                            "actions": {
+                                                "Condition_To_Validate_Start_Date": {
+                                                    "actions": {
+                                                        "Set_Start_Date": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Start_Date",
+                                                                "value": "@variables('Teams_Start_Date')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Start_Date_Given_By_User_Using_Start_Time": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Start_Date_Using_Updated_End_Date": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Start_Date",
+                                                                    "value": "@subtractFromTime(variables('End_Date'), 7, 'Day')"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "less": [
+                                                                    "@variables('Teams_Start_Date')",
+                                                                    "@variables('End_Date')"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Set_Start_Date_Given_By_User_Using_Start_Time": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Teams_Start_Date",
+                                                        "value": "@concat(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Start Date'], 'T', body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Start Time'], ':00Z')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition_To_Check_End_Date_Is_Provided": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_Start_Date_Using_End_Date": {
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "Start_Date",
+                                                            "value": "@subtractFromTime(variables('End_Date'), 7, 'Day')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']",
+                                                            "Start Date"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Check_End_Date_Is_Provided": {
+                                            "actions": {
+                                                "Condition_To_Validate_End_Date": {
+                                                    "actions": {
+                                                        "Set_End_Date": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "End_Date",
+                                                                "value": "@variables('Teams_End_Date')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_End_Date_Given_By_User_Using_End_Time": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "lessOrEquals": [
+                                                                    "@variables('Teams_End_Date')",
+                                                                    "@utcNow()"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Set_End_Date_Given_By_User_Using_End_Time": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Teams_End_Date",
+                                                        "value": "@concat(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['End Date'], 'T', body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['End Time'], ':00Z')"
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']",
+                                                            "End Date"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                }
+                            },
+                            "expression": "@body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Time Range']",
+                            "type": "Switch"
+                        },
+                        "Get_7_Days_Ago_Time": {
+                            "runAfter": {
+                                "Initialize_Incident_Time": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Object_ID": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Object_Type": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_User_Agent": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "GetPastTime",
+                            "inputs": {
+                                "interval": 7,
+                                "timeUnit": "Day"
+                            }
+                        },
+                        "Initialize_Indicators_Of_Compromise": {
+                            "runAfter": {
+                                "Initialize_Scan_Config": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Indicators_Of_Compromise",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_Each_File_Hash": {
+                            "foreach": "@split(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['File hash'],',')",
+                            "actions": {
+                                "Append_To_Indicators_Of_Compromise": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Indicators_Of_Compromise",
+                                        "value": {
+                                            "iocKind": "IOC_HASH",
+                                            "iocValue": "@items('For_Each_File_Hash')"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Switch_Case_For_Time_Range": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_Turbo_Threat_Hunt_ID": {
+                            "runAfter": {
+                                "Initialize_Scan_Config": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Hunt_ID",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Loop_Limit": {
+                            "runAfter": {
+                                "Initialize_Scan_Config": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Loop_Limit",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        },
+                        "Perform_Turbo_Threat_Hunt_Until_Limit_Reach": {
+                            "actions": {
+                                "Start_Turbo_Threat_Hunt": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('Base_URL')}/api/graphql",
+                                        "method": "POST",
+                                        "headers": {
+                                            "Authorization": "Bearer @{variables('Access_Token')}",
+                                            "Content-Type": "application/json",
+                                            "User-Agent": "@{variables('User_Agent')}"
+                                        },
+                                        "body": {
+                                            "query": " mutation StartTurboThreatHuntMutation($input: StartTurboThreatHuntInput!) {\r\n  startTurboThreatHunt(input: $input) {\r\n    huntId\r\n    __typename\r\n  }\r\n}",
+                                            "variables": {
+                                                "input": {
+                                                    "config": {
+                                                        "baseConfig": {
+                                                            "name": "@body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Threat Hunt Name']",
+                                                            "ioc": {
+                                                                "iocList": {
+                                                                    "indicatorsOfCompromise": "@variables('Indicators_Of_Compromise')"
+                                                                }
+                                                            },
+                                                            "threatHuntType": "TURBO_THREAT_HUNT",
+                                                            "snapshotScanLimit": {
+                                                                "scanConfig": "@variables('Scan_Config')"
+                                                            }
+                                                        },
+                                                        "objectsToScan": [
+                                                            {
+                                                                "objectType": "@variables('Object_Type')",
+                                                                "objectIds": [
+                                                                    "@variables('Object_ID')"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Does_Start_Turbo_Threat_Hunt_API_Success": {
+                                    "actions": {
+                                        "Set_Turbo_Threat_Hunt_ID": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Hunt_ID",
+                                                "value": "@body('Start_Turbo_Threat_Hunt')?['data']?['startTurboThreatHunt']?['huntId']"
+                                            }
+                                        },
+                                        "Run_Until_Turbo_Threat_Hunt_Completes": {
+                                            "actions": {
+                                                "Check_Turbo_Threat_Hunt_Status": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "@{variables('Base_URL')}/api/graphql",
+                                                        "method": "POST",
+                                                        "headers": {
+                                                            "Authorization": "Bearer @{variables('Access_Token')}",
+                                                            "Content-Type": "application/json",
+                                                            "User-Agent": "@{variables('User_Agent')}"
+                                                        },
+                                                        "body": {
+                                                            "query": "query ThreatHuntDetailsV2Query($huntId: String!) {\r\n  threatHuntObjectMetrics(huntId: $huntId) {\r\n    totalObjectsScanned\r\n    totalAffectedObjects\r\n    totalUnaffectedObjects\r\n    totalObjectsUnscannable\r\n    unaffectedObjectsFromDb\r\n    cleanRecoverableObjectLimit\r\n    __typename\r\n  }\r\n  threatHuntDetailV2(huntId: $huntId) {\r\n    totalObjectFids\r\n    startTime\r\n    endTime\r\n    status\r\n    totalMatchedSnapshots\r\n    totalScannedSnapshots\r\n    totalUniqueFileMatches\r\n    baseConfig {\r\n      name\r\n      notes\r\n      maxMatchesPerSnapshot\r\n      threatHuntType\r\n      ioc {\r\n        iocList {\r\n          indicatorsOfCompromise {\r\n            iocKind\r\n            iocValue\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      snapshotScanLimit {\r\n        scanLimit {\r\n          scanConfig {\r\n            maxSnapshotsPerObject\r\n            startTime\r\n            endTime\r\n            __typename\r\n          }\r\n          objectSnapshotConfig {\r\n            objectFid\r\n            snapshotFid\r\n            __typename\r\n          }\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      fileScanCriteria {\r\n        fileSizeLimits {\r\n          maximumSizeInBytes\r\n          minimumSizeInBytes\r\n          __typename\r\n        }\r\n        fileTimeLimits {\r\n          earliestCreationTime\r\n          earliestModificationTime\r\n          latestCreationTime\r\n          latestModificationTime\r\n          __typename\r\n        }\r\n        pathFilter {\r\n          inclusions\r\n          exclusions\r\n          exemptions\r\n          __typename\r\n        }\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}",
+                                                            "variables": {
+                                                                "huntId": "@variables('Hunt_ID')"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Does_Check_Turbo_Threat_Hunt_Status_API_Success": {
+                                                    "actions": {
+                                                        "Set_Threat_Hunt_Status": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Threat_Hunt_Status",
+                                                                "value": "@body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['status']"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Check_Turbo_Threat_Hunt_Status": [
+                                                            "Succeeded",
+                                                            "TimedOut",
+                                                            "Skipped",
+                                                            "Failed"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Status_Code_For_Check_Turbo_Threat_Hunt_Status_Failure": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Status_Code",
+                                                                    "value": "@int(outputs('Check_Turbo_Threat_Hunt_Status')?['statusCode'])"
+                                                                }
+                                                            },
+                                                            "Set_Error_Message_Due_To_Check_Turbo_Threat_Hunt_Status_Failure": {
+                                                                "runAfter": {
+                                                                    "Set_Status_Code_For_Check_Turbo_Threat_Hunt_Status_Failure": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Error_Message",
+                                                                    "value": "@if(equals(outputs('Check_Turbo_Threat_Hunt_Status')?['statusCode'], 200), body('Check_Turbo_Threat_Hunt_Status')?['errors'][0]?['message'], body('Check_Turbo_Threat_Hunt_Status')?['message'])"
+                                                                }
+                                                            },
+                                                            "Set_Loop_Limit_To_Zero_Due_To_Check_Turbo_Threat_Hunt_Status_Failure": {
+                                                                "runAfter": {
+                                                                    "Set_Error_Message_Due_To_Check_Turbo_Threat_Hunt_Status_Failure": [
+                                                                        "Succeeded",
+                                                                        "TimedOut",
+                                                                        "Skipped",
+                                                                        "Failed"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Loop_Limit",
+                                                                    "value": 0
+                                                                }
+                                                            },
+                                                            "Set_Threat_Hunt_Status_Due_To_Check_Turbo_Threat_Hunt_Status_Failure": {
+                                                                "runAfter": {
+                                                                    "Set_Loop_Limit_To_Zero_Due_To_Check_Turbo_Threat_Hunt_Status_Failure": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Threat_Hunt_Status",
+                                                                    "value": "Unable To Check Status"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@outputs('Check_Turbo_Threat_Hunt_Status')?['statusCode']",
+                                                                    200
+                                                                ]
+                                                            },
+                                                            {
+                                                                "not": {
+                                                                    "contains": [
+                                                                        "@body('Check_Turbo_Threat_Hunt_Status')",
+                                                                        "errors"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Condition_To_Check_Threat_Hunt_Status": {
+                                                    "actions": {
+                                                        "Polling_interval": {
+                                                            "type": "Wait",
+                                                            "inputs": {
+                                                                "interval": {
+                                                                    "count": "@if(or(empty(string(parameters('Polling_Interval'))),lessOrEquals(int(parameters('Polling_Interval')),0)), 5, int(parameters('Polling_Interval')))",
+                                                                    "unit": "Minute"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Does_Check_Turbo_Threat_Hunt_Status_API_Success": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "or": [
+                                                            {
+                                                                "contains": [
+                                                                    "@variables('Waiting_Status')",
+                                                                    "@variables('Threat_Hunt_Status')"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_Turbo_Threat_Hunt_ID": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": "@equals(or(\r\n    equals(variables('Threat_Hunt_Status'), 'SUCCEEDED'),\r\n    contains(variables('Failed_Status'), variables('Threat_Hunt_Status'))\r\n),true)",
+                                            "limit": {
+                                                "timeout": "@if(or(empty(string(parameters('Polling_Timeout'))),lessOrEquals(int(parameters('Polling_Timeout')),0)), 'PT720M', concat('PT',string(parameters('Polling_Timeout')),'M'))"
+                                            },
+                                            "type": "Until"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Start_Turbo_Threat_Hunt": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Status_Code_For_Start_Turbo_Threat_Hunt_Failure": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Status_Code",
+                                                    "value": "@int(outputs('Start_Turbo_Threat_Hunt')['statusCode'])"
+                                                }
+                                            },
+                                            "Set_Error_Message_Due_To_Start_Turbo_Threat_Hunt_Failure": {
+                                                "runAfter": {
+                                                    "Set_Status_Code_For_Start_Turbo_Threat_Hunt_Failure": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Error_Message",
+                                                    "value": "@if(equals(outputs('Start_Turbo_Threat_Hunt')?['statusCode'], 200), body('Start_Turbo_Threat_Hunt')?['errors'][0]?['message'], body('Start_Turbo_Threat_Hunt')?['message'])"
+                                                }
+                                            },
+                                            "Set_Loop_Limit_To_Zero_Due_To_Start_Turbo_Threat_Hunt_Failure": {
+                                                "runAfter": {
+                                                    "Set_Error_Message_Due_To_Start_Turbo_Threat_Hunt_Failure": [
+                                                        "Succeeded",
+                                                        "TimedOut",
+                                                        "Skipped",
+                                                        "Failed"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Loop_Limit",
+                                                    "value": 0
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('Start_Turbo_Threat_Hunt')['statusCode']",
+                                                    200
+                                                ]
+                                            },
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@body('Start_Turbo_Threat_Hunt')",
+                                                        "errors"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition_To_Check_Turbo_Threat_Hunt_Result": {
+                                    "actions": {
+                                        "Condition_To_Check_File_Matches": {
+                                            "actions": {
+                                                "Decrement_Loop_Limit": {
+                                                    "type": "DecrementVariable",
+                                                    "inputs": {
+                                                        "name": "Loop_Limit",
+                                                        "value": 1
+                                                    }
+                                                },
+                                                "Set_End_Date_To_Previous_Start_Date": {
+                                                    "runAfter": {
+                                                        "Decrement_Loop_Limit": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "End_Date",
+                                                        "value": "@variables('Start_Date')"
+                                                    }
+                                                },
+                                                "Subtract_Time_Delta_From_Start_Date": {
+                                                    "runAfter": {
+                                                        "Set_End_Date_To_Previous_Start_Date": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Expression",
+                                                    "kind": "SubtractFromTime",
+                                                    "inputs": {
+                                                        "baseTime": "@variables('Start_Date')",
+                                                        "interval": "@if(or(empty(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Time Delta']), lessOrEquals(int(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Time Delta']), 0)), 7, int(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Time Delta']))",
+                                                        "timeUnit": "Day"
+                                                    }
+                                                },
+                                                "Set_Start_Date_After_Subtracting_Time_Delta": {
+                                                    "runAfter": {
+                                                        "Subtract_Time_Delta_From_Start_Date": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Start_Date",
+                                                        "value": "@formatDateTime(body('Subtract_Time_Delta_From_Start_Date'), 'yyyy-MM-dd')"
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_Loop_Limit_To_Zero": {
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "Loop_Limit",
+                                                            "value": 0
+                                                        }
+                                                    },
+                                                    "Condition_To_Verify_Incident_Comment_Count_Is_Less_Than_99": {
+                                                        "actions": {
+                                                            "Add_Hunt_Details_Into_Incident_Comment": {
+                                                                "runAfter": {
+                                                                    "Set_Rubrik_Hunt_Link": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "body": {
+                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                        "message": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Turbo Hunt |</strong></b> @{formatDateTime(utcNow(), 'MMMM d yyyy')}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Hunt name:</strong></b> @{body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['Threat Hunt Name']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Hunt Start Time: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['startTime']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Hunt End Time: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['endTime']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Total IOCs: </strong></b>@{length(body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['baseConfig']?['ioc']?['iocList']?['indicatorsOfCompromise'])}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Unique File Matches: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['totalUniqueFileMatches']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Scanned Objects</strong></b><b><strong class=\"editor-text-bold\">: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntObjectMetrics']?['totalObjectsScanned']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Affected Objects: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntObjectMetrics']?['totalAffectedObjects']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Scanned Snapshots: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['totalScannedSnapshots']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Matched Snapshots: </strong></b>@{body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['totalMatchedSnapshots']}</p><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">File Hashes: </strong></b>@{replace(body('Get_Input_To_Start_Turbo_Threat_Hunt')?['data']?['File hash'], ',', ', ')}</p><br><p class=\"editor-paragraph\">@{variables('Rubrik_Hunt_Link')}</p><br>"
+                                                                    },
+                                                                    "path": "/Incidents/Comment"
+                                                                }
+                                                            },
+                                                            "Set_Rubrik_Hunt_Link": {
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Rubrik_Hunt_Link",
+                                                                    "value": "Click on the link to see details in Rubrik portal: \u003ca href=\"@{variables('Base_URL')}/radar/investigations/threat_hunts/@{variables('Hunt_ID')}/details?version=v2\"\u003eClick here\u003c/a\u003e"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Set_Loop_Limit_To_Zero": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Condition_To_Verify_Incident_Comment_Count_Is_99": {
+                                                                    "actions": {
+                                                                        "Add_Comment_Limit_Has_Been_Exceeded_For_Incident": {
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "body": {
+                                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                    "message": "\u003cp class=\"editor-paragraph\"\u003eComment limit to an incident has been breached.\u003c/p\u003e"
+                                                                                },
+                                                                                "path": "/Incidents/Comment"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@variables('Incident_Comment_Count')",
+                                                                                    99
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "less": [
+                                                                        "@variables('Incident_Comment_Count')",
+                                                                        99
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('Check_Turbo_Threat_Hunt_Status')?['data']?['threatHuntDetailV2']?['totalUniqueFileMatches']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Does_Start_Turbo_Threat_Hunt_API_Success": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Loop_Limit_To_Zero_Due_Hunt_Status": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Loop_Limit",
+                                                    "value": 0
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('Threat_Hunt_Status')",
+                                                    "SUCCEEDED"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_File_Hash": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('Loop_Limit'),0)",
+                            "limit": {
+                                "timeout": "PT900M"
+                            },
+                            "type": "Until"
+                        },
+                        "Initialize_Status_Code": {
+                            "runAfter": {
+                                "Get_7_Days_Ago_Time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Status_Code",
+                                        "type": "integer",
+                                        "value": 200
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Waiting_Status": {
+                            "runAfter": {
+                                "Initialize_Loop_Limit": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Indicators_Of_Compromise": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Turbo_Threat_Hunt_ID": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Start_Date_Given_By_User": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_End_Date_Given_By_User": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Waiting_Status",
+                                        "type": "array",
+                                        "value": [
+                                            "IN_PROGRESS",
+                                            "PARTIALLY_SUCCEEDED",
+                                            "PENDING",
+                                            "STATUS_UNSPECIFIED"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Failed_Status": {
+                            "runAfter": {
+                                "Initialize_Waiting_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Failed_Status",
+                                        "type": "array",
+                                        "value": [
+                                            "ABORTED",
+                                            "CANCELED",
+                                            "CANCELING",
+                                            "FAILED",
+                                            "Unable To Check Status"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Incident_Comment_Count": {
+                            "runAfter": {
+                                "Initialize_Waiting_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Comment_Count",
+                                        "type": "integer",
+                                        "value": "@length(triggerBody()?['object']?['properties']?['Comments'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_To_Check_Error_Message_And_Status_Code": {
+                            "actions": {
+                                "Terminate_Due_To_Error_Occured": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "@variables('Status_Code')",
+                                            "message": "@variables('Error_Message')"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Perform_Turbo_Threat_Hunt_Until_Limit_Reach": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "or": [
+                                    {
+                                        "equals": [
+                                            "@empty(variables('Error_Message'))",
+                                            "@false"
+                                        ]
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('Status_Code')",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Authentication": {
+                            "runAfter": {
+                                "Condition_To_Check_Object_ID_And_Object_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['RubrikCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "client_id": "@body('ClientId')?['value']",
+                                    "client_secret": "@body('ClientSecret')?['value']"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "User-Agent": "@variables('User_Agent')"
+                                },
+                                "path": "/api/client_token"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_Rubrik_Hunt_Link": {
+                            "runAfter": {
+                                "Initialize_Waiting_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Rubrik_Hunt_Link",
+                                        "type": "string",
+                                        "value": "@{variables('Base_URL')}/radar/investigations/threat_hunts"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Start_Date_Given_By_User": {
+                            "runAfter": {
+                                "Initialize_Scan_Config": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Teams_Start_Date",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_End_Date_Given_By_User": {
+                            "runAfter": {
+                                "Initialize_Scan_Config": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Teams_End_Date",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Hourly_Time_List": {
+                            "runAfter": {
+                                "Initialize_Waiting_Status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Hourly_Time_List",
+                                        "type": "array",
+                                        "value": [
+                                            {
+                                                "title": "00:00",
+                                                "value": "00:00"
+                                            },
+                                            {
+                                                "title": "00:30",
+                                                "value": "00:30"
+                                            },
+                                            {
+                                                "title": "01:00",
+                                                "value": "01:00"
+                                            },
+                                            {
+                                                "title": "01:30",
+                                                "value": "01:30"
+                                            },
+                                            {
+                                                "title": "02:00",
+                                                "value": "02:00"
+                                            },
+                                            {
+                                                "title": "02:30",
+                                                "value": "02:30"
+                                            },
+                                            {
+                                                "title": "03:00",
+                                                "value": "03:00"
+                                            },
+                                            {
+                                                "title": "03:30",
+                                                "value": "03:30"
+                                            },
+                                            {
+                                                "title": "04:00",
+                                                "value": "04:00"
+                                            },
+                                            {
+                                                "title": "04:30",
+                                                "value": "04:30"
+                                            },
+                                            {
+                                                "title": "05:00",
+                                                "value": "05:00"
+                                            },
+                                            {
+                                                "title": "05:30",
+                                                "value": "05:30"
+                                            },
+                                            {
+                                                "title": "06:00",
+                                                "value": "06:00"
+                                            },
+                                            {
+                                                "title": "06:30",
+                                                "value": "06:30"
+                                            },
+                                            {
+                                                "title": "07:00",
+                                                "value": "07:00"
+                                            },
+                                            {
+                                                "title": "07:30",
+                                                "value": "07:30"
+                                            },
+                                            {
+                                                "title": "08:00",
+                                                "value": "08:00"
+                                            },
+                                            {
+                                                "title": "08:30",
+                                                "value": "08:30"
+                                            },
+                                            {
+                                                "title": "09:00",
+                                                "value": "09:00"
+                                            },
+                                            {
+                                                "title": "09:30",
+                                                "value": "09:30"
+                                            },
+                                            {
+                                                "title": "10:00",
+                                                "value": "10:00"
+                                            },
+                                            {
+                                                "title": "10:30",
+                                                "value": "10:30"
+                                            },
+                                            {
+                                                "title": "11:00",
+                                                "value": "11:00"
+                                            },
+                                            {
+                                                "title": "11:30",
+                                                "value": "11:30"
+                                            },
+                                            {
+                                                "title": "12:00",
+                                                "value": "12:00"
+                                            },
+                                            {
+                                                "title": "12:30",
+                                                "value": "12:30"
+                                            },
+                                            {
+                                                "title": "13:00",
+                                                "value": "13:00"
+                                            },
+                                            {
+                                                "title": "13:30",
+                                                "value": "13:30"
+                                            },
+                                            {
+                                                "title": "14:00",
+                                                "value": "14:00"
+                                            },
+                                            {
+                                                "title": "14:30",
+                                                "value": "14:30"
+                                            },
+                                            {
+                                                "title": "15:00",
+                                                "value": "15:00"
+                                            },
+                                            {
+                                                "title": "15:30",
+                                                "value": "15:30"
+                                            },
+                                            {
+                                                "title": "16:00",
+                                                "value": "16:00"
+                                            },
+                                            {
+                                                "title": "16:30",
+                                                "value": "16:30"
+                                            },
+                                            {
+                                                "title": "17:00",
+                                                "value": "17:00"
+                                            },
+                                            {
+                                                "title": "17:30",
+                                                "value": "17:30"
+                                            },
+                                            {
+                                                "title": "18:00",
+                                                "value": "18:00"
+                                            },
+                                            {
+                                                "title": "18:30",
+                                                "value": "18:30"
+                                            },
+                                            {
+                                                "title": "19:00",
+                                                "value": "19:00"
+                                            },
+                                            {
+                                                "title": "19:30",
+                                                "value": "19:30"
+                                            },
+                                            {
+                                                "title": "20:00",
+                                                "value": "20:00"
+                                            },
+                                            {
+                                                "title": "20:30",
+                                                "value": "20:30"
+                                            },
+                                            {
+                                                "title": "21:00",
+                                                "value": "21:00"
+                                            },
+                                            {
+                                                "title": "21:30",
+                                                "value": "21:30"
+                                            },
+                                            {
+                                                "title": "22:00",
+                                                "value": "22:00"
+                                            },
+                                            {
+                                                "title": "22:30",
+                                                "value": "22:30"
+                                            },
+                                            {
+                                                "title": "23:00",
+                                                "value": "23:00"
+                                            },
+                                            {
+                                                "title": "23:30",
+                                                "value": "23:30"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "RubrikCustomConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RubrikCustomConnectorConnectionName'))]",
+                                "connectionName": "[variables('RubrikCustomConnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "RubrikTurboThreatHunt",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('RubrikCustomConnectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RubrikCustomConnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('RubrikCustomConnectorConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:grantType": "code",
+                    "vaultName": "[parameters('keyvaultName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

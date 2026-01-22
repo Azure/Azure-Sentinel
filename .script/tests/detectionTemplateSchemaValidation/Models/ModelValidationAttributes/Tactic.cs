@@ -132,5 +132,11 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
         /// Such resources include infrastructure, accounts, or capabilities. 
         /// </summary>
         ResourceDevelopment = 262144,
+
+        /// <summary>
+        /// ID:TA0103 Evasion consists of techniques that adversaries use to evade detection by security products and security teams.
+        /// Adversaries may also leverage and abuse trusted devices and processes to hide their activity, possibly by masquerading as master devices or native software.
+        /// </summary>
+        Evasion = 524288
     }
 }

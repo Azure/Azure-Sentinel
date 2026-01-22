@@ -1,5 +1,4 @@
 # Reset-AADPassword
-author: Nicholas DiCola
 
 This playbook will reset the user password using Graph API.  It will send the password (which is a random guid substring) to the user's manager.  The user will have to reset the password upon login.  <br>
 Permissions needed will wary do you need to reset password for regular users (Password Administrator) or admins and regular users (Global administrators). Admin users include active and eligible admin users.
@@ -28,13 +27,16 @@ After deployment, you can run this playbook manually from an entity context in t
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Entra%2520ID%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%2520Entra%2520ID%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
 
-
-## Prerequisites
-
 ## Post deployment
 - Authorize Office 365 Outlook connection
+   - Open Playbook
+   - Click edit API connection
+   - Click Authorize
+   - Sign in
+   - Click Save
 - Grant Password Administrator (reset password for regular users)/Global Administrator (reset password for admins and regular users) and Microsoft Sentinel Responder permissions to the managed identity.<br>
  Run the following code replacing the managed identity object id.  You find the managed identity object ID on the "Identity" blade under "Settings" for the Logic App.
+   - _Note : If you are using both Entity trigger and incident trigger playbooks , kindly run the below script for each playbook because managed identity guid will be diffrent for each playbook._
 ```powershell
 $MIGuid = "<Enter your managed identity guid here>"
 $SubscriptionId = "<Enter your subsciption id here>"
@@ -136,7 +138,10 @@ if ($null -eq $servicePrincipal) {
     }
 }
 ```
-
+- Configurations in Sentinel (Recommended step)<br>
+   - While creating analytical rule , kindly take care of proper mapping beacuse these playbooks require Name and UPNsuffix identifier to be mapped properly under account entity .
+   for example if you want the jhon@abc.company.com to be blocked then , kindly map the column having jhon to Name identifier and abc.company.com to UPNsuffix identifier
+   ![image](./entity-trigger/images/entity_mapping.png)<br>
 ## Screenshots
 **Incident Trigger**<br>
 ![Incident Trigger](./incident-trigger/images/incidentTrigger_light.png)<br>

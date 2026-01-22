@@ -1,3 +1,5 @@
+"""Orchestrator function for asset export jobs."""
+
 import json
 import os
 import logging
@@ -11,13 +13,26 @@ logger.setLevel(logging.WARNING)
 
 asset_status_and_chunk = "TenableAssetExportStatusAndSendChunks"
 export_poll_schedule_minutes = int(os.getenv("TenableExportPollScheduleInMinutes", "1"))
+logs_starts_with = "TenableVM"
+function_name = "TenableAssetExportOrchestrator"
 
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
-    logging.info("started asset export orchestrator")
+    """
+    Orchestrator function to handle Tenable.io Asset Export Jobs.
+
+    It calls activity function to check job status. If finished, returns the chunks available.
+
+    Args:
+        context: The durable orchestration context
+
+    Returns:
+        A dictionary containing the status of the job, the job ID, the chunks available,
+        the asset instance ID and the type of export
+    """
+    logging.info(f"{logs_starts_with} {function_name}: Started asset export orchestrator")
     job_details = context.get_input()
-    logging.info("loaded job details from orchestrator:")
-    logging.info(job_details)
+    logging.info(f"{logs_starts_with} {function_name}: Loaded job details from orchestrator: {job_details}")
 
     asset_job_id = job_details["assetJobId"] if "assetJobId" in job_details else ""
     if asset_job_id == "":
@@ -30,44 +45,33 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         }
 
     chunks = []
-    logging.info(f"checking status of job {asset_job_id}, outside while loop")
     start_time = job_details.get("start_time", 0)
     str_activity_data = json.dumps({"asset_job_id": asset_job_id, "start_time": start_time})
-    job_status = yield context.call_activity(asset_status_and_chunk, str_activity_data)
-    logging.info(f"{asset_job_id} is currently in this state:")
-    logging.info(job_status)
-    logging.info(job_status["status"])
 
-    tio_status = ["ERROR", "CANCELLED", "FINISHED"]
-    while not "status" in job_status or not (job_status["status"] in tio_status):
+    while True:
+        logging.info(f"{logs_starts_with} {function_name}: Checking status of job {asset_job_id}")
+        str_job_status = yield context.call_activity(asset_status_and_chunk, str_activity_data)
+        try:
+            job_status = json.loads(str_job_status)
+        except json.JSONDecodeError as json_err:
+            logging.error(
+                f"{logs_starts_with} {function_name}: Error while loading JSON data from activity." f"Error: {json_err}"
+            )
+            raise Exception(json_err)
         logging.info(
-            f"Checking {asset_job_id} after waking up again, inside while loop:")
-        job_status = yield context.call_activity(asset_status_and_chunk, str_activity_data)
-        logging.info(f"{asset_job_id} is currently in this state:")
-        logging.info(job_status)
+            f"{logs_starts_with} {function_name}: {asset_job_id} is currently in this state: {job_status['status']}"
+        )
 
-        if "status" in job_status and job_status["status"] == "FINISHED":
-            logging.info("job is completely finished!")
+        if "status" in job_status and job_status["status"] in ["FINISHED", "ERROR", "CANCELLED"]:
+            logging.info(f"{logs_starts_with} {function_name}: Job is completed with {job_status["status"].lower()}!")
             chunks = job_status["chunks_available"]
-            logging.info(f"Found these chunks: {chunks}")
+            logging.info(f"{logs_starts_with} {function_name}: Found these chunks: {chunks}")
             break
-        elif "status" in job_status and job_status["status"] == "ERROR":
-            logging.info("job is completed with Error status!")
-            chunks = job_status["chunks_available"]
-            logging.info(f"Found these chunks: {chunks}")
-            break
-        elif "status" in job_status and job_status["status"] == "CANCELLED":
-            logging.info("job is completed with Cancelled status!")
-            chunks = job_status["chunks_available"]
-            logging.info(f"Found these chunks: {chunks}")
-            break
-        else:
-            logging.info("not quite ready, going to sleep...")
-            next_check = context.current_utc_datetime + timedelta(minutes=export_poll_schedule_minutes)
-            yield context.create_timer(next_check)
+        logging.info(f"{logs_starts_with} {function_name}: Job is not completed. Retrying shortly...")
+        next_check = context.current_utc_datetime + timedelta(minutes=export_poll_schedule_minutes)
+        yield context.create_timer(next_check)
 
-    logging.info("Checking that chunks exist...")
-    logging.info(f"Number of chunks: {len(chunks)}")
+    logging.info(f"{logs_starts_with} {function_name}: Number of chunks: {len(chunks)}")
 
     tenable_status = TenableStatus.finished.value
     if "status" in job_status and (job_status["status"] == "CANCELLED" or job_status["status"] == "ERROR"):

@@ -6,21 +6,24 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 tags:
   - RecordedFuture
 query: |
-  imDns
+  // The source table (_Im_Dns) is a ASIM parser table, but can be replaced by any infrastructure table containing domain/dns data.
+  // The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns
+  _Im_Dns
   | where isnotempty(Domain)
   | join kind=inner (
-  ThreatIntelligenceIndicator
+  ThreatIntelIndicators
   // Only look for IOCs
-  | where isnotempty(DomainName)
+  | where ObservableKey == 'domain-name:value'
+  | where isnotempty(ObservableValue)
   // Only look at Recorded Future Threat Hunt Indicators.
-  | where Description startswith "Recorded Future - Threat Hunt"
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  ) on $left.Domain == $right.DomainName
+  | where Data.description startswith "Recorded Future - Threat Hunt"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  ) on $left.Domain == $right.ObservableValue
   | project Domain, DstIpAddr
   | extend IP_0_Address = DstIpAddr
   | extend DNS_0_DomainName = Domain

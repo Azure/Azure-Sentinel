@@ -96,6 +96,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "SavedSearches": [],
   "Hunting Queries": [],
   "Data Connectors": [],
+  "SummaryRules": [],  
   "Watchlists": [],
   "WatchlistDescription": [],
   "dependentDomainSolutionIds": [],
@@ -154,6 +155,9 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
     "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaRequestBlocklistedFileType.yaml",
     "Solutions/CiscoUmbrella/Analytic Rules/CiscoUmbrellaURIContainsIPAddress.yaml"
   ],
+  "SummaryRules": [
+    "SummaryRules/yourSummaryRuleFile.yaml"
+  ],
   "Workbooks": [
     "Solutions/CiscoUmbrella/Workbooks/CiscoUmbrella.json"
   ],
@@ -162,7 +166,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
     "Playbooks/CiscoUmbrellaInvestigateAPIConnector/azuredeploy.json",
     "Playbooks/CiscoUmbrellaManagementAPIConnector/azuredeploy.json",
     "Playbooks/CiscoUmbrellaNetworkDeviceManagementAPIConnector/azuredeploy.json",
-	"Playbooks/Playbooks/CiscoUmbrella-AddIpToDestinationList/azuredeploy.json",
+    "Playbooks/Playbooks/CiscoUmbrella-AddIpToDestinationList/azuredeploy.json",
     "Playbooks/Playbooks/CiscoUmbrella-AssignPolicyToIdentity/azuredeploy.json",
     "Playbooks/Playbooks/CiscoUmbrella-BlockDomain/azuredeploy.json",
     "Playbooks/Playbooks/CiscoUmbrella-GetDomainInfo/azuredeploy.json"
@@ -264,6 +268,8 @@ These files will be created in the solution's `Package` folder with respect to t
 Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
 
 #### *<span style="color:blue">Note:</span> <span style="color:green"> To create a CCP based connector refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md).</span>*
+
+#### *<span style="color:blue">Note:</span> <span style="color:green"> For Summary Rules refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/SUMMARYRULE_README.md).</span>*
 
 ### Azure Toolkit Validation
 

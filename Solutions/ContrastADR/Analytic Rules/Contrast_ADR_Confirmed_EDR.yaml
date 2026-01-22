@@ -1,0 +1,54 @@
+id: c1c6ba64-134e-403b-b9a6-1bebc90809a4
+name: Contrast ADR - EDR Alert Correlation
+description: |
+  'Correlates Contrast ADR incidents with specific high-risk attack patterns including command injection, deserialization attacks, and file upload vulnerabilities. This rule identifies confirmed security events that require immediate attention from security teams.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ContrastADR
+    dataTypes:
+      - ContrastADRIncident_CL
+      - ContrastADR_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - DefenseEvasion
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1059
+  - T1055
+  - T1190
+  - T1008
+query: |
+  ContrastADRIncident_CL
+  | project-rename  incident_id_s = incidentId_s
+  | join kind=inner (ContrastADR_CL | where rule_s in~("class-loader-manipulation", "cmd-injection-semantic-chained-commands", "cmd-injection-semantic-dangerous-paths", "cmd-injection-command-backdoors", "cmd-injection-process-hardening", "cmd-injection", "expression-language-injection", "jndi-injection", "ssjs-injection", "unsafe-file-upload", "untrusted-deserialization","xxe")) on incident_id_s
+  | project-rename hostname_s = host_hostname_s
+  //Please add your EDR table name in place of ContrastWAFLogs_CL and hostname's column name in place of hostname_s below and uncomment the queries below
+  //| join kind = inner ( ContrastWAFLogs_CL
+  //| where TimeGenerated >= ago(5m)) on hostname_s
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: host_hostname_s
+alertDetailsOverride:
+  alertDisplayNameFormat: 'EDR Alert Confirmed {{result_s}} by Contrast ADR on {{application_name_s}}'
+  alertDescriptionFormat: 'EDR Alert Confirmed {{result_s}} by Contrast ADR on {{application_name_s}}'
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: Selected
+    groupByEntities:
+      - Host
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+kind: Scheduled
+version: 1.0.0

@@ -1,0 +1,130 @@
+id: a2f2c91b-5796-45e4-82c7-61763e6c2c9c
+name: CYFIRMA - Attack Surface - Domain/IP Vulnerability Exposure Medium Rule
+description: |
+  "This rule is triggered when CYFIRMA identifies publicly exposed vulnerabilities on domains or IP addresses within your organization's attack surface. These vulnerabilities may include outdated software, missing patches, insecure services, or misconfigurations that can be exploited by threat actors.Such exposure significantly increases the risk of exploitation, lateral movement, or data breach. Immediate investigation and remediation are recommended."
+version: 1.0.0
+kind: Scheduled
+severity: Medium
+requiredDataConnectors:
+  - connectorId: CyfirmaAttackSurfaceAlertsConnector
+    dataTypes:
+      - CyfirmaASDomainIPVulnerabilityAlerts_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - Discovery
+  - DefenseEvasion
+  - Persistence
+  - Execution
+  - Impact
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1505
+  - T1068
+  - T1046
+  - T1499
+query: |
+  // Medium Severity Domain/IP Vulnerability Exposure Detected
+  let timeFrame = 5m;
+  CyfirmaASDomainIPVulnerabilityAlerts_CL
+  | where severity == 'High' and TimeGenerated between (ago(timeFrame) .. now())
+  | mv-expand pvuln = possible_vulnerabilities
+  | extend cve = tostring(pvuln.cveNo), vulProducts = pvuln.products
+  | mv-expand vul_Products = vulProducts
+  | summarize cveList = make_set(cve, 100), vul_products1 = make_set(vul_Products, 100)    by uid
+  | join kind=inner (CyfirmaASDomainIPVulnerabilityAlerts_CL
+      | where severity == 'High'
+      | summarize arg_max(TimeGenerated, *) by uid)
+      on uid
+  | extend
+      Vulnerabilities = strcat_array(cveList, ', '),
+      VulnerabilityProducts = strcat_array(vul_products1, ', '),
+      Description=description,
+      FirstSeen=first_seen,
+      LastSeen=last_seen,
+      RiskScore=risk_score,
+      Domain=sub_domain,
+      TopDomain=top_domain,
+      NetworkIP=ip,
+      AlertUID=alert_uid,
+      UID=uid,
+      OpenPorts=open_ports,
+      HostProvider=host_provider,
+      Country=country,
+      Softwares=softwares,
+      WebServer=web_server,
+      WebServerVersion=web_server_version,
+      ProviderName='CYFIRMA',
+      ProductName='DeCYFIR/DeTCT'
+  | project
+      TimeGenerated,
+      Description,
+      Domain,
+      TopDomain,
+      RiskScore,
+      FirstSeen,
+      LastSeen,
+      NetworkIP,
+      AlertUID,
+      UID,
+      Vulnerabilities,
+      VulnerabilityProducts,
+      OpenPorts,
+      HostProvider,
+      Country,
+      Softwares,
+      WebServer,
+      WebServerVersion,
+      ProviderName,
+      ProductName
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: TopDomain
+      - identifier: DnsDomain
+        columnName: Domain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkIP
+customDetails:
+  TimeGenerated: TimeGenerated
+  RiskScore: RiskScore
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+  Vulnerabilities: Vulnerabilities
+  UID: UID
+  OpenPorts: OpenPorts
+  WebServer: WebServer
+  WebServerVersion: WebServerVersion
+  Softwares: Softwares
+  HostProvider: HostProvider
+  AlertUID: AlertUID
+  Country: Country
+  vulnerableProducts: VulnerabilityProducts
+alertDetailsOverride:
+  alertDisplayNameFormat: "CYFIRMA - Medium Severity Domain/IP Vulnerability Exposure Detected - Domain: {{Domain}}, IP: {{NetworkIP}}"
+  alertDescriptionFormat: "CYFIRMA - Medium Severity Domain/IP Vulnerability Exposure Detected - {{Description}}"
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

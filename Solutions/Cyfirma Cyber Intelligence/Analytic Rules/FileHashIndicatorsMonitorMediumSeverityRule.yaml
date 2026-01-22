@@ -1,0 +1,123 @@
+id: 5347c581-eb36-4bf5-a7e5-be1fb2d617f5
+name: CYFIRMA - Medium severity File Hash Indicators with Monitor Action Rule
+description: |
+  "This query retrieves file hash indicators marked for Monitoring, with no assigned role, from the CyfirmaIndicators_CL table. 
+  It extracts MD5, SHA1, and SHA256 hashes and includes threat metadata for use in preventive security controls such as EDRs, threat intel platforms."
+version: 1.0.0
+kind: Scheduled
+severity: Medium
+enabled: false
+requiredDataConnectors:
+  - connectorId: CyfirmaCyberIntelligenceDC
+    dataTypes:
+      - CyfirmaIndicators_CL
+query: |
+  // File Hash Indicators with Monitor Action
+  let timeFrame = 5m;
+  CyfirmaIndicators_CL 
+  | where  (ConfidenceScore < 80 and ConfidenceScore >= 50)
+      and TimeGenerated between (ago(timeFrame) .. now())
+      and pattern contains 'file:hashes' and RecommendedActions has 'Monitor' and (isempty(Roles) or not(Roles has_any ('Malware', 'Trojan')))
+  | extend MD5 = extract(@"file:hashes\.md5\s*=\s*'([a-fA-F0-9]{32})'", 1, pattern)
+  | extend SHA1 = extract(@"file:hashes\.'SHA-1'\s*=\s*'([a-fA-F0-9]{40})'", 1, pattern)
+  | extend SHA256 = extract(@"file:hashes\.'SHA-256'\s*=\s*'([a-fA-F0-9]{64})'", 1, pattern)
+  | extend
+      Algo_MD5='MD5',
+      Algo_SHA1= 'SHA1',
+      Algo_SHA256='SHA256',
+      ProviderName = 'CYFIRMA',
+      ProductName = 'DeCYFIR/DeTCT'
+  | project  
+      MD5,
+      SHA1,
+      SHA256,
+      Algo_MD5,
+      Algo_SHA1,
+      Algo_SHA256,
+      ThreatActors,
+      Sources,
+      RecommendedActions,
+      Roles,
+      Country,
+      name,
+      Description,
+      ConfidenceScore,
+      SecurityVendors,
+      IndicatorID,
+      created,
+      modified,
+      valid_from,
+      Tags,
+      ThreatType,
+      TimeGenerated,
+      ProductName,
+      ProviderName
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: 5m
+suppressionEnabled: true
+tactics:
+  - Execution
+  - InitialAccess
+  - DefenseEvasion
+  - Impact
+relevantTechniques:
+  - T1204
+  - T1566
+  - T1027
+  - T1486
+  - T1566.001
+alertDetailsOverride:
+  alertDisplayNameFormat: "High-Confidence File Hash Indicators with Monitor Action - {{name}} "
+  alertDescriptionFormat: "{{Description}} - {{name}} "
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+customDetails:
+  ThreatActors: ThreatActors
+  Sources: Sources
+  RecommendedActions: RecommendedActions
+  Roles: Roles
+  Country: Country
+  Description: Description
+  ConfidenceScore: ConfidenceScore
+  SecurityVendors: SecurityVendors
+  IndicatorID: IndicatorID
+  Created: created
+  Modified: modified
+  ValidFrom: valid_from
+  Tags: Tags
+  ThreatType: ThreatType
+  TimeGenerated: TimeGenerated
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Algo_MD5
+      - identifier: Value
+        columnName: MD5
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Algo_SHA1
+      - identifier: Value
+        columnName: SHA1
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Algo_SHA256
+      - identifier: Value
+        columnName: SHA256
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

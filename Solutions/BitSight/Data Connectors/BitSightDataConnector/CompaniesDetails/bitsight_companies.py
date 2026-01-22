@@ -2,16 +2,23 @@
 import hashlib
 import json
 import time
+import inspect
 
 from ..SharedCode.bitsight_client import BitSight
-from ..SharedCode.bitsight_exception import BitSightException
+from ..SharedCode.bitsight_exception import BitSightException, BitSightTimeOutException
 from ..SharedCode.consts import (
     API_TOKEN,
     COMPANIES,
     COMPANIES_RATING_DETAILS_TABLE_NAME,
     COMPANY_DETAIL_TABLE_NAME,
     ENDPOINTS,
-    COMPANY_DETAILS_FUNC_NAME
+    COMPANY_DETAILS_FUNC_NAME,
+    CONN_STRING,
+    COMPANIES_CHECKPOINT_TABLE,
+    RATING_CHECKPOINT_PARTITION_KEY,
+    COMPANY_CHECKPOINT_PARTITION_KEY,
+    COMPANY_CHECKPOINT_ROW_KEY,
+    DATA_CHECKPOINT_PARTITION_KEY
 )
 from ..SharedCode.get_logs_data import get_logs_data
 from ..SharedCode.logger import applogger
@@ -27,7 +34,7 @@ class BitSightCompanies(BitSight):
         Args:
             start_time (float): The start time for data fetching.
         """
-        super().__init__()
+        super().__init__(start_time)
         self.start_time = start_time
         self.company_endpoint_path = ENDPOINTS["company_endpoint_path"]
         self.companies_str = COMPANIES
@@ -41,11 +48,9 @@ class BitSightCompanies(BitSight):
                 {"companies_list": self.companies_str},
             ]
         )
-        self.checkpoint_obj = CheckpointManager()
-        self.company_state = self.checkpoint_obj.get_state("portfolio_company")
-        self.company_detail_state = self.checkpoint_obj.get_state("company_details")
-        self.company_rating_state = self.checkpoint_obj.get_state(
-            "company_rating_details"
+        self.checkpoint_obj = CheckpointManager(
+            connection_string=CONN_STRING,
+            table_name=COMPANIES_CHECKPOINT_TABLE
         )
         self.generate_auth_token()
 
@@ -60,19 +65,13 @@ class BitSightCompanies(BitSight):
             data_to_post = None
             post_data_ratings = []
             checkpoint_key = "{}".format(company_guid)
-            checkpoint_data_company = self.checkpoint_obj.get_last_data(
-                self.company_detail_state, table_name=COMPANY_DETAIL_TABLE_NAME
+            last_data_company_details = self.checkpoint_obj.get_checkpoint(
+                partition_key=DATA_CHECKPOINT_PARTITION_KEY,
+                row_key=checkpoint_key
             )
-            checkpoint_data_company_ratings = self.checkpoint_obj.get_last_data(
-                self.company_rating_state, table_name=COMPANIES_RATING_DETAILS_TABLE_NAME
-            )
-            last_data_company_details = self.checkpoint_obj.get_endpoint_last_data(
-                checkpoint_data_company, "companies_details", checkpoint_key
-            )
-            last_data_company_ratings = self.checkpoint_obj.get_endpoint_last_data(
-                checkpoint_data_company_ratings,
-                "companies_ratings_details",
-                checkpoint_key,
+            last_data_company_ratings = self.checkpoint_obj.get_checkpoint(
+                partition_key=RATING_CHECKPOINT_PARTITION_KEY,
+                row_key=checkpoint_key
             )
             company_detail_url = self.base_url + self.company_endpoint_path.format(
                 company_guid
@@ -94,6 +93,7 @@ class BitSightCompanies(BitSight):
                     ratingdetailskeys = rating_details.keys()
                     # filter out rating field from company details.
                     for rating_detail in ratingdetailskeys:
+                        self.check_timeout()
                         rating = rating_details.get(rating_detail)
                         rating["Company_name"] = company_name
                         post_data_ratings.append(rating)
@@ -110,13 +110,10 @@ class BitSightCompanies(BitSight):
                         )
                     )
                 data_to_post = result_hash
-                self.checkpoint_obj.save_checkpoint(
-                    self.company_rating_state,
-                    checkpoint_data_company_ratings,
-                    "companies_ratings_details",
-                    "{}_{}".format(COMPANIES_RATING_DETAILS_TABLE_NAME, "Checkpoint"),
-                    checkpoint_key,
-                    data_to_post,
+                self.checkpoint_obj.set_checkpoint(
+                    partition_key=RATING_CHECKPOINT_PARTITION_KEY,
+                    row_key=checkpoint_key,
+                    value=data_to_post
                 )
                 # delete rating field after post.
                 del response["rating_details"]
@@ -134,14 +131,13 @@ class BitSightCompanies(BitSight):
                     )
                 )
             data_to_post = result_hash
-            self.checkpoint_obj.save_checkpoint(
-                self.company_detail_state,
-                checkpoint_data_company,
-                "companies_details",
-                "{}_{}".format(COMPANY_DETAIL_TABLE_NAME, "Checkpoint"),
-                checkpoint_key,
-                data_to_post,
+            self.checkpoint_obj.set_checkpoint(
+                partition_key=DATA_CHECKPOINT_PARTITION_KEY,
+                row_key=checkpoint_key,
+                value=data_to_post
             )
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
         except BitSightException:
             raise BitSightException()
         except KeyError as err:
@@ -166,36 +162,45 @@ class BitSightCompanies(BitSight):
             logs_data (list): List of log data.
             company_names (list): List of company names.
         """
-        count_companies = 0
-        fetching_index = self.get_last_data_index(
-            company_names, self.checkpoint_obj, self.company_state, table_name=COMPANY_DETAIL_TABLE_NAME
-        )
-        for company_index in range(fetching_index + 1, len(logs_data)):
-            company_name = logs_data[company_index].get("name_s")
-            if int(time.time()) >= self.start_time + 540:
-                applogger.info(
-                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching from {}.".format(
-                        self.logs_starts_with,
-                        COMPANY_DETAILS_FUNC_NAME,
-                        company_name,
-                    )
+        try:
+            count_companies = 0
+            fetching_index = self.get_last_data_index(
+                company_names, self.checkpoint_obj
+            )
+            for company_index in range(fetching_index + 1, len(logs_data)):
+                company_name = logs_data[company_index].get("name")
+                self.check_timeout()
+                company_guid = logs_data[company_index].get("guid")
+                self.get_company_details(company_name, company_guid)
+                count_companies += 1
+                self.checkpoint_obj.set_checkpoint(
+                    partition_key=COMPANY_CHECKPOINT_PARTITION_KEY,
+                    row_key=COMPANY_CHECKPOINT_ROW_KEY,
+                    value=company_name
                 )
-                break
-            company_guid = logs_data[company_index].get("guid_g")
-            self.get_company_details(company_name, company_guid)
-            count_companies += 1
-            self.checkpoint_obj.save_checkpoint(
-                self.company_state,
-                company_name,
-                "portfolio_company",
-                "{}_{}".format(COMPANY_DETAIL_TABLE_NAME, "Company_Checkpoint"),
-                company_name_flag=True,
+            applogger.info(
+                "{} {} Posted {} companies data.".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, count_companies
+                )
             )
-        applogger.info(
-            "{} {} Posted {} companies data.".format(
-                self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, count_companies
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
+        except BitSightException:
+            raise BitSightException()
+        except KeyError as err:
+            applogger.error(
+                "{} {} Key Error while getting Company data: {}".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, err
+                )
             )
-        )
+            raise BitSightException()
+        except Exception as err:
+            applogger.exception(
+                "{} {} Error: {}".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, err
+                )
+            )
+            raise BitSightException()
 
     def get_specified_companies_details(self, logs_data, company_names):
         """Fetch details for specified companies and post them to Sentinel.
@@ -209,29 +214,42 @@ class BitSightCompanies(BitSight):
                 self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME
             )
         )
-        count_companies = 0
-        companies_to_get = self.get_specified_companies_list(
-            company_names, self.companies_str
-        )
-        company_names = list(map(str.lower, company_names))
-        for company in companies_to_get:
-            if int(time.time()) >= self.start_time + 540:
-                applogger.info(
-                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching after {}".format(
-                        self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, company
-                    )
-                )
-                break
-            index = company_names.index(company)
-            company_name = logs_data[index].get("name_s")
-            company_guid = logs_data[index].get("guid_g")
-            self.get_company_details(company_name, company_guid)
-            count_companies += 1
-        applogger.info(
-            "{} {} Posted {} companies data.".format(
-                self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, count_companies
+        try:
+            count_companies = 0
+            companies_to_get = self.get_specified_companies_list(
+                company_names, self.companies_str
             )
-        )
+            company_names = list(map(str.lower, company_names))
+            for company in companies_to_get:
+                self.check_timeout()
+                index = company_names.index(company)
+                company_name = logs_data[index].get("name")
+                company_guid = logs_data[index].get("guid")
+                self.get_company_details(company_name, company_guid)
+                count_companies += 1
+            applogger.info(
+                "{} {} Posted {} companies data.".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, count_companies
+                )
+            )
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
+        except BitSightException:
+            raise BitSightException()
+        except KeyError as err:
+            applogger.error(
+                "{} {} Key Error while getting Company data: {}".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, err
+                )
+            )
+            raise BitSightException()
+        except Exception as err:
+            applogger.exception(
+                "{} {} Error: {}".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME, err
+                )
+            )
+            raise BitSightException()
 
     def get_bitsight_data_into_sentinel(self):
         """Fetch companies details and ratings data and post them to Sentinel."""
@@ -261,12 +279,19 @@ class BitSightCompanies(BitSight):
                     self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME
                 )
             )
-            logs_data = sorted(logs_data, key=lambda x: x["name_s"])
-            company_names = [data["name_s"] for data in logs_data]
+            logs_data = sorted(logs_data, key=lambda x: x["name"])
+            company_names = [data["name"] for data in logs_data]
             if (self.companies_str.strip()).lower() == "all":
                 self.get_all_copmanies_details(logs_data, company_names)
             else:
                 self.get_specified_companies_details(logs_data, company_names)
+        except BitSightTimeOutException:
+            applogger.error(
+                "{} {} 9:00 mins executed hence stopping the function app.".format(
+                    self.logs_starts_with, COMPANY_DETAILS_FUNC_NAME
+                )
+            )
+            return
         except BitSightException:
             raise BitSightException()
         except KeyError as err:

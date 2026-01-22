@@ -1,0 +1,89 @@
+id: ebd1bf8d-aa18-4e66-9cad-555b71a290f1
+name: CYFIRMA - Customer Accounts Leaks Detection Rule
+description: |
+  "Detects recent leaks of customer account credentials based on CYFIRMA's threat intelligence.
+    This rule surfaces the latest credential exposures, including email, username, and breach metadata.
+    It enables security teams to quickly identify and investigate leaked customer data from third-party breaches, dark web listings, or public repositories."
+version: 1.0.0
+kind: Scheduled
+severity: High
+requiredDataConnectors:
+  - connectorId: CyfirmaCompromisedAccountsDataConnector
+    dataTypes:
+      - CyfirmaCompromisedAccounts_CL
+queryFrequency: 5m
+queryPeriod: 5m
+suppressionDuration: 6h
+suppressionEnabled: true
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1552
+  - T1078
+query: |
+  // Customer Accounts Leaks - Latest per UID
+  let timeFrame = 5m;
+  CyfirmaCompromisedAccounts_CL
+  | where TimeGenerated between (ago(timeFrame) .. now())
+      and Category has "Customer Accounts Leaks"
+  | extend 
+      ProviderName = 'CYFIRMA',
+      ProductName = 'DeCYFIR/DeTCT'
+  | summarize arg_max(TimeGenerated, 
+      user_name,
+      email,
+      url,
+      password,
+      breach_date,
+      first_seen,
+      last_seen,
+      impact,
+      recommendations,
+      description,
+      source,
+      ProductName,
+      ProviderName
+  ) by uid
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: user_name
+      - identifier: UPNSuffix
+        columnName: email
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: url
+customDetails:
+  UID: uid
+  TimeGenerated: TimeGenerated
+  BreachDate: breach_date
+  FirstSeen: first_seen
+  LastSeen: last_seen
+  Impact: impact
+  Recommendations: recommendations
+  Source: source
+  Description: description
+alertDetailsOverride:
+  alertDisplayNameFormat: "Customer Leak - {{user_name}} - {{email}}"
+  alertDescriptionFormat: "{{description}}"
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

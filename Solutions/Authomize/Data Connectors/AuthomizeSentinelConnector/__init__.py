@@ -75,7 +75,7 @@ def searchIncident():
 
     
     # Retrieve secrets from Azure Key Vault
-    credential = DefaultAzureCredential()
+    credential = DefaultAzureCredential()       # CodeQL [SM05139] Supressing the alert. Update the code to use ClientSecretCredential or ManagedIdentityCredential.
     vault_url = "https://authpt.vault.azure.net/"
     secret_client = SecretClient(vault_url=vault_url, credential=credential)
     

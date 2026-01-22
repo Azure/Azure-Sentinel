@@ -1,0 +1,168 @@
+id: 4c1b282b-62f1-4783-bf40-94c44f0ae630
+name: CYFIRMA - Medium Severity Attack Surface based Vulnerabilities Rule
+description: |
+  "This rule detects medium severity attack surface-based vulnerabilities from CYFIRMA's vulnerability intelligence data. It identifies vulnerabilities with a confidence score of 50 or higher, excluding those categorized as 'ASSET_VULNERABILITY', and generates alerts for assets that may be at risk."
+version: 1.0.0
+kind: Scheduled
+severity: Medium
+enabled: false
+requiredDataConnectors:
+  - connectorId: CyfirmaVulnerabilitiesIntelDC
+    dataTypes:
+      - CyfirmaVulnerabilities_CL
+query: |
+  // Medium severity - Attack Surface based Vulnerabilities
+  let timeFrame= 5m;
+  CyfirmaVulnerabilities_CL
+  | extend parsed = parse_json(extensions)
+  | extend extensionKeys = bag_keys(parsed)
+  | mv-expand extensionKeys
+  | extend extensionKeyStr = tostring(extensionKeys)
+  | extend ext = parsed[extensionKeyStr]
+  | extend props = ext.properties
+  | extend 
+      attack_complexity         = tostring(props.attack_complexity),
+      cvss_score                = toreal(props.cvss_score),
+      integrity_impact          = tostring(props.integrity_impact),
+      impact_score              = tostring(props.impact_score),
+      attack_vector             = tostring(props.attack_vector),
+      privileges_required       = tostring(props.privileges_required),
+      cvss_version              = tostring(props.cvss_version),
+      user_interaction          = tostring(props.user_interaction),
+      cvss_vector               = tostring(props.cvss_vector),
+      scope                     = tostring(props.scope),
+      confidentiality_impact    = tostring(props.confidentiality_impact),
+      exploitability_score      = toreal(props.exploitability_score),
+      products                  = tostring(props.products),
+      technologies              = tostring(props.technologies),
+      vendors                   = tostring(props.vendors),
+      confidence_score          = toint(confidence),
+      servers                   = tostring(props.servers),
+      vulnerability_type        = tostring(props.vulnerability_type),
+      vulnerability_category        = tostring(props.vulnerability_category),
+      NetworkIPs                = tostring(props.ips),
+      ProviderName              ='CYFIRMA',
+      ProductName               ='DeCYFIR/DeTCT'
+  | summarize arg_max(
+                  integrity_impact,
+                  TimeGenerated, 
+                  id,
+                  description,
+                  confidence_score,
+                  created,
+                  modified,
+                  attack_complexity,
+                  cvss_score,
+                  impact_score,
+                  attack_vector,
+                  privileges_required,
+                  cvss_version,
+                  user_interaction,
+                  cvss_vector,
+                  scope,
+                  confidentiality_impact,
+                  exploitability_score,
+                  products,
+                  technologies,
+                  vendors,
+                  ProviderName,
+                  ProductName,
+                  servers,
+                  NetworkIPs,
+                  vulnerability_type,
+                  vulnerability_category
+              )
+      by name
+  | where confidence_score >= 60 and vulnerability_category == 'ATTACK_SURFACE_VULNERABILITY' and TimeGenerated between (ago(timeFrame) .. now())
+  | project 
+      TimeGenerated,
+      name,
+      confidence_score,
+      integrity_impact,
+      attack_complexity,
+      cvss_score,
+      impact_score,
+      attack_vector,
+      UID = id,
+      description,
+      created,
+      modified,
+      privileges_required,
+      cvss_version,
+      user_interaction,
+      cvss_vector,
+      scope,
+      confidentiality_impact,
+      exploitability_score,
+      products,
+      technologies,
+      vendors,
+      ProviderName,
+      ProductName,
+      servers,
+      NetworkIPs,
+      vulnerability_type,
+      vulnerability_category
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: GreaterThan
+triggerThreshold: 0
+suppressionDuration: 5m
+suppressionEnabled: false
+tactics:
+  - Execution
+  - LateralMovement
+  - PrivilegeEscalation
+  - InitialAccess
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1059
+  - T1203
+  - T1210
+  - T1068
+  - T1190
+  - T1133
+  - T1003
+  - T1553
+  - T1548.002
+  - T1021.002
+alertDetailsOverride:
+  alertDisplayNameFormat: "CYFIRMA - Medium Severity Attack Surface based Vulnerability Identified - {{name}} "
+  alertDescriptionFormat: "{{description}} "
+  alertDynamicProperties:
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: ProviderName
+      value: ProviderName
+customDetails:
+  TimeGenerated: TimeGenerated
+  CVE: name
+  ConfidenceScore: confidence_score
+  IntegrityImpact: integrity_impact
+  AttackComplexity: attack_complexity
+  CVSSScore: cvss_score
+  ImpactScore: impact_score
+  AttackVector: attack_vector
+  ConfidentialImpact: confidentiality_impact
+  PrivilegesRequired: privileges_required
+  CVSSVersion: cvss_version
+  UserInteraction: user_interaction
+  CVSSVector: scope
+  scope: exploitability_score
+  ExploitabilityScore: modified
+  Modified: products
+  Products: technologies
+  Vendors: vendors
+  Technologies: technologies
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+
+

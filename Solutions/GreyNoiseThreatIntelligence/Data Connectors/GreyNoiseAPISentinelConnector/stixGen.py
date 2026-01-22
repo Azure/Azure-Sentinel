@@ -25,7 +25,7 @@ class GreyNoiseStixGenerator:
     
     def generate_indicator(self, gnIndicator: dict):
         # Set confidence to 90 if spoofable, 100 if not
-        if gnIndicator.get('spoofable') == True and gnIndicator.get('classification') != "benign":
+        if gnIndicator["internet_scanner_intelligence"].get('spoofable') == True and gnIndicator["internet_scanner_intelligence"].get('classification') != "benign":
             confidence = 90
         else:
             confidence = 100
@@ -35,13 +35,12 @@ class GreyNoiseStixGenerator:
             spec_version=self.stix_version,
             name=self.name,
             description="GreyNoise Indicator",
-            indicator_types=[gnIndicator.get('classification')],
+            indicator_types=[gnIndicator["internet_scanner_intelligence"].get('classification')],
             pattern="[ipv4-addr:value = '{}']".format(gnIndicator.get('ip')),
             pattern_type=self.pattern_type,
-            valid_from=datetime.datetime.strptime(gnIndicator.get('first_seen'), "%Y-%m-%d").isoformat()+'Z',
-            valid_until=self.valid_until,
+             valid_from=(datetime.datetime.strptime(gnIndicator['first_seen'], "%Y-%m-%d") if 'first_seen' in gnIndicator and gnIndicator['first_seen'] else datetime.datetime.utcnow()).isoformat()+'Z',valid_until=self.valid_until,
             created_by_ref=self.created_by_ref,
-            labels=gnIndicator.get('tags'),
+            labels=gnIndicator["internet_scanner_intelligence"].get('tags'),
             confidence=confidence,
         )
 

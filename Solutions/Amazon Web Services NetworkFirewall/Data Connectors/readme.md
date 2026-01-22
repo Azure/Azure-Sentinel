@@ -10,9 +10,9 @@ Before deploying, ensure you have:
 - Required IAM permissions to configure AWS services.
 
 ## CloudFormation Templates
- Download the CloudFormation templates from the [GitHub](https://github.com/v-sreddyt/AWS_Networkfirewall/tree/main/CloudFormationTemplates) and deploy in your AWS environment.
+ Download Both the CloudFormation templates(Template 1: OpenID connect authentication deployment,Template 2: AWS Network Firewall Configuration) from connector UI page and deploy in your AWS environment.
   
-1. OIDC Web Identity Provider
+1. OpenID Connect
 
    The OIDC (OpenID Connect) Web Identity Provider allows AWS services to securely authenticate using an external identity provider without managing long-term credentials. The CloudFormation template configures OIDC as a trusted identity provider in AWS, enabling secure role-based access for forwarding AWS Network Firewall logs to Microsoft Sentinel.
    
@@ -35,7 +35,7 @@ Before deploying, ensure you have:
 - Navigate to the [AWS CloudFormation console](https://aka.ms/awsCloudFormationLink#/stacks/create)
 - Choose create stack
 - Select upload a template file
-- Upload the Aws Networkfirewall Configuration template and select next
+- Upload the Aws NetworkFirewall Configuration template and select next
 - Enter the required parameters:
      - Provide the stack Name
      - Microsoft Sentinel Workspace ID where logs to be stored
@@ -62,17 +62,17 @@ The CloudFormation template will create:
 - Run the following Kusto Query Language (KQL) query:
   - For Flow Logs
     ```
-    AWSNetworkFirewall_FlowLog_CL
+    AWSNetworkFirewallFlow
     | where TimeGenerated > ago(1h)
     ```
   - For Alert Logs
     ```
-    AWSNetworkFirewall_AlertLog_CL
+    AWSNetworkFirewallAlert
     | where TimeGenerated > ago(1h)
     ```
   - For Tls Logs
     ```
-    AWSNetworkFirewall_TlsLog_CL
+    AWSNetworkFirewallTls
     | where TimeGenerated > ago(1h)
     ```
 - Ensure logs appear correctly.

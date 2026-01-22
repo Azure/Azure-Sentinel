@@ -1,0 +1,2225 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/VeeamLogo.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Veeam/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nVeeam App for Microsoft Sentinel allows Veeam Data Platform Advanced and Premium customers to combine the powerful cyberthreat detection and response features of Microsoft Sentinel with a simple and powerful data platform that goes beyond backup, providing organizations with reliable data protection, seamless recovery, and vital security insights.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution takes a dependency on the following technologies, and some of these dependencies either may be in [Preview](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) state or might result in additional ingestion or operational costs:\n\na. [Azure Monitor Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/data-collector-api)\n\nb. [Azure Functions](https://azure.microsoft.com/products/functions/#overview)\n\nc. [Azure Key Vault](https://azure.microsoft.com/products/key-vault/)\n\nd. [Azure Storage Account](https://azure.microsoft.com/products/storage/)\n\ne. [Azure Relays](https://azure.microsoft.com/products/service-bus/)\n\nf. [Azure Logic Apps](https://azure.microsoft.com/products/logic-apps/)\n\ng. [Azure Log Analytics](https://learn.microsoft.com/azure/azure-monitor/logs/log-analytics-overview)\n\n**Data Connectors:** 1, **Parsers:** 4, **Workbooks:** 2, **Analytic Rules:** 133, **Watchlists:** 11, **Playbooks:** 15\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Solution installs the data connector for Veeam. You can get Veeam custom log data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam Data Platform Monitoring",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The Veeam Data Platform Monitoring dashboard shows an aggregated view of job activity on your Veeam Backup & Replication servers."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook2",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam Security Activities",
+            "elements": [
+              {
+                "name": "workbook2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The Veeam Security Activities dashboard shows an aggregated view of security events from your Veeam Backup & Replication servers and Veeam ONE servers, as well as Coveware findings."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Adding User or Group Failed",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed attempts to add a user or user group to Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Application Group Deleted",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an application group is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Application Group Settings Updated",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when application group settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Archive Repository Deleted",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an archive repository is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Archive Repository Settings Updated",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when archive repository settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Attempt to Delete Backup Failed",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed backup operations. This might indicate system or storage issues, or a potential sabotage of the backup infrastructure."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "Attempt to Update Security Object Failed",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed attempts to update security objects in Veeam Backup & Replication. Security objects include users and roles, credential records, certificates, or passwords."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "Backup Proxy Deleted",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a backup proxy is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "Backup Repository Deleted",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a backup repository is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "Backup Repository Settings Updated",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when backup repository settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic11",
+            "type": "Microsoft.Common.Section",
+            "label": "Cloud Gateway Deleted",
+            "elements": [
+              {
+                "name": "analytic11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a cloud gateway is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic12",
+            "type": "Microsoft.Common.Section",
+            "label": "Cloud Gateway Pool Deleted",
+            "elements": [
+              {
+                "name": "analytic12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a cloud gateway pool is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic13",
+            "type": "Microsoft.Common.Section",
+            "label": "Cloud Gateway Pool Settings Updated",
+            "elements": [
+              {
+                "name": "analytic13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when cloud gateway pool settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic14",
+            "type": "Microsoft.Common.Section",
+            "label": "Cloud Gateway Settings Updated",
+            "elements": [
+              {
+                "name": "analytic14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when cloud gateway settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic15",
+            "type": "Microsoft.Common.Section",
+            "label": "Cloud Replica Permanent Failover Performed by Tenant",
+            "elements": [
+              {
+                "name": "analytic15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects permanent failover of a cloud replica initiated by a tenant. This might indicate disaster recovery activity or issues with primary systems."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic16",
+            "type": "Microsoft.Common.Section",
+            "label": "Configuration Backup Job Failed",
+            "elements": [
+              {
+                "name": "analytic16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed configuration backup operations. This might indicate system or storage issues, or a potential sabotage of the backup infrastructure."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic17",
+            "type": "Microsoft.Common.Section",
+            "label": "Configuration Backup Job Settings Updated",
+            "elements": [
+              {
+                "name": "analytic17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when configuration backup job settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic18",
+            "type": "Microsoft.Common.Section",
+            "label": "Connection to Backup Repository Lost",
+            "elements": [
+              {
+                "name": "analytic18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a backup server fails to connect to a backup repository."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic19",
+            "type": "Microsoft.Common.Section",
+            "label": "Credential Record Deleted",
+            "elements": [
+              {
+                "name": "analytic19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a credential record is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic20",
+            "type": "Microsoft.Common.Section",
+            "label": "Credential Record Updated",
+            "elements": [
+              {
+                "name": "analytic20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a credential record is updated in Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic21",
+            "type": "Microsoft.Common.Section",
+            "label": "Detaching Backups Started",
+            "elements": [
+              {
+                "name": "analytic21-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a backup file is detached from a backup job."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic22",
+            "type": "Microsoft.Common.Section",
+            "label": "Encryption Password Added",
+            "elements": [
+              {
+                "name": "analytic22-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an encryption password is added to Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic23",
+            "type": "Microsoft.Common.Section",
+            "label": "Encryption Password Changed",
+            "elements": [
+              {
+                "name": "analytic23-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an encryption password is updated in Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic24",
+            "type": "Microsoft.Common.Section",
+            "label": "Encryption Password Deleted",
+            "elements": [
+              {
+                "name": "analytic24-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an encryption password is deleted in Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic25",
+            "type": "Microsoft.Common.Section",
+            "label": "External Repository Deleted",
+            "elements": [
+              {
+                "name": "analytic25-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an external repository is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic26",
+            "type": "Microsoft.Common.Section",
+            "label": "External Repository Settings Updated",
+            "elements": [
+              {
+                "name": "analytic26-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when external repository settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic27",
+            "type": "Microsoft.Common.Section",
+            "label": "Failover Plan Deleted",
+            "elements": [
+              {
+                "name": "analytic27-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a failover plan is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic28",
+            "type": "Microsoft.Common.Section",
+            "label": "Failover Plan Failed",
+            "elements": [
+              {
+                "name": "analytic28-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a failover plan fails. This might indicate disaster recovery activity or issues with primary systems."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic29",
+            "type": "Microsoft.Common.Section",
+            "label": "Failover Plan Settings Updated",
+            "elements": [
+              {
+                "name": "analytic29-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when failover plan settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic30",
+            "type": "Microsoft.Common.Section",
+            "label": "Failover Plan Started",
+            "elements": [
+              {
+                "name": "analytic30-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a failover plan starts. This might indicate disaster recovery activity or issues with primary systems."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic31",
+            "type": "Microsoft.Common.Section",
+            "label": "Failover Plan Stopped",
+            "elements": [
+              {
+                "name": "analytic31-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a failover plan stops. This might indicate disaster recovery activity or issues with primary systems."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic32",
+            "type": "Microsoft.Common.Section",
+            "label": "File Server Deleted",
+            "elements": [
+              {
+                "name": "analytic32-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a file server is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic33",
+            "type": "Microsoft.Common.Section",
+            "label": "File Server Settings Updated",
+            "elements": [
+              {
+                "name": "analytic33-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when file server settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic34",
+            "type": "Microsoft.Common.Section",
+            "label": "File Share Deleted",
+            "elements": [
+              {
+                "name": "analytic34-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a file share is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic35",
+            "type": "Microsoft.Common.Section",
+            "label": "Four-Eyes Authorization Disabled",
+            "elements": [
+              {
+                "name": "analytic35-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when four-eyes authorization is disabled."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic36",
+            "type": "Microsoft.Common.Section",
+            "label": "Four-Eyes Authorization Request Created",
+            "elements": [
+              {
+                "name": "analytic36-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a four-eyes authorization request is created."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic37",
+            "type": "Microsoft.Common.Section",
+            "label": "Four-Eyes Authorization Request Expired",
+            "elements": [
+              {
+                "name": "analytic37-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a four-eyes authorization request is expired."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic38",
+            "type": "Microsoft.Common.Section",
+            "label": "Four-Eyes Authorization Request Rejected",
+            "elements": [
+              {
+                "name": "analytic38-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a four-eyes authorization request is rejected."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic39",
+            "type": "Microsoft.Common.Section",
+            "label": "General Settings Updated",
+            "elements": [
+              {
+                "name": "analytic39-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when Veeam Backup & Replication general settings are updated. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic40",
+            "type": "Microsoft.Common.Section",
+            "label": "Global Network Traffic Rules Deleted",
+            "elements": [
+              {
+                "name": "analytic40-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a global network traffic rule is deleted in Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic41",
+            "type": "Microsoft.Common.Section",
+            "label": "Global VM Exclusions Added",
+            "elements": [
+              {
+                "name": "analytic41-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when global VM exclusion are added in Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic42",
+            "type": "Microsoft.Common.Section",
+            "label": "Global VM Exclusions Changed",
+            "elements": [
+              {
+                "name": "analytic42-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when global VM exclusions are updated in Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic43",
+            "type": "Microsoft.Common.Section",
+            "label": "Global VM Exclusions Deleted",
+            "elements": [
+              {
+                "name": "analytic43-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a VM is removed from global exclusions in Veeam Backup & Replication. This might indicate unauthorized changes."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic44",
+            "type": "Microsoft.Common.Section",
+            "label": "Host Deleted",
+            "elements": [
+              {
+                "name": "analytic44-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a host is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic45",
+            "type": "Microsoft.Common.Section",
+            "label": "Host Settings Updated",
+            "elements": [
+              {
+                "name": "analytic45-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when host settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic46",
+            "type": "Microsoft.Common.Section",
+            "label": "Hypervisor Host Deleted",
+            "elements": [
+              {
+                "name": "analytic46-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a hypervisor host is deleted from Veeam Backup & Replication. This might indicate unauthorized changes to the virtualization environment."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic47",
+            "type": "Microsoft.Common.Section",
+            "label": "Hypervisor Host Settings Updated",
+            "elements": [
+              {
+                "name": "analytic47-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when hypervisor host settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic48",
+            "type": "Microsoft.Common.Section",
+            "label": "Invalid Code for Multi-Factor Authentication Entered",
+            "elements": [
+              {
+                "name": "analytic48-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed multi-factor authentication attempts. This might indicate credential stuffing or brute-force attacks."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic49",
+            "type": "Microsoft.Common.Section",
+            "label": "Job Deleted",
+            "elements": [
+              {
+                "name": "analytic49-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a job is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic50",
+            "type": "Microsoft.Common.Section",
+            "label": "Job No Longer Used as Second Destination",
+            "elements": [
+              {
+                "name": "analytic50-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a job used as a secondary destination is removed."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic51",
+            "type": "Microsoft.Common.Section",
+            "label": "KMS Key Rotation Job Finished",
+            "elements": [
+              {
+                "name": "analytic51-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a KMS key rotation job is finished."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic52",
+            "type": "Microsoft.Common.Section",
+            "label": "KMS Server Deleted",
+            "elements": [
+              {
+                "name": "analytic52-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a KMS server is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic53",
+            "type": "Microsoft.Common.Section",
+            "label": "KMS Server Settings Updated",
+            "elements": [
+              {
+                "name": "analytic53-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when KMS server settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic54",
+            "type": "Microsoft.Common.Section",
+            "label": "License Expired",
+            "elements": [
+              {
+                "name": "analytic54-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a Veeam license is expired. This could impact backup operations and data protection."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic55",
+            "type": "Microsoft.Common.Section",
+            "label": "License Expiring",
+            "elements": [
+              {
+                "name": "analytic55-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a Veeam license expires shortly."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic56",
+            "type": "Microsoft.Common.Section",
+            "label": "License Grace Period Started",
+            "elements": [
+              {
+                "name": "analytic56-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a Veeam license grace period starts. This might indicate potential licensing issues that need attention."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic57",
+            "type": "Microsoft.Common.Section",
+            "label": "License Limit Exceeded",
+            "elements": [
+              {
+                "name": "analytic57-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when the Veeam license limit is exceeded."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic58",
+            "type": "Microsoft.Common.Section",
+            "label": "License Removed",
+            "elements": [
+              {
+                "name": "analytic58-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when the Veeam license is removed from Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic59",
+            "type": "Microsoft.Common.Section",
+            "label": "License Support Expired",
+            "elements": [
+              {
+                "name": "analytic59-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when the Veeam support contract is expired. This might impact backup operations and data protection."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic60",
+            "type": "Microsoft.Common.Section",
+            "label": "License Support Expiring",
+            "elements": [
+              {
+                "name": "analytic60-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when the Veeam support contract expires shortly."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic61",
+            "type": "Microsoft.Common.Section",
+            "label": "Malware Activity Detected",
+            "elements": [
+              {
+                "name": "analytic61-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when restore points marked as suspicious. This might indicate potential compromise of backup data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic62",
+            "type": "Microsoft.Common.Section",
+            "label": "Malware Detection Exclusions List Updated",
+            "elements": [
+              {
+                "name": "analytic62-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when malware detection exclusions are updated. This might indicate potential compromise of backup data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic63",
+            "type": "Microsoft.Common.Section",
+            "label": "Malware Detection Session Finished",
+            "elements": [
+              {
+                "name": "analytic63-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when malware detection session finishes."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic64",
+            "type": "Microsoft.Common.Section",
+            "label": "Malware Detection Settings Updated",
+            "elements": [
+              {
+                "name": "analytic64-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when malware detection settings are updated."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic65",
+            "type": "Microsoft.Common.Section",
+            "label": "Malware Event Detected",
+            "elements": [
+              {
+                "name": "analytic65-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when restore points are marked as infected. This might indicate potential compromise of backup data."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic66",
+            "type": "Microsoft.Common.Section",
+            "label": "Multi-Factor Authentication Disabled",
+            "elements": [
+              {
+                "name": "analytic66-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when multi-factor authentication is disabled for all users."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic67",
+            "type": "Microsoft.Common.Section",
+            "label": "Multi-Factor Authentication for User Disabled",
+            "elements": [
+              {
+                "name": "analytic67-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when multi-factor authentication is disabled for a specific user."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic68",
+            "type": "Microsoft.Common.Section",
+            "label": "Multi-Factor Authentication Token Revoked",
+            "elements": [
+              {
+                "name": "analytic68-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a multi-factor authentication token is revoked."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic69",
+            "type": "Microsoft.Common.Section",
+            "label": "Multi-Factor Authentication User Locked",
+            "elements": [
+              {
+                "name": "analytic69-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when the allowed number of multi-factor authentication attempts is exceeded for a user."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic70",
+            "type": "Microsoft.Common.Section",
+            "label": "NDMP Server Deleted",
+            "elements": [
+              {
+                "name": "analytic70-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an NDMP server is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic71",
+            "type": "Microsoft.Common.Section",
+            "label": "Object Marked as Clean",
+            "elements": [
+              {
+                "name": "analytic71-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an object is marked as clean."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic72",
+            "type": "Microsoft.Common.Section",
+            "label": "Object Storage Deleted",
+            "elements": [
+              {
+                "name": "analytic72-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an object storage is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic73",
+            "type": "Microsoft.Common.Section",
+            "label": "Object Storage Settings Updated",
+            "elements": [
+              {
+                "name": "analytic73-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when object storage settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic74",
+            "type": "Microsoft.Common.Section",
+            "label": "Objects Added to Malware Detection Exclusions",
+            "elements": [
+              {
+                "name": "analytic74-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an object is added to malware detection exclusions."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic75",
+            "type": "Microsoft.Common.Section",
+            "label": "Objects Deleted from Malware Detection Exclusions",
+            "elements": [
+              {
+                "name": "analytic75-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when an object is deleted from malware detection exclusions."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic76",
+            "type": "Microsoft.Common.Section",
+            "label": "Objects for Job Deleted",
+            "elements": [
+              {
+                "name": "analytic76-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when objects are deleted from the job. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic77",
+            "type": "Microsoft.Common.Section",
+            "label": "Objects for Protection Group Changed",
+            "elements": [
+              {
+                "name": "analytic77-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when protection group objects are updated."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic78",
+            "type": "Microsoft.Common.Section",
+            "label": "Objects for Protection Group Deleted",
+            "elements": [
+              {
+                "name": "analytic78-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when objects are deleted from a protection group. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic79",
+            "type": "Microsoft.Common.Section",
+            "label": "Preferred Networks Deleted",
+            "elements": [
+              {
+                "name": "analytic79-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a preferred network is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic80",
+            "type": "Microsoft.Common.Section",
+            "label": "Protection Group Deleted",
+            "elements": [
+              {
+                "name": "analytic80-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a protection group is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic81",
+            "type": "Microsoft.Common.Section",
+            "label": "Protection Group Settings Updated",
+            "elements": [
+              {
+                "name": "analytic81-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when protection group settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic82",
+            "type": "Microsoft.Common.Section",
+            "label": "Recovery Token Deleted",
+            "elements": [
+              {
+                "name": "analytic82-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a recovery token is deleted. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic83",
+            "type": "Microsoft.Common.Section",
+            "label": "Restore Point Marked as Clean",
+            "elements": [
+              {
+                "name": "analytic83-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a restore point is marked as clean."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic84",
+            "type": "Microsoft.Common.Section",
+            "label": "Restore Point Marked as Infected",
+            "elements": [
+              {
+                "name": "analytic84-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a restore point is marked as infected."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic85",
+            "type": "Microsoft.Common.Section",
+            "label": "Scale-Out Backup Repository Deleted",
+            "elements": [
+              {
+                "name": "analytic85-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a scale-out backup repository is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic86",
+            "type": "Microsoft.Common.Section",
+            "label": "Scale-Out Backup Repository Settings Updated",
+            "elements": [
+              {
+                "name": "analytic86-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when scale-out backup repository settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic87",
+            "type": "Microsoft.Common.Section",
+            "label": "Service Provider Deleted",
+            "elements": [
+              {
+                "name": "analytic87-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a service provider is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic88",
+            "type": "Microsoft.Common.Section",
+            "label": "Service Provider Updated",
+            "elements": [
+              {
+                "name": "analytic88-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when service provider settings are updated in Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic89",
+            "type": "Microsoft.Common.Section",
+            "label": "SSH Credentials Changed",
+            "elements": [
+              {
+                "name": "analytic89-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when SSH credentials are updated."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic90",
+            "type": "Microsoft.Common.Section",
+            "label": "Storage Deleted",
+            "elements": [
+              {
+                "name": "analytic90-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when storage is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic91",
+            "type": "Microsoft.Common.Section",
+            "label": "Storage Settings Updated",
+            "elements": [
+              {
+                "name": "analytic91-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when storage settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic92",
+            "type": "Microsoft.Common.Section",
+            "label": "Subtenant Deleted",
+            "elements": [
+              {
+                "name": "analytic92-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a subtenant is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic93",
+            "type": "Microsoft.Common.Section",
+            "label": "Subtenant Updated",
+            "elements": [
+              {
+                "name": "analytic93-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when subtenant settings are updated in Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic94",
+            "type": "Microsoft.Common.Section",
+            "label": "SureBackup Job Failed",
+            "elements": [
+              {
+                "name": "analytic94-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed SureBackup job operations. This might indicate malware issues, storage problems, or potential sabotage of backup infrastructure."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic95",
+            "type": "Microsoft.Common.Section",
+            "label": "Tape Erase Job Started",
+            "elements": [
+              {
+                "name": "analytic95-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when tape erase operations start. This might indicate data destruction activity."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic96",
+            "type": "Microsoft.Common.Section",
+            "label": "Tape Library Deleted",
+            "elements": [
+              {
+                "name": "analytic96-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tape library is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic97",
+            "type": "Microsoft.Common.Section",
+            "label": "Tape Media Pool Deleted",
+            "elements": [
+              {
+                "name": "analytic97-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tape media pool is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic98",
+            "type": "Microsoft.Common.Section",
+            "label": "Tape Media Vault Deleted",
+            "elements": [
+              {
+                "name": "analytic98-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tape media vault is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic99",
+            "type": "Microsoft.Common.Section",
+            "label": "Tape Medium Deleted",
+            "elements": [
+              {
+                "name": "analytic99-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tape medium is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic100",
+            "type": "Microsoft.Common.Section",
+            "label": "Tape Server Deleted",
+            "elements": [
+              {
+                "name": "analytic100-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tape server is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic101",
+            "type": "Microsoft.Common.Section",
+            "label": "Tenant Password Changed",
+            "elements": [
+              {
+                "name": "analytic101-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tenant password is updated."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic102",
+            "type": "Microsoft.Common.Section",
+            "label": "Tenant Quota Changed",
+            "elements": [
+              {
+                "name": "analytic102-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tenant quota is updated."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic103",
+            "type": "Microsoft.Common.Section",
+            "label": "Tenant Quota Deleted",
+            "elements": [
+              {
+                "name": "analytic103-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tenant quota is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic104",
+            "type": "Microsoft.Common.Section",
+            "label": "Tenant Replica Started",
+            "elements": [
+              {
+                "name": "analytic104-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tenant replica starts."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic105",
+            "type": "Microsoft.Common.Section",
+            "label": "Tenant Replica Stopped",
+            "elements": [
+              {
+                "name": "analytic105-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a tenant replica stops."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic106",
+            "type": "Microsoft.Common.Section",
+            "label": "Tenant State Changed",
+            "elements": [
+              {
+                "name": "analytic106-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when tenant state is updated."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic107",
+            "type": "Microsoft.Common.Section",
+            "label": "User or Group Added",
+            "elements": [
+              {
+                "name": "analytic107-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a user or user group is added to Veeam Backup & Replication."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic108",
+            "type": "Microsoft.Common.Section",
+            "label": "User or Group Deleted",
+            "elements": [
+              {
+                "name": "analytic108-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a user or user group is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic109",
+            "type": "Microsoft.Common.Section",
+            "label": "Best Practice Compliance Check Not Passed",
+            "elements": [
+              {
+                "name": "analytic109-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a security best practice does not pass a compliance check in Veeam Security & Compliance Analyzer."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic110",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Application with No Recent Data Backup Sessions",
+            "elements": [
+              {
+                "name": "analytic110-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects applications with no recent backup sessions."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic111",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Backup Copy RPO",
+            "elements": [
+              {
+                "name": "analytic111-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE Backup Copy RPO violation alerts."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic112",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Backup Server Security and Compliance State",
+            "elements": [
+              {
+                "name": "analytic112-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects backup server security and compliance state issues."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic113",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Computer with No Backup",
+            "elements": [
+              {
+                "name": "analytic113-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects computers with no backup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic114",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Immutability Change Tracking",
+            "elements": [
+              {
+                "name": "analytic114-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects changes in Veeam ONE immutability tracking configuration."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic115",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Immutability State",
+            "elements": [
+              {
+                "name": "analytic115-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects changes in the immutability state of Veeam Backup & Replication repositories. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic116",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Job Disabled (Veeam Backup for Microsoft 365)",
+            "elements": [
+              {
+                "name": "analytic116-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when Veeam Backup for Microsoft 365 jobs are disabled."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic117",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Job Disabled",
+            "elements": [
+              {
+                "name": "analytic117-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a Veeam ONE job is disabled."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic118",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Possible Ransomware Activity (Hyper-V)",
+            "elements": [
+              {
+                "name": "analytic118-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE possible ransomware activity alerts for Microsoft Hyper-V."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic119",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Possible Ransomware Activity (vSphere)",
+            "elements": [
+              {
+                "name": "analytic119-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE possible ransomware activity alerts for VMware vSphere."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic120",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Suspicious Incremental Backup Size",
+            "elements": [
+              {
+                "name": "analytic120-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects suspiciously large incremental backup sizes."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic121",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Unusual Job Duration (Veeam Backup for Microsoft 365)",
+            "elements": [
+              {
+                "name": "analytic121-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam Backup for Microsoft 365 jobs with unusual execution duration."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic122",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Unusual Job Duration",
+            "elements": [
+              {
+                "name": "analytic122-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE unusual job duration alerts."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic123",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE Malware Detection Change Tracking",
+            "elements": [
+              {
+                "name": "analytic123-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects changes in Veeam ONE malware detection tracking."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic124",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE VM with No Backup (Hyper-V)",
+            "elements": [
+              {
+                "name": "analytic124-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE VMs with no backup (Hyper-V)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic125",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE VM with No Backup",
+            "elements": [
+              {
+                "name": "analytic125-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE VMs with no backup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic126",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE VM with No Replica (Hyper-V)",
+            "elements": [
+              {
+                "name": "analytic126-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Hyper-V VMs with no replica configured."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic127",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam ONE VM with No Replica",
+            "elements": [
+              {
+                "name": "analytic127-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Veeam ONE VMs with no replica configuration."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic128",
+            "type": "Microsoft.Common.Section",
+            "label": "Virtual Lab Deleted",
+            "elements": [
+              {
+                "name": "analytic128-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a virtual lab is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic129",
+            "type": "Microsoft.Common.Section",
+            "label": "Virtual Lab Settings Updated",
+            "elements": [
+              {
+                "name": "analytic129-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when virtual lab settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic130",
+            "type": "Microsoft.Common.Section",
+            "label": "WAN Accelerator Deleted",
+            "elements": [
+              {
+                "name": "analytic130-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when a WAN accelerator is deleted from Veeam Backup & Replication. This might indicate unauthorized removal of critical components."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic131",
+            "type": "Microsoft.Common.Section",
+            "label": "WAN Accelerator Settings Updated",
+            "elements": [
+              {
+                "name": "analytic131-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when WAN accelerator settings are updated in Veeam Backup & Replication. This might indicate configuration changes that require review."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic132",
+            "type": "Microsoft.Common.Section",
+            "label": "Configuration Backup Failed",
+            "elements": [
+              {
+                "name": "analytic132-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects failed configuration backup operations. This might indicate system or storage issues, or a potential sabotage of the backup infrastructure."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic133",
+            "type": "Microsoft.Common.Section",
+            "label": "Coveware Security Finding Detected",
+            "elements": [
+              {
+                "name": "analytic133-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects when security findings from Coveware by Veeam appear. Security findings indicate potential threats, suspicious activities, or security events that need to be monitored."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "watchlists",
+        "label": "Watchlists",
+        "subLabel": {
+          "preValidation": "Configure the watchlists",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Watchlists",
+        "elements": [
+          {
+            "name": "watchlists-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "Microsoft Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Microsoft Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Microsoft Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.",
+              "link": {
+                "label": "Learn more",
+                "uri": "https://aka.ms/sentinelwatchlists"
+              }
+            }
+          },
+          {
+            "name": "watchlist1",
+            "type": "Microsoft.Common.Section",
+            "label": "Job Types Lookup",
+            "elements": [
+              {
+                "name": "watchlist1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Job Types Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist2",
+            "type": "Microsoft.Common.Section",
+            "label": "License Editions Lookup",
+            "elements": [
+              {
+                "name": "watchlist2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "License Editions Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist3",
+            "type": "Microsoft.Common.Section",
+            "label": "License Types Lookup",
+            "elements": [
+              {
+                "name": "watchlist3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "License Types Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist4",
+            "type": "Microsoft.Common.Section",
+            "label": "Operation Names Lookup",
+            "elements": [
+              {
+                "name": "watchlist4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Operation Names Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist5",
+            "type": "Microsoft.Common.Section",
+            "label": "Session States Lookup",
+            "elements": [
+              {
+                "name": "watchlist5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Session States Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist6",
+            "type": "Microsoft.Common.Section",
+            "label": "VBR Events Lookup",
+            "elements": [
+              {
+                "name": "watchlist6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Veeam Software Backup & Replication Events Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist7",
+            "type": "Microsoft.Common.Section",
+            "label": "Action Results Lookup",
+            "elements": [
+              {
+                "name": "watchlist7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Action Results Lookup."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist8",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam Backup & Replication Settings",
+            "elements": [
+              {
+                "name": "watchlist8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This watchlist lists Veeam Backup & Replication servers and the event types to collect. To add a server, specify Veeam Server Name and Base URL. Then run the Veeam-SetupConnections Playbook. The playbook sets the collection flags to true and creates keyVaultIds if they are empty. Otherwise, it uses the values you provide to configure Hybrid Connections and Key Vault secrets."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist9",
+            "type": "Microsoft.Common.Section",
+            "label": "VONE Settings",
+            "elements": [
+              {
+                "name": "watchlist9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This watchlist lists Veeam ONE servers and a flag that controls event collection. To add a server, specify Veeam Server Name and Base URL. Then run the Veeam-SetupConnections Playbook. The playbook sets the collection flag to true and creates keyVaultIds if they are empty. Otherwise, it uses the values you provide to configure Hybrid Connections and Key Vault secrets."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist10",
+            "type": "Microsoft.Common.Section",
+            "label": "Coveware Settings",
+            "elements": [
+              {
+                "name": "watchlist10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This watchlist defines Coveware server settings for findings data collection. You can disable data collection by setting the Collect Coveware Findings flag to false."
+                }
+              }
+            ]
+          },
+          {
+            "name": "watchlist11",
+            "type": "Microsoft.Common.Section",
+            "label": "Veeam Collection Schedule Settings",
+            "elements": [
+              {
+                "name": "watchlist11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This watchlist stores the configuration for schedules and recurrence intervals used by Veeam collection playbooks. To apply the changes, run the Veeam-ChangeCollectionTime playbook."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "playbooks",
+        "label": "Playbooks",
+        "subLabel": {
+          "preValidation": "Configure the playbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Playbooks",
+        "elements": [
+          {
+            "name": "playbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the Playbook templates to help implement your Security Orchestration, Automation and Response (SOAR) operations. After installing the solution, these will be deployed under Playbook Templates in the Automation blade in Microsoft Sentinel. They can be configured and managed from the Manage solution view in Content Hub."
+            }
+          },
+          {
+            "name": "playbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

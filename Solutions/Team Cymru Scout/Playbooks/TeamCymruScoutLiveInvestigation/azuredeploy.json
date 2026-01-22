@@ -64,6 +64,13 @@
                 "description": "Enter Base URL of your Team Cymru Scout account.(e.g. https://scout.cymru.com)"
             }
         },
+        "WorkspaceName": {
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Enter workspace name in which you want to fetch or store your data."
+            }
+        },
         "CreateIncidentAndNotifyPlaybookName": {
             "defaultValue": "TeamCymruScoutCreateIncidentAndNotify",
             "minLength": 1,
@@ -74,6 +81,7 @@
         }
     },
     "variables": {
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
         "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
     },
     "resources": [
@@ -110,6 +118,15 @@
                                         },
                                         "indicator_value": {
                                             "type": "string"
+                                        },
+                                        "create_incident_for": {
+                                            "type": "string"
+                                        },
+                                        "start_date": {
+                                            "type": "string"
+                                        },
+                                        "end_date": {
+                                            "type": "string"
                                         }
                                     },
                                     "type": "object"
@@ -140,61 +157,104 @@
                                             "type": "Compose",
                                             "inputs": "@setProperty(body('Parse_JSON_For_IP_Indicator_Details_Data')?['whois'], 'ip', body('Parse_JSON_For_IP_Indicator_Details_Data')?['ip'])"
                                         },
-                                        "Condition_To_Execute_Sub_Playbook_For_Malicious_IP": {
+                                        "Condition_To_Execute_Sub_Playbook_For_Malicious_Or_Suspicious_IP": {
                                             "actions": {
-                                                "Condition_To_Perform_Next_Actions_If_Sub_Playbook_Executes_Successfully": {
-                                                    "actions": {},
+                                                "Condition_To_Call_Subplaybook_Based_On_First_Call_Of_Playbook": {
+                                                    "actions": {
+                                                        "TeamCymruScoutCreateIncidentAndNotifyForFirstRun": {
+                                                            "type": "Workflow",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "workflow": {
+                                                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('CreateIncidentAndNotifyPlaybookName')))]"
+                                                                    },
+                                                                    "triggerName": "manual"
+                                                                },
+                                                                "body": {
+                                                                    "country_code": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['geo_ip_cc']",
+                                                                    "is_first_run": true,
+                                                                    "base_url": "@variables('base_url')",
+                                                                    "overall_rating": "@toLower(body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['overall_rating'])",
+                                                                    "indicator_value": "@variables('indicator_value')",
+                                                                    "whois_table_name": "@variables('whois_table_name')",
+                                                                    "whois_data": "@outputs('Compose_Whois_Object_To_Add_IP_Address_Property')",
+                                                                    "insights_table_name": "@variables('insights_table_name')",
+                                                                    "insights_data": "@variables('insights_data')",
+                                                                    "open_ports_table_name": "@variables('open_ports_table_name')",
+                                                                    "open_ports_data": "@variables('open_ports_data')",
+                                                                    "certs_table_name": "@variables('certs_table_name')",
+                                                                    "certs_data": "@variables('certs_data')",
+                                                                    "fingerprints_table_name": "@variables('fingerprints_table_name')",
+                                                                    "fingerprints_data": "@variables('fingerprints_data')",
+                                                                    "pdns_table_name": "@variables('pdns_table_name')",
+                                                                    "pdns_data": "@variables('pdns_data')"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
                                                     "runAfter": {
-                                                        "CreateIncidentAndMailForMaliciousIP": [
+                                                        "Run_Query_And_Check_Whether_This_is_First_Execution_Or_Not": [
                                                             "Succeeded",
-                                                            "TimedOut",
-                                                            "Failed"
+                                                            "Failed",
+                                                            "TimedOut"
                                                         ]
                                                     },
                                                     "else": {
                                                         "actions": {
-                                                            "Terminate_Due_To_Failure_While_Executing_Sub_Playbook_For_Malicious_IP": {
-                                                                "type": "Terminate",
+                                                            "TeamCymruScoutCreateIncidentAndNotify": {
+                                                                "type": "Workflow",
                                                                 "inputs": {
-                                                                    "runStatus": "Failed",
-                                                                    "runError": {
-                                                                        "code": "400",
-                                                                        "message": "@{body('CreateIncidentAndMailForMaliciousIP')}"
+                                                                    "host": {
+                                                                        "workflow": {
+                                                                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('CreateIncidentAndNotifyPlaybookName')))]"
+                                                                        },
+                                                                        "triggerName": "manual"
+                                                                    },
+                                                                    "body": {
+                                                                        "country_code": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['geo_ip_cc']",
+                                                                        "base_url": "@variables('base_url')",
+                                                                        "overall_rating": "@toLower(body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['overall_rating'])",
+                                                                        "indicator_value": "@variables('indicator_value')",
+                                                                        "whois_table_name": "@variables('whois_table_name')",
+                                                                        "insights_table_name": "@variables('insights_table_name')",
+                                                                        "open_ports_table_name": "@variables('open_ports_table_name')",
+                                                                        "certs_table_name": "@variables('certs_table_name')",
+                                                                        "fingerprints_table_name": "@variables('fingerprints_table_name')",
+                                                                        "pdns_table_name": "@variables('pdns_table_name')"
                                                                     }
                                                                 }
                                                             }
                                                         }
                                                     },
                                                     "expression": {
-                                                        "and": [
+                                                        "or": [
                                                             {
                                                                 "equals": [
-                                                                    "@body('CreateIncidentAndMailForMaliciousIP')?['status']",
-                                                                    "success"
+                                                                    "@outputs('Run_Query_And_Check_Whether_This_is_First_Execution_Or_Not')?['statusCode']",
+                                                                    400
                                                                 ]
                                                             }
                                                         ]
                                                     },
                                                     "type": "If"
                                                 },
-                                                "CreateIncidentAndMailForMaliciousIP": {
-                                                    "type": "Workflow",
+                                                "Run_Query_And_Check_Whether_This_is_First_Execution_Or_Not": {
+                                                    "type": "ApiConnection",
                                                     "inputs": {
                                                         "host": {
-                                                            "workflow": {
-                                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('CreateIncidentAndNotifyPlaybookName'))]"
-                                                            },
-                                                            "triggerName": "manual"
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                            }
                                                         },
-                                                        "body": {
-                                                            "country_code": "@{body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['geo_ip_cc']}",
-                                                            "indicator_value": "@variables('indicator_value')",
-                                                            "insights": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['insights']",
-                                                            "open_ports": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['open_ports']?['top_open_ports']",
-                                                            "pdns": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['pdns']?['top_pdns']"
-                                                        },
-                                                        "retryPolicy": {
-                                                            "type": "none"
+                                                        "method": "post",
+                                                        "body": "@{variables('ip_indicators_table_name')}_CL\n| where TimeGenerated \u003e= ago(90d)",
+                                                        "path": "/queryData",
+                                                        "queries": {
+                                                            "subscriptions": "[subscription().subscriptionId]",
+                                                            "resourcegroups": "[resourceGroup().name]",
+                                                            "resourcetype": "Log Analytics Workspace",
+                                                            "resourcename": "[trim(parameters('WorkspaceName'))]",
+                                                            "timerange": "Set in query"
                                                         }
                                                     }
                                                 }
@@ -232,9 +292,9 @@
                                             "expression": {
                                                 "and": [
                                                     {
-                                                        "equals": [
-                                                            "@toLower(body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['overall_rating'])",
-                                                            "malicious"
+                                                        "contains": [
+                                                            "@triggerBody()?['create_incident_for']",
+                                                            "@toLower(body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['overall_rating'])"
                                                         ]
                                                     }
                                                 ]
@@ -1089,7 +1149,7 @@
                                                 }
                                             },
                                             "runAfter": {
-                                                "Condition_To_Ingest_Top_Pdns_Data_If_It_Is_Not_Null": [
+                                                "Condition_To_Ingest_Insights_Data_If_It_Is_Not_Null": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -1157,7 +1217,19 @@
                                                 }
                                             },
                                             "runAfter": {
-                                                "Parse_JSON_For_IP_Indicator_Details_Data": [
+                                                "Condition_To_Ingest_Communications_Data_If_It_Is_Not_Null": [
+                                                    "Succeeded"
+                                                ],
+                                                "Condition_To_Ingest_Main_PDNS_Data_If_It_Is_Not_Null": [
+                                                    "Succeeded"
+                                                ],
+                                                "Condition_To_Ingest_Main_Open_Ports_Data_If_It_Is_Not_Null": [
+                                                    "Succeeded"
+                                                ],
+                                                "Condition_To_Ingest_Main_Fingerprints_Data_If_It_Is_Not_Null": [
+                                                    "Succeeded"
+                                                ],
+                                                "Condition_To_Ingest_Main_X509_Data_If_It_Is_Not_Null": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -1653,7 +1725,9 @@
                                                 "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
-                                                    "sections": "proto_by_ip"
+                                                    "sections": "proto_by_ip",
+                                                    "start_date": "@{variables('start_date')}",
+                                                    "end_date": "@{variables('end_date')}"
                                                 },
                                                 "authentication": {
                                                     "password": "@parameters('password')",
@@ -1681,7 +1755,9 @@
                                                 "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
-                                                    "sections": "top_asns_by_ip"
+                                                    "sections": "top_asns_by_ip",
+                                                    "start_date": "@{variables('start_date')}",
+                                                    "end_date": "@{variables('end_date')}"
                                                 },
                                                 "authentication": {
                                                     "password": "@parameters('password')",
@@ -1709,7 +1785,9 @@
                                                 "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
-                                                    "sections": "top_country_codes_by_ip"
+                                                    "sections": "top_country_codes_by_ip",
+                                                    "start_date": "@{variables('start_date')}",
+                                                    "end_date": "@{variables('end_date')}"
                                                 },
                                                 "authentication": {
                                                     "password": "@parameters('password')",
@@ -1737,7 +1815,9 @@
                                                 "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
-                                                    "sections": "top_services_by_ip"
+                                                    "sections": "top_services_by_ip",
+                                                    "start_date": "@{variables('start_date')}",
+                                                    "end_date": "@{variables('end_date')}"
                                                 },
                                                 "authentication": {
                                                     "password": "@parameters('password')",
@@ -1765,7 +1845,9 @@
                                                 "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                                 "method": "GET",
                                                 "queries": {
-                                                    "sections": "top_tags_by_ip"
+                                                    "sections": "top_tags_by_ip",
+                                                    "start_date": "@{variables('start_date')}",
+                                                    "end_date": "@{variables('end_date')}"
                                                 },
                                                 "authentication": {
                                                     "password": "@parameters('password')",
@@ -1885,7 +1967,6 @@
                                                                                                 "children": {
                                                                                                     "items": {
                                                                                                         "properties": {
-                                                                                                            "children": {},
                                                                                                             "id": {
                                                                                                                 "type": [
                                                                                                                     "integer",
@@ -2060,7 +2141,6 @@
                                                                                             "null"
                                                                                         ]
                                                                                     },
-                                                                                    "tags": {},
                                                                                     "top_services": {
                                                                                         "items": {
                                                                                             "properties": {
@@ -2279,9 +2359,7 @@
                                                                         "string",
                                                                         "null"
                                                                     ]
-                                                                },
-                                                                "reverse_hostnames": {},
-                                                                "tags": {}
+                                                                }
                                                             },
                                                             "type": [
                                                                 "object",
@@ -2413,7 +2491,6 @@
                                                                                         "children": {
                                                                                             "items": {
                                                                                                 "properties": {
-                                                                                                    "children": {},
                                                                                                     "id": {
                                                                                                         "type": [
                                                                                                             "integer",
@@ -2663,7 +2740,6 @@
                                                                                     "null"
                                                                                 ]
                                                                             },
-                                                                            "tags": {},
                                                                             "tld": {
                                                                                 "type": [
                                                                                     "string",
@@ -3039,7 +3115,6 @@
                                                                                             "null"
                                                                                         ]
                                                                                     },
-                                                                                    "inferred_service_name": {},
                                                                                     "last_seen": {
                                                                                         "type": [
                                                                                             "string",
@@ -3175,7 +3250,6 @@
                                                                         "null"
                                                                     ]
                                                                 },
-                                                                "reverse_hostnames": {},
                                                                 "start_date": {
                                                                     "type": [
                                                                         "string",
@@ -3224,9 +3298,7 @@
                                                                                                     "string",
                                                                                                     "null"
                                                                                                 ]
-                                                                                            },
-                                                                                            "parent_ids": {},
-                                                                                            "parents": {}
+                                                                                            }
                                                                                         },
                                                                                         "type": [
                                                                                             "object",
@@ -3261,7 +3333,6 @@
                                                                             "children": {
                                                                                 "items": {
                                                                                     "properties": {
-                                                                                        "children": {},
                                                                                         "id": {
                                                                                             "type": [
                                                                                                 "integer",
@@ -3862,7 +3933,6 @@
                                                                                         "children": {
                                                                                             "items": {
                                                                                                 "properties": {
-                                                                                                    "children": {},
                                                                                                     "id": {
                                                                                                         "type": [
                                                                                                             "integer",
@@ -4089,7 +4159,7 @@
                                         },
                                         "Terminate_Due_To_Successfully_Ingested_Data_Into_Log_Analytics_Workspace": {
                                             "runAfter": {
-                                                "Condition_To_Execute_Sub_Playbook_For_Malicious_IP": [
+                                                "Send_IP_Indicator_To_Live_Investigation_Indicators_Table": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -4097,6 +4167,426 @@
                                             "inputs": {
                                                 "runStatus": "Succeeded"
                                             }
+                                        },
+                                        "Set_Indicator_Object_Value_For_IP": {
+                                            "runAfter": {
+                                                "Condition_To_Execute_Sub_Playbook_For_Malicious_Or_Suspicious_IP": [
+                                                    "Succeeded",
+                                                    "Failed",
+                                                    "TimedOut",
+                                                    "Skipped"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "indicator_object",
+                                                "value": {
+                                                    "type": "@triggerBody()?['indicator_type']",
+                                                    "value": "@triggerBody()?['indicator_value']"
+                                                }
+                                            }
+                                        },
+                                        "Send_IP_Indicator_To_Live_Investigation_Indicators_Table": {
+                                            "runAfter": {
+                                                "Set_Indicator_Object_Value_For_IP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": "@{variables('indicator_object')}",
+                                                "headers": {
+                                                    "Log-Type": "@variables('ip_indicators_table_name')"
+                                                },
+                                                "path": "/api/logs"
+                                            }
+                                        },
+                                        "Condition_To_Ingest_Insights_Data_If_It_Is_Not_Null": {
+                                            "actions": {
+                                                "For_Each_Insight": {
+                                                    "foreach": "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['insights']",
+                                                    "actions": {
+                                                        "Switch_Case_For_Summary_Overall_Rating": {
+                                                            "cases": {
+                                                                "Case_When_Overall_Rating_Is_Malicious": {
+                                                                    "case": "malicious",
+                                                                    "actions": {
+                                                                        "Append_Rank_And_IP_For_Malicious_To_Every_Insight_Object_": {
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "insights_data",
+                                                                                "value": "@setProperty(setProperty(items('For_Each_Insight'), 'rank', 3), 'ip', body('Parse_JSON_For_IP_Indicator_Details_Data')?['ip'])"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "Case_When_Overall_Rating_Is_Suspicious": {
+                                                                    "case": "suspicious",
+                                                                    "actions": {
+                                                                        "Append_Rank_And_IP_For_Suspicious_To_Every_Insight_Object_": {
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "insights_data",
+                                                                                "value": "@setProperty(setProperty(items('For_Each_Insight'), 'rank', 2), 'ip', body('Parse_JSON_For_IP_Indicator_Details_Data')?['ip'])"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "default": {
+                                                                "actions": {
+                                                                    "Append_Rank_And_IP_For_Other_To_Every_Insight_Object_": {
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "insights_data",
+                                                                            "value": "@setProperty(setProperty(items('For_Each_Insight'), 'rank', 1), 'ip', body('Parse_JSON_For_IP_Indicator_Details_Data')?['ip'])"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": "@toLower(body('Parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['overall_rating'])",
+                                                            "type": "Switch"
+                                                        }
+                                                    },
+                                                    "type": "Foreach",
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    }
+                                                },
+                                                "Compose_An_Object_From_Insights_Data": {
+                                                    "runAfter": {
+                                                        "For_Each_Insight": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@variables('insights_data')"
+                                                },
+                                                "Send_Insights_Data_To_Log_Analytics_Table": {
+                                                    "runAfter": {
+                                                        "Compose_An_Object_From_Insights_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Insights_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('insights_table_name')"
+                                                        },
+                                                        "path": "/api/logs"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Condition_To_Ingest_Top_Pdns_Data_If_It_Is_Not_Null": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('parse_JSON_For_IP_Indicator_Details_Data')?['summary']?['insights']?['insights']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Ingest_Communications_Data_If_It_Is_Not_Null": {
+                                            "actions": {
+                                                "For_Each_Communication_Peer": {
+                                                    "foreach": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['communications']?['peers']",
+                                                    "actions": {
+                                                        "Append_IP_Address_To_Every_Peer_Object": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "communication_peers_data",
+                                                                "value": "@setProperty(items('For_Each_Communication_peer'), 'ip', body('Parse_JSON_For_IP_Indicator_Details_Data')?['ip'])"
+                                                            }
+                                                        }
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "Compose_An_Object_From_Communication_Peers_Data": {
+                                                    "runAfter": {
+                                                        "For_Each_Communication_Peer": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@variables('communication_peers_data')"
+                                                },
+                                                "Send_Communication_Peers_Data_To_Log_Analytic_Table": {
+                                                    "runAfter": {
+                                                        "Compose_An_Object_From_Communication_Peers_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Communication_Peers_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('communication_peers_data_table_name')"
+                                                        },
+                                                        "path": "/api/logs"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_IP_Indicator_Details_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['communications']?['peers']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Ingest_Main_PDNS_Data_If_It_Is_Not_Null": {
+                                            "actions": {
+                                                "Compose_An_Object_From_Main_PDNS_Data": {
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['pdns']?['pdns']"
+                                                },
+                                                "Send_Main_PDNS_Data_To_Log_Analytic_Table": {
+                                                    "runAfter": {
+                                                        "Compose_An_Object_From_Main_PDNS_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Main_PDNS_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('main_pdns_table_name')"
+                                                        },
+                                                        "path": "/api/logs"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_IP_Indicator_Details_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['pdns']?['pdns']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Ingest_Main_Open_Ports_Data_If_It_Is_Not_Null": {
+                                            "actions": {
+                                                "Compose_An_Object_From_Main_Open_Ports_Data": {
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['open_ports']?['open_ports']"
+                                                },
+                                                "Send_Main_Open_Ports_Data_To_Log_Analytic_Table": {
+                                                    "runAfter": {
+                                                        "Compose_An_Object_From_Main_Open_Ports_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Main_Open_Ports_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('main_opn_ports_data_table_name')"
+                                                        },
+                                                        "path": "/api/logs"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_IP_Indicator_Details_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['open_ports']?['open_ports']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Ingest_Main_Fingerprints_Data_If_It_Is_Not_Null": {
+                                            "actions": {
+                                                "Compose_An_Object_From_Main_Fingerprints_Data": {
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['fingerprints']?['fingerprints']"
+                                                },
+                                                "Send_Main_Fingerprints_Data_To_Log_Analytic_Table": {
+                                                    "runAfter": {
+                                                        "Compose_An_Object_From_Main_Fingerprints_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Main_Fingerprints_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('main_fingerprints_data_table_name')"
+                                                        },
+                                                        "path": "/api/logs"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_IP_Indicator_Details_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['fingerprints']?['fingerprints']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Condition_To_Ingest_Main_X509_Data_If_It_Is_Not_Null": {
+                                            "actions": {
+                                                "Compose_An_Object_From_Main_X509_Data": {
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['x509']?['x509']"
+                                                },
+                                                "Send_Main_X509_Data_To_Log_Analytic_Table": {
+                                                    "runAfter": {
+                                                        "Compose_An_Object_From_Main_X509_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": "@{outputs('Compose_An_Object_From_Main_X509_Data')}",
+                                                        "headers": {
+                                                            "Log-Type": "@variables('main_x509_data_table_name')"
+                                                        },
+                                                        "path": "/api/logs"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_IP_Indicator_Details_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('Parse_JSON_For_IP_Indicator_Details_Data')?['x509']?['x509']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
                                         }
                                     },
                                     "runAfter": {
@@ -4137,24 +4627,20 @@
                                     "inputs": {
                                         "uri": "@{variables('base_url')}/api/scout/ip/@{variables('indicator_value')}/details",
                                         "method": "GET",
+                                        "queries": {
+                                            "start_date": "@{variables('start_date')}",
+                                            "end_date": "@{variables('end_date')}"
+                                        },
                                         "authentication": {
                                             "password": "@parameters('password')",
                                             "type": "Basic",
                                             "username": "@variables('username')"
                                         }
-                                    },
-                                    "runtimeConfiguration": {
-                                        "secureData": {
-                                            "properties": [
-                                                "inputs",
-                                                "outputs"
-                                            ]
-                                        }
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Initialize_Top_Tags_By_IP_Sections_Data_Table_Name": [
+                                "Initialize_Indicator_Object": [
                                     "Succeeded"
                                 ]
                             },
@@ -4166,7 +4652,9 @@
                                             "uri": "@{variables('base_url')}/api/scout/search",
                                             "method": "GET",
                                             "queries": {
-                                                "query": "@variables('indicator_value')"
+                                                "query": "@{variables('indicator_value')}",
+                                                "start_date": "@{variables('start_date')}",
+                                                "end_date": "@{variables('end_date')}"
                                             },
                                             "authentication": {
                                                 "password": "@parameters('password')",
@@ -4672,7 +5160,6 @@
                                                                                     "children": {
                                                                                         "items": {
                                                                                             "properties": {
-                                                                                                "children": {},
                                                                                                 "id": {
                                                                                                     "type": [
                                                                                                         "integer",
@@ -4806,7 +5293,7 @@
                                             },
                                             "Terminate_Due_To_Successfully_Ingested_Domain_Data": {
                                                 "runAfter": {
-                                                    "Send_Domain_Data_To_Log_Analytics_Table": [
+                                                    "Send_Domain_Indicator_To_Live_Investigation_Indicators_Table": [
                                                         "Succeeded"
                                                     ]
                                                 },
@@ -4814,11 +5301,49 @@
                                                 "inputs": {
                                                     "runStatus": "Succeeded"
                                                 }
+                                            },
+                                            "Set_Indicator_Object_Value_For_Domain": {
+                                                "runAfter": {
+                                                    "Send_Domain_Data_To_Log_Analytics_Table": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "indicator_object",
+                                                    "value": {
+                                                        "type": "@triggerBody()?['indicator_type']",
+                                                        "value": "@triggerBody()?['indicator_value']"
+                                                    }
+                                                }
+                                            },
+                                            "Send_Domain_Indicator_To_Live_Investigation_Indicators_Table": {
+                                                "runAfter": {
+                                                    "Set_Indicator_Object_Value_For_Domain": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "body": "@{variables('indicator_object')}",
+                                                    "headers": {
+                                                        "Log-Type": "@variables('domain_indicators_table_name')"
+                                                    },
+                                                    "path": "/api/logs"
+                                                }
                                             }
                                         },
                                         "runAfter": {
                                             "HTTP_Request_To_Fetch_Details_Of_Domain_Indicator": [
-                                                "Succeeded"
+                                                "Succeeded",
+                                                "TimedOut",
+                                                "Failed"
                                             ]
                                         },
                                         "else": {
@@ -4869,13 +5394,25 @@
                                     {
                                         "name": "base_url",
                                         "type": "string",
-                                        "value": "[parameters('BaseURL')]"
+                                        "value": "[trim(parameters('BaseURL'))]"
                                     }
                                 ]
                             }
                         },
                         "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": {
                             "runAfter": {
+                                "Initialize_Domain_Data": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Certs_Data": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Pdns_Data": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Open_Ports_Data": [
+                                    "Succeeded"
+                                ],
                                 "Initialize_Top_Fingerprints_Data": [
                                     "Succeeded"
                                 ]
@@ -4892,7 +5429,7 @@
                         },
                         "Initialize_Domain_Data": {
                             "runAfter": {
-                                "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": [
+                                "Update_Indicator_Value_For_Refang_And_Defang": [
                                     "Succeeded"
                                 ]
                             },
@@ -4925,7 +5462,7 @@
                         },
                         "Initialize_Identity_Sections_Data_Table_Name": {
                             "runAfter": {
-                                "Initialize_Top_Certs_Section_Data_Table_Name": [
+                                "Initialize_Top_Country_Codes_Data_Object": [
                                     "Succeeded"
                                 ]
                             },
@@ -4942,7 +5479,16 @@
                         },
                         "Initialize_Proto_By_IP_Sections_Data_Table_Name": {
                             "runAfter": {
-                                "Initialize_Whois_Sections_Data_Table_Name": [
+                                "Initialize_Top_Certs_Section_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Fingerprints_Section_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Open_Ports_Section_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Pdns_Section_Data_Table_Name": [
                                     "Succeeded"
                                 ]
                             },
@@ -4960,6 +5506,12 @@
                         "Initialize_Summary_Details_Data_Table_Name": {
                             "runAfter": {
                                 "Initialize_Domain_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Whois_Sections_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Identity_Sections_Data_Table_Name": [
                                     "Succeeded"
                                 ]
                             },
@@ -4993,7 +5545,7 @@
                         },
                         "Initialize_Top_Asns_Data_Array": {
                             "runAfter": {
-                                "Initialize_Top_Tags_Data_Array": [
+                                "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": [
                                     "Succeeded"
                                 ]
                             },
@@ -5025,7 +5577,7 @@
                         },
                         "Initialize_Top_Certs_Data": {
                             "runAfter": {
-                                "Initialize_Top_Open_Ports_Data": [
+                                "Update_Indicator_Value_For_Refang_And_Defang": [
                                     "Succeeded"
                                 ]
                             },
@@ -5041,7 +5593,7 @@
                         },
                         "Initialize_Top_Certs_Section_Data_Table_Name": {
                             "runAfter": {
-                                "Initialize_Top_Open_Ports_Section_Data_Table_Name": [
+                                "Initialize_Summary_Details_Data_Table_Name": [
                                     "Succeeded"
                                 ]
                             },
@@ -5075,7 +5627,7 @@
                         },
                         "Initialize_Top_Country_Codes_Data_Array": {
                             "runAfter": {
-                                "Initialize_Top_Asns_Data_Array": [
+                                "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": [
                                     "Succeeded"
                                 ]
                             },
@@ -5107,7 +5659,7 @@
                         },
                         "Initialize_Top_Fingerprints_Data": {
                             "runAfter": {
-                                "Initialize_Top_Certs_Data": [
+                                "Update_Indicator_Value_For_Refang_And_Defang": [
                                     "Succeeded"
                                 ]
                             },
@@ -5123,7 +5675,7 @@
                         },
                         "Initialize_Top_Fingerprints_Section_Data_Table_Name": {
                             "runAfter": {
-                                "Initialize_Top_Pdns_Section_Data_Table_Name": [
+                                "Initialize_Summary_Details_Data_Table_Name": [
                                     "Succeeded"
                                 ]
                             },
@@ -5140,7 +5692,7 @@
                         },
                         "Initialize_Top_Open_Ports_Data": {
                             "runAfter": {
-                                "Initialize_Top_Pdns_Data": [
+                                "Update_Indicator_Value_For_Refang_And_Defang": [
                                     "Succeeded"
                                 ]
                             },
@@ -5156,7 +5708,7 @@
                         },
                         "Initialize_Top_Open_Ports_Section_Data_Table_Name": {
                             "runAfter": {
-                                "Initialize_Top_Fingerprints_Section_Data_Table_Name": [
+                                "Initialize_Summary_Details_Data_Table_Name": [
                                     "Succeeded"
                                 ]
                             },
@@ -5223,7 +5775,7 @@
                         },
                         "Initialize_Top_Services_Data_Array": {
                             "runAfter": {
-                                "Initialize_Domain_Data": [
+                                "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": [
                                     "Succeeded"
                                 ]
                             },
@@ -5240,6 +5792,18 @@
                         "Initialize_Top_Services_Data_Object": {
                             "runAfter": {
                                 "Initialize_Top_Country_Codes_Data_Array": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Asns_Data_Array": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Tags_Data_Array": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Top_Services_Data_Array": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Insights_Data_Array": [
                                     "Succeeded"
                                 ]
                             },
@@ -5272,7 +5836,7 @@
                         },
                         "Initialize_Top_Tags_Data_Array": {
                             "runAfter": {
-                                "Initialize_Top_Services_Data_Array": [
+                                "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": [
                                     "Succeeded"
                                 ]
                             },
@@ -5304,9 +5868,6 @@
                         },
                         "Initialize_User_Name": {
                             "runAfter": {
-                                "Initialize_Base_URL": [
-                                    "Succeeded"
-                                ]
                             },
                             "type": "InitializeVariable",
                             "inputs": {
@@ -5321,7 +5882,7 @@
                         },
                         "Initialize_Whois_Sections_Data_Table_Name": {
                             "runAfter": {
-                                "Initialize_Identity_Sections_Data_Table_Name": [
+                                "Initialize_Top_Country_Codes_Data_Object": [
                                     "Succeeded"
                                 ]
                             },
@@ -5338,7 +5899,7 @@
                         },
                         "Update_Indicator_Value_For_Refang_And_Defang": {
                             "runAfter": {
-                                "Initialize_User_Name": [
+                                "Condition_To_Pass_Start_Date_Within_30_Days_Range_Only": [
                                     "Succeeded"
                                 ]
                             },
@@ -5352,14 +5913,319 @@
                                     }
                                 ]
                             }
+                        },
+                        "Initialize_Start_Date": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "start_date",
+                                        "type": "string",
+                                        "value": "@{split(triggerBody()?['start_date'], 'T')[0]}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_End_Date": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "end_date",
+                                        "type": "string",
+                                        "value": "@{split(triggerBody()?['end_date'], 'T')[0]}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Indicator_Object": {
+                            "runAfter": {
+                                "Initialize_Domain_Indicators_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "indicator_object",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Insights_Data_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Top_Tags_By_IP_Sections_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "insights_table_name",
+                                        "type": "string",
+                                        "value": "Insights_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Insights_Data_Array": {
+                            "runAfter": {
+                                "Initialize_Data_To_Be_Ingested_Into_Summary_Details_Table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "insights_data",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Communication_Peers_Data": {
+                            "runAfter": {
+                                "Initialize_Insights_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "communication_peers_data",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Communication_Peers_Data_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Insights_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "communication_peers_data_table_name",
+                                        "type": "string",
+                                        "value": "Communication_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Main_PDNS_Data_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Insights_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "main_pdns_table_name",
+                                        "type": "string",
+                                        "value": "PDNS_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Main_Open_Ports_Data_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Insights_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "main_opn_ports_data_table_name",
+                                        "type": "string",
+                                        "value": "Open_Ports_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Main_Fingerprints_Data_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Insights_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "main_fingerprints_data_table_name",
+                                        "type": "string",
+                                        "value": "Fingerprints_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Main_X509_Data_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Insights_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "main_x509_data_table_name",
+                                        "type": "string",
+                                        "value": "X509_Data"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_IP_Indicators_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Communication_Peers_Data": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Communication_Peers_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Main_PDNS_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Main_Open_Ports_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Main_Fingerprints_Data_Table_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Main_X509_Data_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_indicators_table_name",
+                                        "type": "string",
+                                        "value": "Live_Investigation_IP_Indicators"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Domain_Indicators_Table_Name": {
+                            "runAfter": {
+                                "Initialize_IP_Indicators_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain_indicators_table_name",
+                                        "type": "string",
+                                        "value": "Live_Investigation_Domain_Indicators"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Date_Difference_Variable": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_User_Name": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_End_Date": [
+                                    "Succeeded"
+                                ],
+                                "Initialize_Start_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "test_date",
+                                        "type": "string",
+                                        "value": "@{split(dateDifference(variables('start_date'), variables('end_date')), '.')[0]}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Condition_To_Pass_Start_Date_Within_30_Days_Range_Only": {
+                            "actions": {
+                                "Set_Start_Date_Within_30_Days": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "start_date",
+                                        "value": "@split(addDays(triggerBody()?['start_date'], int(variables('difference_in_days'))), 'T')[0]"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Difference_in_Days": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@int(variables('test_date'))",
+                                            29
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_Difference_in_Days": {
+                            "runAfter": {
+                                "Initialize_Date_Difference_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "difference_in_days",
+                                        "type": "string",
+                                        "value": "@{sub(int(variables('test_date')), 29)}"
+                                    }
+                                ]
+                            }
                         }
-                    },
-                    "outputs": {}
+                    }
                 },
                 "parameters": {
                     "password": {},
                     "$connections": {
                         "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
                             "azureloganalyticsdatacollector": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                                 "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
@@ -5382,8 +6248,24 @@
             },
             "apiVersion": "2017-07-01",
             "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
             ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
         },
         {
             "type": "Microsoft.Web/connections",

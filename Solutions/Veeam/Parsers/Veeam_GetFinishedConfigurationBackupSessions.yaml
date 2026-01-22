@@ -1,0 +1,39 @@
+id: a8ff1c42-9fa3-4712-98bd-ff12b98e81e3
+Function:
+  Title: Parser for Veeam Configuration Backup Session Finished Events
+  Version: '1.0.0'
+  LastUpdated: '2024-08-12'
+Category: Microsoft Sentinel Parser
+FunctionName: Veeam_GetFinishedConfigurationBackupSessions
+FunctionAlias: Veeam_GetFinishedConfigurationBackupSessions
+FunctionQuery: |
+    Syslog
+    | where SyslogMessage has "instanceId"
+    | extend instanceId = extract("instanceId=(\\d+)", 1, SyslogMessage)  
+    | filter instanceId == "40700"
+    | extend UserName = extract("UserName=\"(?<UserName>[^\"]*)\"", 1, SyslogMessage)
+    | extend fullName = extract("fullName=\"(?<fullName>[^\"]*)\"", 1, SyslogMessage)
+    | extend param3 = extract("param3=\"(?<param3>[^\"]*)\"", 1, SyslogMessage)
+    | extend param6 = extract("param6=\"(?<param6>[^\"]*)\"", 1, SyslogMessage)
+    | extend Result = extract("Result=\"(?<Result>[^\"]*)\"", 1, SyslogMessage)
+    | extend user =  extract("user=\"(?<user>[^\"]*)\"", 1, SyslogMessage)
+    | extend InitiatorName =  extract("InitiatorName=\"(?<InitiatorName>[^\"]*)\"", 1, SyslogMessage)
+    | extend Description =  extract("Description=\"(?<Description>[^\"]*)\"", 1, SyslogMessage)
+    | extend src =  extract("src=\"(?<src>[^\"]*)\"", 1, SyslogMessage)
+    | extend user = case(
+        isnotnull(user) and user != "", 
+            user, 
+        instanceId in ("40201","42402","42404","42405","40204","40400","40500","40600","40700","42400","42401","42403"), 
+            iff(isnull(fullName) or fullName == "", "unknown", fullName), 
+        instanceId in ("36013"), 
+            iff(isnull(InitiatorName) or InitiatorName == "", "unknown", InitiatorName), 
+        instanceId in ("41800","41810"), 
+            iff(isnull(param3) or param3 == "", "unknown", param3), 
+        instanceId in ("23090","23420","41402"), 
+            iff(isnull(param6) or param6 == "", "unknown", param6), 
+        instanceId in ("40205","40206","41610","42301","24080","28200","28500","28920","28950","29120","29150","29900","30200","30500","32120","32200","25500","28100","29800","31600","31700","31800","31900","42260","42270","42280","42302","30100","30400","31500","31210","31400","41600","31200","28970","28980","42230","42220","42290"), 
+            iff(isnull(UserName) or UserName == "", "unknown", UserName),
+        "unknown" 
+    )
+    | extend Result = extract("Result:\\s*([^\\.]*)", 1, Description)
+    | project TimeGenerated, Computer, user, Description,  Result, SyslogMessage, instanceId

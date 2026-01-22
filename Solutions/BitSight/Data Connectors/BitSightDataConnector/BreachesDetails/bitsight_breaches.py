@@ -1,9 +1,10 @@
 """Module containing the BitSightBreaches class for fetching BitSight breaches data and posting it to Sentinel."""
 import time
+import inspect
 
 from ..SharedCode import consts
 from ..SharedCode.bitsight_client import BitSight
-from ..SharedCode.bitsight_exception import BitSightException
+from ..SharedCode.bitsight_exception import BitSightException, BitSightTimeOutException
 from ..SharedCode.get_logs_data import get_logs_data
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import CheckpointManager
@@ -18,7 +19,7 @@ class BitSightBreaches(BitSight):
         Args:
             start_time (float): The start time for data fetching.
         """
-        super().__init__()
+        super().__init__(start_time)
         self.start_time = start_time
         self.check_env_var = self.check_environment_var_exist(
             [
@@ -28,46 +29,63 @@ class BitSightBreaches(BitSight):
                 {"companies_list": consts.COMPANIES},
             ]
         )
-        self.checkpoint_obj = CheckpointManager()
-        self.breach_company_state = self.checkpoint_obj.get_state("breaches_company")
-        self.breaches_details_state = self.checkpoint_obj.get_state("breaches_details")
+        self.checkpoint_obj = CheckpointManager(
+            connection_string=consts.CONN_STRING,
+            table_name=consts.BREACHES_CHECKPOINT_TABLE
+        )
         self.generate_auth_token()
 
     def get_breaches_data_into_sentinel(self) -> None:
         """Fetch breaches data for all companies or specified companies and post it to Sentinel."""
-        if not self.check_env_var:
-            raise BitSightException(
-                "{} {} Some Environment variables are not set hence exiting the app.".format(
+        try:
+            if not self.check_env_var:
+                raise BitSightException(
+                    "{} {} Some Environment variables are not set hence exiting the app.".format(
+                        self.logs_starts_with, consts.BREACHES_FUNC_NAME
+                    )
+                )
+
+            applogger.info(
+                "{} {} Fetching companies from companies table.".format(
                     self.logs_starts_with, consts.BREACHES_FUNC_NAME
                 )
             )
+            logs_data, flag = get_logs_data()
+            if not flag:
+                applogger.info(
+                    "{} {} Companies are not available yet.".format(
+                        self.logs_starts_with, consts.BREACHES_FUNC_NAME
+                    )
+                )
+                return
 
-        applogger.info(
-            "{} {} Fetching companies from companies table.".format(
-                self.logs_starts_with, consts.BREACHES_FUNC_NAME
-            )
-        )
-        logs_data, flag = get_logs_data()
-        if not flag:
             applogger.info(
-                "{} {} Companies are not available yet.".format(
+                "{} {} Fetched companies from companies table.".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME
+                )
+            )
+            logs_data = sorted(logs_data, key=lambda x: x["name"])
+            company_names = [data["name"] for data in logs_data]
+
+            if consts.COMPANIES.strip().lower() == "all":
+                self.get_all_companies_breaches_details(company_names, logs_data)
+            else:
+                self.get_specific_company_breaches_details(company_names, logs_data)
+        except BitSightTimeOutException:
+            applogger.error(
+                "{} {} 9:00 mins executed hence stopping the function app.".format(
                     self.logs_starts_with, consts.BREACHES_FUNC_NAME
                 )
             )
             return
-
-        applogger.info(
-            "{} {} Fetched companies from companies table.".format(
-                self.logs_starts_with, consts.BREACHES_FUNC_NAME
+        except BitSightException:
+            raise BitSightException()
+        except Exception as e:
+            applogger.error(
+                "{} {} Exception occurred: {}".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, e
+                )
             )
-        )
-        logs_data = sorted(logs_data, key=lambda x: x["name_s"])
-        company_names = [data["name_s"] for data in logs_data]
-
-        if consts.COMPANIES.strip().lower() == "all":
-            self.get_all_companies_breaches_details(company_names, logs_data)
-        else:
-            self.get_specific_company_breaches_details(company_names, logs_data)
 
     def get_all_companies_breaches_details(self, company_names, logs_data):
         """Fetch breaches data for all companies and post it to Sentinel.
@@ -77,35 +95,36 @@ class BitSightBreaches(BitSight):
             logs_data (list): List of log data.
         """
         count_companies = 0
-        fetching_index = self.get_last_data_index(
-            company_names, self.checkpoint_obj, self.breach_company_state, table_name=consts.BREACHES_TABLE_NAME
-        )
-        for company_index in range(fetching_index + 1, len(logs_data)):
-            company_name = logs_data[company_index].get("name_s")
-            if int(time.time()) >= self.start_time + 540:
-                applogger.info(
-                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching from {}.".format(
-                        self.logs_starts_with,
-                        consts.BREACHES_FUNC_NAME,
-                        company_name,
-                    )
+        try:
+            fetching_index = self.get_last_data_index(
+                company_names, self.checkpoint_obj
+            )
+            for company_index in range(fetching_index + 1, len(logs_data)):
+                self.check_timeout()
+                company_name = logs_data[company_index].get("name")
+                company_guid = logs_data[company_index].get("guid")
+                self.get_breaches_data(company_name, company_guid)
+                count_companies += 1
+                self.checkpoint_obj.set_checkpoint(
+                    partition_key=consts.COMPANY_CHECKPOINT_PARTITION_KEY,
+                    row_key=consts.COMPANY_CHECKPOINT_ROW_KEY,
+                    value=company_name
                 )
-                break
-            company_guid = logs_data[company_index].get("guid_g")
-            self.get_breaches_data(company_name, company_guid)
-            count_companies += 1
-            self.checkpoint_obj.save_checkpoint(
-                self.breach_company_state,
-                company_name,
-                "breaches",
-                "{}_{}".format(consts.BREACHES_TABLE_NAME, "Company_Checkpoint"),
-                company_name_flag=True,
+            applogger.info(
+                "{} {} Posted {} companies data.".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, count_companies
+                )
             )
-        applogger.info(
-            "{} {} Posted {} companies data.".format(
-                self.logs_starts_with, consts.BREACHES_FUNC_NAME, count_companies
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
+        except BitSightException:
+            raise BitSightException()
+        except Exception as e:
+            applogger.error(
+                "{} {} Exception occurred: {}".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, e
+                )
             )
-        )
 
     def get_specific_company_breaches_details(self, company_names, logs_data):
         """Fetch breaches data for specified companies and post it to Sentinel.
@@ -119,31 +138,36 @@ class BitSightBreaches(BitSight):
                 self.logs_starts_with, consts.BREACHES_FUNC_NAME
             )
         )
-        count_companies = 0
-        companies_to_get = self.get_specified_companies_list(
-            company_names, consts.COMPANIES
-        )
-        company_names = list(map(str.lower, company_names))
-
-        for company in companies_to_get:
-            if int(time.time()) >= self.start_time + 540:
-                applogger.info(
-                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching after {}".format(
-                        self.logs_starts_with, consts.BREACHES_FUNC_NAME, company
-                    )
-                )
-                break
-
-            index = company_names.index(company)
-            company_name = logs_data[index].get("name_s")
-            company_guid = logs_data[index].get("guid_g")
-            self.get_breaches_data(company_name, company_guid)
-            count_companies += 1
-        applogger.info(
-            "{} {} Posted {} companies data.".format(
-                self.logs_starts_with, consts.BREACHES_FUNC_NAME, count_companies
+        try:
+            count_companies = 0
+            companies_to_get = self.get_specified_companies_list(
+                company_names, consts.COMPANIES
             )
-        )
+            company_names = list(map(str.lower, company_names))
+
+            for company in companies_to_get:
+                self.check_timeout()
+                index = company_names.index(company)
+                company_name = logs_data[index].get("name")
+                company_guid = logs_data[index].get("guid")
+                self.get_breaches_data(company_name, company_guid)
+                count_companies += 1
+            applogger.info(
+                "{} {} Posted {} companies data.".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, count_companies
+                )
+            )
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
+        except BitSightException:
+            raise BitSightException()
+        except Exception as err:
+            applogger.exception(
+                "{} {} Error: {}".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, err
+                )
+            )
+            raise BitSightException()
 
     def get_breaches_data(self, company_name, company_guid):
         """Fetch breaches data for a specific company and post it to Sentinel.
@@ -172,9 +196,9 @@ class BitSightBreaches(BitSight):
                     )
                 )
                 return
-            last_data = self.checkpoint_obj.get_last_data(self.breaches_details_state, table_name=consts.BREACHES_TABLE_NAME)
-            last_checkpoint_company = self.checkpoint_obj.get_endpoint_last_data(
-                last_data, "breaches", company_guid
+            last_checkpoint_company = self.checkpoint_obj.get_checkpoint(
+                partition_key=consts.DATA_CHECKPOINT_PARTITION_KEY,
+                row_key=checkpoint_key
             )
             max_date = (
                 last_checkpoint_company if last_checkpoint_company else "0000-01-01"
@@ -185,17 +209,16 @@ class BitSightBreaches(BitSight):
             self.send_data_to_sentinel(
                 body, consts.BREACHES_TABLE_NAME, company_name, breaches_endpoint
             )
-            self.checkpoint_obj.save_checkpoint(
-                self.breaches_details_state,
-                last_data,
-                "breaches",
-                "{}_{}".format(consts.BREACHES_TABLE_NAME, "Checkpoint"),
-                checkpoint_key,
-                checkpoint_date,
+            self.checkpoint_obj.set_checkpoint(
+                partition_key=consts.DATA_CHECKPOINT_PARTITION_KEY,
+                row_key=checkpoint_key,
+                value=checkpoint_date
             )
 
             # delete rating field after post.
             del breaches_response["results"]
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
         except BitSightException:
             applogger.error(
                 "{} {} Exception occurred in get_breaches_data method.".format(
@@ -226,21 +249,37 @@ class BitSightBreaches(BitSight):
             body (list): List of breaches data.
             max_date (str): Maximum date of breaches data.
         """
-        body = []
-        if max_date == "0000-01-01":
-            for breach in breaches_results:
-                date_created = breach.get("date_created", "")
-                if date_created and date_created > max_date:
-                    max_date = date_created
-                breach["company_name"] = company_name
-                breach["company_guid"] = company_guid
-                body.append(breach)
-        else:
-            for breach in breaches_results:
-                date_created = breach.get("date_created", "")
-                if date_created and date_created > max_date:
-                    max_date = date_created
+        try:
+            body = []
+            if max_date == "0000-01-01":
+                for breach in breaches_results:
+                    self.check_timeout()
+                    date_created = breach.get("date_created", "")
+                    if date_created and date_created > max_date:
+                        max_date = date_created
                     breach["company_name"] = company_name
                     breach["company_guid"] = company_guid
+                    breach["parsed_date"] = breach.pop("date", "")
                     body.append(breach)
-        return body, max_date
+            else:
+                for breach in breaches_results:
+                    self.check_timeout()
+                    date_created = breach.get("date_created", "")
+                    if date_created and date_created > max_date:
+                        max_date = date_created
+                        breach["company_name"] = company_name
+                        breach["company_guid"] = company_guid
+                        breach["parsed_date"] = breach.pop("date", "")
+                        body.append(breach)
+            return body, max_date
+        except BitSightTimeOutException:
+            raise BitSightTimeOutException()
+        except BitSightException:
+            raise BitSightException()
+        except Exception as err:
+            applogger.exception(
+                "{} {} Error: {}".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, err
+                )
+            )
+            raise BitSightException()

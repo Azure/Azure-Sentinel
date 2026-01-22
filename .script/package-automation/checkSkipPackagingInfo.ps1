@@ -4,13 +4,6 @@ param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentat
 $isPackagingRequired = $false
 try 
 {
-    $customProperties = @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; "EventName"="CheckPackagingSkipStatus"; }
-    if ($instrumentationKey -ne '')
-    {
-        Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CheckPackagingSkipStatus" -CustomProperties $customProperties
-        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-    }
-
     $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*parameters.json' } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
 
     Write-Host "Files List $filesList"
@@ -32,24 +25,23 @@ try
         if ($hasCreatePackageAttribute -eq $true -and $isCreatePackageSetToTrue -eq $false) {
             Write-Host "::warning::Skipping Package Creation for Solution '$solutionName', as Data File has attribute 'createPackage' set to False!"
             Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
-
-            $customProperties['isPackagingRequired'] = $isPackagingRequired
-            if ($instrumentationKey -ne '')
-            {
-                Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Execution for CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-            }
         }
         else
         {
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
-            #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
             if ($isPRMerged) {
-                git fetch --depth=1 origin master
-                $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+                git fetch origin master
+                $base = $(git merge-base HEAD origin/master)
+                Write-Host $log
+                if (![string]::IsNullOrWhiteSpace($base)) {
+                    $diff = $(git diff --name-only HEAD^ HEAD)
+                } else {
+                    Write-Host "::warning::merge-base not found, falling back to last two commits"
+                    $diff = $(git diff --name-only HEAD^ HEAD)
+                }
             } else {
                 $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
             }
-            Write-Host "List of files changed in PR: $diff"
 
             $changesInPackageFolder = $diff | Where-Object {$_ -notlike '*testParameters.json' } | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
             Write-Host "List of files changed in Package folder:  $changesInPackageFolder"
@@ -58,7 +50,7 @@ try
             {
                 # changes are in Package folder so skip packaging
                 Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
-                Write-Host "Skip packaging as changes are in Package folder!"
+                Write-Host "Skip packaging as changes are in Package folder!" -ForegroundColor Yellow
             }
             else
             {
@@ -70,18 +62,13 @@ try
                 $changesInSolutionFolder = $filteredFiles | Where-Object { $_ -notmatch ($exclusionList -join '|')  }
                 Write-Host "List of files changed in Solution folder: $changesInSolutionFolder"
                 # there are no changes in package folder but check if changes in pr are valid and not from exclusion list
-                if ($changesInSolutionFolder.Count -gt 0)
+                if ($null -ne $changesInSolutionFolder -and $changesInSolutionFolder.Count -gt 0)
                 {
                     $isPackagingRequired = $true
                     # has changes in Solution folder and valid files
                     # WE NEED PACKAGING
-                    $customProperties['isPackagingRequired'] = $isPackagingRequired
                     Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
                     Write-Host "isPackagingRequired $isPackagingRequired"
-                    if ($instrumentationKey -ne '')
-                    {
-                        Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
-                    }
                 }
                 else {
                     Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
@@ -95,9 +82,6 @@ catch
 {
     Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
     Write-Host "Error in checkSkipPackagingInfo file. Error Details: $_"
-    if ($instrumentationKey -ne '')
-    {
-        Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'ErrorDetails' = "CheckPackagingSkipStatus : Error occured in catch block: $_"; 'EventName' = "CheckPackagingSkipStatus"; }
-    }
+
     exit 1
 }

@@ -1,0 +1,2102 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-SetupConnections",
+    "description": "A Microsoft Sentinel playbook that configures Key Vault secrets and hybrid connections for Veeam servers. The playbook gets server settings and Key Vault secrets from vbr_settings and vone_settings watchlists, creates Key Vault IDs, and sets all collection flags to True if required.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Azure Key Vault configured with appropriate access policies.",
+      "6. Azure Relay namespace configured.",
+      "7. VBR Settings watchlist configured in Microsoft Sentinel.",
+      "8. Veeam ONE Settings watchlist configured in Microsoft Sentinel."
+    ],
+    "entities": [],
+    "tags": [
+      "Automation",
+      "Veeam",
+      "Setup",
+      "Connections"
+    ],
+    "lastUpdateTime": "2025-09-02T01:02:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.0",
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace.",
+      "2. Assign the Key Vault Administrator role to the Logic App's managed identity on the Key Vault resource.",
+      "3. Assign the Website Contributor role to the Logic App's managed identity on the Function App resource.",
+      "4. Assign the Azure Relay Owner role to the Logic App's managed identity on the Relay Namespace resource.",
+      "5. **After playbook is run successfully**, you need to go to the Key Vault and set the password and username for each VBR server. Also, you need to install Hybrid Connections Manager into your network and set up connection there."
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Veeam-SetupConnections",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    },
+     "keyVaultName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Key Vault"
+      }
+    },
+    "relayNamespaceName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Relay namespace"
+      }
+    },
+    "workspaceId": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace ID (GUID) of the Log Analytics workspace that contains Microsoft Sentinel"
+      }
+    },
+    "AzureSentinelConnectionName": {
+      "type": "string",
+      "defaultValue": "azuresentinel-connection",
+      "metadata": {
+        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App (This will exist as an API Connection in your subscription)"
+      }
+    },
+    "subscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionId]",
+      "metadata": {
+        "description": "Azure subscription ID"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "Name of the resource group containing the Logic Apps to be updated"
+      }
+    },
+    "keyVaultDomain": {
+      "type": "string",
+      "defaultValue": "[environment().suffixes.keyVaultDns]",
+      "metadata": {
+        "description": "The domain suffix for Azure Key Vault (dynamically assigned based on Azure environment)"
+      }
+    },
+    "azureManagementDomain": {
+      "type": "string",
+      "defaultValue": "[environment().resourceManager]",
+      "metadata": {
+        "description": "The Azure Management API endpoint (dynamically assigned based on Azure environment)"
+      }
+    }
+  },
+  "variables": {
+    "newRecurrenceInterval": "12",
+    "newRecurrenceFrequency": "Hour"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-SetupConnectionsPlaybook",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "subscriptionId": {
+              "type": "String",
+              "defaultValue": "[parameters('subscriptionId')]"
+            },
+            "resourceGroupName": {
+              "type": "String",
+              "defaultValue": "[parameters('resourceGroupName')]"
+            },
+
+            "keyVaultName": {
+              "type": "String",
+              "defaultValue": "[parameters('keyVaultName')]"
+            },
+            "relayNamespaceName": {
+              "type": "String",
+              "defaultValue": "[parameters('relayNamespaceName')]"
+            },
+            "functionAppName": {
+              "type": "String",
+              "defaultValue": "[parameters('functionAppName')]"
+            },
+            "workspaceId": {
+              "type": "String",
+              "defaultValue": "[parameters('workspaceId')]"
+            },
+            "keyVaultDomain": {
+              "type": "String",
+              "defaultValue": "[parameters('keyVaultDomain')]"
+            },
+            "azureManagementDomain": {
+              "type": "String",
+              "defaultValue": "[parameters('azureManagementDomain')]"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recurrenceInterval": {
+                      "default": "[variables('newRecurrenceInterval')]"
+                    },
+                    "recurrenceFrequency": {
+                      "default": "[variables('newRecurrenceFrequency')]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Variables": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "VbrUsernameId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "VbrPasswordId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "VbrServerName",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "VbrBaseUrl",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "VoneUsernameId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "VonePasswordId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "VoneServerName",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
+                    "name": "VoneBaseUrl",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "For_each_VONE_server_set_missing_parameters": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_VONE_Settings')?['properties']?['watchlistItems']",
+              "actions": {
+                "If_any_value_in_watchlist_is_missing": {
+                  "type": "If",
+                  "expression": {
+                    "or": [
+                      {
+                        "equals": [
+                          "@body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@item()?['properties.itemsKeyValue']?['Key Vault Password ID']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@item()?['properties.itemsKeyValue']?['Key Vault Password ID']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@item()?['properties.itemsKeyValue']?['Key Vault Username ID']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@item()?['properties.itemsKeyValue']?['Key Vault Username ID']",
+                          "@null"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Update_Watchlist_Item_With_KeyVault_IDs_VONE": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "body": {
+                          "Veeam Server Name": "@body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Veeam Server Name']",
+                          "Base URL": "@body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Base URL']",
+                          "Collect Alarms": "@if(\r\n or(\r\n  empty(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms']), \r\n  equals(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms'], null), \r\n  equals(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms'], '')\r\n ),\r\n 'true', \r\n body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms']\r\n)",
+                          "Key Vault Password ID": "@if(\r\n or(\r\n  empty(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Key Vault Password ID']), \r\n  equals(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Key Vault Password ID'], null), \r\n  equals(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Key Vault Password ID'], '')\r\n ),\r\n concat(body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Veeam Server Name'], 'Password'), \r\n body('Parse_current_VONE_server')?['properties.itemsKeyValue']?['Key Vault Password ID']\r\n)"
+                        },
+                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vone_settings')}/watchlistItem/@{encodeURIComponent(items('For_each_VONE_server_set_missing_parameters')?['name'])}"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {
+                    "Parse_current_VONE_server": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Parse_current_VONE_server": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_VONE_server_set_missing_parameters')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "properties.watchlistItemType": {
+                          "type": "string"
+                        },
+                        "properties.watchlistItemId": {
+                          "type": "string"
+                        },
+                        "properties.tenantId": {
+                          "type": "string"
+                        },
+                        "properties.isDeleted": {
+                          "type": "boolean"
+                        },
+                        "properties.created": {
+                          "type": "string"
+                        },
+                        "properties.updated": {
+                          "type": "string"
+                        },
+                        "properties.createdBy": {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "objectId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.updatedBy": {
+                          "type": "object",
+                          "properties": {
+                            "email": {},
+                            "name": {
+                              "type": "string"
+                            },
+                            "objectId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.itemsKeyValue": {
+                          "type": "object",
+                          "properties": {
+                            "Veeam Server Name": {
+                              "type": "string"
+                            },
+                            "Base URL": {
+                              "type": "string"
+                            },
+                            "Collect Alarms": {
+                              "type": "string"
+                            },
+                            "Key Vault Username ID": {
+                              "type": "string"
+                            },
+                            "Key Vault Password ID": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.entityMapping": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "etag": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "systemData": {
+                          "type": "object",
+                          "properties": {
+                            "createdBy": {
+                              "type": "string"
+                            },
+                            "createdByType": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "lastModifiedBy": {
+                              "type": "string"
+                            },
+                            "lastModifiedByType": {
+                              "type": "string"
+                            },
+                            "lastModifiedAt": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_VONE_Settings": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Watchlists_-_Get_Updated_VONE_Settings": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vone_settings')}/watchlistItems"
+              },
+              "runAfter": {
+                "For_each_VONE_server_set_missing_parameters": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_Updated_VONE_Settings": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Watchlists_-_Get_Updated_VONE_Settings')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "properties": {
+                        "watchlistItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "properties.watchlistItemType": {
+                                "type": "string"
+                              },
+                              "properties.watchlistItemId": {
+                                "type": "string"
+                              },
+                              "properties.tenantId": {
+                                "type": "string"
+                              },
+                              "properties.isDeleted": {
+                                "type": "boolean"
+                              },
+                              "properties.created": {
+                                "type": "string"
+                              },
+                              "properties.updated": {
+                                "type": "string"
+                              },
+                              "properties.createdBy": {
+                                "type": "object",
+                                "properties": {
+                                  "email": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "objectId": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "properties.updatedBy": {
+                                "type": "object",
+                                "properties": {
+                                  "email": {},
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "objectId": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "properties.itemsKeyValue": {
+                                "type": "object",
+                                "properties": {
+                                  "Veeam Server Name": {
+                                    "type": "string"
+                                  },
+                                  "Base URL": {
+                                    "type": "string"
+                                  },
+                                  "Collect Alarms": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Username ID": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Password ID": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "properties.entityMapping": {
+                                "type": "object",
+                                "properties": {}
+                              },
+                              "etag": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "systemData": {
+                                "type": "object",
+                                "properties": {
+                                  "createdBy": {
+                                    "type": "string"
+                                  },
+                                  "createdByType": {
+                                    "type": "string"
+                                  },
+                                  "createdAt": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedBy": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedByType": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedAt": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "properties.watchlistItemType",
+                              "properties.watchlistItemId",
+                              "properties.tenantId",
+                              "properties.isDeleted",
+                              "properties.created",
+                              "properties.updated",
+                              "properties.createdBy",
+                              "properties.updatedBy",
+                              "properties.itemsKeyValue",
+                              "properties.entityMapping",
+                              "etag",
+                              "id",
+                              "name",
+                              "type",
+                              "systemData"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Watchlists_-_Get_Updated_VONE_Settings": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "For_each_VBR_server_set_missing_parameters": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_VBR_Settings')?['properties']?['watchlistItems']",
+              "actions": {
+                "Parse_current_VBR_server": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_VBR_server_set_missing_parameters')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "properties.itemsKeyValue": {
+                          "type": "object",
+                          "properties": {
+                            "Veeam Server Name": {
+                              "type": "string"
+                            },
+                            "Base URL": {
+                              "type": "string"
+                            },
+                            "Collect Malware Events": {
+                              "type": "string"
+                            },
+                            "Collect Security and Compliance Analyzer Results": {
+                              "type": "string"
+                            },
+                            "Collect Authorization Events": {
+                              "type": "string"
+                            },
+                            "Collect Configuration Backups": {
+                              "type": "string"
+                            },
+                            "Key Vault Password ID": {
+                              "type": "string"
+                            },
+                            "Key Vault Username ID": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Check_If_KeyVault_IDs_Missing": {
+                  "type": "If",
+                  "expression": {
+                    "or": [
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Password ID']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Username ID']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Password ID']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Username ID']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Malware Events']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Malware Events']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Authorization Events']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Authorization Events']",
+                          "@null"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups']",
+                          ""
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups']",
+                          "@null"
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Update_Watchlist_Item_With_KeyVault_IDs": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "body": {
+                          "Veeam Server Name": "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name']",
+                          "Base URL": "@body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Base URL']",
+                          "Collect Malware Events": "@if(or(empty(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Malware Events']), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Malware Events'], null), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Malware Events'], '')), 'true', body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Malware Events'])",
+                          "Collect Security and Compliance Analyzer Results": "@if(or(empty(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results']), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results'], null), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results'], '')), 'true', body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results'])",
+                          "Collect Authorization Events": "@if(or(empty(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Authorization Events']), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Authorization Events'], null), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Authorization Events'], '')), 'true', body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Authorization Events'])",
+                          "Collect Configuration Backups": "@if(or(empty(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups']), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups'], null), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups'], '')), 'true', body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Collect Configuration Backups'])",
+                          "Key Vault Username ID": "@if(or(empty(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Username ID']), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Username ID'], null)), concat(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name'], 'Username'), body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Username ID'])",
+                          "Key Vault Password ID": "@if(or(empty(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Password ID']), equals(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Password ID'], null)), concat(body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Veeam Server Name'], 'Password'), body('Parse_current_VBR_server')?['properties.itemsKeyValue']?['Key Vault Password ID'])"
+                        },
+                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vbr_settings')}/watchlistItem/@{encodeURIComponent(items('For_each_VBR_server_set_missing_parameters')?['name'])}"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {
+                    "Parse_current_VBR_server": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_VBR_Settings": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "For_each_updated_VONE_server": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_Updated_VONE_Settings')?['properties']?['watchlistItems']",
+              "actions": {
+                "Parse_current_updated_VONE_server": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_updated_VONE_server')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "properties.watchlistItemType": {
+                          "type": "string"
+                        },
+                        "properties.watchlistItemId": {
+                          "type": "string"
+                        },
+                        "properties.tenantId": {
+                          "type": "string"
+                        },
+                        "properties.isDeleted": {
+                          "type": "boolean"
+                        },
+                        "properties.created": {
+                          "type": "string"
+                        },
+                        "properties.updated": {
+                          "type": "string"
+                        },
+                        "properties.createdBy": {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "objectId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.updatedBy": {
+                          "type": "object",
+                          "properties": {
+                            "email": {},
+                            "name": {
+                              "type": "string"
+                            },
+                            "objectId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.itemsKeyValue": {
+                          "type": "object",
+                          "properties": {
+                            "Veeam Server Name": {
+                              "type": "string"
+                            },
+                            "Base URL": {
+                              "type": "string"
+                            },
+                            "Collect Alarms": {
+                              "type": "string"
+                            },
+                            "Key Vault Username ID": {
+                              "type": "string"
+                            },
+                            "Key Vault Password ID": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.entityMapping": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "etag": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "systemData": {
+                          "type": "object",
+                          "properties": {
+                            "createdBy": {
+                              "type": "string"
+                            },
+                            "createdByType": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "lastModifiedBy": {
+                              "type": "string"
+                            },
+                            "lastModifiedByType": {
+                              "type": "string"
+                            },
+                            "lastModifiedAt": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                " Are_there_any_events_collected_from_VONE_server": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@body('Parse_current_updated_VONE_server')?['properties.itemsKeyValue']?['Collect Alarms']",
+                          "true"
+                        ]
+                      },
+                      {
+                        "not": {
+                          "equals": [
+                            "@body('Parse_current_updated_VONE_server')?['properties.itemsKeyValue']?['Veeam Server Name']",
+                            "ExampleServerName"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Set_VonePasswordId": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VonePasswordId",
+                        "value": "@body('Parse_current_updated_VONE_server')?['properties.itemsKeyValue']?['Key Vault Password ID']"
+                      }
+                    },
+                    "Set_VoneUsernameId": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VoneUsernameId",
+                        "value": "@body('Parse_current_updated_VONE_server')?['properties.itemsKeyValue']?['Key Vault Username ID']"
+                      },
+                      "runAfter": {
+                        "Set_VonePasswordId": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Set_VoneServerName": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VoneServerName",
+                        "value": "@body('Parse_current_updated_VONE_server')?['properties.itemsKeyValue']?['Veeam Server Name']"
+                      },
+                      "runAfter": {
+                        "Set_VoneUsernameId": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Extract_Host_and_Port_VONE": {
+                      "type": "Compose",
+                      "inputs": {
+                        "host": "@split(replace(variables('VoneBaseUrl'), 'https://', ''), ':')[0]",
+                        "port": "@if(and(greater(length(split(replace(variables('VoneBaseUrl'), 'https://', ''), ':')), 1), not(equals(last(split(replace(variables('VoneBaseUrl'), 'https://', ''), ':')), ''))), int(last(split(replace(variables('VoneBaseUrl'), 'https://', ''), ':'))), 1239)"
+                      },
+                      "runAfter": {
+                        "Set_VoneBaseUrl": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Setup_KeyVault_Secrets_VONE": {
+                      "type": "Scope",
+                      "actions": {
+                        "Check_Username_Secret_Exists_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VoneUsernameId'), '?api-version=7.4')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          }
+                        },
+                        "Create_Username_Secret_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VoneUsernameId'), '?api-version=7.4')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "value": "UNDEFINED",
+                              "attributes": {
+                                "enabled": true
+                              },
+                              "tags": {
+                                "source": "playbook",
+                                "vbrServer": "@variables('VoneServerName')",
+                                "type": "username"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Username_Secret_Exists_VONE": [
+                              "Failed"
+                            ]
+                          }
+                        },
+                        "Check_Password_Secret_Exists_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VonePasswordId'), '?api-version=7.4')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          }
+                        },
+                        "Create_Password_Secret_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VonePasswordId'), '?api-version=7.4')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "value": "UNDEFINED",
+                              "attributes": {
+                                "enabled": true
+                              },
+                              "tags": {
+                                "source": "playbook",
+                                "vbrServer": "@variables('VoneServerName')",
+                                "type": "password",
+                                "status": "requires_update"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Password_Secret_Exists_VONE": [
+                              "Failed"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Extract_Host_and_Port_VONE": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Setup_Hybrid_Connection_VONE": {
+                      "type": "Scope",
+                      "actions": {
+                        "Check_Hybrid_Connection_Exists_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VoneServerName'), '?api-version=2024-01-01')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          }
+                        },
+                        "Create_Hybrid_Connection_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VoneServerName'), '?api-version=2024-01-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "requiresClientAuthorization": true,
+                                "userMetadata": "@concat('[{\"key\":\"endpoint\",\"value\":\"', outputs('Extract_Host_and_Port_VONE')?['host'], ':', outputs('Extract_Host_and_Port_VONE')?['port'], '\"}]')"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Hybrid_Connection_Exists_VONE": [
+                              "Failed"
+                            ]
+                          }
+                        },
+                        "Create_Listener_Rule_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VoneServerName'), '/authorizationRules/defaultListener?api-version=2024-01-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "rights": [
+                                  "Listen"
+                                ]
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Create_Hybrid_Connection_VONE": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Create_Sender_Rule_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VoneServerName'), '/authorizationRules/defaultSender?api-version=2024-01-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "rights": [
+                                  "Send"
+                                ]
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Create_Listener_Rule_VONE": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Get_Sender_Key_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VoneServerName'), '/authorizationRules/defaultSender/listKeys?api-version=2024-01-01')",
+                            "method": "POST",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Create_Sender_Rule_VONE": [
+                              "Succeeded",
+                              "Skipped"
+                            ]
+                          }
+                        },
+                        "Check_Function_App_Binding_Exists_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/sites/', parameters('functionAppName'), '/hybridConnectionNamespaces/', parameters('relayNamespaceName'), '/relays/', variables('VoneServerName'), '?api-version=2022-03-01')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Get_Sender_Key_VONE": [
+                              "Succeeded",
+                              "Skipped"
+                            ]
+                          }
+                        },
+                        "Bind_To_Function_App_VONE": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/sites/', parameters('functionAppName'), '/hybridConnectionNamespaces/', parameters('relayNamespaceName'), '/relays/', variables('VoneServerName'), '?api-version=2022-03-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "hostname": "@outputs('Extract_Host_and_Port_VONE')?['host']",
+                                "port": "@outputs('Extract_Host_and_Port_VONE')?['port']",
+                                "relayArmUri": "@if(equals(body('Check_Hybrid_Connection_Exists_VONE')?['id'], null), body('Create_Hybrid_Connection_VONE')?['id'], body('Check_Hybrid_Connection_Exists_VONE')?['id'])",
+                                "relayName": "@variables('VoneServerName')",
+                                "sendKeyName": "defaultSender",
+                                "sendKeyValue": "@body('Get_Sender_Key_VONE')?['primaryKey']",
+                                "serviceBusNamespace": "@parameters('relayNamespaceName')",
+                                "serviceBusSuffix": ".servicebus.windows.net"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Function_App_Binding_Exists_VONE": [
+                              "Failed"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Setup_KeyVault_Secrets_VONE": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Set_VoneBaseUrl": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VoneBaseUrl",
+                        "value": "@body('Parse_current_updated_VONE_server')?['properties.itemsKeyValue']?['Base URL']"
+                      },
+                      "runAfter": {
+                        "Set_VoneServerName": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {
+                    "Parse_current_updated_VONE_server": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_Updated_VONE_Settings": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "For_each_updated_VBR_server": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_updated_VBR_Settings')?['properties']?['watchlistItems']",
+              "actions": {
+                "Are_there_any_events_collected_from_VBR_server": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@item()?['properties.itemsKeyValue']?['Veeam Server Name']",
+                            "ExampleServerName"
+                          ]
+                        }
+                      },
+                      {
+                        "or": [
+                          {
+                            "equals": [
+                              "@body('Parse_current_updated_VBR_Server')?['properties.itemsKeyValue']?['Collect Malware Events']",
+                              "true"
+                            ]
+                          },
+                          {
+                            "equals": [
+                              "@body('Parse_current_updated_VBR_Server')?['properties.itemsKeyValue']?['Collect Security and Compliance Analyzer Results']",
+                              "true"
+                            ]
+                          },
+                          {
+                            "equals": [
+                              "@body('Parse_current_updated_VBR_Server')?['properties.itemsKeyValue']?['Collect Authorization Events']",
+                              "true"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Extract_Host_and_Port_VBR": {
+                      "type": "Compose",
+                      "inputs": {
+                        "host": "@split(replace(variables('VbrBaseUrl'), 'https://', ''), ':')[0]",
+                        "port": "@if(and(greater(length(split(replace(variables('VbrBaseUrl'), 'https://', ''), ':')), 1), not(equals(last(split(replace(variables('VbrBaseUrl'), 'https://', ''), ':')), ''))), int(last(split(replace(variables('VbrBaseUrl'), 'https://', ''), ':'))), 9419)"
+                      },
+                      "runAfter": {
+                        "Set_VbrBaseUrl": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Setup_KeyVault_Secrets_VBR": {
+                      "type": "Scope",
+                      "actions": {
+                        "Check_Username_Secret_Exists_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VbrUsernameId'), '?api-version=7.4')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          }
+                        },
+                        "Create_Username_Secret_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VbrUsernameId'), '?api-version=7.4')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "value": "UNDEFINED",
+                              "attributes": {
+                                "enabled": true
+                              },
+                              "tags": {
+                                "source": "playbook",
+                                "vbrServer": "@variables('VbrServerName')",
+                                "type": "username"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Username_Secret_Exists_VBR": [
+                              "Failed"
+                            ]
+                          }
+                        },
+                        "Check_Password_Secret_Exists_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VbrPasswordId'), '?api-version=7.4')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          }
+                        },
+                        "Create_Password_Secret_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'), '/secrets/', variables('VbrPasswordId'), '?api-version=7.4')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "value": "UNDEFINED",
+                              "attributes": {
+                                "enabled": true
+                              },
+                              "tags": {
+                                "source": "playbook",
+                                "vbrServer": "@variables('VbrServerName')",
+                                "type": "password",
+                                "status": "requires_update"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@concat('https://', parameters('keyVaultName'), parameters('keyVaultDomain'))"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Password_Secret_Exists_VBR": [
+                              "Failed"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Extract_Host_and_Port_VBR": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Setup_Hybrid_Connection_VBR": {
+                      "type": "Scope",
+                      "actions": {
+                        "Check_Hybrid_Connection_Exists_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VbrServerName'), '?api-version=2024-01-01')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          }
+                        },
+                        "Create_Hybrid_Connection_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VbrServerName'), '?api-version=2024-01-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "requiresClientAuthorization": true,
+                                "userMetadata": "@concat('[{\"key\":\"endpoint\",\"value\":\"', outputs('Extract_Host_and_Port_VBR')?['host'], ':', outputs('Extract_Host_and_Port_VBR')?['port'], '\"}]')"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Hybrid_Connection_Exists_VBR": [
+                              "Failed"
+                            ]
+                          }
+                        },
+                        "Create_Listener_Rule_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VbrServerName'), '/authorizationRules/defaultListener?api-version=2024-01-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "rights": [
+                                  "Listen"
+                                ]
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Create_Hybrid_Connection_VBR": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Create_Sender_Rule_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VbrServerName'), '/authorizationRules/defaultSender?api-version=2024-01-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "rights": [
+                                  "Send"
+                                ]
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Create_Listener_Rule_VBR": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Get_Sender_Key_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Relay/namespaces/', parameters('relayNamespaceName'), '/hybridConnections/', variables('VbrServerName'), '/authorizationRules/defaultSender/listKeys?api-version=2024-01-01')",
+                            "method": "POST",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Create_Sender_Rule_VBR": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Check_Function_App_Binding_Exists_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/sites/', parameters('functionAppName'), '/hybridConnectionNamespaces/', parameters('relayNamespaceName'), '/relays/', variables('VbrServerName'), '?api-version=2022-03-01')",
+                            "method": "GET",
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Get_Sender_Key_VBR": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Bind_To_Function_App_VBR": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "@concat(parameters('azureManagementDomain'), '/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/sites/', parameters('functionAppName'), '/hybridConnectionNamespaces/', parameters('relayNamespaceName'), '/relays/', variables('VbrServerName'), '?api-version=2022-03-01')",
+                            "method": "PUT",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "properties": {
+                                "hostname": "@outputs('Extract_Host_and_Port_VBR')?['host']",
+                                "port": "@outputs('Extract_Host_and_Port_VBR')?['port']",
+                                "relayArmUri": "@if(equals(body('Check_Hybrid_Connection_Exists_VBR')?['id'], null), body('Create_Hybrid_Connection_VBR')?['id'], body('Check_Hybrid_Connection_Exists_VBR')?['id'])",
+                                "relayName": "@variables('VbrServerName')",
+                                "sendKeyName": "defaultSender",
+                                "sendKeyValue": "@body('Get_Sender_Key_VBR')?['primaryKey']",
+                                "serviceBusNamespace": "@parameters('relayNamespaceName')",
+                                "serviceBusSuffix": ".servicebus.windows.net"
+                              }
+                            },
+                            "authentication": {
+                              "type": "ManagedServiceIdentity",
+                              "audience": "@parameters('azureManagementDomain')"
+                            }
+                          },
+                          "runAfter": {
+                            "Check_Function_App_Binding_Exists_VBR": [
+                              "Failed"
+                            ]
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Setup_KeyVault_Secrets_VBR": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Set_VbrPasswordId": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VbrPasswordId",
+                        "value": "@item()?['properties.itemsKeyValue']?['Key Vault Password ID']"
+                      }
+                    },
+                    "Set_VbrUsernameId": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VbrUsernameId",
+                        "value": "@item()?['properties.itemsKeyValue']?['Key Vault Username ID']"
+                      },
+                      "runAfter": {
+                        "Set_VbrPasswordId": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Set_VbrServerName": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VbrServerName",
+                        "value": "@item()?['properties.itemsKeyValue']?['Veeam Server Name']"
+                      },
+                      "runAfter": {
+                        "Set_VbrUsernameId": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Set_VbrBaseUrl": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VbrBaseUrl",
+                        "value": "@item()?['properties.itemsKeyValue']?['Base URL']"
+                      },
+                      "runAfter": {
+                        "Set_VbrServerName": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {
+                    "Parse_current_updated_VBR_Server": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Parse_current_updated_VBR_Server": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_updated_VBR_server')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "properties.watchlistItemType": {
+                          "type": "string"
+                        },
+                        "properties.watchlistItemId": {
+                          "type": "string"
+                        },
+                        "properties.tenantId": {
+                          "type": "string"
+                        },
+                        "properties.isDeleted": {
+                          "type": "boolean"
+                        },
+                        "properties.created": {
+                          "type": "string"
+                        },
+                        "properties.updated": {
+                          "type": "string"
+                        },
+                        "properties.createdBy": {
+                          "type": "object",
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "objectId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.updatedBy": {
+                          "type": "object",
+                          "properties": {
+                            "email": {},
+                            "name": {
+                              "type": "string"
+                            },
+                            "objectId": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.itemsKeyValue": {
+                          "type": "object",
+                          "properties": {
+                            "Veeam Server Name": {
+                              "type": "string"
+                            },
+                            "Base URL": {
+                              "type": "string"
+                            },
+                            "Collect Malware Events": {
+                              "type": "string"
+                            },
+                            "Collect Security and Compliance Analyzer Results": {
+                              "type": "string"
+                            },
+                            "Collect Authorization Events": {
+                              "type": "string"
+                            },
+                            "Key Vault Username ID": {
+                              "type": "string"
+                            },
+                            "Key Vault Password ID": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "properties.entityMapping": {
+                          "type": "object",
+                          "properties": {}
+                        },
+                        "etag": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "systemData": {
+                          "type": "object",
+                          "properties": {
+                            "createdBy": {
+                              "type": "string"
+                            },
+                            "createdByType": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "lastModifiedBy": {
+                              "type": "string"
+                            },
+                            "lastModifiedByType": {
+                              "type": "string"
+                            },
+                            "lastModifiedAt": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_updated_VBR_Settings": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Watchlists_-_Get_Updated_VBR_Settings": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vbr_settings')}/watchlistItems"
+              },
+              "runAfter": {
+                "For_each_VBR_server_set_missing_parameters": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_updated_VBR_Settings": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Watchlists_-_Get_Updated_VBR_Settings')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "properties": {
+                      "type": "object",
+                      "properties": {
+                        "watchlistItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "properties.itemsKeyValue": {
+                                "type": "object",
+                                "properties": {
+                                  "Veeam Server Name": {
+                                    "type": "string"
+                                  },
+                                  "Base URL": {
+                                    "type": "string"
+                                  },
+                                  "Collect Malware Events": {
+                                    "type": "string"
+                                  },
+                                  "Collect Security and Compliance Analyzer Results": {
+                                    "type": "string"
+                                  },
+                                  "Collect Authorization Events": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Password ID": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Username ID": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "properties.itemsKeyValue"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Watchlists_-_Get_Updated_VBR_Settings": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_VONE_Settings": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Watchlists_-_Get_VONE_Settings_')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "properties": {
+                      "type": "object",
+                      "properties": {
+                        "watchlistItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "properties.watchlistItemType": {
+                                "type": "string"
+                              },
+                              "properties.watchlistItemId": {
+                                "type": "string"
+                              },
+                              "properties.tenantId": {
+                                "type": "string"
+                              },
+                              "properties.isDeleted": {
+                                "type": "boolean"
+                              },
+                              "properties.created": {
+                                "type": "string"
+                              },
+                              "properties.updated": {
+                                "type": "string"
+                              },
+                              "properties.createdBy": {
+                                "type": "object",
+                                "properties": {
+                                  "email": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "objectId": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "properties.updatedBy": {
+                                "type": "object",
+                                "properties": {
+                                  "email": {},
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "objectId": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "properties.itemsKeyValue": {
+                                "type": "object",
+                                "properties": {
+                                  "Veeam Server Name": {
+                                    "type": "string"
+                                  },
+                                  "Base URL": {
+                                    "type": "string"
+                                  },
+                                  "Collect Alarms": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Username ID": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Password ID": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "properties.entityMapping": {
+                                "type": "object",
+                                "properties": {}
+                              },
+                              "etag": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "systemData": {
+                                "type": "object",
+                                "properties": {
+                                  "createdBy": {
+                                    "type": "string"
+                                  },
+                                  "createdByType": {
+                                    "type": "string"
+                                  },
+                                  "createdAt": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedBy": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedByType": {
+                                    "type": "string"
+                                  },
+                                  "lastModifiedAt": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "properties.watchlistItemType",
+                              "properties.watchlistItemId",
+                              "properties.tenantId",
+                              "properties.isDeleted",
+                              "properties.created",
+                              "properties.updated",
+                              "properties.createdBy",
+                              "properties.updatedBy",
+                              "properties.itemsKeyValue",
+                              "properties.entityMapping",
+                              "etag",
+                              "id",
+                              "name",
+                              "type",
+                              "systemData"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Watchlists_-_Get_VONE_Settings_": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Watchlists_-_Get_VONE_Settings_": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vone_settings')}/watchlistItems"
+              },
+              "runAfter": {
+                "Initialize_Variables": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Watchlists_-_Get_VBR_Settings": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('subscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('resourceGroupName'))}/workspaces/@{encodeURIComponent(parameters('workspaceId'))}/watchlists/@{encodeURIComponent('vbr_settings')}/watchlistItems"
+              },
+              "runAfter": {
+                "Initialize_Variables": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_VBR_Settings": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Watchlists_-_Get_VBR_Settings')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "properties": {
+                      "type": "object",
+                      "properties": {
+                        "watchlistItems": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "properties.itemsKeyValue": {
+                                "type": "object",
+                                "properties": {
+                                  "Veeam Server Name": {
+                                    "type": "string"
+                                  },
+                                  "Base URL": {
+                                    "type": "string"
+                                  },
+                                  "Collect Malware Events": {
+                                    "type": "string"
+                                  },
+                                  "Collect Security and Compliance Analyzer Results": {
+                                    "type": "string"
+                                  },
+                                  "Collect Authorization Events": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Password ID": {
+                                    "type": "string"
+                                  },
+                                  "Key Vault Username ID": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "required": [
+                              "properties.itemsKeyValue"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Watchlists_-_Get_VBR_Settings": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[parameters('AzureSentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

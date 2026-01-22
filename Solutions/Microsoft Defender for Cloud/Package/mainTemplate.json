@@ -33,16 +33,9 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Microsoft Defender for Cloud",
-    "_solutionVersion": "3.0.2",
+    "_solutionVersion": "3.0.3",
     "solutionId": "azuresentinel.azure-sentinel-solution-microsoftdefenderforcloud",
     "_solutionId": "[variables('solutionId')]",
-    "analyticRuleObject1": {
-      "analyticRuleVersion1": "1.0.2",
-      "_analyticRulecontentId1": "011c84d8-85f0-4370-b864-24c13455aa94",
-      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '011c84d8-85f0-4370-b864-24c13455aa94')]",
-      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('011c84d8-85f0-4370-b864-24c13455aa94')))]",
-      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','011c84d8-85f0-4370-b864-24c13455aa94','-', '1.0.2')))]"
-    },
     "uiConfigId1": "AzureSecurityCenter",
     "_uiConfigId1": "[variables('uiConfigId1')]",
     "dataConnectorContentId1": "AzureSecurityCenter",
@@ -61,154 +54,16 @@
     "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2'))))]",
     "dataConnectorVersion2": "1.0.0",
     "_dataConnectorcontentProductId2": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId2'),'-', variables('dataConnectorVersion2'))))]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.2",
+      "_analyticRulecontentId1": "011c84d8-85f0-4370-b864-24c13455aa94",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '011c84d8-85f0-4370-b864-24c13455aa94')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('011c84d8-85f0-4370-b864-24c13455aa94')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','011c84d8-85f0-4370-b864-24c13455aa94','-', '1.0.2')))]"
+    },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
-      "apiVersion": "2023-04-01-preview",
-      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
-      ],
-      "properties": {
-        "description": "CoreBackupDeletionwithSecurityAlert_AnalyticalRules Analytics Rule with template version 3.0.2",
-        "mainTemplate": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
-          "parameters": {},
-          "variables": {},
-          "resources": [
-            {
-              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
-              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
-              "apiVersion": "2023-02-01-preview",
-              "kind": "Scheduled",
-              "location": "[parameters('workspace-location')]",
-              "properties": {
-                "description": "The query identifies any efforts by an attacker to delete backup containers, while also searching for any security alerts that may be linked to the same activity, in order to uncover additional information about the attacker's actions.' \nThough such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.",
-                "displayName": "Detect CoreBackUp Deletion Activity from related Security Alerts",
-                "enabled": false,
-                "query": "SecurityAlert\n| extend Extprop = parse_json(ExtendedProperties)\n| mv-expand todynamic(Entities)\n| extend HostName = iff(isnotempty(tostring(Extprop[\"Compromised Host\"])), tolower(tostring(Extprop[\"Compromised Host\"])), tolower(tostring(parse_json(Entities).HostName)))\n| where isnotempty(HostName)\n| mv-expand todynamic(split(HostName, ','))\n| extend DnsDomain = iff(isnotempty(tostring(Extprop[\"Machine Domain\"])), tostring(Extprop[\"Machine Domain\"]), tostring(parse_json(Entities).DnsDomain))\n| extend UserName = iff(isnotempty(tostring(Extprop[\"User Name\"])), tostring(Extprop[\"User Name\"]), iff(tostring(parse_json(Entities).Type) == 'account', tostring(parse_json(Entities).Name), ''))\n| extend NTDomain = iff(isnotempty(tostring(Extprop[\"User Domain\"])), tostring(Extprop[\"User Domain\"]), tostring(parse_json(Entities).NTDomain))\n| extend IpAddress = iff(tostring(parse_json(Entities).Type) == 'ip', tostring(parse_json(Entities).Address), tostring(parse_json(Extprop).[\"IpAddress\"]))\n| summarize timestamp = arg_max(TimeGenerated, *) by AlertName, tostring(HostName)\n| project timestamp, AlertName, UserName, NTDomain, tostring(HostName), DnsDomain, IpAddress\n| join kind=inner\n(\nCoreAzureBackup\n| where State =~ \"Deleted\"\n| where OperationName =~ \"BackupItem\"\n| extend data = split(BackupItemUniqueId, \";\")\n| extend AzureLocation = data[0], VaultId=data[1], HostName=tolower(tostring(data[2])), DrivesBackedUp=data[3]\n| project timestamp = TimeGenerated, AzureLocation, VaultId, HostName, DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName\n)\non HostName\n| project timestamp, AlertName, HostName, DnsDomain, UserName, NTDomain, _ResourceId, IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName\n",
-                "queryFrequency": "P1D",
-                "queryPeriod": "P1D",
-                "severity": "Medium",
-                "suppressionDuration": "PT1H",
-                "suppressionEnabled": false,
-                "triggerOperator": "GreaterThan",
-                "triggerThreshold": 0,
-                "status": "Available",
-                "requiredDataConnectors": [
-                  {
-                    "connectorId": "AzureSecurityCenter",
-                    "dataTypes": [
-                      "SecurityAlert"
-                    ]
-                  },
-                  {
-                    "connectorId": "MicrosoftDefenderForCloudTenantBased",
-                    "dataTypes": [
-                      "SecurityAlert"
-                    ]
-                  }
-                ],
-                "tactics": [
-                  "Impact"
-                ],
-                "techniques": [
-                  "T1496"
-                ],
-                "entityMappings": [
-                  {
-                    "fieldMappings": [
-                      {
-                        "identifier": "Name",
-                        "columnName": "UserName"
-                      },
-                      {
-                        "identifier": "NTDomain",
-                        "columnName": "NTDomain"
-                      }
-                    ],
-                    "entityType": "Account"
-                  },
-                  {
-                    "fieldMappings": [
-                      {
-                        "identifier": "ResourceId",
-                        "columnName": "_ResourceId"
-                      }
-                    ],
-                    "entityType": "AzureResource"
-                  },
-                  {
-                    "fieldMappings": [
-                      {
-                        "identifier": "HostName",
-                        "columnName": "HostName"
-                      },
-                      {
-                        "identifier": "DnsDomain",
-                        "columnName": "DnsDomain"
-                      }
-                    ],
-                    "entityType": "Host"
-                  },
-                  {
-                    "fieldMappings": [
-                      {
-                        "identifier": "Address",
-                        "columnName": "IpAddress"
-                      }
-                    ],
-                    "entityType": "IP"
-                  }
-                ]
-              }
-            },
-            {
-              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-              "apiVersion": "2022-01-01-preview",
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
-              "properties": {
-                "description": "Microsoft Defender for Cloud Analytics Rule 1",
-                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
-                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
-                "kind": "AnalyticsRule",
-                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
-                "source": {
-                  "kind": "Solution",
-                  "name": "Microsoft Defender for Cloud",
-                  "sourceId": "[variables('_solutionId')]"
-                },
-                "author": {
-                  "name": "Microsoft",
-                  "email": "[variables('_email')]"
-                },
-                "support": {
-                  "tier": "Microsoft",
-                  "name": "Microsoft Corporation",
-                  "link": "https://support.microsoft.com",
-                  "email": "support@microsoft.com"
-                }
-              }
-            }
-          ]
-        },
-        "packageKind": "Solution",
-        "packageVersion": "[variables('_solutionVersion')]",
-        "packageName": "[variables('_solutionName')]",
-        "packageId": "[variables('_solutionId')]",
-        "contentSchemaVersion": "3.0.0",
-        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
-        "contentKind": "AnalyticsRule",
-        "displayName": "Detect CoreBackUp Deletion Activity from related Security Alerts",
-        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
-        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
-        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
-    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
@@ -218,7 +73,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Microsoft Defender for Cloud data connector with template version 3.0.2",
+        "description": "Microsoft Defender for Cloud data connector with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -377,7 +232,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Microsoft Defender for Cloud data connector with template version 3.0.2",
+        "description": "Microsoft Defender for Cloud data connector with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion2')]",
@@ -393,9 +248,9 @@
               "properties": {
                 "connectorUiConfig": {
                   "id": "[variables('_uiConfigId2')]",
-                  "title": "Tenant-based Microsoft Defender for Cloud (Preview)",
+                  "title": "Tenant-based Microsoft Defender for Cloud",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your MDC security alerts from Microsoft 365 Defender into Microsoft Sentinel, so you can can leverage the advantages of XDR correlations connecting the dots across your cloud resources, devices and identities and view the data in workbooks, queries and investigate and respond to incidents.",
+                  "descriptionMarkdown": "Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your MDC security alerts from Microsoft 365 Defender into Microsoft Sentinel, so you can can leverage the advantages of XDR correlations connecting the dots across your cloud resources, devices and identities and view the data in workbooks, queries and investigate and respond to incidents. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2269832&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).",
                   "logo": "Microsoft.svg",
                   "graphQueriesTableName": "SecurityAlerts",
                   "graphQueries": [
@@ -459,7 +314,7 @@
                       "instructions": [
                         {
                           "parameters": {
-                            "title": "Tenant-based Microsoft Defender for Cloud (Preview)",
+                            "title": "Tenant-based Microsoft Defender for Cloud",
                             "connectorKind": "MicrosoftDefenderForCloudTenantBased",
                             "enable": true,
                             "newPipelineEnabledFeatureFlagConfig": {
@@ -519,7 +374,7 @@
         "contentSchemaVersion": "3.0.0",
         "contentId": "[variables('_dataConnectorContentId2')]",
         "contentKind": "DataConnector",
-        "displayName": "Tenant-based Microsoft Defender for Cloud (Preview)",
+        "displayName": "Tenant-based Microsoft Defender for Cloud",
         "contentProductId": "[variables('_dataConnectorcontentProductId2')]",
         "id": "[variables('_dataConnectorcontentProductId2')]",
         "version": "[variables('dataConnectorVersion2')]"
@@ -563,9 +418,9 @@
       "kind": "GenericUI",
       "properties": {
         "connectorUiConfig": {
-          "title": "Tenant-based Microsoft Defender for Cloud (Preview)",
+          "title": "Tenant-based Microsoft Defender for Cloud",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your MDC security alerts from Microsoft 365 Defender into Microsoft Sentinel, so you can can leverage the advantages of XDR correlations connecting the dots across your cloud resources, devices and identities and view the data in workbooks, queries and investigate and respond to incidents.",
+          "descriptionMarkdown": "Microsoft Defender for Cloud is a security management tool that allows you to detect and quickly respond to threats across Azure, hybrid, and multi-cloud workloads. This connector allows you to stream your MDC security alerts from Microsoft 365 Defender into Microsoft Sentinel, so you can can leverage the advantages of XDR correlations connecting the dots across your cloud resources, devices and identities and view the data in workbooks, queries and investigate and respond to incidents. For more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2269832&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).",
           "graphQueries": [
             {
               "metricName": "Total data received",
@@ -627,7 +482,7 @@
               "instructions": [
                 {
                   "parameters": {
-                    "title": "Tenant-based Microsoft Defender for Cloud (Preview)",
+                    "title": "Tenant-based Microsoft Defender for Cloud",
                     "connectorKind": "MicrosoftDefenderForCloudTenantBased",
                     "enable": true,
                     "newPipelineEnabledFeatureFlagConfig": {
@@ -654,11 +509,156 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "CoreBackupDeletionwithSecurityAlert_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "The query identifies any efforts by an attacker to delete backup containers, while also searching for any security alerts that may be linked to the same activity, in order to uncover additional information about the attacker's actions.' \nThough such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.",
+                "displayName": "Detect CoreBackUp Deletion Activity from related Security Alerts",
+                "enabled": false,
+                "query": "SecurityAlert\n| extend Extprop = parse_json(ExtendedProperties)\n| mv-expand todynamic(Entities)\n| extend HostName = iff(isnotempty(tostring(Extprop[\"Compromised Host\"])), tolower(tostring(Extprop[\"Compromised Host\"])), tolower(tostring(parse_json(Entities).HostName)))\n| where isnotempty(HostName)\n| mv-expand todynamic(split(HostName, ','))\n| extend DnsDomain = iff(isnotempty(tostring(Extprop[\"Machine Domain\"])), tostring(Extprop[\"Machine Domain\"]), tostring(parse_json(Entities).DnsDomain))\n| extend UserName = iff(isnotempty(tostring(Extprop[\"User Name\"])), tostring(Extprop[\"User Name\"]), iff(tostring(parse_json(Entities).Type) == 'account', tostring(parse_json(Entities).Name), ''))\n| extend NTDomain = iff(isnotempty(tostring(Extprop[\"User Domain\"])), tostring(Extprop[\"User Domain\"]), tostring(parse_json(Entities).NTDomain))\n| extend IpAddress = iff(tostring(parse_json(Entities).Type) == 'ip', tostring(parse_json(Entities).Address), tostring(parse_json(Extprop).[\"IpAddress\"]))\n| summarize timestamp = arg_max(TimeGenerated, *) by AlertName, tostring(HostName)\n| project timestamp, AlertName, UserName, NTDomain, tostring(HostName), DnsDomain, IpAddress\n| join kind=inner\n(\nCoreAzureBackup\n| where State =~ \"Deleted\"\n| where OperationName =~ \"BackupItem\"\n| extend data = split(BackupItemUniqueId, \";\")\n| extend AzureLocation = data[0], VaultId=data[1], HostName=tolower(tostring(data[2])), DrivesBackedUp=data[3]\n| project timestamp = TimeGenerated, AzureLocation, VaultId, HostName, DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName\n)\non HostName\n| project timestamp, AlertName, HostName, DnsDomain, UserName, NTDomain, _ResourceId, IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "AzureSecurityCenter",
+                    "dataTypes": [
+                      "SecurityAlert"
+                    ]
+                  },
+                  {
+                    "connectorId": "MicrosoftDefenderForCloudTenantBased",
+                    "dataTypes": [
+                      "SecurityAlert"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "Impact"
+                ],
+                "techniques": [
+                  "T1496"
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "UserName",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "NTDomain",
+                        "identifier": "NTDomain"
+                      }
+                    ],
+                    "entityType": "Account"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "_ResourceId",
+                        "identifier": "ResourceId"
+                      }
+                    ],
+                    "entityType": "AzureResource"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "HostName",
+                        "identifier": "HostName"
+                      },
+                      {
+                        "columnName": "DnsDomain",
+                        "identifier": "DnsDomain"
+                      }
+                    ],
+                    "entityType": "Host"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "IpAddress",
+                        "identifier": "Address"
+                      }
+                    ],
+                    "entityType": "IP"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "Microsoft Defender for Cloud Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft Defender for Cloud",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "link": "https://support.microsoft.com",
+                  "email": "support@microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "Detect CoreBackUp Deletion Activity from related Security Alerts",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.2",
+        "version": "3.0.3",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Microsoft Defender for Cloud",
@@ -689,11 +689,6 @@
           "operator": "AND",
           "criteria": [
             {
-              "kind": "AnalyticsRule",
-              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
-              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-            },
-            {
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId1')]",
               "version": "[variables('dataConnectorVersion1')]"
@@ -702,6 +697,11 @@
               "kind": "DataConnector",
               "contentId": "[variables('_dataConnectorContentId2')]",
               "version": "[variables('dataConnectorVersion2')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
             }
           ]
         },
