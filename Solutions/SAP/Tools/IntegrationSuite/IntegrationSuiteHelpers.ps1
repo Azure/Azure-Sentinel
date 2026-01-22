@@ -551,15 +551,7 @@ function New-IntegrationSuiteConnectionRequestBody {
         #   - "Basic": HTTP Basic Auth without OAuth (username/password on every request)
         $authConfig = $null
         $authType = if ($Credentials.AuthType) { $Credentials.AuthType } else { "OAuth2" }
-        
-        # DEBUG: Log the auth configuration being built
-        Write-Log "[DEBUG] Building auth config with AuthType: $authType"
-        Write-Log "[DEBUG] ClientId: $($Credentials.ClientId)"
-        Write-Log "[DEBUG] IntegrationServerUrl: $($Credentials.IntegrationServerUrl)"
-        if ($Credentials.TokenEndpoint) {
-            Write-Log "[DEBUG] TokenEndpoint: $($Credentials.TokenEndpoint)"
-        }
-        
+              
         switch ($authType) {
             "Basic" {
                 Write-Log "Using Basic auth (HTTP Basic Authentication on every request)"
@@ -571,7 +563,6 @@ function New-IntegrationSuiteConnectionRequestBody {
                     UserName = $Credentials.ClientId
                     Password = $Credentials.ClientSecret
                 }
-                Write-Log "[DEBUG] Basic auth config built with UserName (PascalCase) and Password (PascalCase)"
             }
             default {
                 # "OAuth2" - Standard OAuth2 with credentials in body
@@ -728,15 +719,8 @@ function New-SentinelIntegrationSuiteConnection {
         
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
-        # DEBUG: Log the complete request body (with masked secrets) for troubleshooting
-        Write-Log "[DEBUG] Request body structure (secrets masked):"
-        $debugBody = $bodyObject | ConvertTo-Json -Depth 10
-        # Mask sensitive data in debug output
-        Write-Log $debugBody
-        
         # Construct ARM API URI
         $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$sanitizedConnectionName`?api-version=$ApiVersion"
-        Write-Log "[DEBUG] API URI: $uri"
         
         # Create headers
         $headers = @{
