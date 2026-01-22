@@ -13,7 +13,11 @@
 
 ## Data Connectors
 
-This solution provides **1 data connector(s)**.
+This solution provides **2 data connector(s)**.
+
+### [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md)
+
+**Publisher:** Microsoft
 
 ### [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md)
 
@@ -53,6 +57,6 @@ This solution ingests data into **1 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `SecurityAlert` | [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md) |
+| `SecurityAlert` | [Subscription-based Microsoft Defender for Cloud (Legacy)](../connectors/azuresecuritycenter.md), [Tenant-based Microsoft Defender for Cloud](../connectors/microsoftdefenderforcloudtenantbased.md) |
 
 [← Back to Solutions Index](../solutions-index.md)

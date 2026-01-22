@@ -2,13 +2,13 @@
 
 **Table:** `ThreatIntelligenceIndicator`
 
-This table is ingested by **11 solution(s)** using **15 connector(s)**.
+This table is ingested by **10 solution(s)** using **14 connector(s)**.
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
 ---
 
-## Solutions (11)
+## Solutions (10)
 
 This table is used by the following solutions:
 
@@ -18,13 +18,12 @@ This table is used by the following solutions:
 - [CrowdStrike Falcon Endpoint Protection](../solutions/crowdstrike-falcon-endpoint-protection.md)
 - [Datalake2Sentinel](../solutions/datalake2sentinel.md)
 - [GreyNoiseThreatIntelligence](../solutions/greynoisethreatintelligence.md)
-- [JoeSandbox](../solutions/joesandbox.md)
 - [MISP2Sentinel](../solutions/misp2sentinel.md)
 - [MimecastTIRegional](../solutions/mimecasttiregional.md)
 - [Threat Intelligence](../solutions/threat-intelligence.md)
 - [VMRay](../solutions/vmray.md)
 
-## Connectors (15)
+## Connectors (14)
 
 This table is ingested by the following connectors:
 
@@ -34,7 +33,6 @@ This table is ingested by the following connectors:
 - [CrowdStrike Falcon Adversary Intelligence ](../connectors/crowdstrikefalconadversaryintelligence.md)
 - [Datalake2Sentinel](../connectors/datalake2sentinelconnector.md)
 - [GreyNoise Threat Intelligence](../connectors/greynoise2sentinelapi.md)
-- [JoeSandboxThreatIntelligence](../connectors/joesandbox.md)
 - [MISP2Sentinel](../connectors/misp2sentinelconnector.md)
 - [Microsoft Defender Threat Intelligence](../connectors/microsoftdefenderthreatintelligence.md)
 - [Mimecast Intelligence for Microsoft - Microsoft Sentinel](../connectors/mimecasttiregionalconnectorazurefunctions.md)

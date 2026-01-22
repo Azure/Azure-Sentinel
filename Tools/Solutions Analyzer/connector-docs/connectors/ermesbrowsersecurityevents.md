@@ -6,7 +6,7 @@
 | **Publisher** | Ermes Cyber Security S.p.A. |
 | **Tables Ingested** | [`ErmesBrowserSecurityEvents_CL`](../tables-index.md#ermesbrowsersecurityevents_cl) |
 | **Used in Solutions** | [Ermes Browser Security](../solutions/ermes-browser-security.md) |
-| **Connector Definition Files** | [ErmesBrowserSecurityEvents_ConnectorDefinition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ermes%20Browser%20Security/Data%20Connectors/ErmesBrowserSecurityEvents_CCF/ErmesBrowserSecurityEvents_ConnectorDefinition.json) |
+| **Connector Definition Files** | [data_connector_definition.json](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Ermes%20Browser%20Security/Data%20Connectors/ErmesBrowserSecurityEvents_ccp/data_connector_definition.json) |
 
 Ermes Browser Security Events
 
@@ -26,7 +26,6 @@ Ermes Browser Security Events
 **1. Connect Ermes Browser Security Events to Microsoft Sentinel**
 
 Connect using OAuth2 credentials
-- **API URL (optional)**: https://api.shield.ermessecurity.com
 - **OAuth Configuration**:
   - Client ID
   - Client Secret
