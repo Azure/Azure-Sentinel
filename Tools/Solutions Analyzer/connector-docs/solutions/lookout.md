@@ -8,7 +8,9 @@
 | **Support Tier** | Partner |
 | **Support Link** | [https://www.lookout.com/support](https://www.lookout.com/support) |
 | **Categories** | domains |
+| **Version** | 3.0.1 |
 | **First Published** | 2021-10-18 |
+| **Last Updated** | 2025-11-07 |
 | **Solution Folder** | [https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Lookout) |
 
 ## Data Connectors

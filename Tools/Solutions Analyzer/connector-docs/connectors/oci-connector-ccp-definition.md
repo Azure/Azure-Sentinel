@@ -25,7 +25,7 @@ The Oracle Cloud Infrastructure (OCI) data connector provides the capability to 
 **1. Connect to OCI Streaming API to start collecting Event logs in Microsoft Sentinel**
 
 1) Log in to the OCI console and access the navigation menu.
-2) In the navigation menu, go to "Analytics & AI" → "Streaming".
+2) In the navigation menu, go to "Analytics & AI" -> "Streaming".
 3) Click "Create Stream".
 4) Select an existing "Stream Pool" or create a new one.
 5) Enter the following details:
@@ -34,7 +34,7 @@ The Oracle Cloud Infrastructure (OCI) data connector provides the capability to 
    - "Number of Partitions"
    - "Total Write Rate"
    - "Total Read Rate" (based on your data volume)
-6) In the navigation menu, go to "Logging" → "Service Connectors".
+6) In the navigation menu, go to "Logging" -> "Service Connectors".
 7) Click "Create Service Connector".
 8) Enter the following details:
    - "Connector Name"
@@ -46,17 +46,38 @@ The Oracle Cloud Infrastructure (OCI) data connector provides the capability to 
 12) Configure the "Target" by selecting the previously created stream.
 13) Click "Create".
 14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).
- Note : The connector only supports ingesting data from one partition ID at a time, and that ID must be a single-digit number (e.g., 0, 1, or 2).
-- **Stream OCID**: Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)
-- **Service Endpoint Base URL**: Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)
-- **Cursor Type** (select)
+**Connector Management Interface**
+
+This section is an interactive interface in the Microsoft Sentinel portal that allows you to manage your data collectors.
+
+📊 **View Existing Collectors**: A management table displays all currently configured data collectors with the following information:
+- **Tenant Id**
+- **Stream**
+- **Partition**
+
+➕ **Add New Collector**: Click the "Add new collector" button to configure a new data collector (see configuration form below).
+
+🔧 **Manage Collectors**: Use the actions menu to delete or modify existing collectors.
+
+> 💡 **Portal-Only Feature**: This configuration interface is only available when viewing the connector in the Microsoft Sentinel portal. You cannot configure data collectors through this static documentation.
+
+**Add Oracle Cloud Infrastructure Data Stream**
+
+*Connect to Oracle Cloud Infrastructure Data*
+
+When you click the "Add stream" button in the portal, a configuration form will open. You'll need to provide:
+
+- **Stream OCID** (required): Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)
+- **Public Message Endpoint of the stream (Service Endpoint Base URL)** (required): Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)
+- **Cursor Type** (required): Select from available options
   - Individual Cursor
-- **Partition Id**: Provide the Partition Id. (E.g. 0 or 1 or 2)
-- **Tenant ID**: OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)
-- **User ID**: Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)
-- **Pem File Content**: (password field)
-- **Pass Phrase**: (password field)
-- **Fingerprint**: (password field)
-- Click 'Connect' to establish connection
+- **Partition Id** (required): Provide the Partition Id. (E.g. 0 or 1 or 2)
+- **Tenant ID** (required): OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)
+- **User ID** (required): Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)
+- **Pem File Content** (required): Provide the Pem File content.
+- **Fingerprint** (required): Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)
+- **Pem File Pass Phrase** (optional): Just Leave blank If not encrypted)
+
+> 💡 **Portal-Only Feature**: This configuration form is only available in the Microsoft Sentinel portal.
 
 [← Back to Connectors Index](../connectors-index.md)

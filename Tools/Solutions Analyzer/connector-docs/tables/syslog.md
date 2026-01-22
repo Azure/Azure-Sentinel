@@ -2,18 +2,17 @@
 
 **Table:** `Syslog`
 
-This table is ingested by **34 solution(s)** using **35 connector(s)**.
+This table is ingested by **33 solution(s)** using **34 connector(s)**.
 
 ⚠️ **Note:** This table name is unique to specific connectors.
 
 ---
 
-## Solutions (34)
+## Solutions (33)
 
 This table is used by the following solutions:
 
 - [Barracuda CloudGen Firewall](../solutions/barracuda-cloudgen-firewall.md)
-- [Blackberry CylancePROTECT](../solutions/blackberry-cylanceprotect.md)
 - [CTERA](../solutions/ctera.md)
 - [Cisco ACI](../solutions/cisco-aci.md)
 - [Cisco ISE](../solutions/cisco-ise.md)
@@ -47,12 +46,11 @@ This table is used by the following solutions:
 - [VMWareESXi](../solutions/vmwareesxi.md)
 - [Watchguard Firebox](../solutions/watchguard-firebox.md)
 
-## Connectors (35)
+## Connectors (34)
 
 This table is ingested by the following connectors:
 
 - [[Deprecated] Barracuda CloudGen Firewall](../connectors/barracudacloudfirewall.md)
-- [[Deprecated] Blackberry CylancePROTECT](../connectors/blackberrycylanceprotect.md)
 - [CTERA Syslog](../connectors/ctera.md)
 - [[Deprecated] Cisco Application Centric Infrastructure](../connectors/ciscoaci.md)
 - [[Deprecated] Cisco Identity Services Engine](../connectors/ciscoise.md)

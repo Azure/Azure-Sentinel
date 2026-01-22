@@ -16,15 +16,15 @@
 
 This solution provides **2 data connector(s)**.
 
-### [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md)
+### [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md)
 
 **Publisher:** Cyera Inc
 
-### [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
+### [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md)
 
 **Publisher:** Cyera Inc
 
-The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Sentinel.
+The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera’s **Data Security Posture Management (DSPM)** telemetry — *Assets*, *Identities*, *Issues*, and *Classifications* — into **Microsoft Sentinel**.\n\nThis connector uses an **Azure Function App** to call Cyera’s REST API on a schedule, fetch the latest DSPM telemetry, and send it to Microsoft Sentinel through the **Azure Monitor Logs Ingestion API** via a **Data Collection Endpoint (DCE)** and **Data Collection Rule (DCR, kind: Direct)** — no agents required.\n\n**Tables created/used**\n\n| Entity | Table | Purpose |\n|---|---|---|\n| Assets | `CyeraAssets_CL` | Raw asset metadata and data-store context |\n| Identities | `CyeraIdentities_CL` | Identity definitions and sensitivity context |\n| Issues | `CyeraIssues_CL` | Findings and remediation details |\n| Classifications | `CyeraClassifications_CL` | Data class & sensitivity definitions |\n| MS View | `CyeraAssets_MS_CL` | Normalized asset view for dashboards |\n\n> **Note:** This v7 connector supersedes the earlier CCF-based approach and aligns with Microsoft’s recommended Direct ingestion path for Microsoft Sentinel.
 
 **Permissions:**
 
@@ -52,7 +52,7 @@ The **Cyera DSPM Azure Function Connector** enables seamless ingestion of Cyera�
 > Before deploying, have these values handy:
 - **Cyera Function Connector Name**: `CyeraDSPMConnector`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
-- **Workspace Name**: `{{workspace}}`
+- **Workspace Name**: `{{workspace-location}}`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
 - **Workspace Location**: `{{workspace-location}}`
   > *Note: The value above is dynamically provided when these instructions are presented within Microsoft Sentinel.*
@@ -99,10 +99,10 @@ This solution ingests data into **5 table(s)**:
 
 | Table | Used By Connectors |
 |-------|-------------------|
-| `CyeraAssets_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
-| `CyeraAssets_MS_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
-| `CyeraClassifications_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
-| `CyeraIdentities_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
-| `CyeraIssues_CL` | [Cyera DSPM Azure Functions Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Azure Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraAssets_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraAssets_MS_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraClassifications_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraIdentities_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
+| `CyeraIssues_CL` | [Cyera DSPM Azure Functions Microsoft Sentinel Data Connector](../connectors/cyerafunctionsconnector.md), [Cyera DSPM Microsoft Sentinel Data Connector](../connectors/cyeradspmccf.md) |
 
 [← Back to Solutions Index](../solutions-index.md)
