@@ -1,6 +1,6 @@
 {
   "name": "OCI-Connector-CCP-Definition",
-  "apiVersion": "2024-09-01",
+  "apiVersion": "2022-09-01-preview",
   "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
   "location": "{{location}}",
   "kind": "Customizable",
@@ -21,17 +21,17 @@
       "sampleQueries": [
         {
           "description": "All OCI Events",
-          "query": "{{graphQueriesTableName}} \n| sort by TimeGenerated desc"
+          "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
         },
         {
           "description": "Get Sample of OCI Events",
-          "query": "{{graphQueriesTableName}} \n | take 10"
+          "query": "{{graphQueriesTableName}}\n| take 10"
         }
       ],
       "dataTypes": [
         {
-          "name": "{{graphQueriesTableName}}",
-          "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+          "name": "OCI_LogsV2_CL",
+          "lastDataReceivedQuery": "OCI_LogsV2_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -39,6 +39,10 @@
           "type": "HasDataConnectors"
         }
       ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
       "permissions": {
         "resourceProvider": [
           {
@@ -49,7 +53,8 @@
             "requiredPermissions": {
               "write": true,
               "read": true,
-              "delete": true
+              "delete": true,
+              "action": false
             }
           }
         ],
@@ -63,110 +68,162 @@
       "instructionSteps": [
         {
           "title": "Connect to OCI Streaming API to start collecting Event logs in Microsoft Sentinel",
-          "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" → \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" → \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).\n\r Note : The connector only supports ingesting data from one partition ID at a time, and that ID must be a single-digit number (e.g., 0, 1, or 2).\n ",
+          "description": "1) Log in to the OCI console and access the navigation menu.\n2) In the navigation menu, go to \"Analytics & AI\" -> \"Streaming\".\n3) Click \"Create Stream\".\n4) Select an existing \"Stream Pool\" or create a new one.\n5) Enter the following details:\n   - \"Stream Name\"\n   - \"Retention\"\n   - \"Number of Partitions\"\n   - \"Total Write Rate\"\n   - \"Total Read Rate\" (based on your data volume)\n6) In the navigation menu, go to \"Logging\" -> \"Service Connectors\".\n7) Click \"Create Service Connector\".\n8) Enter the following details:\n   - \"Connector Name\"\n   - \"Description\"\n   - \"Resource Compartment\"\n9) Select the \"Source\": \"Logging\".\n10) Select the \"Target\": \"Streaming\".\n11) (Optional) Configure \"Log Group\", \"Filters\", or use a \"custom search query\" to stream only the required logs.\n12) Configure the \"Target\" by selecting the previously created stream.\n13) Click \"Create\".\n14) Follow the documentation to create a [Private Key and API Key Configuration File](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).\n\r",
           "instructions": [
             {
-              "type": "Textbox",
+              "type": "DataConnectorsGrid",
               "parameters": {
-                "label": "Stream OCID",
-                "required": true,
-                "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
-                "type": "text",
-                "name": "streamId"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Service Endpoint Base URL",
-                "required": true,
-                "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
-                "type": "text",
-                "name": "serviceEndpointBaseUrl"
-              }
-            },
-            {
-              "type": "Dropdown",
-              "parameters": {
-                "label": "Cursor Type",
-                "name": "cursorType",
-                "required": true,
-                "type": "text",
-                "placeholder": "Select Cursor Type",
-                "options": [
+                "mapping": [
                   {
-                    "key": "IndividualCursor",
-                    "text": "Individual Cursor"
+                    "columnName": "Tenant Id",
+                    "columnValue": "properties.auth.tenantId"
+                  },
+                  {
+                    "columnName": "Stream",
+                    "columnValue": "properties.request.streamId"
+                  },
+                  {
+                    "columnName": "Partition",
+                    "columnValue": "properties.request.partitions"
                   }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
                 ]
               }
             },
             {
-              "type": "Textbox",
+              "type": "ContextPane",
               "parameters": {
-                "label": "Partition Id",
-                "required": true,
-                "placeholder": "Provide the Partition Id. (E.g. 0 or 1 or 2)",
-                "type": "text",
-                "name": "partitions",
-                "description": "The partition ID uses zero-based indexing. For example, if a stream has 3 partitions, the valid partition IDs are 0, 1, or 2."                
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Tenant ID",
-                "required": true,
-                "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
-                "type": "text",
-                "name": "tenantId"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "User ID",
-                "required": true,
-                "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
-                "type": "text",
-                "name": "userId"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Pem File Content",
-                "required": true,
-                "placeholder": "Provide the Pem File content.",
-                "type": "password",
-                "name": "pemFile"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Pass Phrase",
-                "required": false,
-                "placeholder": "Provide the pass phrase for the Pem File Content. (Optional)",
-                "type": "password",
-                "name": "passPhrase"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Fingerprint",
-                "required": true,
-                "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
-                "type": "password",
-                "name": "publicFingerprint"
-              }
-            },
-            {
-              "type": "ConnectionToggleButton",
-              "parameters": {
-                "connectLabel": "Connect",
-                "name": "Connect"
+                "label": "Add stream",
+                "title": "Add Oracle Cloud Infrastructure Data Stream",
+                "subtitle": "Connect to Oracle Cloud Infrastructure Data",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Stream OCID",
+                          "placeholder": "Provide the OCI Stream OCID (E.g. ocid1.stream.oc1..xxxxxxEXAMPLExxxxxx)",
+                          "type": "text",
+                          "name": "streamId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Public Message Endpoint of the stream (Service Endpoint Base URL)",
+                          "placeholder": "Provide the Service Endpoint Base URL: (https://cell-1.streaming.ap-hyderabad-1.oci.oraclecloud.com)",
+                          "type": "text",
+                          "name": "serviceEndpointBaseUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Cursor Type",
+                          "name": "cursorType",
+                          "options": [
+                            {
+                              "key": "IndividualCursor",
+                              "text": "Individual Cursor"
+                            }
+                          ],
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The partition ID uses zero-based indexing. For example, if a stream has 3 partitions, the valid partition IDs are 0, 1, or 2."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Partition Id",
+                          "placeholder": "Provide the Partition Id. (E.g. 0 or 1 or 2)",
+                          "type": "text",
+                          "name": "partitions",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Tenant ID",
+                          "placeholder": "OCI Tenant ID (E.g. ocid1.tenancy.oc1..xxxxxxEXAMPLExxxxxx)",
+                          "type": "text",
+                          "name": "tenantId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "User ID",
+                          "placeholder": "Provide the User Id. (E.g. ocid1.user.oc1..xxxxxxEXAMPLExxxxxx)",
+                          "type": "text",
+                          "name": "userId",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Pem File Content",
+                          "placeholder": "Provide the Pem File content.",
+                          "type": "password",
+                          "name": "pemFile",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Fingerprint",
+                          "placeholder": "Provide the fingerprint for the Pem File Content. (E.g. 12:34:56:78:90:AB:CD:EF:GH:IJ:KL:MN:OP)",
+                          "type": "password",
+                          "name": "publicFingerprint",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "If your PEM file is not encrypted, leave Pass Phrase as blank."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Pem File Pass Phrase",
+                          "placeholder": "Just Leave blank If not encrypted)",
+                          "type": "password",
+                          "name": "passPhrase"
+                        }
+                      }
+                    ]
+                  }
+                ]
               }
             }
           ]

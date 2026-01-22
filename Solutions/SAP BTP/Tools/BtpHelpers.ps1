@@ -499,10 +499,30 @@ function Get-BtpServiceKeyCredentials {
 function New-BtpConnectionRequestBody {
     param(
         [Parameter(Mandatory=$true)]
-        [object]$BtpCredentials
+        [object]$BtpCredentials,
+
+        [Parameter(Mandatory=$true)]
+        [object]$DcrConfig,
+
+        [Parameter(Mandatory=$false)]
+        [string]$SubaccountName = "Unknown",
+        
+        [Parameter(Mandatory=$false)]
+        [int]$PollingFrequencyMinutes = 1,
+        
+        [Parameter(Mandatory=$false)]
+        [int]$IngestDelayMinutes = 20
     )
     
     try {
+        # Validate DcrConfig
+        if ($null -eq $DcrConfig -or
+            [string]::IsNullOrWhiteSpace($DcrConfig.DataCollectionEndpoint) -or
+            [string]::IsNullOrWhiteSpace($DcrConfig.DataCollectionRuleImmutableId)) {
+            Write-Log "DcrConfig is required with DataCollectionEndpoint and DataCollectionRuleImmutableId" -Level "ERROR"
+            return $null
+        }
+        
         # Build API endpoint for audit log records
         $apiEndpoint = "$($BtpCredentials.ApiUrl)/auditlog/v2/auditlogrecords"
         
@@ -512,6 +532,15 @@ function New-BtpConnectionRequestBody {
             properties = @{
                 connectorDefinitionName = "SAPBTPAuditEvents"
                 dataType = "SAPBTPAuditLog_CL"
+                # DCR configuration required for data ingestion via Azure Monitor Logs Ingestion API
+                dcrConfig = @{
+                    dataCollectionEndpoint = $DcrConfig.DataCollectionEndpoint
+                    dataCollectionRuleImmutableId = $DcrConfig.DataCollectionRuleImmutableId
+                    streamName = "Custom-SAPBTPAuditLog_CL"
+                }
+                addOnAttributes = @{
+                    SubaccountName = if ([string]::IsNullOrWhiteSpace($SubaccountName)) { "Unknown" } else { $SubaccountName }
+                }
                 auth = @{
                     type = "OAuth2"
                     ClientId = $BtpCredentials.ClientId
@@ -525,7 +554,8 @@ function New-BtpConnectionRequestBody {
                 request = @{
                     apiEndpoint = $apiEndpoint
                     httpMethod = "Get"
-                    queryWindowInMin = 5
+                    queryWindowInMin = $PollingFrequencyMinutes
+                    queryWindowDelayInMin = $IngestDelayMinutes
                     queryTimeFormat = "yyyy-MM-ddTHH:mm:ss.fff"
                     retryCount = 3
                     timeoutInSeconds = 120
@@ -552,6 +582,8 @@ function New-BtpConnectionRequestBody {
                 isActive = $true
             }
         }
+        
+        Write-Log "Built connection request body with DCR configuration"
         
         return $body
     }
@@ -720,32 +752,6 @@ function Export-BtpSubaccountsCsv {
     }
 }
 
-# Function to generate connection name from BTP credentials
-function Get-BtpConnectionName {
-    param(
-        [Parameter(Mandatory=$true)]
-        [object]$BtpCredentials,
-        [Parameter(Mandatory=$true)]
-        [string]$SubaccountId
-    )
-    
-    # Use subdomain from UAA URL for connection name with subaccount ID suffix
-    # Pattern: subdomain_subaccountid (e.g., msdemo_12345678-90ab-cdef-1234-567890abcdef)
-    # Falls back to subaccount ID only if subdomain cannot be extracted
-    $cleanSubaccountId = $SubaccountId.Replace('-', '')
-    
-    if ([string]::IsNullOrWhiteSpace($BtpCredentials.Subdomain)) {
-        Write-Log "Subdomain not found in UAA URL, using subaccount ID only for connection name" -Level "WARNING"
-        $connectionName = "$cleanSubaccountId"
-    } else {
-        # Remove any special characters and ensure valid Azure resource name
-        $cleanSubdomain = $BtpCredentials.Subdomain -replace '[^a-zA-Z0-9]', ''
-        $connectionName = "${cleanSubdomain}_${cleanSubaccountId}"
-    }
-    
-    return $connectionName
-}
-
 # Function to create SAP BTP connection in Microsoft Sentinel
 function New-SentinelBtpConnection {
     param(
@@ -761,12 +767,25 @@ function New-SentinelBtpConnection {
         [object]$BtpCredentials,
         [Parameter(Mandatory=$true)]
         [string]$SubaccountId,
+        [Parameter(Mandatory=$true)]
+        [object]$DcrConfig,
         [Parameter(Mandatory=$false)]
-        [string]$ApiVersion = "2025-09-01"
+        [int]$PollingFrequencyMinutes = 1,
+        [Parameter(Mandatory=$false)]
+        [int]$IngestDelayMinutes = 20,
+        [Parameter(Mandatory=$false)]
+        [string]$ApiVersion = "2025-07-01-preview"
     )
     
     try {
-        Write-Log "Creating SAP BTP connection '$ConnectionName' for subaccount '$SubaccountId'..."
+        # Sanitize connection name to be URL-compliant by removing unsupported characters
+        # Keep only alphanumeric, hyphens, underscores, and periods
+        $sanitizedConnectionName = $ConnectionName -replace '[^a-zA-Z0-9\-_\.]', ''
+        
+        Write-Log "Creating SAP BTP connection '$sanitizedConnectionName' for subaccount '$SubaccountId'..."
+        if ($sanitizedConnectionName -ne $ConnectionName) {
+            Write-Log "  Original name '$ConnectionName' was sanitized for URL compliance" -Level "WARNING"
+        }
         
         # Validate credentials
         $requiredFields = @('ClientId', 'ClientSecret', 'TokenEndpoint', 'ApiUrl')
@@ -775,6 +794,14 @@ function New-SentinelBtpConnection {
                 Write-Log "Invalid $field - cannot create connection" -Level "ERROR"
                 return $false
             }
+        }
+        
+        # Validate DcrConfig
+        if ($null -eq $DcrConfig -or
+            [string]::IsNullOrWhiteSpace($DcrConfig.DataCollectionEndpoint) -or
+            [string]::IsNullOrWhiteSpace($DcrConfig.DataCollectionRuleImmutableId)) {
+            Write-Log "DcrConfig is required with DataCollectionEndpoint and DataCollectionRuleImmutableId" -Level "ERROR"
+            return $false
         }
         
         Write-Log "Credentials validated successfully"
@@ -789,8 +816,9 @@ function New-SentinelBtpConnection {
             return $false
         }
         
-        # Build request body
-        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials
+        # Build request body with DCR configuration
+        # Use sanitized connection name for SubaccountName to ensure consistency
+        $bodyObject = New-BtpConnectionRequestBody -BtpCredentials $BtpCredentials -DcrConfig $DcrConfig -SubaccountName $sanitizedConnectionName -PollingFrequencyMinutes $PollingFrequencyMinutes -IngestDelayMinutes $IngestDelayMinutes
         if ($null -eq $bodyObject) {
             return $false
         }
@@ -798,7 +826,8 @@ function New-SentinelBtpConnection {
         $body = $bodyObject | ConvertTo-Json -Depth 10
         
         # Construct ARM API URI
-        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$($ConnectionName)?api-version=$ApiVersion"
+        # Construct ARM API URI - backtick escapes ? to ensure it's treated as literal character
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/providers/Microsoft.SecurityInsights/dataConnectors/$sanitizedConnectionName`?api-version=$ApiVersion"
         
         # Create headers
         $headers = @{
@@ -809,7 +838,7 @@ function New-SentinelBtpConnection {
         # Make REST API call
         $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $body
         
-        Write-Log "Successfully created SAP BTP connection '$ConnectionName'" -Level "SUCCESS"
+        Write-Log "Successfully created SAP BTP connection '$sanitizedConnectionName'" -Level "SUCCESS"
         Write-Log "  Subaccount: $SubaccountId"
         Write-Log "  API Endpoint: $($BtpCredentials.ApiUrl)"
         return $true
@@ -964,6 +993,337 @@ function Get-BtpSubaccountCfDetails {
     }
     catch {
         Write-Log "Error retrieving CF details for subaccount $SubaccountId : $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to get workspace details including resource ID and location
+function Get-SentinelWorkspaceDetails {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceName
+    )
+    
+    try {
+        Write-Log "Getting workspace details for '$WorkspaceName'..."
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $null
+        }
+        
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName`?api-version=2022-10-01"
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+        
+        # Extract a short ID from workspace ID for naming (first 12 chars of last GUID segment)
+        $workspaceId = $response.properties.customerId
+        $shortId = $workspaceId.Substring(0, [Math]::Min(12, $workspaceId.Length))
+        
+        Write-Log "Workspace details retrieved successfully" -Level "SUCCESS"
+        Write-Log "  Location: $($response.location)"
+        Write-Log "  Workspace ID: $workspaceId"
+        Write-Log "  Short ID for naming: $shortId"
+        
+        return @{
+            ResourceId = $response.id
+            Location = $response.location
+            WorkspaceId = $workspaceId
+            ShortId = $shortId
+            Name = $WorkspaceName
+        }
+    }
+    catch {
+        Write-Log "Error getting workspace details: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to get or create Data Collection Endpoint for SAP BTP
+function Get-OrCreateDataCollectionEndpoint {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceShortId,
+        [Parameter(Mandatory=$true)]
+        [string]$Location
+    )
+    
+    try {
+        # DCE naming convention matching portal: Microsoft-Sentinel-SAP-BTP-{workspace-short-id}
+        $dceName = "Microsoft-Sentinel-SAP-BTP-$WorkspaceShortId"
+        
+        Write-Log "Checking for existing Data Collection Endpoint '$dceName'..."
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $null
+        }
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionEndpoints/$dceName`?api-version=2022-06-01"
+        
+        # Try to get existing DCE
+        try {
+            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+            
+            Write-Log "Found existing DCE '$dceName'" -Level "SUCCESS"
+            Write-Log "  Logs Ingestion Endpoint: $($response.properties.logsIngestion.endpoint)"
+            
+            return @{
+                Name = $dceName
+                ResourceId = $response.id
+                LogsIngestionEndpoint = $response.properties.logsIngestion.endpoint
+            }
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 404) {
+                Write-Log "DCE '$dceName' not found, creating new one..."
+            }
+            else {
+                throw $_
+            }
+        }
+        
+        # Create new DCE
+        $dceBody = @{
+            location = $Location
+            properties = @{
+                networkAcls = @{
+                    publicNetworkAccess = "Enabled"
+                }
+            }
+        } | ConvertTo-Json -Depth 5
+        
+        $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $dceBody
+        
+        Write-Log "Successfully created DCE '$dceName'" -Level "SUCCESS"
+        Write-Log "  Logs Ingestion Endpoint: $($response.properties.logsIngestion.endpoint)"
+        
+        return @{
+            Name = $dceName
+            ResourceId = $response.id
+            LogsIngestionEndpoint = $response.properties.logsIngestion.endpoint
+        }
+    }
+    catch {
+        Write-Log "Error with Data Collection Endpoint: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to get Data Collection Endpoint by resource ID
+# DCE naming pattern differs from DCR - DCE uses patterns like ASI-{guid}
+# DCE logsIngestion URL format: https://{dce-name-lowercase}-{random}.{region}.ingest.monitor.azure.com
+function Get-DataCollectionEndpointById {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$DataCollectionEndpointId
+    )
+    
+    try {
+        Write-Log "Getting Data Collection Endpoint details from: $DataCollectionEndpointId"
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $null
+        }
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $uri = "https://management.azure.com$DataCollectionEndpointId`?api-version=2022-06-01"
+        
+        $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+        
+        # Extract DCE name from resource ID
+        $dceName = $DataCollectionEndpointId.Split('/')[-1]
+        
+        Write-Log "Found DCE '$dceName'" -Level "SUCCESS"
+        Write-Log "  Logs Ingestion Endpoint: $($response.properties.logsIngestion.endpoint)"
+        
+        return @{
+            Name = $dceName
+            ResourceId = $response.id
+            LogsIngestionEndpoint = $response.properties.logsIngestion.endpoint
+        }
+    }
+    catch {
+        Write-Log "Error getting Data Collection Endpoint: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to load DCR template from SAPBTP_DCR.json file
+# This provides a single source of truth for the DCR schema definition
+# Note: Only returns the 'properties' section; 'location' is set by the caller at top-level
+function Get-SapBtpDcrTemplate {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceResourceId,
+        [Parameter(Mandatory=$true)]
+        [string]$DataCollectionEndpointId
+    )
+    
+    try {
+        # Determine the path to SAPBTP_DCR.json relative to this script
+        $scriptDir = $PSScriptRoot
+        if ([string]::IsNullOrWhiteSpace($scriptDir)) {
+            # Fallback if $PSScriptRoot is not available (e.g., running in ISE)
+            $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+        }
+        
+        # Path to DCR template: ../Data Connectors/SAPBTPPollerConnector/SAPBTP_DCR.json
+        $dcrTemplatePath = Join-Path -Path $scriptDir -ChildPath "..\Data Connectors\SAPBTPPollerConnector\SAPBTP_DCR.json"
+        $dcrTemplatePath = [System.IO.Path]::GetFullPath($dcrTemplatePath)
+        
+        if (-not (Test-Path $dcrTemplatePath)) {
+            Write-Log "DCR template file not found at: $dcrTemplatePath" -Level "ERROR"
+            return $null
+        }
+        
+        Write-Log "Loading DCR template from: $dcrTemplatePath"
+        
+        # Read and parse the JSON template
+        $templateContent = Get-Content -Path $dcrTemplatePath -Raw
+        
+        # Replace placeholders with actual values (only properties-level placeholders)
+        # Note: {{location}} is at top-level of JSON, not in properties, so we don't replace it here
+        $templateContent = $templateContent -replace '\{\{workspaceResourceId\}\}', $WorkspaceResourceId
+        $templateContent = $templateContent -replace '\{\{dataCollectionEndpointId\}\}', $DataCollectionEndpointId
+        
+        # Parse JSON - the template is an array with one element
+        $templateArray = $templateContent | ConvertFrom-Json
+        $template = $templateArray[0]
+        
+        if ($null -eq $template -or $null -eq $template.properties) {
+            Write-Log "Invalid DCR template structure" -Level "ERROR"
+            return $null
+        }
+        
+        Write-Log "Successfully loaded DCR template" -Level "SUCCESS"
+        
+        # Return the properties section which contains the DCR configuration
+        return $template.properties
+    }
+    catch {
+        Write-Log "Error loading DCR template: $_" -Level "ERROR"
+        return $null
+    }
+}
+
+# Function to get or create Data Collection Rule for SAP BTP
+# When DCR exists, also returns the associated DCE ID from its properties
+function Get-OrCreateDataCollectionRule {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$SubscriptionId,
+        [Parameter(Mandatory=$true)]
+        [string]$ResourceGroupName,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceShortId,
+        [Parameter(Mandatory=$true)]
+        [string]$WorkspaceResourceId,
+        [Parameter(Mandatory=$false)]
+        [string]$DataCollectionEndpointId = "",
+        [Parameter(Mandatory=$true)]
+        [string]$Location
+    )
+    
+    try {
+        # DCR naming convention matching portal: Microsoft-Sentinel-SAP-BTP-DCR-{workspace-short-id}
+        $dcrName = "Microsoft-Sentinel-SAP-BTP-DCR-$WorkspaceShortId"
+        
+        Write-Log "Checking for existing Data Collection Rule '$dcrName'..."
+        
+        $token = Get-AzureAccessToken
+        if ($null -eq $token) {
+            return $null
+        }
+        
+        $headers = @{
+            "Authorization" = "Bearer $token"
+            "Content-Type" = "application/json"
+        }
+        
+        $uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Insights/dataCollectionRules/$dcrName`?api-version=2022-06-01"
+        
+        # Try to get existing DCR
+        try {
+            $response = Invoke-RestMethod -Uri $uri -Method Get -Headers $headers
+            
+            Write-Log "Found existing DCR '$dcrName'" -Level "SUCCESS"
+            Write-Log "  Immutable ID: $($response.properties.immutableId)"
+            Write-Log "  DCE Reference: $($response.properties.dataCollectionEndpointId)"
+            
+            return @{
+                Name = $dcrName
+                ResourceId = $response.id
+                ImmutableId = $response.properties.immutableId
+                DataCollectionEndpointId = $response.properties.dataCollectionEndpointId
+            }
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 404) {
+                Write-Log "DCR '$dcrName' not found, creating new one..."
+            }
+            else {
+                throw $_
+            }
+        }
+        
+        # For creating new DCR, DataCollectionEndpointId is required
+        if ([string]::IsNullOrWhiteSpace($DataCollectionEndpointId)) {
+            Write-Log "DataCollectionEndpointId is required to create a new DCR" -Level "ERROR"
+            return $null
+        }
+        
+        # Load DCR schema from SAPBTP_DCR.json to avoid duplication and ensure single source of truth
+        $dcrProperties = Get-SapBtpDcrTemplate -WorkspaceResourceId $WorkspaceResourceId -DataCollectionEndpointId $DataCollectionEndpointId
+        
+        if ($null -eq $dcrProperties) {
+            Write-Log "Failed to load DCR template from SAPBTP_DCR.json" -Level "ERROR"
+            return $null
+        }
+        
+        # Build the DCR body with location and loaded properties
+        $dcrBody = @{
+            location = $Location
+            properties = $dcrProperties
+        } | ConvertTo-Json -Depth 10
+        
+        $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $dcrBody
+        
+        Write-Log "Successfully created DCR '$dcrName'" -Level "SUCCESS"
+        Write-Log "  Immutable ID: $($response.properties.immutableId)"
+        
+        return @{
+            Name = $dcrName
+            ResourceId = $response.id
+            ImmutableId = $response.properties.immutableId
+            DataCollectionEndpointId = $DataCollectionEndpointId
+        }
+    }
+    catch {
+        Write-Log "Error with Data Collection Rule: $_" -Level "ERROR"
         return $null
     }
 }

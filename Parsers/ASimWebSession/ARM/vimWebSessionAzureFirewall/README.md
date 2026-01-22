@@ -2,7 +2,8 @@
 
 ARM template for ASIM WebSession schema parser for Azure Firewall.
 
-This ASIM parser supports normalizing commonly used Azure Firewall logs to the ASIM WebSession normalized schema.
+This ASIM filtering parser supports filtering and normalizing Azure Firewall logs to the ASIM Web Session normalized schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
