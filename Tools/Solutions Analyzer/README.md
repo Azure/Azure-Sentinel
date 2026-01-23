@@ -182,6 +182,88 @@ See [Override System documentation](script-docs/map_solutions_connectors_tables.
 
 ## Version History
 
+### v7.5 - Statistics Page and Filter Fields Enhancements
+
+**Unified Statistics Page:**
+- New `statistics.md` page consolidates statistics from all index pages
+- Accessible via 📊 icon in navigation bar on all pages
+- Detailed breakdowns by content type, solution, and source
+
+**Filter Fields Detection:**
+- Analyzes KQL queries to extract filter field conditions that identify data sources
+- Generates `filter_fields` column in CSV outputs with structured format: `Table.Field operator "value"`
+
+*Supported Filter Fields:*
+| Field | Table | Description |
+|-------|-------|-------------|
+| `DeviceVendor` | CommonSecurityLog | CEF vendor identifier |
+| `DeviceProduct` | CommonSecurityLog | CEF product identifier |
+| `DeviceEventClassID` | CommonSecurityLog | CEF event class |
+| `EventVendor` | ASIM tables | Normalized vendor field |
+| `EventProduct` | ASIM tables | Normalized product field |
+| `ResourceType` | AzureDiagnostics | Azure resource type |
+| `Category` | AzureDiagnostics | Diagnostic category |
+| `EventID` | WindowsEvent/SecurityEvent/Event | Windows event ID |
+| `Source` | Event | Windows Event Log source |
+| `Provider` | WindowsEvent | Windows event provider |
+| `Facility` | Syslog | Syslog facility |
+| `ProcessName` | Syslog | Syslog process name |
+| `ProcessID` | Syslog | Syslog process ID |
+| `SyslogMessage` | Syslog | Syslog message content |
+| `EventName` | AWSCloudTrail | AWS API event name |
+
+*Supported Operators:*
+- **Equality**: `==`, `=~` (case-insensitive), `!=`
+- **In operators**: `in`, `in~` (case-insensitive), `!in`
+- **String operators**: `has`, `has_any`, `has_all`, `contains`, `startswith`, `endswith`
+- **Negative string operators**: `!has`, `!contains`, `!startswith`, `!endswith`
+- **Case-sensitive variants**: `has_cs`, `contains_cs`, `startswith_cs`, `endswith_cs`
+
+*Detection Features:*
+- Table-aware field mapping (e.g., `EventID` mapped to WindowsEvent/SecurityEvent based on query context)
+- Skips fields in `extend`/`project` statements (computed values, not filters)
+- Variable resolution for `let` statement lists (e.g., `let EventList = dynamic([...])`)
+- Operator folding: multiple `==` values combined into single `in` operator
+- Case-sensitivity deduplication: `=~` subsumes `==` for same value
+
+*CSV Fields Generated:*
+- `connectors.csv`: `filter_fields`, `event_vendor`, `event_product`, `event_vendor_product_by_table`
+- `content_items.csv`: `content_filter_fields`, `content_event_vendor`, `content_event_product`
+- `parsers.csv` / `asim_parsers.csv`: `filter_fields`
+
+**Field-Specific Selection Criteria Tables:**
+- Added breakdown tables in the Selection Criteria Summary section for each filter field
+- Splits compound criteria (e.g., `field in ("a","b")`) into individual values for accurate counting
+- Paired field tables for commonly used together fields:
+  - **DeviceProduct / DeviceVendor**: Shows product-vendor combinations
+  - **EventProduct / EventVendor**: Shows event product-vendor combinations
+  - **Facility / ProcessName**: Shows facility-process combinations
+- Individual field tables for all other fields (e.g., DeviceEventClassID, SyslogMessage, EventID)
+- Displays just the value for `==` operators, operator + value for others (e.g., `has RPZ`, `!= health`)
+
+**Selection Criteria Display Improvements:**
+- Smart content items section: when all items share the same selection criteria, displayed in header instead of column
+- Parser filter fields merged into content page tables for complete context
+- Operator normalization in display: case-insensitive operators (`=~`, `in~`) consolidated with case-sensitive equivalents
+
+### v7.4 - Field Standardization
+
+**solution_folder Field Standardization:**
+- `solution_folder` now consistently contains just the folder name (e.g., `1Password`) across all CSV files
+- New `solution_github_url` field contains the full GitHub URL (e.g., `https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/1Password`)
+- This change ensures consistent cross-referencing between CSV files and enables reliable path construction in scripts
+
+**Affected CSV Files:**
+- `solutions_connectors_tables_mapping.csv` - Added `solution_github_url` field
+- `solutions.csv` - Added `solution_github_url` field
+- `content_items.csv` - Added `solution_github_url` field
+- `content_tables_mapping.csv` - Added `solution_github_url` field
+- `parsers.csv` - Added `solution_github_url` field
+- Issues report - Added `solution_github_url` field
+
+**Bug Fixes:**
+- Fixed false positive table extraction from KQL string literals (e.g., `"USAGE"`, `"alert"` inside quoted strings are no longer extracted as tables)
+
 ### v7.3 - Standalone Content Items
 
 **Standalone Content Collection:**

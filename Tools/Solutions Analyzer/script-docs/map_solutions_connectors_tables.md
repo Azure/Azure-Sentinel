@@ -191,7 +191,8 @@ The main CSV file containing one row per unique combination of solution, connect
 |--------|-------------|
 | `Table` | The table name (e.g., Syslog, CommonSecurityLog, CustomLog_CL). Empty for solutions without data connectors. |
 | `solution_name` | Solution folder name |
-| `solution_folder` | GitHub URL to the solution's folder |
+| `solution_folder` | Solution folder name (matches directory name in Solutions/) |
+| `solution_github_url` | Full GitHub URL to the solution's folder |
 | `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
 | `solution_offer_id` | Offer ID from SolutionMetadata.json |
 | `solution_first_publish_date` | First publication date |
@@ -216,9 +217,9 @@ The main CSV file containing one row per unique combination of solution, connect
 
 All file references are converted to direct GitHub URLs pointing to the master branch:
 
-**solution_folder:**
+**solution_github_url:**
 ```
-https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}
+https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_folder}
 ```
 
 **connector_files:**
@@ -259,7 +260,8 @@ Contains one row per solution with all solution-specific metadata. Metadata is s
 | Column | Description |
 |--------|-------------|
 | `solution_name` | Official solution name from Solution JSON (or folder name if not available) |
-| `solution_folder` | GitHub URL to the solution's folder |
+| `solution_folder` | Solution folder name (matches directory name in Solutions/) |
+| `solution_github_url` | Full GitHub URL to the solution's folder |
 | `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
 | `solution_offer_id` | Offer ID from SolutionMetadata.json |
 | `solution_first_publish_date` | First publication date |
@@ -348,7 +350,8 @@ Contains one row per content item (analytics rule, hunting query, playbook, work
 | `metadata_categories` | Categories/domains from YAML metadata section (comma-separated) |
 | `not_in_solution_json` | `true` if item was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) |
 | `solution_name` | Solution name (empty for standalone content) |
-| `solution_folder` | Solution folder path (empty for standalone content) |
+| `solution_folder` | Solution folder name (empty for standalone content) |
+| `solution_github_url` | Full GitHub URL to the solution's folder (empty for standalone content) |
 | `is_published` | `true` if parent solution is published on Azure Marketplace (empty for standalone content) |
 
 #### Content Source Classification
@@ -376,7 +379,8 @@ Contains one row per unique combination of solution, content item, and table. Th
 | Column | Description |
 |--------|-------------|
 | `solution_name` | Solution folder name |
-| `solution_folder` | Solution folder path |
+| `solution_folder` | Solution folder name (empty for standalone content) |
+| `solution_github_url` | Full GitHub URL to the solution's folder (empty for standalone content) |
 | `content_type` | Type of content item: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `watchlist`, `summary_rule` |
 | `content_id` | Content item identifier |
 | `content_name` | Name or filename of the content item |
@@ -403,7 +407,8 @@ Contains one row per parser (both ASIM and non-ASIM) from solution directories a
 | `source_file` | Relative path to the source file |
 | `github_url` | Full GitHub URL to the parser definition |
 | `solution_name` | Solution name (empty for legacy parsers) |
-| `solution_folder` | Solution folder path |
+| `solution_folder` | Solution folder name (empty for legacy parsers) |
+| `solution_github_url` | Full GitHub URL to the solution's folder (empty for legacy parsers) |
 | `location` | Location: `solution` (in Solutions directory) or `legacy` (in top-level /Parsers directory) |
 | `file_type` | File type: `yaml`, `kql`, or `txt` |
 | `discovered` | `true` if parser was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) |
@@ -445,7 +450,8 @@ Contains exceptions and issues encountered during analysis.
 | Column | Description |
 |--------|-------------|
 | `solution_name` | Solution name |
-| `solution_folder` | GitHub URL to the solution's folder |
+| `solution_folder` | Solution folder name |
+| `solution_github_url` | Full GitHub URL to the solution's folder |
 | `connector_id` | Connector ID (if applicable) |
 | `connector_title` | Connector title (if applicable) |
 | `connector_publisher` | Connector publisher (if applicable) |
@@ -574,6 +580,7 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 |-------|----------------|-------------|
 | `DeviceVendor` | CommonSecurityLog | CEF vendor identifier |
 | `DeviceProduct` | CommonSecurityLog | CEF product identifier |
+| `DeviceEventClassID` | CommonSecurityLog | CEF event class identifier |
 | `EventVendor` | Multiple (ASIM) | ASIM normalized vendor |
 | `EventProduct` | Multiple (ASIM) | ASIM normalized product |
 | `ResourceType` | AzureDiagnostics | Azure resource type |
@@ -585,14 +592,17 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 | `ProcessName` | Syslog | Syslog process name |
 | `ProcessID` | Syslog | Syslog process ID |
 | `SyslogMessage` | Syslog | Syslog message content |
+| `EventName` | AWSCloudTrail | AWS API event name |
 
 #### Supported Operators
 
 | Operator Category | Operators | Example |
 |-------------------|-----------|---------|
 | **Equality** | `==`, `=~`, `!=` | `DeviceVendor == "Fortinet"` |
-| **In operators** | `in`, `in~`, `!in` | `EventID in (4624, 4625)` |
+| **In operators** | `in`, `in~`, `!in`, `!in~` | `EventID in (4624, 4625)` |
 | **String operators** | `has`, `has_any`, `has_all`, `contains`, `startswith`, `endswith` | `SyslogMessage has "error"` |
+| **Negative string** | `!has`, `!contains`, `!startswith`, `!endswith` | `SyslogMessage !has "debug"` |
+| **Case-sensitive** | `has_cs`, `contains_cs`, `startswith_cs`, `endswith_cs` | `ProcessName has_cs "sshd"` |
 
 > **Note:** `EventID` and `ProcessID` fields only support equality and in operators, not string operators.
 
@@ -601,11 +611,14 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 The filter field extraction follows these rules:
 
 1. **Table-aware mapping**: When tables in the query are known, fields are mapped to their canonical tables
-   - `DeviceVendor`/`DeviceProduct` → CommonSecurityLog
+   - `DeviceVendor`/`DeviceProduct`/`DeviceEventClassID` → CommonSecurityLog
    - `EventVendor`/`EventProduct` → Context-dependent (ASIM tables)
    - `ResourceType`/`Category` → AzureDiagnostics
    - `EventID` → WindowsEvent, SecurityEvent, or Event (based on which is in query)
+   - `Source` → Event
+   - `Provider` → WindowsEvent
    - `Facility`/`ProcessName`/`ProcessID`/`SyslogMessage` → Syslog
+   - `EventName` → AWSCloudTrail
 
 2. **ASIM vendor/product skipping**: When `skip_asim_vendor_product=True`, `EventVendor` and `EventProduct` are skipped because ASIM parsers SET these values (not filter by them)
 
@@ -619,19 +632,28 @@ The filter field extraction follows these rules:
    - String literals: `in ("value1", "value2")`
    - Integer literals: `in (4624, 4625, 4634)`
    - Case-insensitive: `in~` variant
+   - Variable resolution: `let EventList = dynamic([...])` then `EventName in~ (EventList)`
 
 5. **String operator patterns**: Match patterns like `field has "value"` or `field has_any ("val1", "val2")`
 
+6. **Operator folding**: Multiple equality operators for the same field are combined:
+   - Multiple `==` values → single `in` operator with comma-separated values
+   - Multiple `=~` values → single `in~` operator
+   - Case-insensitive values take precedence over case-sensitive for deduplication
+
 #### Output Format
 
-Filter fields are formatted as a semicolon-separated list with the structure:
+Filter fields are formatted as a pipe-separated (`|`) list with the structure:
 ```
-Table:Field=value1,value2;Table:Field=value3
+Table.Field operator "value" | Table.Field operator "value1,value2"
 ```
 
-Example:
+Examples:
 ```
-CommonSecurityLog:DeviceVendor=Fortinet;CommonSecurityLog:DeviceProduct=FortiGate
+CommonSecurityLog.DeviceVendor == "Fortinet" | CommonSecurityLog.DeviceProduct == "FortiGate"
+Syslog.Facility == "authpriv" | Syslog.SyslogMessage has "error"
+AzureDiagnostics.Category in "AzureFirewallNetworkRule,AzureFirewallApplicationRule"
+AWSCloudTrail.EventName in~ "CreateUser,DeleteUser,AttachUserPolicy"
 ```
 
 #### CSV Fields Affected
@@ -645,6 +667,7 @@ CommonSecurityLog:DeviceVendor=Fortinet;CommonSecurityLog:DeviceProduct=FortiGat
 | `content_items.csv` | `content_filter_fields` | Filter fields from content item queries |
 | `content_items.csv` | `content_event_vendor` | Extracted vendor values |
 | `content_items.csv` | `content_event_product` | Extracted product values |
+| `parsers.csv` | `filter_fields` | Filter fields from solution parser queries |
 | `asim_parsers.csv` | `filter_fields` | Filter fields from ASIM parser queries |
 
 > **Note:** For ASIM parsers, `EventVendor` and `EventProduct` fields are skipped because ASIM parsers SET these values (via `extend`) rather than filter by them. The extraction focuses on source-identifying fields like `DeviceVendor`, `Facility`, etc.

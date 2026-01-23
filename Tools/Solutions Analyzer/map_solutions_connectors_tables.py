@@ -56,6 +56,7 @@ FILTER_FIELDS = {
     # CommonSecurityLog fields
     'DeviceVendor': 'CommonSecurityLog',
     'DeviceProduct': 'CommonSecurityLog',
+    'DeviceEventClassID': 'CommonSecurityLog',
     # ASIM fields (used in normalized tables)
     'EventVendor': None,  # Multiple tables
     'EventProduct': None,  # Multiple tables
@@ -71,6 +72,8 @@ FILTER_FIELDS = {
     'ProcessName': 'Syslog',
     'ProcessID': 'Syslog',
     'SyslogMessage': 'Syslog',
+    # AWSCloudTrail fields
+    'EventName': 'AWSCloudTrail',
 }
 
 # Fields that only use equality operators (==, =~, in)
@@ -304,8 +307,8 @@ def extract_filter_fields_from_query(query: str, tables_in_query: Optional[Set[s
         # Determine the table this filter applies to
         table_name = None
         
-        # DeviceVendor/DeviceProduct -> CommonSecurityLog
-        if field_lower in ('devicevendor', 'deviceproduct'):
+        # DeviceVendor/DeviceProduct/DeviceEventClassID -> CommonSecurityLog
+        if field_lower in ('devicevendor', 'deviceproduct', 'deviceeventclassid'):
             table_name = 'CommonSecurityLog'
         # EventVendor/EventProduct -> look for ASIM tables
         # Skip if skip_asim_vendor_product is True (ASIM parsers SET these, not filter on them)
@@ -361,6 +364,12 @@ def extract_filter_fields_from_query(query: str, tables_in_query: Optional[Set[s
                 table_name = 'Syslog'
             else:
                 return  # Skip - Syslog field without Syslog table context
+        # AWSCloudTrail fields
+        elif field_lower == 'eventname':
+            if 'awscloudtrail' in tables_lower:
+                table_name = 'AWSCloudTrail'
+            else:
+                return  # Skip - EventName without AWSCloudTrail table context
         else:
             return  # Unknown field, skip
         
@@ -453,8 +462,37 @@ def extract_filter_fields_from_query(query: str, tables_in_query: Optional[Set[s
             values = parse_numeric_values(values_str)
             if values:
                 add_filter_value(field_name, operator, ','.join(values))
-        # else: it's a table or variable reference, skip for now
-        # We could potentially handle this by looking up the table, but that's complex
+        elif field_name.lower() == 'eventname':
+            # EventName can reference a variable: EventName in~ (EventNameList)
+            # Try to resolve the variable from let statements in the query
+            var_name = values_str.strip()
+            if var_name and var_name.isidentifier():
+                # Look for let statement: let EventNameList = dynamic([...]);
+                let_pattern = re.compile(
+                    r'let\s+' + re.escape(var_name) + r'\s*=\s*dynamic\s*\(\s*\[([^\]]+)\]\s*\)',
+                    re.IGNORECASE
+                )
+                let_match = let_pattern.search(effective_query)
+                if let_match:
+                    # Extract values from dynamic array
+                    array_content = let_match.group(1)
+                    values = parse_literal_values(array_content)
+                    if values:
+                        add_filter_value(field_name, operator, ','.join(values))
+                else:
+                    # Try alternative patterns:
+                    # 1. let var = datatable(col:type) ["val1", "val2", ...]
+                    datatable_pattern = re.compile(
+                        r'let\s+' + re.escape(var_name) + r'\s*=\s*datatable\s*\([^)]*\)\s*\[([^\]]+)\]',
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    datatable_match = datatable_pattern.search(effective_query)
+                    if datatable_match:
+                        array_content = datatable_match.group(1)
+                        values = parse_literal_values(array_content)
+                        if values:
+                            add_filter_value(field_name, operator, ','.join(values))
+        # else: it's a table or variable reference we can't resolve, skip
     
     # Extract string operator patterns: SyslogMessage has "value", !has "value", etc.
     for match in FILTER_STRING_OP_PATTERN.finditer(effective_query):
@@ -900,9 +938,11 @@ BLOCKED_TOKENS = {
 
 # Known tables from tables_reference.csv - loaded at runtime
 KNOWN_TABLES_LOWER: Set[str] = set()
+# Mapping from lowercase table name to proper case (as defined in tables_reference.csv)
+KNOWN_TABLES_PROPER_CASE: Dict[str, str] = {}
 
 
-def load_known_tables(script_dir: Path) -> Set[str]:
+def load_known_tables(script_dir: Path) -> Tuple[Set[str], Dict[str, str]]:
     """
     Load known table names from tables_reference.csv.
     
@@ -910,10 +950,11 @@ def load_known_tables(script_dir: Path) -> Set[str]:
         script_dir: Path to the directory containing tables_reference.csv
     
     Returns:
-        Set of lowercase table names
+        Tuple of (set of lowercase table names, dict mapping lowercase to proper case)
     """
     tables_file = script_dir / "tables_reference.csv"
     known_tables: Set[str] = set()
+    proper_case_map: Dict[str, str] = {}
     
     if tables_file.exists():
         with open(tables_file, "r", encoding="utf-8") as f:
@@ -921,9 +962,27 @@ def load_known_tables(script_dir: Path) -> Set[str]:
             for row in reader:
                 table_name = row.get("table_name", "").strip()
                 if table_name:
-                    known_tables.add(table_name.lower())
+                    lower_name = table_name.lower()
+                    known_tables.add(lower_name)
+                    proper_case_map[lower_name] = table_name
     
-    return known_tables
+    return known_tables, proper_case_map
+
+
+def normalize_table_case(table_name: str) -> str:
+    """
+    Normalize a table name to its proper case as defined in tables_reference.csv.
+    
+    Args:
+        table_name: The table name to normalize
+        
+    Returns:
+        The properly-cased table name, or the original if not found in reference
+    """
+    if not table_name:
+        return table_name
+    lower_name = table_name.lower()
+    return KNOWN_TABLES_PROPER_CASE.get(lower_name, table_name)
 
 
 PIPE_BLOCK_COMMANDS = {
@@ -1262,6 +1321,60 @@ def read_json(path: Path) -> Optional[Any]:
         return None
 
 
+def remove_string_literals(text: str) -> str:
+    """
+    Remove string literals from KQL query text to avoid false positives in table extraction.
+    
+    Handles:
+    - Double-quoted strings: "text here"
+    - Single-quoted strings: 'text here'
+    - Multi-line strings with escaped quotes
+    
+    Args:
+        text: The KQL query text
+        
+    Returns:
+        Text with string literals replaced by empty placeholders
+    """
+    if not text:
+        return text
+    
+    result = []
+    i = 0
+    in_string = False
+    string_char = None
+    
+    while i < len(text):
+        char = text[i]
+        
+        if not in_string:
+            if char in '"\'':
+                # Check for multi-char string prefix like @" for verbatim strings
+                if i > 0 and text[i-1] == '@':
+                    # Remove the @ as well (it was already added)
+                    if result and result[-1] == '@':
+                        result.pop()
+                in_string = True
+                string_char = char
+                result.append(' ')  # Replace string with space to preserve token boundaries
+            else:
+                result.append(char)
+        else:
+            # Inside a string
+            if char == '\\' and i + 1 < len(text):
+                # Escape sequence - skip the next character
+                i += 1
+            elif char == string_char:
+                # End of string
+                in_string = False
+                string_char = None
+            # Don't add any characters from inside the string
+        
+        i += 1
+    
+    return ''.join(result)
+
+
 def remove_line_comments(text: str) -> str:
     if not text:
         return text
@@ -1487,7 +1600,8 @@ def extract_query_table_tokens(
     if not cleaned:
         return tokens
     without_comments = remove_line_comments(cleaned)
-    pruned = strip_pipe_command_blocks(without_comments)
+    without_strings = remove_string_literals(without_comments)  # Remove string literals to avoid false positives
+    pruned = strip_pipe_command_blocks(without_strings)
     substituted = substitute_placeholders(pruned, root, cache)
 
     assigned_variables: Set[str] = set()
@@ -1518,7 +1632,7 @@ def extract_query_table_tokens(
                 tokens.add(candidate)
 
     pipeline_tokens = detect_pipeline_heads(
-        without_comments,
+        without_strings,
         assigned_variables=assigned_variables,
         allow_parser_tokens=allow_parser_tokens,
         known_parser_names=known_parser_names,
@@ -1529,7 +1643,7 @@ def extract_query_table_tokens(
     # This handles cases where table and pipe are on the SAME line (with optional leading whitespace)
     # Use [^\S\n]* instead of \s* to match whitespace but not newlines
     inline_pipe_pattern = re.compile(r'^[^\S\n]*([A-Za-z_][A-Za-z0-9_]*)[^\S\n]*\|', re.MULTILINE)
-    for match in inline_pipe_pattern.finditer(without_comments):
+    for match in inline_pipe_pattern.finditer(without_strings):
         candidate = match.group(1)
         lowered = candidate.lower()
         if lowered not in assigned_variables:
@@ -1539,7 +1653,7 @@ def extract_query_table_tokens(
     # Detect tables in parentheses followed by pipe: (TableName | ...
     # This handles patterns like let x = (AzureDiagnostics | where ...)
     paren_pipe_pattern = re.compile(r'\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n?\s*\|', re.MULTILINE)
-    for match in paren_pipe_pattern.finditer(without_comments):
+    for match in paren_pipe_pattern.finditer(without_strings):
         candidate = match.group(1)
         lowered = candidate.lower()
         if lowered not in assigned_variables:
@@ -1549,7 +1663,7 @@ def extract_query_table_tokens(
     # Detect tables in braces followed by pipe: { TableName | ...
     # This handles patterns like let parser = (disabled:bool=false) { CommonSecurityLog | where ...
     brace_pipe_pattern = re.compile(r'\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n?\s*\|', re.MULTILINE)
-    for match in brace_pipe_pattern.finditer(without_comments):
+    for match in brace_pipe_pattern.finditer(without_strings):
         candidate = match.group(1)
         lowered = candidate.lower()
         if lowered not in assigned_variables:
@@ -1559,7 +1673,7 @@ def extract_query_table_tokens(
     # Detect ASIM view function calls: _Im_Dns(...), _ASim_NetworkSession(...)
     # These are called like functions but reference underlying tables
     asim_view_pattern = re.compile(r'(_Im_[A-Za-z0-9_]+|_ASim_[A-Za-z0-9_]+)\s*\(', re.IGNORECASE)
-    for match in asim_view_pattern.finditer(without_comments):
+    for match in asim_view_pattern.finditer(without_strings):
         view_name = match.group(1)
         tokens.add(view_name)
     
@@ -2088,6 +2202,7 @@ def collect_solution_info(solution_dir: Path) -> Dict[str, str]:
     return {
         "solution_name": solution_name,
         "solution_folder": solution_dir.name,
+        "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(solution_dir.name)}",
         "solution_publisher_id": metadata.get("publisherId", ""),
         "solution_offer_id": metadata.get("offerId", ""),
         "solution_first_publish_date": metadata.get("firstPublishDate", ""),
@@ -2463,6 +2578,12 @@ def _extract_parser_record(
     # Filter out non-table tokens (variable names, etc.)
     valid_tables = {t for t in tables if is_valid_table_candidate(t)}
     
+    # Extract filter fields from the parser query
+    filter_fields_str = ""
+    if query:
+        ff = extract_filter_fields_from_query(query, valid_tables)
+        filter_fields_str = format_filter_fields(ff)
+    
     # Extract additional metadata from YAML files
     title = ""
     version = ""
@@ -2516,10 +2637,12 @@ def _extract_parser_record(
         "parser_category": category,
         "description": description,
         "tables": ", ".join(sorted(valid_tables)),
+        "filter_fields": filter_fields_str,
         "source_file": source_file,
         "github_url": github_url,
         "solution_name": solution_name,
         "solution_folder": solution_folder,
+        "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder)}" if solution_folder else "",
         "location": location,
         "file_type": suffix.lstrip('.'),
         "discovered": "false",  # Default to false, set to true for solution parsers not in Solution JSON
@@ -2540,10 +2663,12 @@ def write_parsers_csv(parser_records: List[Dict[str, Any]], output_path: Path) -
         "parser_category",
         "description",
         "tables",
+        "filter_fields",
         "source_file",
         "github_url",
         "solution_name",
         "solution_folder",
+        "solution_github_url",
         "location",
         "file_type",
         "discovered",
@@ -3864,13 +3989,23 @@ def extract_content_item_from_yaml(
     # Extract vendor/product from query (legacy)
     vp = extract_vendor_product_from_query(query) if query else {'vendor': set(), 'product': set()}
     
-    # Detect tables in the query for context (enables proper EventID attribution)
+    # Detect tables in the query for context (enables proper EventID/EventName attribution)
     tables_in_query: Set[str] = set()
     if query:
-        table_pattern = re.compile(r'^\s*(\w+)\s*[\|\n]', re.MULTILINE)
-        for match in table_pattern.finditer(query):
+        # Pattern 1: Table at start of line followed by pipe or newline
+        # e.g., "AWSCloudTrail\n| where ..."
+        table_pattern1 = re.compile(r'^\s*(\w+)\s*[\|\n]', re.MULTILINE)
+        for match in table_pattern1.finditer(query):
             table_name = match.group(1)
             if table_name.lower() not in ('let', 'union', 'print', 'range', 'datatable'):
+                tables_in_query.add(table_name)
+        
+        # Pattern 2: Table after let assignment: let VarName = TableName
+        # e.g., "let EventInfo = AWSCloudTrail"
+        table_pattern2 = re.compile(r'let\s+\w+\s*=\s*(\w+)\s*[\|\n]', re.MULTILINE | re.IGNORECASE)
+        for match in table_pattern2.finditer(query):
+            table_name = match.group(1)
+            if table_name.lower() not in ('let', 'union', 'print', 'range', 'datatable', 'dynamic', 'pack', 'bag_pack', 'materialize'):
                 tables_in_query.add(table_name)
     
     # Extract comprehensive filter fields (new)
@@ -3897,6 +4032,7 @@ def extract_content_item_from_yaml(
         "content_filter_fields": filter_fields_str,
         "solution_name": solution_name,
         "solution_folder": solution_folder,
+        "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder)}" if solution_folder else "",
     }
 
 
@@ -3978,6 +4114,7 @@ def extract_content_item_from_workbook(
         "content_filter_fields": filter_fields_str,
         "solution_name": solution_name,
         "solution_folder": solution_folder,
+        "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder)}" if solution_folder else "",
     }
 
 
@@ -4204,6 +4341,7 @@ def extract_content_item_from_playbook(
         "content_write_tables": write_tables_str,
         "solution_name": solution_name,
         "solution_folder": solution_folder,
+        "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder)}" if solution_folder else "",
     }
 
 
@@ -4552,7 +4690,8 @@ def extract_tables_from_content_query(
     parser_names: Set[str],
     parser_table_map: Dict[str, Set[str]],
     return_rejected: bool = False,
-) -> Union[Set[str], Tuple[Set[str], Set[str]]]:
+    return_parser_map: bool = False,
+) -> Union[Set[str], Tuple[Set[str], Set[str]], Tuple[Set[str], Set[str], Dict[str, str]]]:
     """Extract table names from a content item's KQL query.
     
     ASIM parsers (starting with _Im_ or _ASim_) are kept as-is and NOT expanded
@@ -4567,17 +4706,27 @@ def extract_tables_from_content_query(
         parser_names: Set of known parser names
         parser_table_map: Mapping of parser names to their underlying tables
         return_rejected: If True, also return rejected table candidates
+        return_parser_map: If True, also return mapping of table -> source parser name
         
     Returns:
-        If return_rejected is False: Set of valid table names
-        If return_rejected is True: Tuple of (valid tables, rejected candidates)
+        If return_rejected is False and return_parser_map is False: Set of valid table names
+        If return_rejected is True and return_parser_map is False: Tuple of (valid tables, rejected candidates)
+        If return_rejected is True and return_parser_map is True: Tuple of (valid tables, rejected candidates, table_to_parser_map)
     """
     if not query:
-        return (set(), set()) if return_rejected else set()
+        if return_rejected and return_parser_map:
+            return (set(), set(), {})
+        elif return_rejected:
+            return (set(), set())
+        else:
+            return set()
     
     # Build normalized parser names set for validation
     parser_names_normalized = {normalize_parser_name(p) for p in parser_names}
     parser_table_map_normalized = {normalize_parser_name(k): v for k, v in parser_table_map.items()}
+    
+    # Build reverse mapping from normalized to original parser name for lookup
+    normalized_to_original = {normalize_parser_name(p): p for p in parser_names}
     
     # Use existing query parsing infrastructure, passing known parser names
     # so they're recognized as valid candidates for extraction
@@ -4590,6 +4739,8 @@ def extract_tables_from_content_query(
     
     # Process tables - keep ASIM parsers as-is, expand other parsers
     result_tables: Set[str] = set()
+    # Track which tables came from which parser (resolved_table -> source_parser)
+    table_to_parser: Dict[str, str] = {}
     
     # Helper to check if a name is an ASIM parser/view
     # Matches: _Im_*, _ASim_*, im*, Im*, asim*, ASim* (with or without underscore prefix)
@@ -4611,6 +4762,13 @@ def extract_tables_from_content_query(
                 derived_tables = expand_parser_tables(table, parser_table_map)
                 if derived_tables:
                     result_tables.update(derived_tables)
+                    # Track that these tables came from this parser
+                    # Use original parser name (not normalized) for display
+                    original_parser = normalized_to_original.get(table_normalized, table)
+                    for derived_table in derived_tables:
+                        # Only track if not already tracked (first parser wins)
+                        if derived_table not in table_to_parser:
+                            table_to_parser[derived_table] = original_parser
                 else:
                     # Keep the parser name if we can't expand it
                     result_tables.add(table)
@@ -4619,8 +4777,19 @@ def extract_tables_from_content_query(
     
     # Filter tables through is_valid_table_candidate to remove helper functions
     valid_tables = {t for t in result_tables if is_valid_table_candidate(t)}
+    # Also filter table_to_parser to only include valid tables
+    valid_table_to_parser = {t: p for t, p in table_to_parser.items() if t in valid_tables}
     
-    if return_rejected:
+    if return_rejected and return_parser_map:
+        # Filter out ASIM Empty parsers from rejected tables - these are expected infrastructure
+        # patterns used as schema placeholders, not actual unknown tables
+        rejected_tables = {
+            t for t in (result_tables - valid_tables)
+            if not (t.lower().endswith("_empty") and 
+                    (t.lower().startswith("_im_") or t.lower().startswith("_asim_")))
+        }
+        return valid_tables, rejected_tables, valid_table_to_parser
+    elif return_rejected:
         # Filter out ASIM Empty parsers from rejected tables - these are expected infrastructure
         # patterns used as schema placeholders, not actual unknown tables
         rejected_tables = {
@@ -4734,14 +4903,14 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
 
 
 def main() -> None:
-    global KNOWN_TABLES_LOWER
+    global KNOWN_TABLES_LOWER, KNOWN_TABLES_PROPER_CASE
     # Script is in Tools/Solutions Analyzer, repo root is 2 levels up
     repo_root = Path(__file__).resolve().parents[2]
     script_dir = Path(__file__).resolve().parent
     args = parse_args(repo_root)
 
     # Load known tables from tables_reference.csv for whitelist-based table validation
-    KNOWN_TABLES_LOWER = load_known_tables(script_dir)
+    KNOWN_TABLES_LOWER, KNOWN_TABLES_PROPER_CASE = load_known_tables(script_dir)
     if KNOWN_TABLES_LOWER:
         print(f"Loaded {len(KNOWN_TABLES_LOWER)} known table names from tables_reference.csv")
 
@@ -4820,7 +4989,15 @@ def main() -> None:
     all_solutions_info: Dict[str, Dict[str, str]] = {}
     solutions_without_connectors: Set[str] = set()
 
-    for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
+    # Get list of solution directories for progress tracking
+    solution_dirs = sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower())
+    total_solutions = len(solution_dirs)
+    print(f"\nProcessing {total_solutions} solution directories...")
+    
+    for solution_idx, solution_dir in enumerate(solution_dirs, 1):
+        # Progress checkpoint every 50 solutions
+        if solution_idx % 50 == 0 or solution_idx == 1:
+            print(f"  [{solution_idx}/{total_solutions}] Processing {solution_dir.name}...")
         solution_info = collect_solution_info(solution_dir.resolve())
         
         # Store all solution info for later processing
@@ -4853,11 +5030,12 @@ def main() -> None:
             # Track table usage for this content item: table_name -> set of usages
             item_table_usage: Dict[str, set] = defaultdict(set)
             
-            # Extract read tables from queries, also get rejected candidates for logging
+            # Extract read tables from queries, also get rejected candidates and parser mappings
             query = item.get("content_query", "")
+            table_to_parser: Dict[str, str] = {}  # Track which parser each table came from
             if query:
-                tables, rejected_tables = extract_tables_from_content_query(
-                    query, parser_names, parser_table_map, return_rejected=True
+                tables, rejected_tables, table_to_parser = extract_tables_from_content_query(
+                    query, parser_names, parser_table_map, return_rejected=True, return_parser_map=True
                 )
                 for table in tables:
                     if is_valid_table_candidate(table):
@@ -4914,15 +5092,23 @@ def main() -> None:
                 else:
                     usage_str = "read"
                 
+                # Get the source parser name if this table came from a parser
+                source_parser = table_to_parser.get(table, "")
+                
+                # Normalize table name to proper case from reference
+                normalized_table = normalize_table_case(table)
+                
                 content_table_mappings.append({
                     "solution_name": item["solution_name"],
                     "solution_folder": item.get("solution_folder", ""),
+                    "solution_github_url": item.get("solution_github_url", ""),
                     "content_type": item["content_type"],
                     "content_id": item.get("content_id", ""),
                     "content_name": item["content_name"],
                     "content_file": item.get("content_file", ""),
-                    "table_name": table,
+                    "table_name": normalized_table,
                     "table_usage": usage_str,
+                    "source_parser": source_parser,
                 })
             
             # Remove query and write_tables from output to keep CSV manageable
@@ -5157,6 +5343,8 @@ def main() -> None:
                                 reason="plural_table_name",
                                 details=f"Plural table name(s) {plural_list} replaced with '{table_name}'.",
                             )
+                        # Normalize table name to proper case from reference
+                        normalized_table_name = normalize_table_case(table_name)
                         row_key = (
                             solution_info["solution_name"],
                             solution_info["solution_folder"],
@@ -5177,9 +5365,9 @@ def main() -> None:
                             connector_instruction_steps,
                             connector_permissions,
                             connector_id_generated,
-                            table_name,
+                            normalized_table_name,
                         )
-                        combo_key = (solution_info["solution_name"], connector_id, table_name)
+                        combo_key = (solution_info["solution_name"], connector_id, normalized_table_name)
                         if not is_azuredeploy:
                             combo_with_non_azure.add(combo_key)
 
@@ -5292,7 +5480,7 @@ def main() -> None:
             )
         
         # Track solutions that truly have no connectors (no Data Connectors dir or no valid connectors)
-        if not data_connectors_dir.exists() or not has_valid_connector:
+        if not has_data_connectors_dir or not has_valid_connector:
             solutions_without_connectors.add(solution_info["solution_name"])
 
     # Add rows for solutions without any connectors
@@ -5356,7 +5544,8 @@ def main() -> None:
         row_data = {
             "Table": row_key[19],
             "solution_name": row_key[0],
-            "solution_folder": f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}",
+            "solution_folder": row_key[1],
+            "solution_github_url": f"{GITHUB_REPO_URL}/Solutions/{quote(row_key[1])}",
             "solution_publisher_id": row_key[2],
             "solution_offer_id": row_key[3],
             "solution_first_publish_date": row_key[4],
@@ -5423,6 +5612,7 @@ def main() -> None:
     connector_vendor_product_by_table: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {'vendor': set, 'product': set}}
     connector_filter_fields: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {field_name -> set of values}}
     
+    print(f"\nAnalyzing connector collection methods and filter fields...")
     for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
         for dc_folder_name in ["Data Connectors", "DataConnectors", "Data Connector"]:
             data_connectors_dir = solution_dir / dc_folder_name
@@ -5611,33 +5801,43 @@ def main() -> None:
     # Extract table mappings from standalone content items
     for item in standalone_items:
         query = item.get('content_query', '')
-        write_tables = item.get('content_write_tables', [])
+        write_tables_raw = item.get('content_write_tables', '')
+        # content_write_tables is a comma-separated string, not a list
+        write_tables = [t.strip() for t in write_tables_raw.split(',') if t.strip()] if write_tables_raw else []
         if query or write_tables:
             # Extract read tables from query using global parsers
             read_tables, _ = extract_tables_from_content_query(
                 query, global_parser_names, global_parser_table_map, return_rejected=True
             )
             for table in read_tables:
+                # Normalize table name to proper case from reference
+                normalized_table = normalize_table_case(table)
                 content_table_mappings.append({
                     "solution_name": item.get("solution_name", "Standalone Content"),
+                    "solution_folder": item.get("solution_folder", ""),
+                    "solution_github_url": item.get("solution_github_url", ""),
                     "content_type": item.get("content_type", ""),
                     "content_id": item.get("content_id", ""),
                     "content_name": item.get("content_name", ""),
                     "content_file": item.get("content_file", ""),
-                    "table_name": table,
+                    "table_name": normalized_table,
                     "table_usage": "read",
                     "is_published": "",  # Not applicable
                 })
             # Add write tables
             for table in write_tables:
                 usage = "read/write" if table in read_tables else "write"
+                # Normalize table name to proper case from reference
+                normalized_table = normalize_table_case(table)
                 content_table_mappings.append({
                     "solution_name": item.get("solution_name", "Standalone Content"),
+                    "solution_folder": item.get("solution_folder", ""),
+                    "solution_github_url": item.get("solution_github_url", ""),
                     "content_type": item.get("content_type", ""),
                     "content_id": item.get("content_id", ""),
                     "content_name": item.get("content_name", ""),
                     "content_file": item.get("content_file", ""),
-                    "table_name": table,
+                    "table_name": normalized_table,
                     "table_usage": usage,
                     "is_published": "",
                 })
@@ -5668,7 +5868,8 @@ def main() -> None:
         
         solutions_data.append({
             'solution_name': info['solution_name'],
-            'solution_folder': f"{GITHUB_REPO_URL}/Solutions/{quote(info['solution_folder'])}",
+            'solution_folder': info['solution_folder'],
+            'solution_github_url': f"{GITHUB_REPO_URL}/Solutions/{quote(info['solution_folder'])}",
             'solution_publisher_id': info['solution_publisher_id'],
             'solution_offer_id': info['solution_offer_id'],
             'solution_first_publish_date': info['solution_first_publish_date'],
@@ -5690,16 +5891,17 @@ def main() -> None:
     
     # Build tables data from tables_reference.csv metadata (tables_reference was loaded early)
     # Collect all unique tables from connector data AND content items
+    # Normalize table names to proper case from tables_reference.csv to avoid duplicates
     all_tables: Set[str] = set()
     for row in rows:
         table = row.get('Table', '')
         if table:
-            all_tables.add(table)
+            all_tables.add(normalize_table_case(table))
     # Also add tables from content items (includes custom tables written by playbooks)
     for mapping in content_table_mappings:
         table = mapping.get('table_name', '')
         if table:
-            all_tables.add(table)
+            all_tables.add(normalize_table_case(table))
     
     # Apply solution overrides to rows early, before building table_support_tiers
     # This ensures solution-level overrides (like support_tier fixes) affect derived table data
@@ -5821,6 +6023,7 @@ def main() -> None:
         "Table",
         "solution_name",
         "solution_folder",
+        "solution_github_url",
         "solution_publisher_id",
         "solution_offer_id",
         "solution_first_publish_date",
@@ -5883,6 +6086,7 @@ def main() -> None:
     solutions_fieldnames = [
         'solution_name',
         'solution_folder',
+        'solution_github_url',
         'solution_publisher_id',
         'solution_offer_id',
         'solution_first_publish_date',
@@ -5964,6 +6168,7 @@ def main() -> None:
         'not_in_solution_json',
         'solution_name',
         'solution_folder',
+        'solution_github_url',
         'is_published',
     ]
     content_items_path = args.content_items_csv.resolve()
@@ -5973,7 +6178,7 @@ def main() -> None:
         writer.writerows(all_content_items)
     
     # Write content-to-tables mapping CSV
-    content_tables_fieldnames = ['solution_name', 'solution_folder', 'content_type', 'content_id', 'content_name', 'content_file', 'table_name', 'table_usage', 'is_published']
+    content_tables_fieldnames = ['solution_name', 'solution_folder', 'solution_github_url', 'content_type', 'content_id', 'content_name', 'content_file', 'table_name', 'table_usage', 'source_parser', 'is_published']
     content_tables_path = args.content_tables_mapping_csv.resolve()
     with content_tables_path.open("w", encoding="utf-8", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=content_tables_fieldnames, quoting=csv.QUOTE_ALL)
@@ -5983,6 +6188,7 @@ def main() -> None:
     report_fieldnames = [
         "solution_name",
         "solution_folder",
+        "solution_github_url",
         "connector_id",
         "connector_title",
         "connector_publisher",
@@ -5996,10 +6202,10 @@ def main() -> None:
     for issue in issues:
         if issue.get("reason") == "parser_tables_resolved":
             continue
-        # Convert solution_folder to GitHub URL
+        # Add solution_github_url field (keep solution_folder as folder name)
         solution_folder_raw = issue.get("solution_folder", "")
         if solution_folder_raw:
-            issue["solution_folder"] = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_raw)}"
+            issue["solution_github_url"] = f"{GITHUB_REPO_URL}/Solutions/{quote(solution_folder_raw)}"
         # Convert relevant_file path to GitHub URL if present
         if issue.get("relevant_file"):
             normalized = issue["relevant_file"].replace("\\", "/")
