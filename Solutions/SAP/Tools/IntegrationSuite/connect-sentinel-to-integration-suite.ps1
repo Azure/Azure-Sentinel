@@ -4,9 +4,9 @@
 # processing destinations from a CSV file to create multiple connections.
 #
 # Key Features:
-# - Supports both Cloud Foundry (CF) and SAP NEO environments
+# - Purpose built for Cloud Foundry (CF) environments
 # - CF Mode: Retrieves credentials at runtime via CF CLI (no stored secrets)
-# - Direct Mode: Supply credentials directly for SAP NEO or other environments
+# - Direct Mode: Supply credentials directly for other environments
 # - Processes destinations.csv to create connections for each SAP backend
 # - Uses shared DCE/DCR across all connections
 # - Supports multiple authentication types:
@@ -76,7 +76,7 @@ param(
     [Parameter(Mandatory=$false, HelpMessage="Prefix for connection names (default: SAP)")]
     [string]$ConnectionPrefix = "SAP",
     
-    # Direct Credential Parameters (for SAP NEO or environments without CF CLI)
+    # Direct Credential Parameters
     # When these are provided, CF CLI is not required
     [Parameter(Mandatory=$false, HelpMessage="Integration Server URL (e.g., https://tenant.it-cpi023-rt.cfapps.eu20.hana.ondemand.com)")]
     [string]$IntegrationServerUrl,
@@ -110,7 +110,10 @@ param(
     [string]$ApiPathSuffix = "/microsoft/sentinel/sap-log-trigger",
     
     [Parameter(Mandatory=$false, HelpMessage="Azure Management API version")]
-    [string]$ApiVersion = "2025-07-01-preview"
+    [string]$ApiVersion = "2025-07-01-preview",
+    
+    [Parameter(Mandatory=$false, HelpMessage="Timeout in seconds for connector creation API call (default: 300)")]
+    [int]$ConnectorTimeoutSec = 300
 )
 
 # Import shared helper functions
@@ -182,7 +185,7 @@ elseif (-not [string]::IsNullOrWhiteSpace($IntegrationServerUrl) -and
         Write-Log "This mode uses HTTP Basic Auth (username/password on every request)"
     }
     else {
-        Write-Log "This mode supports SAP NEO and other non-CF environments"
+        Write-Log "This mode supports CF environments and others"
     }
     
     $credentials = Get-IntegrationSuiteCredentials `
@@ -350,7 +353,8 @@ foreach ($destination in $destinations) {
         -ApiPathSuffix $ApiPathSuffix `
         -RfcDestinationName $rfcDestinationName `
         -PollingFrequencyMinutes $pollingFrequency `
-        -ApiVersion $ApiVersion
+        -ApiVersion $ApiVersion `
+        -TimeoutSec $ConnectorTimeoutSec
     
     $result = [PSCustomObject]@{
         ConnectionName = $connectionName

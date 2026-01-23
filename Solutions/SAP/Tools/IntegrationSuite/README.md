@@ -183,7 +183,7 @@ The service key from SAP BTP "SAP Process Integration Runtime" service looks lik
 {
   "oauth": {
     "clientid": "sb-xxx!b3750|it-rt-tenant!b18631",
-    "clientsecret": "xxx$VNLOOTjZ4-xxx=",
+    "clientsecret": "xxxxxx",
     "url": "https://tenant.it-cpi023-rt.cfapps.eu20-001.hana.ondemand.com",
     "tokenurl": "https://tenant.authentication.eu20.hana.ondemand.com/oauth/token"
   }

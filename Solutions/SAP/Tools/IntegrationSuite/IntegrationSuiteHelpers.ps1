@@ -661,7 +661,9 @@ function New-SentinelIntegrationSuiteConnection {
         [Parameter(Mandatory=$false)]
         [int]$PollingFrequencyMinutes = 5,
         [Parameter(Mandatory=$false)]
-        [string]$ApiVersion = "2025-07-01-preview"
+        [string]$ApiVersion = "2025-07-01-preview",
+        [Parameter(Mandatory=$false)]
+        [int]$TimeoutSec = 300
     )
     
     try {
@@ -728,8 +730,10 @@ function New-SentinelIntegrationSuiteConnection {
             "Content-Type" = "application/json"
         }
         
-        # Make REST API call
-        $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $body
+        # Make REST API call with extended timeout for connector provisioning
+        # The SecurityInsights backend may take significant time to provision the connector
+        Write-Log "  Request timeout: $TimeoutSec seconds"
+        $response = Invoke-RestMethod -Uri $uri -Method Put -Headers $headers -Body $body -TimeoutSec $TimeoutSec
         
         Write-Log "Successfully created SAP Integration Suite connection '$sanitizedConnectionName'" -Level "SUCCESS"
         Write-Log "  Integration Server: $($Credentials.IntegrationServerUrl)"
