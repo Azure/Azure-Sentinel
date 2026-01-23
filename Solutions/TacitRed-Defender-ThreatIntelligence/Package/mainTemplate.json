@@ -70,29 +70,6 @@
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
-          "metadata": {
-            "title": "TacitRed Defender TI - Function App",
-            "description": "This Azure Function App processes TacitRed threat intelligence data and prepares it for ingestion into Microsoft Defender Threat Intelligence via the Upload API.",
-            "prerequisites": "1. TacitRed API Key (obtain from https://app.tacitred.com)\n2. Microsoft Sentinel workspace with Defender TI integration",
-            "postDeployment": [
-              "1. Note the Function App URL after deployment",
-              "2. Deploy the TacitRedToDefenderTI Logic App playbook",
-              "3. Configure the Logic App with the Function App URL and TacitRed API Key"
-            ],
-            "prerequisitesDeployTemplateFile": "",
-            "lastUpdateTime": "2025-12-10T00:00:00.000Z",
-            "entities": [],
-            "tags": ["ThreatIntelligence", "DefenderTI", "AzureFunction", "TacitRed"],
-            "support": {
-              "tier": "Partner",
-              "name": "Data443 Risk Mitigation, Inc.",
-              "email": "support@data443.com",
-              "link": "https://www.data443.com"
-            },
-            "author": {
-              "name": "Data443 Risk Mitigation, Inc."
-            }
-          },
           "parameters": {
             "FunctionAppName": {
               "defaultValue": "tacitreddefenderti",
@@ -219,7 +196,7 @@
                     },
                     {
                       "name": "SENTINEL_WORKSPACE_ID",
-                      "value": "[[variables('workspaceResourceId')]"
+                      "value": "[[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                     },
                     {
                       "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
@@ -233,7 +210,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[[guid(resourceGroup().id, variables('functionAppName'), 'Reader')]",
-              "scope": "[[variables('workspaceResourceId')]",
+              "scope": "[[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
               "properties": {
                 "roleDefinitionId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')]",
                 "principalId": "[[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2024-04-01', 'Full').identity.principalId]",
@@ -247,7 +224,7 @@
               "type": "Microsoft.Authorization/roleAssignments",
               "apiVersion": "2022-04-01",
               "name": "[[guid(resourceGroup().id, variables('functionAppName'), 'SentinelContributor')]",
-              "scope": "[[variables('workspaceResourceId')]",
+              "scope": "[[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
               "properties": {
                 "roleDefinitionId": "[[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ab8e14d6-4a74-4a29-9ba8-549422addade')]",
                 "principalId": "[[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2024-04-01', 'Full').identity.principalId]",
@@ -283,7 +260,33 @@
                 }
               }
             }
-          ]
+          ],
+          "metadata": {
+            "title": "TacitRedDefenderTI_FunctionApp",
+            "description": "This Azure Function connects to TacitRed API to retrieve compromised credentials and pushes them to Microsoft Defender Threat Intelligence.",
+            "prerequisites": [
+              "TacitRed API Key",
+              "Microsoft Sentinel workspace with Defender TI enabled"
+            ],
+            "lastUpdateTime": "2025-12-09T00:00:00Z",
+            "tags": [
+              "TacitRed",
+              "Threat Intelligence",
+              "Azure Function"
+            ],
+            "postDeployment": [
+              "Deploy the TacitRedToDefenderTI playbook and provide the Function App URL"
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "TacitRedDefenderTI_FunctionApp",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+          }
         },
         "packageKind": "Solution",
         "packageVersion": "[variables('_solutionVersion')]",
@@ -325,15 +328,17 @@
                 "description": "TacitRed API Key for authentication"
               }
             },
-            "FunctionAppUrl": {
+            "FunctionAppName": {
               "type": "string",
+              "defaultValue": "tacitreddefenderti",
               "metadata": {
-                "description": "URL of the deployed TacitRed Azure Function App (e.g., https://tacitreddefendertiXXX.azurewebsites.net/api/TacitRedToDefenderTI)"
+                "description": "Prefix for the Azure Function App name"
               }
             }
           },
           "variables": {
             "logicAppName": "[[parameters('PlaybookName')]",
+            "functionAppName": "[[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
             "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
             "workspace-name": "[parameters('workspace')]",
             "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
@@ -375,7 +380,7 @@
                           {
                             "name": "FunctionAppUrl",
                             "type": "String",
-                            "value": "[[parameters('FunctionAppUrl')]"
+                            "value": "[[concat('https://', reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2024-04-01').defaultHostName, '/api/TacitRedToDefenderTI')]"
                           },
                           {
                             "name": "Domains",
@@ -505,11 +510,11 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "TacitRed-Defender-ThreatIntelligence",
         "publisherDisplayName": "Data443 Risk Mitigation, Inc.",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>&#8226; Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TacitRed-Defender-ThreatIntelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>&#8226; There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TacitRed Defender Threat Intelligence solution integrates TacitRed's threat intelligence feed with Microsoft Sentinel. It automatically retrieves compromised credentials and other threat indicators from TacitRed and ingests them into Microsoft Sentinel using the Upload API for enhanced threat detection.</p>\n<p><strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/TacitRed-Defender-ThreatIntelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The TacitRed Defender Threat Intelligence solution integrates TacitRed's threat intelligence feed with Microsoft Sentinel. It automatically retrieves compromised credentials and other threat indicators from TacitRed and ingests them into Microsoft Sentinel using the Upload API for enhanced threat detection.</p>\n<p><strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
-        "icon": "<svg id=\"d4e9f9a0-1b2c-4d4e-9f6a-7b8c9d0e1f2a\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 200 50\" width=\"75px\" height=\"75px\"><text x=\"10\" y=\"35\" font-family=\"Arial, sans-serif\" font-size=\"24\" font-weight=\"bold\" fill=\"#000000\">Tacit</text><text x=\"70\" y=\"35\" font-family=\"Arial, sans-serif\" font-size=\"24\" font-weight=\"bold\" fill=\"#FF0000\">Red</text><text x=\"120\" y=\"35\" font-family=\"Arial, sans-serif\" font-size=\"12\" fill=\"#555555\">by Data443</text></svg>",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/tacitred_logo.svg\"width=\"75px\"height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {
