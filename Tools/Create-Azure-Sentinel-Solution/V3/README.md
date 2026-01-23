@@ -249,13 +249,85 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 NOTE: It is now recommended to use 'createSolutionV3.ps1' file instead of 'createSolutionV2.ps1'. 'createSolutionV2.ps1' is not recommended going forward. 'createSolutionV4.ps1' file is used for GitHub pipeline and is not used for local use. `'createSolutionV3.ps1' requires 'commonFunctions.ps1' file which is placed under 'Tools\Create-Azure-Sentinel-Solution\common' path and this file 'commonFunctions.ps1' has all core logic to create package.`
 
-To generate the solution package, run the `createSolutionV3.ps1` script in the automation folder, `Tools/Create-Azure-Sentinel-Solution/V3`.
-> Ex. From repository root, run: `./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1`
+The `createSolutionV3.ps1` script supports two version management modes:
 
-Executing above command with ask you to enter the data file path in the solution as 'Enter solution data file path'. Just specify the data folder path from Solutions. No need to specify data file path. This will generate and compress the solution package, and name the package using the version provided in the input file.
-eg: Enter solution data file path : C:\Github\Azure-Sentinel\Solutions\Agari\data
+#### **Catalog Mode (Default)**
+Uses Microsoft Catalog API for version management. This is the original behavior and is recommended for production deployments.
 
-In above example we have provided path of data folder only without file name. Also there is NO need to copy paste data input file to Tools/input folder.
+#### **Local Mode** 
+Uses local version bumping with semantic versioning (major.minor.patch). This mode works offline and is ideal for development and testing.
+
+### Usage Examples
+
+#### **Basic Usage (Catalog Mode)**
+```powershell
+# Navigate to the script directory
+cd Tools/Create-Azure-Sentinel-Solution/V3
+
+# Run with catalog mode (default behavior)
+./createSolutionV3.ps1
+
+# Or specify the data folder path directly
+./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data"
+
+# Explicitly specify catalog mode
+./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data" -VersionMode "catalog"
+```
+
+#### **Local Version Bumping Mode**
+```powershell
+# Patch version bump (1.0.0 -> 1.0.1)
+./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data" -VersionMode "local" -VersionBump "patch"
+
+# Minor version bump (1.0.0 -> 1.1.0)
+./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data" -VersionMode "local" -VersionBump "minor"
+
+# Major version bump (1.0.0 -> 2.0.0)
+./createSolutionV3.ps1 -SolutionDataFolderPath "C:\Github\Azure-Sentinel\Solutions\YourSolution\Data" -VersionMode "local" -VersionBump "major"
+```
+
+#### **Interactive Mode**
+If you don't specify the `-SolutionDataFolderPath` parameter, the script will prompt you for the data folder path:
+```powershell
+./createSolutionV3.ps1 -VersionMode "local" -VersionBump "patch"
+# You will be prompted: "Enter solution data folder path"
+# Just specify the data folder path from Solutions, e.g.: C:\Github\Azure-Sentinel\Solutions\Agari\Data
+```
+
+### Version Management Modes Comparison
+
+| Feature | Catalog Mode | Local Mode |
+|---------|--------------|------------|
+| **Version Source** | Microsoft Catalog API | Local solution data file |
+| **Version Logic** | Increments based on catalog version | Semantic versioning (major.minor.patch) |
+| **Internet Required** | Yes (for API calls) | No |
+| **Use Case** | Production deployments | Development/testing |
+| **File Updates** | No automatic updates | Automatically updates data and metadata files |
+
+### What Gets Updated in Local Mode
+
+When using local mode, the script automatically updates:
+1. **Solution data file** (`Solution_[Name].json`) - Version property updated
+2. **Solution metadata file** (referenced in data file) - Version property updated  
+3. **Generated package files** - Only version numbers change, no other content modifications
+
+### Parameters
+
+- **`SolutionDataFolderPath`** (Optional): Path to the solution data folder. If not provided, you'll be prompted to enter it.
+- **`VersionMode`** (Optional): Choose between `"catalog"` (default) or `"local"` version management.
+- **`VersionBump`** (Optional): For local mode, specify `"patch"`, `"minor"`, or `"major"` (default: `"patch"`).
+
+### Legacy Usage
+
+The original usage still works for backward compatibility:
+```powershell
+# From repository root, run:
+./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1
+# You will be prompted: "Enter solution data folder path"
+# Example input: C:\Github\Azure-Sentinel\Solutions\Agari\Data
+```
+
+In the above examples, provide the path to the data folder only (without the file name). There is NO need to copy the data input file to the `Tools/input` folder.
 
 The package consists of the following files:
 
