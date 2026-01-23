@@ -30,6 +30,9 @@ Ensure you have the following:
 
 ## Usage
 
+> [!IMPORTANT]
+> Be aware the CLI login may need S-User IDs rather than email addresses depending on your organization's setup.
+
 ### export-subaccounts.ps1
 
 Generates a CSV file with all subaccounts from your BTP global account.
@@ -81,6 +84,11 @@ Creates or updates Sentinel connections to BTP subaccounts.
 ### Initial Deployment
 
 **Step 1: SAP BTP Admin - Generate subaccounts CSV**
+
+```powershell
+btp login
+btp get accounts/global-account
+```
 
 ```powershell
 .\export-subaccounts.ps1 -BtpSubdomain "<global-account-subdomain>"

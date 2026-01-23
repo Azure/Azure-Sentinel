@@ -49,7 +49,7 @@ param(
     
     [Parameter(Mandatory=$false)]
     [ValidateSet("CreateNewKey", "Cleanup")]
-    [string]$KeyRotationMode = "CreateNewKey"
+    [string]$KeyRotationMode
 )
 
 # Import shared helper functions
@@ -104,7 +104,11 @@ $CfPassword = $credentials.Password
 # Main script execution
 Write-Log "======================================================================="
 Write-Log "Starting SAP BTP Audit Log Management Onboarding Process"
-Write-Log "Key Rotation Mode: $KeyRotationMode"
+if ($KeyRotationMode) {
+    Write-Log "Key Rotation Mode: $KeyRotationMode"
+} else {
+    Write-Log "Key Rotation Mode: Not specified (will reuse existing keys if present)"
+}
 if ($ExportCredentialsToCsv) {
     Write-Log "Export Credentials to CSV: Enabled"
     Write-Log "WARNING: Credentials will be stored in plaintext in CSV file" -Level "WARNING"
@@ -171,16 +175,19 @@ foreach ($subaccount in $subaccounts) {
     $keyName = "$instanceName-key"
     
     # Create service instance (will skip if already exists)
-    $serviceCreated = New-CfServiceInstance -InstanceName $instanceName -Service $ServiceName -Plan $ServicePlan
+    # Returns: "created" if new instance was created, "exists" if already exists, $false on failure
+    $serviceResult = New-CfServiceInstance -InstanceName $instanceName -Service $ServiceName -Plan $ServicePlan
     
-    if (-not $serviceCreated) {
+    if (-not $serviceResult) {
         $failureCount++
         continue
     }
     
-    # Wait a bit for service to be ready
-    Write-Log "Waiting for service instance to be ready..."
-    Start-Sleep -Seconds 5
+    # Only wait for service to be ready if a new instance was created
+    if ($serviceResult -eq "created") {
+        Write-Log "Waiting for service instance to be ready..."
+        Start-Sleep -Seconds 5
+    }
     
     # Handle key rotation based on mode
     $existingKeyObjects = Get-CfServiceKeysWithDetails -InstanceName $instanceName
@@ -221,20 +228,37 @@ foreach ($subaccount in $subaccounts) {
         continue
     }
     
-    # For CreateNewKey mode, handle key creation
+    # Handle key creation based on whether KeyRotationMode was specified
+    $keyCreated = $false
+    $reusingExistingKey = $false
+    
     if ($keyExists) {
-        # CreateNewKey mode with existing key - generate timestamped key name
-        $timestamp = Get-Date -Format "yyyyMMddHHmmss"
-        $keyName = "$InstanceName-key-$timestamp"
-        Write-Log "Key already exists. Creating new key with timestamp: $keyName" -Level "INFO"
+        if ($KeyRotationMode -eq "CreateNewKey") {
+            # CreateNewKey mode explicitly requested - generate timestamped key name
+            $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+            $keyName = "$InstanceName-key-$timestamp"
+            Write-Log "Key rotation requested. Creating new key with timestamp: $keyName" -Level "INFO"
+        } else {
+            # No KeyRotationMode specified - reuse existing key, skip creation but allow exports
+            Write-Log "Service key '$keyName' already exists. Reusing existing key." -Level "INFO"
+            Write-Log "To create a new key, use -KeyRotationMode CreateNewKey" -Level "INFO"
+            $reusingExistingKey = $true
+        }
     }
     
-    # Create service key
-    $keyCreated = New-CfServiceKey -InstanceName $instanceName -KeyName $keyName
-    
-    if (-not $keyCreated) {
-        $failureCount++
-        continue
+    # Create service key (only if key doesn't exist, or CreateNewKey mode was explicitly requested)
+    if (-not $reusingExistingKey) {
+        $keyCreated = New-CfServiceKey -InstanceName $instanceName -KeyName $keyName
+        
+        if (-not $keyCreated) {
+            $failureCount++
+            continue
+        }
+        
+        # Wait for service key to be provisioned by the service broker
+        # The auditlog-management service broker needs time to generate credentials
+        Write-Log "Waiting for service key credentials to be provisioned..."
+        Start-Sleep -Seconds 5
     }
     
     # Export credentials to CSV if requested

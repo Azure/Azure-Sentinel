@@ -274,7 +274,7 @@ function Get-BtpCredentials {
         Read-Host "Press Enter to provide credentials interactively, or Ctrl+C to exit" | Out-Null
         
         if ([string]::IsNullOrWhiteSpace($Username)) {
-            $Username = Read-Host "Enter BTP Username (email)"
+            $Username = Read-Host "Enter BTP Username (email/S-User)"
         }
         
         if ($null -eq $Password -or $Password.Length -eq 0) {
@@ -639,7 +639,7 @@ function Get-CfServiceKey {
         [string]$InstanceName,
         [string]$KeyName,
         [int]$MaxRetries = 5,
-        [int]$InitialDelaySeconds = 2
+        [int]$InitialDelaySeconds = 5
     )
     
     try {
@@ -915,6 +915,7 @@ function New-BtpConnectionRequestBody {
 }
 
 # Function to create CF service instance
+# Returns: "created" if new instance was created, "exists" if already exists, $false on failure
 function New-CfServiceInstance {
     param(
         [string]$InstanceName,
@@ -944,7 +945,7 @@ function New-CfServiceInstance {
         
         if ($existingResponse -and $existingResponse.pagination.total_results -gt 0) {
             Write-Log "Service instance '$InstanceName' already exists. Skipping creation." -Level "WARNING"
-            return $true
+            return "exists"
         }
         
         # Get service offering and plan GUIDs
@@ -1002,7 +1003,7 @@ function New-CfServiceInstance {
         if ($createResponse -and ($createResponse.Success -eq $true -or $createResponse.guid)) {
             Write-Log "Successfully initiated creation of service instance '$InstanceName'" -Level "SUCCESS"
             Write-Log "Note: Service instance creation is asynchronous. It may take a few minutes to complete." -Level "INFO"
-            return $true
+            return "created"
         }
         else {
             Write-Log "Failed to create service instance '$InstanceName' - check error details above" -Level "ERROR"
@@ -1477,9 +1478,6 @@ function Get-ServiceKeyFromKeyVault {
         
         Write-Log "Successfully retrieved secret '$secretName'" -Level "SUCCESS"
         
-        # Debug: Show what we retrieved
-        Write-Log "Retrieved value: $result" -Level "INFO"
-        
         # Parse JSON
         $credentialsObj = $result | ConvertFrom-Json
         
@@ -1696,12 +1694,26 @@ function Get-BtpSubaccountCfDetails {
         # Parse labels (it's a JSON string in the response)
         $labels = $cfInstance.labels | ConvertFrom-Json
         
+        # Handle inconsistent label keys - some have trailing colons, some don't
+        # Try both formats: "API Endpoint" and "API Endpoint:"
         $cfApiEndpoint = $labels.'API Endpoint'
+        if ([string]::IsNullOrWhiteSpace($cfApiEndpoint)) {
+            $cfApiEndpoint = $labels.'API Endpoint:'
+        }
+        
         $cfOrgId = $labels.'Org ID'
+        if ([string]::IsNullOrWhiteSpace($cfOrgId)) {
+            $cfOrgId = $labels.'Org ID:'
+        }
+        
         $cfOrgName = $labels.'Org Name'
+        if ([string]::IsNullOrWhiteSpace($cfOrgName)) {
+            $cfOrgName = $labels.'Org Name:'
+        }
         
         if ([string]::IsNullOrWhiteSpace($cfApiEndpoint) -or [string]::IsNullOrWhiteSpace($cfOrgName)) {
             Write-Log "Could not extract CF details from environment instance for subaccount $SubaccountId" -Level "WARNING"
+            Write-Log "  Available labels: $($labels | ConvertTo-Json -Compress)" -Level "WARNING"
             return $null
         }
         
