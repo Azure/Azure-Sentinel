@@ -1,8 +1,9 @@
-# AWS CloudTrail ASIM AuditEvent Normalization Filter Parser
+# AWS CloudTrail ASIM AuditEvent Normalization Parser
 
-ARM template for ASIM AuditEvent schema parser for AWS CLoudTrail.
+ARM template for ASIM AuditEvent schema parser for AWS CloudTrail.
 
-This ASIM filtering parser supports normalizing AWS CLoudTrail logs ingested in 'CommonSecurityLog' table to the ASIM Audit Event schema.
+This ASIM parser supports filtering and normalizing  AWS CloudTrail activity logs to the ASIM Audit Event schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
@@ -14,4 +15,4 @@ For more information, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuditEvent%2FARM%2FvimAuditEventBarracudaCEF%2FvimAuditEventAWSCloudTrail.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuditEvent%2FARM%2FvimAuditEventAWSCloudTrail%2FvimAuditEventAWSCloudTrail.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuditEvent%2FARM%2FvimAuditEventAWSCloudTrail%2FvimAuditEventAWSCloudTrail.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimAuditEvent%2FARM%2FvimAuditEventAWSCloudTrail%2FvimAuditEventAWSCloudTrail.json)
