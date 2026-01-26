@@ -203,7 +203,7 @@ class TableInfo:
 
 def get_cache_path(url: str) -> Path:
     """Get the cache file path for a URL."""
-    url_hash = hashlib.md5(url.encode()).hexdigest()
+    url_hash = hashlib.md5(url.encode()).hexdigest()  # CodeQL [SM02167] MD5 used for cache key generation, not for cryptographic security purposes
     url_parts = url.rstrip('/').split('/')
     readable_name = url_parts[-1] if url_parts else 'unknown'
     readable_name = re.sub(r'[^\w\-.]', '_', readable_name)
