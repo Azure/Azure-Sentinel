@@ -1,11 +1,10 @@
 """This file is used for accessing keyvault to get or set secrets."""
-import os
+
 import logging
 from azure.keyvault.secrets import SecretClient
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from azure.core.exceptions import ResourceNotFoundError
-
-KEYVAULT_NAME = os.environ.get("KeyVaultName", "")
+from . import consts
 
 
 class KeyVaultSecretManager:
@@ -13,8 +12,13 @@ class KeyVaultSecretManager:
 
     def __init__(self) -> None:
         """Intialize instance variables for class."""
-        self.keyvault_name = KEYVAULT_NAME
-        self.keyvault_uri = "https://{}.vault.azure.net/".format(self.keyvault_name)
+        self.keyvault_name = consts.KEYVAULT_NAME
+        if ".us" in consts.SCOPE:
+            self.keyvault_uri = "https://{}.vault.usgovcloudapi.net/".format(
+                self.keyvault_name
+            )
+        else:
+            self.keyvault_uri = "https://{}.vault.azure.net/".format(self.keyvault_name)
         self.client = self.get_client()
 
     def get_client(self):
@@ -23,7 +27,7 @@ class KeyVaultSecretManager:
         Returns:
             SecretClient: returns client object for accessing AzureKeyVault.
         """
-        credential = DefaultAzureCredential()        # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
+        credential = ManagedIdentityCredential()
         client = SecretClient(vault_url=self.keyvault_uri, credential=credential)
         return client
 

@@ -8,18 +8,18 @@
             "maxLength": 11,
             "type": "string"
         },
-        "WorkspaceID": {
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceName": {
             "type": "string",
             "minLength": 1,
             "metadata": {
-                "description": "Enter Workspace ID of Log Analytics Workspace"
-            }
-        },
-        "WorkspaceKey": {
-            "type": "securestring",
-            "minLength": 1,
-            "metadata": {
-                "description": "Enter Primary Key of Log Analytics Workspace"
+                "description": "Log analytics workspace name. Can be found under Log analytics \"Settings\"."
             }
         },
         "ArmisSecretKey": {
@@ -28,24 +28,26 @@
                 "description": "Enter Armis Secret Key for Authentication"
             }
         },
-        "ArmisBaseURL":{
+        "ArmisBaseURL": {
             "type": "string",
             "metadata": {
                 "description": "Enter Base URL starting with \"https://\" followed by hostname(Example: https://[armis-instance].armis.com/api/v1)"
             }
         },
-        "ArmisAlertsTableName":{
+        "ArmisAlertsTableName": {
             "type": "string",
-            "defaultValue": "Armis_Alerts_CL",
+            "defaultValue": "Armis_Alerts",
+            "maxLength": 52,
             "metadata": {
-                "description": "Enter name of the table used to store Armis Alerts logs. Default is 'Armis_Alerts_CL'"
+                "description": "Enter name of the table used to store Armis Alerts logs. Default is 'Armis_Alerts'"
             }
         },
-        "ArmisActivitiesTableName":{
+        "ArmisActivitiesTableName": {
             "type": "string",
-            "defaultValue": "Armis_Activities_CL",
+            "defaultValue": "Armis_Activities",
+            "maxLength": 52,
             "metadata": {
-                "description": "Enter name of the table used to store Armis Activities logs. Default is 'Armis_Activities_CL'"
+                "description": "Enter name of the table used to store Armis Activities logs. Default is 'Armis_Activities'"
             }
         },
         "Severity": {
@@ -61,7 +63,7 @@
             ],
             "defaultValue": "Low"
         },
-        "ArmisSchedule":{
+        "ArmisSchedule": {
             "type": "string",
             "defaultValue": "0 */15 * * * *",
             "metadata": {
@@ -88,7 +90,14 @@
                 "description": "Enter Azure Client Secret that you have created during creating the client secret"
             }
         },
-        "TenantId":{
+        "AzureEntraObjectID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Object id of your Microsoft Entra App"
+            }
+        },
+        "TenantId": {
             "type": "string",
             "minLength": 1,
             "metadata": {
@@ -104,10 +113,580 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-         "StorageSuffix": "[environment().suffixes.storage]",
-         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "suffix": "[concat('A', uniqueString(resourceGroup().id))]",
+        "endpointName": "[concat(toLower(parameters('FunctionName')),'LogsEndpoint', variables('suffix'))]",
+        "logWsResId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+        "dataRuleName": "[concat(toLower(parameters('FunctionName')),'dataCollectionRule', variables('suffix'))]",
+        "dcrRoleName": "[concat(toLower(parameters('FunctionName')),'EntraRole', variables('suffix'))]",
+        "dcrRoleId": "[guid(subscription().id, string(variables('dcrRoleName')))]",
+        "scope": "[concat(replace(environment().portal, 'portal', 'monitor'), '/.default')]"
     },
     "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('endpointName')]",
+            "location": "[parameters('Location')]",
+            "kind": "Linux",
+            "properties": {
+                "description": "Data collection endpoint for ingestion api",
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('ArmisAlertsTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('ArmisAlertsTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "activityUUIDs",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "affectedDevicesCount",
+                            "type": "real"
+                        },
+                        {
+                            "name": "alertId",
+                            "type": "real"
+                        },
+                        {
+                            "name": "classification",
+                            "type": "string"
+                        },
+                        {
+                            "name": "connectionIds",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "description",
+                            "type": "string"
+                        },
+                        {
+                            "name": "destinationEndpoints",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "deviceIds",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "lastAlertUpdateTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "mitreAttackLabels",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "policyId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "policyLabels",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "policyTitle",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sourceEndpoints",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "statusChangeTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "armis_alert_time",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "alert_title",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alert_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/', parameters('ArmisActivitiesTableName'), '_CL')]",
+            "properties": {
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[concat(parameters('ArmisActivitiesTableName'), '_CL')]",
+                    "columns": [
+                        {
+                            "name": "activityUUID",
+                            "type": "string"
+                        },
+                        {
+                            "name": "connectionIds",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "content",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "decisionData_answerIps",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "decisionData_deviceId",
+                            "type": "real"
+                        },
+                        {
+                            "name": "decisionData_host",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_queryType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_clientOfferedSuites",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "decisionData_selectedSuite",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_selectedSuiteSecurityLevel",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_srcDeviceId",
+                            "type": "real"
+                        },
+                        {
+                            "name": "decisionData_srcIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_srcMac",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_version",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_sslConnectionStatus",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_method",
+                            "type": "string"
+                        },
+                        {
+                            "name": "decisionData_port",
+                            "type": "real"
+                        },
+                        {
+                            "name": "decisionData_userAgent",
+                            "type": "string"
+                        },
+                        {
+                            "name": "destinationEndpoints",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "deviceIds",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "protocol",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sensor",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "sensor_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sensor_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "site",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "site_location",
+                            "type": "string"
+                        },
+                        {
+                            "name": "site_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sites",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "sourceEndpoints",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "armis_activity_time",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "activity_title",
+                            "type": "string"
+                        },
+                        {
+                            "name": "activity_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dataRuleName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[concat(variables('logWsResId'), '/tables/', parameters('ArmisAlertsTableName'), '_CL')]",
+                "[concat(variables('logWsResId'), '/tables/', parameters('ArmisActivitiesTableName'), '_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))]",
+                "streamDeclarations": {
+                    "[concat('Custom-', parameters('ArmisAlertsTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "activityUUIDs",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "affectedDevicesCount",
+                                "type": "real"
+                            },
+                            {
+                                "name": "alertId",
+                                "type": "real"
+                            },
+                            {
+                                "name": "classification",
+                                "type": "string"
+                            },
+                            {
+                                "name": "connectionIds",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "name": "destinationEndpoints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "deviceIds",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "lastAlertUpdateTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "mitreAttackLabels",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "policyId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "policyLabels",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "policyTitle",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sourceEndpoints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "statusChangeTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "armis_alert_time",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "alert_title",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alert_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            }
+                        ]
+                    },
+                    "[concat('Custom-', parameters('ArmisActivitiesTableName'))]": {
+                        "columns": [
+                            {
+                                "name": "activityUUID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "connectionIds",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "content",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "decisionData_answerIps",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "decisionData_deviceId",
+                                "type": "real"
+                            },
+                            {
+                                "name": "decisionData_host",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_queryType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_clientOfferedSuites",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "decisionData_selectedSuite",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_selectedSuiteSecurityLevel",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_srcDeviceId",
+                                "type": "real"
+                            },
+                            {
+                                "name": "decisionData_srcIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_srcMac",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_version",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_sslConnectionStatus",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_method",
+                                "type": "string"
+                            },
+                            {
+                                "name": "decisionData_port",
+                                "type": "real"
+                            },
+                            {
+                                "name": "decisionData_userAgent",
+                                "type": "string"
+                            },
+                            {
+                                "name": "destinationEndpoints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "deviceIds",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sensor",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "sensor_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sensor_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "site",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "site_location",
+                                "type": "string"
+                            },
+                            {
+                                "name": "site_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sites",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "sourceEndpoints",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "armis_activity_time",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "activity_title",
+                                "type": "string"
+                            },
+                            {
+                                "name": "activity_type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]",
+                            "name": "[concat('RuleDest', variables('suffix'))]"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "[concat('Custom-', parameters('ArmisAlertsTableName'))]" ],
+                        "destinations": [ "[concat('RuleDest', variables('suffix'))]" ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now())",
+                        "outputStream": "[concat('Custom-', parameters('ArmisAlertsTableName'), '_CL')]"
+                    },
+                    {
+                        "streams": [
+                            "[concat('Custom-', parameters('ArmisActivitiesTableName'))]"
+                        ],
+                        "destinations": [ "[concat('RuleDest', variables('suffix'))]" ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(now()), json_decisionData = parse_json(decisionData), json_sensor = parse_json(sensor), json_site = parse_json(site)\n| extend decisionData_answerIps = todynamic(json_decisionData.answerIps), decisionData_deviceId = toreal(json_decisionData.deviceId), decisionData_host = tostring(json_decisionData.host), decisionData_queryType = tostring(json_decisionData.queryType), decisionData_clientOfferedSuites = todynamic(json_decisionData.clientOfferedSuites), decisionData_selectedSuite = tostring(json_decisionData.selectedSuite), decisionData_selectedSuiteSecurityLevel = tostring(json_decisionData.selectedSuiteSecurityLevel), decisionData_srcDeviceId = toreal(json_decisionData.srcDeviceId), decisionData_srcIp = tostring(json_decisionData.srcIp), decisionData_srcMac = tostring(json_decisionData.srcMac), decisionData_version = tostring(json_decisionData.version), decisionData_sslConnectionStatus = tostring(json_decisionData.sslConnectionStatus), decisionData_method = tostring(json_decisionData.method), decisionData_port = toreal(json_decisionData.port), decisionData_userAgent = tostring(json_decisionData.userAgent), sensor_name = tostring(json_sensor.name), sensor_type = tostring(json_sensor.type), site_location = tostring(json_site.location), site_name = tostring(json_site.name)\n| project-away json_decisionData, decisionData, json_sensor, sensor, json_site, site",
+                        "outputStream": "[concat('Custom-', parameters('ArmisActivitiesTableName'), '_CL')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('dcrRoleId')]",
+            "properties": {
+                "assignableScopes": [
+                    "[resourceGroup().id]",
+                    "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]"
+                ],
+                "description": "Entra ID application access role",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Insights/Register/Action",
+                            "Microsoft.Support/*",
+                            "Microsoft.Resources/subscriptions/resourceGroups/read"
+                        ],
+                        "dataActions": [
+                            "Microsoft.Insights/Metrics/Write",
+                            "Microsoft.Insights/Telemetry/Write"
+                        ]
+                    }
+                ],
+                "roleName": "[variables('dcrRoleName')]",
+                "type": "customRole"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceGroup().id, concat('Non Statistics DCR Role assignment', variables('FunctionName')))]",
+            "dependsOn": [ "[variables('dcrRoleId')]", "[variables('dataRuleName')]" ],
+            "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))]",
+            "properties": {
+                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', variables('dcrRoleId'))]",
+                "principalId": "[parameters('AzureEntraObjectID')]"
+            }
+        },
         {
             "type": "Microsoft.Insights/components",
             "apiVersion": "2020-02-02",
@@ -211,7 +790,7 @@
                 "alwaysOn": true,
                 "reserved": true,
                 "siteConfig": {
-                    "linuxFxVersion": "python|3.11"
+                    "linuxFxVersion": "python|3.12"
                 }
             },
             "resources": [
@@ -228,9 +807,6 @@
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
                         "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
                         "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2019-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
-                        "logAnalyticsUri": "[variables('LogAnaltyicsUri')]",
-                        "WorkspaceID": "[parameters('WorkspaceID')]",
-                        "WorkspaceKey": "[parameters('WorkspaceKey')]",
                         "ArmisSecretKey": "[parameters('ArmisSecretKey')]",
                         "ArmisURL": "[parameters('ArmisBaseURL')]",
                         "ArmisAlertsTableName": "[parameters('ArmisAlertsTableName')]",
@@ -241,7 +817,10 @@
                         "AZURE_CLIENT_ID": "[parameters('AzureClientId')]",
                         "AZURE_CLIENT_SECRET": "[parameters('AzureClientSecret')]",
                         "AZURE_TENANT_ID": "[parameters('TenantId')]",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ArmisAlertsActivities311-functionapp"
+                        "AZURE_DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('endpointName'))).logsIngestion.endpoint]",
+                        "DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataRuleName'))).immutableId]",
+                        "SCOPE": "[variables('scope')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-ArmisAlertsActivities320-functionapp"
                     }
                 }
             ]

@@ -1,0 +1,857 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Send incident email with XDR Portal links",
+        "description":  "This playbook will send an email with incident and entity information with all links pointing to the security.microsoft.com portal",
+        "prerequisites":  "An O365 account to be used to send email notification (The user account will be used in O365 connector (Send an email).",
+        "postDeployment":  [ "**1.Configure connections**\nEdit the Logic App or go to Logic app designer.\nFrom the toolbar click *Connections* and Expand *Office 365 Outlook*.\nCreate a new connection or click the link to edit the existing connection and signin.\nNote:  Email sent with this playbook will be from user that creates connection.\nRun the PowerShell script found in detailed instructions to Grant API Permissions.\n**Attach the playbook**\nAttach the playbook\n[Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)\n[click here for detailed insturctions](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Send-Incident-Email-XDRPortal/readme.md)" ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "2025-12-12T00:00:00.000Z",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Brian Delaney"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Send incident email with XDR Portal links",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Send-Incident-Email-XDR",
+            "type":  "string"
+        },
+        "GRAPH_ENDPOINT":  {
+            "defaultValue": "https://graph.microsoft.com",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for the Microsoft Graph Endpoint"
+            }
+        },
+        "PORTAL_ENDPOINT":  {
+            "defaultValue": "https://security.microsoft.com",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for the XDR Portal Endpoint"
+            }
+        },
+        "SOC_PHONE_FOOTER":  {
+            "defaultValue": "+1 (555) 555-5555",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter a contact phone number for the email footer"
+            }
+        },
+        "SOC_EMAIL_FOOTER":  {
+            "defaultValue": "socteam@contoso.com",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter a contact email address for the email footer"
+            }
+        },
+        "EMAIL_RECIPIENT":  {
+            "defaultValue": "socalerts@contoso.com",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter a contact email address for the email alert recipient"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Office365ConnectionName":  "[concat('Office365-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "GRAPH_ENDPOINT":  {
+                            "defaultValue":  "[parameters('GRAPH_ENDPOINT')]",
+                            "type":  "String"
+                        },
+                        "PORTAL_ENDPOINT":  {
+                            "defaultValue":  "[parameters('PORTAL_ENDPOINT')]",
+                            "type":  "String"
+                        },
+                        "SOC_PHONE_FOOTER":  {
+                            "defaultValue":  "[parameters('SOC_PHONE_FOOTER')]",
+                            "type":  "String"
+                        },
+                        "SOC_EMAIL_FOOTER":  {
+                            "defaultValue":  "[parameters('SOC_EMAIL_FOOTER')]",
+                            "type":  "String"
+                        },
+                        "EMAIL_RECIPIENT":  {
+                            "defaultValue":  "[parameters('EMAIL_RECIPIENT')]",
+                            "type":  "String"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body":  {
+                                    "callback_url":  "@listCallbackUrl()"
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "HTTP":  {
+                            "runAfter":  {
+                                "Additional_Details":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "uri":  "@{parameters('GRAPH_ENDPOINT')}/v1.0/security/incidents/@{triggerBody()?['object']?['properties']?['providerIncidentId']}?$expand=alerts",
+                                "method":  "GET",
+                                "authentication":  {
+                                    "type":  "ManagedServiceIdentity",
+                                    "audience":  "@{parameters('GRAPH_ENDPOINT')}"
+                                }
+                            },
+                            "runtimeConfiguration":  {
+                                "contentTransfer":  {
+                                    "transferMode":  "Chunked"
+                                },
+                                "staticResult":  {
+                                    "staticResultOptions":  "Disabled",
+                                    "name":  "HTTP0"
+                                }
+                            }
+                        },
+                        "Switch":  {
+                            "runAfter":  {
+                                "Initialize_severity":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases":  {
+                                "high":  {
+                                    "case":  "high",
+                                    "actions":  {
+                                        "Set_icon_high":  {
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "Icon",
+                                                "value":  "🚨"
+                                            }
+                                        },
+                                        "Set_header_bg_high":  {
+                                            "runAfter":  {
+                                                "Set_icon_high":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "HeaderBackgroundColor",
+                                                "value":  "#dc3545"
+                                            }
+                                        },
+                                        "Set_badge_high":  {
+                                            "runAfter":  {
+                                                "Set_header_bg_high":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "BadgeText",
+                                                "value":  "High Priority"
+                                            }
+                                        }
+                                    }
+                                },
+                                "medium":  {
+                                    "case":  "medium",
+                                    "actions":  {
+                                        "Set_icon_medium":  {
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "Icon",
+                                                "value":  "⚠️"
+                                            }
+                                        },
+                                        "Set_header_bg_medium":  {
+                                            "runAfter":  {
+                                                "Set_icon_medium":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "HeaderBackgroundColor",
+                                                "value":  "#fd7e14"
+                                            }
+                                        },
+                                        "Set_badge_medium":  {
+                                            "runAfter":  {
+                                                "Set_header_bg_medium":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "BadgeText",
+                                                "value":  "Medium Priority"
+                                            }
+                                        }
+                                    }
+                                },
+                                "low":  {
+                                    "case":  "low",
+                                    "actions":  {
+                                        "Set_icon_low":  {
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "Icon",
+                                                "value":  "🟡"
+                                            }
+                                        },
+                                        "Set_header_bg_low":  {
+                                            "runAfter":  {
+                                                "Set_icon_low":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "HeaderBackgroundColor",
+                                                "value":  "#ffc107"
+                                            }
+                                        },
+                                        "Set_badge_low":  {
+                                            "runAfter":  {
+                                                "Set_header_bg_low":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "BadgeText",
+                                                "value":  "Low Priority"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default":  {
+                                "actions":  {
+                                    "Set_icon_info":  {
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "Icon",
+                                            "value":  "ℹ️"
+                                        }
+                                    },
+                                    "Set_header_bg_info":  {
+                                        "runAfter":  {
+                                            "Set_icon_info":  [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "HeaderBackgroundColor",
+                                            "value":  "#17a2b8"
+                                        }
+                                    },
+                                    "Set_badge_info":  {
+                                        "runAfter":  {
+                                            "Set_header_bg_info":  [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type":  "SetVariable",
+                                        "inputs":  {
+                                            "name":  "BadgeText",
+                                            "value":  "Informational"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  "@body('HTTP')?['severity']",
+                            "type":  "Switch"
+                        },
+                        "Send_an_email_(V2)":  {
+                            "runAfter":  {
+                                "Compose":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "body":  {
+                                    "To":  "@parameters('EMAIL_RECIPIENT')",
+                                    "Subject":  "Incident @{triggerBody()?['object']?['properties']?['providerIncidentId']}: @{triggerBody()?['object']?['properties']?['title']}",
+                                    "Body":  "\u003cp class=\"editor-paragraph\"\u003e@{outputs('Compose')}\u003c/p\u003e",
+                                    "Importance":  "Normal"
+                                },
+                                "path":  "/v2/Mail"
+                            }
+                        },
+                        "Compose":  {
+                            "runAfter":  {
+                                "For_each_alert":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Compose",
+                            "inputs":  "\u003c!DOCTYPE html\u003e\n\u003chtml lang=\"en\"\u003e\n\u003chead\u003e\n    \u003cmeta charset=\"UTF-8\"\u003e\n    \u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"\u003e\n    \u003ctitle\u003eSecurity Incident Alert\u003c/title\u003e\n    \u003cstyle\u003e\n        /* Reset and base styles */\n        * {\n            margin: 0;\n            padding: 0;\n            box-sizing: border-box;\n        }\n        \n        body {\n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n            line-height: 1.6;\n            color: #333333;\n            background-color: #f5f5f5;\n            margin: 0;\n            padding: 20px;\n        }\n        \n        .email-container {\n            max-width: 600px;\n            margin: 0 auto;\n            background-color: #ffffff;\n            border-radius: 8px;\n            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);\n            overflow: hidden;\n        }\n        \n        /* Header - Base styles */\n        .header {\n            color: white;\n            padding: 30px 20px;\n            text-align: center;\n        }\n        \n        .alert-icon {\n            font-size: 48px;\n            margin-bottom: 10px;\n            display: block;\n        }\n        \n        .header h1 {\n            font-size: 24px;\n            font-weight: 600;\n            margin-bottom: 5px;\n        }\n        \n        .severity-badge {\n            display: inline-block;\n            background-color: rgba(255, 255, 255, 0.2);\n            padding: 5px 15px;\n            border-radius: 20px;\n            font-size: 12px;\n            font-weight: 500;\n            text-transform: uppercase;\n            letter-spacing: 1px;\n        }\n        \n        /* Severity Level Styles */\n        .severity-high .header {\n            background: linear-gradient(135deg, #dc3545, #c82333);\n        }\n        \n        .severity-medium .header {\n            background: linear-gradient(135deg, #fd7e14, #e8630a);\n        }\n        \n        .severity-low .header {\n            background: linear-gradient(135deg, #ffc107, #e0a800);\n        }\n        \n        .severity-informational .header {\n            background: linear-gradient(135deg, #17a2b8, #138496);\n        }\n        \n        .severity-high .incident-details {\n            border-left-color: #dc3545;\n        }\n        \n        .severity-medium .incident-details {\n            border-left-color: #fd7e14;\n        }\n        \n        .severity-low .incident-details {\n            border-left-color: #ffc107;\n        }\n        \n        .severity-informational .incident-details {\n            border-left-color: #17a2b8;\n        }\n        \n        .severity-high .impact-card h4 {\n            color: #dc3545;\n        }\n        \n        .severity-medium .impact-card h4 {\n            color: #fd7e14;\n        }\n        \n        .severity-low .impact-card h4 {\n            color: #ffc107;\n        }\n        \n        .severity-informational .impact-card h4 {\n            color: #17a2b8;\n        }\n        \n        .severity-high .impact-count {\n            background-color: #dc3545;\n        }\n        \n        .severity-medium .impact-count {\n            background-color: #fd7e14;\n        }\n        \n        .severity-low .impact-count {\n            background-color: #ffc107;\n        }\n        \n        .severity-informational .impact-count {\n            background-color: #17a2b8;\n        }\n        \n        .severity-high .incident-number {\n            background-color: #dc3545;\n        }\n        \n        .severity-medium .incident-number {\n            background-color: #fd7e14;\n        }\n        \n        .severity-low .incident-number {\n            background-color: #ffc107;\n            color: #212529;\n        }\n        \n        .severity-informational .incident-number {\n            background-color: #17a2b8;\n        }\n        \n        /* Severity text colors for inline use */\n        .severity-text-high {\n            color: #dc3545 !important;\n        }\n        \n        .severity-text-medium {\n            color: #fd7e14 !important;\n        }\n        \n        .severity-text-low {\n            color: #ffc107 !important;\n        }\n        \n        .severity-text-informational {\n            color: #17a2b8 !important;\n        }\n        \n        /* Content */\n        .content {\n            padding: 30px 20px;\n        }\n        \n        .incident-details {\n            background-color: #f8f9fa;\n            border-left: 4px solid #dc3545;\n            padding: 20px;\n            margin-bottom: 25px;\n            border-radius: 0 4px 4px 0;\n        }\n        \n        .detail-row {\n            display: flex;\n            margin-bottom: 12px;\n            flex-wrap: wrap;\n        }\n        \n        .detail-label {\n            font-weight: 600;\n            color: #495057;\n            min-width: 140px;\n            margin-bottom: 5px;\n        }\n        \n        .detail-value {\n            color: #333333;\n            flex: 1;\n        }\n        \n        .incident-number {\n            color: white;\n            padding: 4px 8px;\n            border-radius: 4px;\n            font-family: 'Courier New', monospace;\n            font-size: 14px;\n        }\n        \n        .description-box {\n            background-color: #ffffff;\n            border: 1px solid #dee2e6;\n            border-radius: 4px;\n            padding: 15px;\n            margin: 15px 0;\n        }\n        \n        /* Impact sections */\n        .impact-section {\n            margin: 25px 0;\n        }\n        \n        .section-title {\n            font-size: 18px;\n            font-weight: 600;\n            color: #495057;\n            margin-bottom: 15px;\n            padding-bottom: 8px;\n            border-bottom: 2px solid #e9ecef;\n        }\n        \n        .impact-grid {\n            display: grid;\n            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));\n            gap: 20px;\n            margin-bottom: 20px;\n        }\n        \n        .impact-card {\n            background-color: #f8f9fa;\n            border: 1px solid #dee2e6;\n            border-radius: 6px;\n            padding: 15px;\n        }\n        \n        .impact-card h4 {\n            font-size: 14px;\n            font-weight: 600;\n            text-transform: uppercase;\n            letter-spacing: 0.5px;\n            margin-bottom: 10px;\n            display: flex;\n            align-items: center;\n        }\n        \n        .impact-icon {\n            margin-right: 8px;\n            font-size: 16px;\n        }\n        \n        .impact-list {\n            list-style: none;\n            padding: 0;\n        }\n        \n        .impact-list li {\n            background-color: #ffffff;\n            border: 1px solid #e9ecef;\n            border-radius: 4px;\n            padding: 8px 12px;\n            margin-bottom: 5px;\n            font-family: 'Courier New', monospace;\n            font-size: 13px;\n            word-break: break-all;\n        }\n        \n        .impact-count {\n            color: white;\n            border-radius: 50%;\n            width: 20px;\n            height: 20px;\n            display: inline-flex;\n            align-items: center;\n            justify-content: center;\n            font-size: 11px;\n            font-weight: bold;\n            margin-left: auto;\n        }\n        \n        /* Additional details */\n        .additional-details {\n            background-color: #e3f2fd;\n            border: 1px solid #bbdefb;\n            border-radius: 6px;\n            padding: 20px;\n            margin: 25px 0;\n        }\n        \n        .additional-details h3 {\n            color: #1976d2;\n            font-size: 16px;\n            margin-bottom: 10px;\n        }\n        \n        .additional-details p {\n            color: #424242;\n            line-height: 1.6;\n        }\n        \n        /* Footer */\n        .footer {\n            background-color: #343a40;\n            color: #ffffff;\n            padding: 20px;\n            text-align: center;\n            font-size: 12px;\n        }\n        \n        .footer p {\n            margin-bottom: 5px;\n        }\n        \n        .timestamp {\n            color: #adb5bd;\n            font-style: italic;\n        }\n        \n        /* Responsive design */\n        @media screen and (max-width: 600px) {\n            body {\n                padding: 10px;\n            }\n            \n            .email-container {\n                border-radius: 0;\n            }\n            \n            .header {\n                padding: 20px 15px;\n            }\n            \n            .content {\n                padding: 20px 15px;\n            }\n            \n            .detail-row {\n                flex-direction: column;\n            }\n            \n            .detail-label {\n                min-width: auto;\n            }\n            \n            .impact-grid {\n                grid-template-columns: 1fr;\n            }\n        }\n        \n        /* Print styles */\n        @media print {\n            body {\n                background-color: white;\n                padding: 0;\n            }\n            \n            .email-container {\n                box-shadow: none;\n                max-width: none;\n            }\n        }\n    \u003c/style\u003e\n\u003c/head\u003e\n\u003cbody\u003e\n    \u003cdiv class=\"email-container severity-@{body('HTTP')?['severity']}\"\u003e\n        \u003c!-- Header --\u003e\n        \u003cdiv class=\"header\" style=\"background-color: @{variables('HeaderBackgroundColor')}; color: white; padding: 30px 20px; text-align: center;\"\u003e\n            \u003cspan class=\"alert-icon\" style=\"font-size: 48px; margin-bottom: 10px; display: block; color: white;\"\u003e@{variables('Icon')}\u003c/span\u003e\n            \u003ch1 style=\"font-size: 24px; font-weight: 600; margin-bottom: 5px; color: white; margin-top: 0;\"\u003eSecurity Incident Alert\u003c/h1\u003e\n            \u003cspan class=\"severity-badge\" style=\"display: inline-block; background-color: rgba(255, 255, 255, 0.2); padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: white;\"\u003e@{variables('BadgeText')}\u003c/span\u003e\n        \u003c/div\u003e\n        \n        \u003c!-- Main Content --\u003e\n        \u003cdiv class=\"content\"\u003e\n            \u003c!-- Incident Details --\u003e\n            \u003cdiv class=\"incident-details\"\u003e\n                \u003cdiv class=\"detail-row\"\u003e\n                    \u003cspan class=\"detail-label\"\u003eIncident Title:\u003c/span\u003e\n                    \u003cspan class=\"detail-value\"\u003e\u003cstrong\u003e\u003ca href=\"@{body('HTTP')?['incidentWebUrl']}\"\u003e@{body('HTTP')?['displayName']}\u003c/a\u003e\u003c/strong\u003e\u003c/span\u003e\n                \u003c/div\u003e\n                \n                \u003cdiv class=\"detail-row\"\u003e\n                    \u003cspan class=\"detail-label\"\u003eIncident Number:\u003c/span\u003e\n                    \u003cspan class=\"detail-value\"\u003e\u003cspan class=\"incident-number\"\u003e@{triggerBody()?['object']?['properties']?['providerIncidentId']}\u003c/span\u003e\u003c/span\u003e\n                \u003c/div\u003e           \n               \n                \u003cdiv class=\"detail-row\"\u003e\n                    \u003cspan class=\"detail-label\"\u003eDetection Time:\u003c/span\u003e\n                    \u003cspan class=\"detail-value\"\u003e@{body('HTTP')?['createdDateTime']}\u003c/span\u003e\n                \u003c/div\u003e\n                \n                \u003cdiv class=\"detail-row\"\u003e\n                    \u003cspan class=\"detail-label\"\u003eSeverity Level:\u003c/span\u003e\n                    \u003cspan class=\"detail-value\"\u003e\u003cstrong class=\"severity-text-@{body('HTTP')?['severity']}\" style=\"color: #17a2b8;\"\u003e@{variables('Severity')}\u003c/strong\u003e\u003c/span\u003e\n                \u003c/div\u003e\n            \u003c/div\u003e\n            \n            \u003cdiv class=\"impact-section\"\u003e\n                \u003ch2 class=\"section-title\"\u003eRelated Alerts \u003cspan class=\"impact-count\"\u003e@{length(body('HTTP')?['alerts'])}\u003c/span\u003e\u003c/h2\u003e\n                \n                \u003cdiv class=\"impact-grid\"\u003e                   \n@{variables('Alerts')}\n                \u003c/div\u003e\n            \u003c/div\u003e\n            \n            \u003c!-- Impact Details --\u003e\n            \u003cdiv class=\"impact-section\"\u003e\n                \u003ch2 class=\"section-title\"\u003eImpact Details\u003c/h2\u003e\n                \n                \u003cdiv class=\"impact-grid\"\u003e\n                    \u003c!-- Impacted Users --\u003e\n@{if(empty(variables('Users')), '\u003c!-- ', '')}\n                    \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e\u003cspan class=\"impact-icon\"\u003e👤\u003c/span\u003eImpacted Users \u003cspan class=\"impact-count\"\u003e@{length(variables('Users'))}\u003c/span\u003e\u003c/h4\u003e\n                        \u003cul class=\"impact-list\"\u003e\n@{variables('UsersString')}\n                        \u003c/ul\u003e\n                    \u003c/div\u003e\n@{if(empty(variables('Users')), ' --\u003e', '')}\n                    \n                    \u003c!-- Impacted Devices --\u003e\n@{if(empty(variables('Devices')), '\u003c!-- ', '')}\n                    \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e\u003cspan class=\"impact-icon\"\u003e💻\u003c/span\u003eImpacted Devices \u003cspan class=\"impact-count\"\u003e@{length(variables('Devices'))}\u003c/span\u003e\u003c/h4\u003e\n                        \u003cul class=\"impact-list\"\u003e\n@{variables('DevicesString')}\n                        \u003c/ul\u003e\n                    \u003c/div\u003e\n@{if(empty(variables('Devices')), ' --\u003e', '')}\n                    \n                    \u003c!-- Impacted Email Addresses --\u003e\n@{if(empty(variables('mail')), '\u003c!-- ', '')}\n                    \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e\u003cspan class=\"impact-icon\"\u003e✉️\u003c/span\u003eImpacted Mail Messages \u003cspan class=\"impact-count\"\u003e@{length(variables('mail'))}\u003c/span\u003e\u003c/h4\u003e\n                        \u003cul class=\"impact-list\"\u003e\n@{variables('MailString')}\n                        \u003c/ul\u003e\n                    \u003c/div\u003e\n@{if(empty(variables('mail')), ' --\u003e', '')}\n                    \n                    \u003c!-- Impacted IP Addresses --\u003e\n@{if(empty(variables('IPs')), '\u003c!-- ', '')}\n                    \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e\u003cspan class=\"impact-icon\"\u003e🌐\u003c/span\u003eImpacted IPs \u003cspan class=\"impact-count\"\u003e@{length(variables('IPs'))}\u003c/span\u003e\u003c/h4\u003e\n                        \u003cul class=\"impact-list\"\u003e\n@{variables('IPsString')}\n                        \u003c/ul\u003e\n                    \u003c/div\u003e\n@{if(empty(variables('IPs')), ' --\u003e', '')}\n\n                    \u003c!-- Impacted URLs --\u003e\n@{if(empty(variables('URL')), '\u003c!-- ', '')}\n                    \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e\u003cspan class=\"impact-icon\"\u003e🔗\u003c/span\u003eImpacted URLs \u003cspan class=\"impact-count\"\u003e@{length(variables('URL'))}\u003c/span\u003e\u003c/h4\u003e\n                        \u003cul class=\"impact-list\"\u003e\n@{variables('URLString')}\n                        \u003c/ul\u003e\n                    \u003c/div\u003e\n@{if(empty(variables('URL')), ' --\u003e', '')}\n\n                    \u003c!-- Impacted Other --\u003e\n@{if(empty(variables('OtherEvidence')), '\u003c!-- ', '')}\n                    \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e\u003cspan class=\"impact-icon\"\u003e🏷️\u003c/span\u003eOther Evidence Types \u003cspan class=\"impact-count\"\u003e@{length(variables('OtherEvidence'))}\u003c/span\u003e\u003c/h4\u003e\n                        \u003cul class=\"impact-list\"\u003e\n@{variables('otherEvidenceTypeString')}\n                        \u003c/ul\u003e\n                    \u003c/div\u003e\n@{if(empty(variables('OtherEvidence')), ' --\u003e', '')}\n                \u003c/div\u003e\n            \u003c/div\u003e\n            \n@{outputs('Additional_Details')}\n        \u003c/div\u003e\n        @{outputs('Footer')}\n    \u003c/div\u003e\n\u003c/body\u003e\n\u003c/html\u003e"
+                        },
+                        "For_each_alert":  {
+                            "foreach":  "@take(body('HTTP')?['alerts'], 10)",
+                            "actions":  {
+                                "Append_to_alerts":  {
+                                    "type":  "AppendToStringVariable",
+                                    "inputs":  {
+                                        "name":  "Alerts",
+                                        "value":  "                  \u003cdiv class=\"impact-card\"\u003e\n                        \u003ch4\u003e@{item()?['title']}\u003c/h4\u003e\n                        \u003cdiv class=\"alert-details\"\u003e\n                            \u003cdiv class=\"detail-row\" style=\"margin-bottom: 8px;\"\u003e\n                                \u003cspan class=\"detail-label\" style=\"min-width: 70px; font-size: 12px;\"\u003eProduct:\u003c/span\u003e\n                                \u003cspan class=\"detail-value\" style=\"font-size: 12px;\"\u003e@{item()?['productName']}\u003c/span\u003e\n                            \u003c/div\u003e\n                            \u003cdiv class=\"detail-row\" style=\"margin-bottom: 8px;\"\u003e\n                                \u003cspan class=\"detail-label\" style=\"min-width: 70px; font-size: 12px;\"\u003eSeverity:\u003c/span\u003e\n                                \u003cspan class=\"detail-value\" style=\"font-size: 12px;\"\u003e\u003cstrong class=\"severity-text-@{item()?['severity']}\"\u003e@{item()?['severity']}\u003c/strong\u003e\u003c/span\u003e\n                            \u003c/div\u003e\n                            \u003cdiv class=\"detail-row\" style=\"margin-bottom: 0;\"\u003e\n                                \u003cspan class=\"detail-label\" style=\"min-width: 70px; font-size: 12px;\"\u003eDescription:\u003c/span\u003e\n                                \u003cspan class=\"detail-value\" style=\"font-size: 12px;\"\u003e@{item()?['description']}\u003c/span\u003e\n                            \u003c/div\u003e\n                        \u003c/div\u003e\n                    \u003c/div\u003e"
+                                    }
+                                },
+                                "For_each_evidence":  {
+                                    "foreach":  "@item()?['evidence']",
+                                    "actions":  {
+                                        "Switch_evidence_type":  {
+                                            "cases":  {
+                                                "Case_user":  {
+                                                    "case":  "#microsoft.graph.security.userEvidence",
+                                                    "actions":  {
+                                                        "Condition":  {
+                                                            "actions":  {
+                                                                "Compose_user":  {
+                                                                    "type":  "Compose",
+                                                                    "inputs":  "@coalesce(item()?['userAccount']?['userPrincipalName'],item()?['userAccount']?['accountName'],item()?['userAccount']?['displayName'])"
+                                                                },
+                                                                "Append_to_users_array":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_users_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "Users",
+                                                                        "value":  "@items('For_each_evidence')"
+                                                                    }
+                                                                },
+                                                                "Append_to_users_string":  {
+                                                                    "runAfter":  {
+                                                                        "Compose_user":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "UsersString",
+                                                                        "value":  "\u003cli\u003e@{if(empty(item()?['userAccount']?['azureAdUserId']), outputs('Compose_user'), concat('\u003ca href=\"', parameters('PORTAL_ENDPOINT'), '/user?aad=', item()?['userAccount']?['azureAdUserId'], '\u0026tid=', body('HTTP')?['tenantId'], '\"\u003e', outputs('Compose_user'), '\u003c/a\u003e'))}\u003c/li\u003e"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('UsersString')",
+                                                                                "@coalesce(item()?['userAccount']?['userPrincipalName'],item()?['userAccount']?['accountName'],item()?['userAccount']?['displayName'])"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_device":  {
+                                                    "case":  "#microsoft.graph.security.deviceEvidence",
+                                                    "actions":  {
+                                                        "Condition_1":  {
+                                                            "actions":  {
+                                                                "Append_to_devices_string":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "DevicesString",
+                                                                        "value":  "\u003cli\u003e@{if(empty(item()?['mdeDeviceId']), coalesce(item()?['deviceDnsName'],item()?['hostName']), concat('\u003ca href=\"', parameters('PORTAL_ENDPOINT'), '/machines/v2/', item()?['mdeDeviceId'], '?tid=', body('HTTP')?['tenantId'], '\"\u003e', coalesce(item()?['deviceDnsName'],item()?['hostName']), '\u003c/a\u003e'))}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_to_devices_array":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_devices_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "Devices",
+                                                                        "value":  "@items('For_each_evidence')"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('DevicesString')",
+                                                                                "@coalesce(item()?['deviceDnsName'],item()?['hostName'])"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_ip":  {
+                                                    "case":  "#microsoft.graph.security.ipEvidence",
+                                                    "actions":  {
+                                                        "Condition_2":  {
+                                                            "actions":  {
+                                                                "Append_to_ip_string":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "IPsString",
+                                                                        "value":  "\u003cli\u003e@{item()['ipAddress']}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_to_ip_array":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_ip_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "IPs",
+                                                                        "value":  "@item()"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('IPsString')",
+                                                                                "@item()['ipAddress']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_mail":  {
+                                                    "case":  "#microsoft.graph.security.analyzedMessageEvidence",
+                                                    "actions":  {
+                                                        "Condition_3":  {
+                                                            "actions":  {
+                                                                "Append_to_mail_string":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "MailString",
+                                                                        "value":  "\u003cli\u003e@{if(empty(item()?['receivedDateTime']), coalesce(item()?['subject'],item()?['networkMessageId']), concat('\u003ca href=\"', parameters('PORTAL_ENDPOINT'), '/emailentityV2?f=summary\u0026id=', item()?['networkMessageId'], '\u0026recipient=', encodeUriComponent(item()?['recipientEmailAddress']), '\u0026startTime=', encodeUriComponent(item()?['receivedDateTime']), '\u0026endTime=', encodeUriComponent(item()?['receivedDateTime']),'\u0026tid=', body('HTTP')?['tenantId'], '\"\u003e', coalesce(item()?['subject'],item()?['networkMessageId']), '\u003c/a\u003e'))}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_to_mail_array":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_mail_string":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "mail",
+                                                                        "value":  "@item()"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('MailString')",
+                                                                                "@item()?['networkMessageId']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "Case_url":  {
+                                                    "case":  "#microsoft.graph.security.urlEvidence",
+                                                    "actions":  {
+                                                        "Condition_5":  {
+                                                            "actions":  {
+                                                                "Append_to_string_variable":  {
+                                                                    "type":  "AppendToStringVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "URLString",
+                                                                        "value":  "\u003cli\u003e@{item()?['url']}\u003c/li\u003e"
+                                                                    }
+                                                                },
+                                                                "Append_to_array_variable":  {
+                                                                    "runAfter":  {
+                                                                        "Append_to_string_variable":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "AppendToArrayVariable",
+                                                                    "inputs":  {
+                                                                        "name":  "URL",
+                                                                        "value":  "@items('For_each_evidence')"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "not":  {
+                                                                            "contains":  [
+                                                                                "@variables('URLString')",
+                                                                                "@item()?['url']"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default":  {
+                                                "actions":  {
+                                                    "Condition_4":  {
+                                                        "actions":  {
+                                                            "Append_to_otherEvidenceType_string":  {
+                                                                "type":  "AppendToStringVariable",
+                                                                "inputs":  {
+                                                                    "name":  "otherEvidenceTypeString",
+                                                                    "value":  "\u003cli\u003e@{last(split(item()?['@odata.type'], '.'))}\u003c/li\u003e"
+                                                                }
+                                                            },
+                                                            "Append_to_otherEvidence_array":  {
+                                                                "runAfter":  {
+                                                                    "Append_to_otherEvidenceType_string":  [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type":  "AppendToArrayVariable",
+                                                                "inputs":  {
+                                                                    "name":  "OtherEvidence",
+                                                                    "value":  "@items('For_each_evidence')"
+                                                                }
+                                                            }
+                                                        },
+                                                        "else":  {
+                                                            "actions":  {
+                                                            }
+                                                        },
+                                                        "expression":  {
+                                                            "and":  [
+                                                                {
+                                                                    "not":  {
+                                                                        "contains":  [
+                                                                            "@variables('otherEvidenceTypeString')",
+                                                                            "@last(split(item()?['@odata.type'], '.'))"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type":  "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression":  "@item()?['@odata.type']",
+                                            "type":  "Switch"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Append_to_alerts":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach",
+                                    "runtimeConfiguration":  {
+                                        "concurrency":  {
+                                            "repetitions":  1
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_otherEvidenceType_string":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach",
+                            "runtimeConfiguration":  {
+                                "concurrency":  {
+                                    "repetitions":  1
+                                }
+                            }
+                        },
+                        "Footer":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Compose",
+                            "inputs":  "        \u003c!-- Footer --\u003e\n        \u003cdiv class=\"footer\"\u003e\n            \u003cp\u003e\u003cstrong\u003eSecurity Operations Center\u003c/strong\u003e\u003c/p\u003e\n            \u003cp\u003eEmail: @{parameters('SOC_EMAIL_FOOTER')} | Phone: @{parameters('SOC_PHONE_FOOTER')}\u003c/p\u003e\n            \u003cp class=\"timestamp\"\u003eThis alert email was generated automatically at @{utcNow()}\u003c/p\u003e\n            \u003cp style=\"margin-top: 10px; font-size: 11px;\"\u003eThis is an automated security alert. Please do not reply to this email.\u003c/p\u003e\n        \u003c/div\u003e"
+                        },
+                        "Initialize_severity":  {
+                            "runAfter":  {
+                                "HTTP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Icon",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "HeaderBackgroundColor",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "BadgeText",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "Severity",
+                                        "type":  "string",
+                                        "value":  "@{concat(toUpper(substring(body('HTTP')?['severity'], 0, 1)), substring(body('HTTP')?['severity'], 1))}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_otherEvidenceType_string":  {
+                            "runAfter":  {
+                                "Switch":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Alerts",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "Users",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "UsersString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "Devices",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "DevicesString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "IPs",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "IPsString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "mail",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "MailString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "URL",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "URLString",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "OtherEvidence",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    },
+                                    {
+                                        "name":  "otherEvidenceTypeString",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Additional_Details":  {
+                            "runAfter":  {
+                                "Footer":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Compose",
+                            "inputs":  "           \u003c!-- Additional Details can be added to the email here, such as in the example below which is currently commented --\u003e\n\u003c!-- \n            \u003cdiv class=\"additional-details\"\u003e\n                \u003ch3\u003eAdditional Details \u0026 Recommendations\u003c/h3\u003e\n                \u003cp\u003e\u003cstrong\u003eImmediate Actions Taken:\u003c/strong\u003e\u003c/p\u003e\n                \u003cul style=\"margin: 10px 0 15px 20px;\"\u003e\n                    \u003cli\u003eSuspicious IP addresses have been temporarily blocked\u003c/li\u003e\n                    \u003cli\u003eAffected user accounts have been flagged for monitoring\u003c/li\u003e\n                    \u003cli\u003eSecurity team has been notified and is investigating\u003c/li\u003e\n                \u003c/ul\u003e\n                \n                \u003cp\u003e\u003cstrong\u003eRecommended Actions:\u003c/strong\u003e\u003c/p\u003e\n                \u003cul style=\"margin: 10px 0 15px 20px;\"\u003e\n                    \u003cli\u003eReview and update password policies\u003c/li\u003e\n                    \u003cli\u003eEnable multi-factor authentication for all administrative accounts\u003c/li\u003e\n                    \u003cli\u003eMonitor for any suspicious activity in the coming 24-48 hours\u003c/li\u003e\n                    \u003cli\u003eConsider implementing additional network security measures\u003c/li\u003e\n                \u003c/ul\u003e\n                \n                \u003cp\u003e\u003cstrong\u003eNext Steps:\u003c/strong\u003e The security team will provide updates every 2 hours until the incident is resolved. If you notice any unusual activity, please report it immediately to the security team.\u003c/p\u003e\n            \u003c/div\u003e\n--\u003e"
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName":  "[variables('Office365ConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]",
+                                "connectionProperties":  {
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Send-Incident-Email-XDR",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('Office365ConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('Office365ConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        }
+    ]
+}
