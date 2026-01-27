@@ -49,20 +49,6 @@
       "metadata": {
         "description": "Name for the workbook"
       }
-    },
-    "cyrenIpReputationToken": {
-      "type": "securestring",
-      "minLength": 1,
-      "metadata": {
-        "description": "Cyren IP Reputation feed JWT token for authentication."
-      }
-    },
-    "cyrenMalwareUrlToken": {
-      "type": "securestring",
-      "minLength": 1,
-      "metadata": {
-        "description": "Cyren Malware URL feed JWT token for authentication."
-      }
     }
   },
   "variables": {
@@ -79,8 +65,6 @@
     "_dataConnectorContentIdConnections1": "CyrenThreatIntelConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
     "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
-    "dceName": "[concat('DCE-', parameters('workspace'))]",
-    "cyrenDcrName": "[concat('DCR-Cyren-', parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
     "analyticRuleObject1": {
       "analyticRuleVersion1": "1.0.0",
@@ -112,197 +96,6 @@
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
-    {
-      "type": "Microsoft.Insights/dataCollectionEndpoints",
-      "apiVersion": "2024-03-11",
-      "name": "[variables('dceName')]",
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "networkAcls": {
-          "publicNetworkAccess": "Enabled"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.Insights/dataCollectionRules",
-      "apiVersion": "2024-03-11",
-      "name": "[variables('cyrenDcrName')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
-      ],
-      "properties": {
-        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "streamDeclarations": {
-          "Custom-Cyren_Indicators_CL": {
-            "columns": [
-              { "name": "TimeGenerated", "type": "datetime" },
-              { "name": "payload", "type": "dynamic" },
-              { "name": "timestamp", "type": "datetime" }
-            ]
-          }
-        },
-        "destinations": {
-          "logAnalytics": [
-            {
-              "workspaceResourceId": "[variables('workspaceResourceId')]",
-              "name": "clv2ws1"
-            }
-          ]
-        },
-        "dataFlows": [
-          {
-            "streams": ["Custom-Cyren_Indicators_CL"],
-            "destinations": ["clv2ws1"],
-            "transformKql": "source | extend p=todynamic(payload) | extend d=todynamic(p.detection), m=todynamic(p.meta) | extend url_str=tostring(p.url) | extend TimeGenerated=todatetime(timestamp), url_s=url_str, ip_s=tostring(p.identifier), domain_s=iif(isnotempty(url_str), tostring(split(split(url_str, '://')[1], '/')[0]), ''), fileHash_s='', protocol_s=tostring(m.protocol), port_d=toint(m.port), category_s=iif(isnull(d.category), '', strcat_array(d.category, ',')), risk_d=toint(d.risk), firstSeen_t=todatetime(p.first_seen), lastSeen_t=todatetime(p.last_seen), source_s='Cyren', relationships_s=tostring(p.relationships), detection_methods_s=iif(isnull(p.detection_methods), '', strcat_array(p.detection_methods, ',')), action_s=tostring(p.action), type_s=tostring(p.type), identifier_s=tostring(p.identifier), detection_ts_t=todatetime(d.detection_ts), object_type_s=tostring(m.object_type) | project TimeGenerated, url_s, ip_s, fileHash_s, domain_s, protocol_s, port_d, category_s, risk_d, firstSeen_t, lastSeen_t, source_s, relationships_s, detection_methods_s, action_s, type_s, identifier_s, detection_ts_t, object_type_s",
-            "outputStream": "Custom-Cyren_Indicators_CL"
-          }
-        ]
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/tables",
-      "apiVersion": "2025-07-01",
-      "name": "[concat(parameters('workspace'), '/Cyren_Indicators_CL')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('cyrenDcrName'))]"
-      ],
-      "properties": {
-        "retentionInDays": 4,
-        "totalRetentionInDays": 4,
-        "plan": "Analytics",
-        "schema": {
-          "name": "Cyren_Indicators_CL",
-          "columns": [
-            { "name": "TimeGenerated", "type": "datetime" },
-            { "name": "url_s", "type": "string" },
-            { "name": "ip_s", "type": "string" },
-            { "name": "fileHash_s", "type": "string" },
-            { "name": "domain_s", "type": "string" },
-            { "name": "protocol_s", "type": "string" },
-            { "name": "port_d", "type": "int" },
-            { "name": "category_s", "type": "string" },
-            { "name": "risk_d", "type": "int" },
-            { "name": "firstSeen_t", "type": "datetime" },
-            { "name": "lastSeen_t", "type": "datetime" },
-            { "name": "source_s", "type": "string" },
-            { "name": "relationships_s", "type": "string" },
-            { "name": "detection_methods_s", "type": "string" },
-            { "name": "action_s", "type": "string" },
-            { "name": "type_s", "type": "string" },
-            { "name": "identifier_s", "type": "string" },
-            { "name": "detection_ts_t", "type": "datetime" },
-            { "name": "object_type_s", "type": "string" }
-          ]
-        }
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "apiVersion": "2025-09-01",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'CyrenIpReputation')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('cyrenDcrName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'Cyren_Indicators_CL')]"
-      ],
-      "kind": "RestApiPoller",
-      "properties": {
-        "connectorDefinitionName": "CyrenThreatIntel",
-        "dataType": "Cyren_Indicators_CL",
-        "dcrConfig": {
-          "streamName": "Custom-Cyren_Indicators_CL",
-          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
-          "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('cyrenDcrName')), '2024-03-11').immutableId]"
-        },
-        "auth": {
-          "type": "APIKey",
-          "ApiKeyName": "Authorization",
-          "ApiKeyIdentifier": "Bearer",
-          "ApiKey": "[parameters('cyrenIpReputationToken')]"
-        },
-        "request": {
-          "apiEndpoint": "https://api-feeds.cyren.com/v1/feed/data?feedId=ip_reputation",
-          "httpMethod": "GET",
-          "queryParameters": {
-            "count": 100,
-            "format": "jsonl"
-          },
-          "queryWindowInMin": 120,
-          "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.fffZ",
-          "startTimeAttributeName": "startTime",
-          "endTimeAttributeName": "endTime",
-          "rateLimitQps": 1,
-          "retryCount": 3,
-          "timeoutInSeconds": 60,
-          "headers": {
-            "Accept": "application/json",
-            "User-Agent": "Microsoft-Sentinel-Cyren/1.0"
-          }
-        },
-        "paging": {
-          "pagingType": "None"
-        },
-        "response": {
-          "eventsJsonPaths": ["$"],
-          "format": "jsonl"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "apiVersion": "2025-09-01",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'CyrenMalwareUrls')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('cyrenDcrName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'Cyren_Indicators_CL')]"
-      ],
-      "kind": "RestApiPoller",
-      "properties": {
-        "connectorDefinitionName": "CyrenThreatIntel",
-        "dataType": "Cyren_Indicators_CL",
-        "dcrConfig": {
-          "streamName": "Custom-Cyren_Indicators_CL",
-          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
-          "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('cyrenDcrName')), '2024-03-11').immutableId]"
-        },
-        "auth": {
-          "type": "APIKey",
-          "ApiKeyName": "Authorization",
-          "ApiKeyIdentifier": "Bearer",
-          "ApiKey": "[parameters('cyrenMalwareUrlToken')]"
-        },
-        "request": {
-          "apiEndpoint": "https://api-feeds.cyren.com/v1/feed/data?feedId=malware_urls",
-          "httpMethod": "GET",
-          "queryParameters": {
-            "count": 100,
-            "format": "jsonl"
-          },
-          "queryWindowInMin": 120,
-          "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.fffZ",
-          "startTimeAttributeName": "startTime",
-          "endTimeAttributeName": "endTime",
-          "rateLimitQps": 1,
-          "retryCount": 3,
-          "timeoutInSeconds": 60,
-          "headers": {
-            "Accept": "application/json",
-            "User-Agent": "Microsoft-Sentinel-Cyren/1.0"
-          }
-        },
-        "paging": {
-          "pagingType": "None"
-        },
-        "response": {
-          "eventsJsonPaths": ["$"],
-          "format": "jsonl"
-        }
-      }
-    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2025-09-01",
@@ -918,12 +711,10 @@
                   "httpMethod": "GET",
                   "queryParameters": {
                     "count": 100,
+                    "offset": 0,
                     "format": "jsonl"
                   },
-                  "queryWindowInMin": 120,
-                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.fffZ",
-                  "startTimeAttributeName": "startTime",
-                  "endTimeAttributeName": "endTime",
+                  "queryWindowInMin": 15,
                   "rateLimitQps": 1,
                   "retryCount": 3,
                   "timeoutInSeconds": 60,
@@ -933,7 +724,9 @@
                   }
                 },
                 "paging": {
-                  "pagingType": "None"
+                  "pagingType": "Offset",
+                  "offsetParameterName": "offset",
+                  "pageSize": 100
                 },
                 "response": {
                   "eventsJsonPaths": [
@@ -968,12 +761,10 @@
                   "httpMethod": "GET",
                   "queryParameters": {
                     "count": 100,
+                    "offset": 0,
                     "format": "jsonl"
                   },
-                  "queryWindowInMin": 120,
-                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.fffZ",
-                  "startTimeAttributeName": "startTime",
-                  "endTimeAttributeName": "endTime",
+                  "queryWindowInMin": 15,
                   "rateLimitQps": 1,
                   "retryCount": 3,
                   "timeoutInSeconds": 60,
@@ -983,7 +774,9 @@
                   }
                 },
                 "paging": {
-                  "pagingType": "None"
+                  "pagingType": "Offset",
+                  "offsetParameterName": "offset",
+                  "pageSize": 100
                 },
                 "response": {
                   "eventsJsonPaths": [
@@ -1013,7 +806,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyren - High Risk IP Indicators_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "Cyren - High Risk IP Indicators_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -1057,35 +850,35 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IPAddress"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "Source": "Source",
-                  "DetectionCount": "DetectionCount",
+                  "RiskScore": "MaxRisk",
                   "Categories": "ThreatCategories",
-                  "RiskScore": "MaxRisk"
+                  "Source": "Source",
+                  "DetectionCount": "DetectionCount"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "matchingMethod": "Selected",
-                    "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByEntities": [
                       "IP"
                     ],
-                    "reopenClosedIncident": false,
-                    "lookbackDuration": "1d"
-                  },
-                  "createIncident": true
+                    "lookbackDuration": "1d",
+                    "enabled": true,
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1140,7 +933,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyren - High Risk URL Indicators_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "Cyren - High Risk URL Indicators_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -1184,36 +977,36 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "URL",
                     "fieldMappings": [
                       {
                         "identifier": "Url",
                         "columnName": "MaliciousURL"
                       }
-                    ]
+                    ],
+                    "entityType": "URL"
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "Source": "Source",
-                  "DetectionCount": "DetectionCount",
-                  "Domain": "Domain",
+                  "RiskScore": "MaxRisk",
                   "Categories": "ThreatCategories",
-                  "RiskScore": "MaxRisk"
+                  "Source": "Source",
+                  "Domain": "Domain",
+                  "DetectionCount": "DetectionCount"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "matchingMethod": "Selected",
-                    "enabled": true,
+                    "reopenClosedIncident": false,
                     "groupByEntities": [
                       "URL"
                     ],
-                    "reopenClosedIncident": false,
-                    "lookbackDuration": "1d"
-                  },
-                  "createIncident": true
+                    "lookbackDuration": "1d",
+                    "enabled": true,
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1268,7 +1061,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyren - Feed Outage Detection_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "Cyren - Feed Outage Detection_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -1312,18 +1105,18 @@
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "TotalEventsLast24h": "TotalEventsLast24h",
                   "LatestEventTime": "LatestEventTime",
+                  "TotalEventsLast24h": "TotalEventsLast24h",
                   "HoursSinceLastEvent": "HoursSinceLastEvent"
                 },
                 "incidentConfiguration": {
+                  "createIncident": true,
                   "groupingConfiguration": {
-                    "matchingMethod": "Selected",
-                    "enabled": false,
                     "reopenClosedIncident": false,
-                    "lookbackDuration": "1d"
-                  },
-                  "createIncident": true
+                    "lookbackDuration": "1d",
+                    "enabled": false,
+                    "matchingMethod": "Selected"
+                  }
                 }
               }
             },
@@ -1378,7 +1171,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CyrenThreatIntelligenceDashboard Workbook with template version 3.0.0",
+        "description": "CyrenThreatIntelligenceDashboard Workbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -1463,7 +1256,7 @@
       "apiVersion": "2025-09-01",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "CyrenThreatIntelligence",
