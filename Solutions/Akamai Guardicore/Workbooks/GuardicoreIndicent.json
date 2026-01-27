@@ -1,0 +1,239 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Guardicore Incident Analysis Dashboard\n\nThis dashboard provides detailed analysis of security incidents and their associated network connections. Select an incident to view connection patterns and traffic analysis."
+      },
+      "name": "dashboard-intro",
+      "styleSettings": {
+        "margin": "0 0 20px 0"
+      }
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "incident-selector",
+            "version": "KqlParameterItem/1.0",
+            "name": "SelectedIncident",
+            "label": "Select Incident",
+            "type": 2,
+            "isRequired": true,
+            "query": "GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| distinct incidentTitle_s\n| order by incidentTitle_s asc",
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "test incident ronen"
+          },
+          {
+            "id": "row-count-selector",
+            "version": "KqlParameterItem/1.0",
+            "name": "RowCount",
+            "label": "Number of connections to show (15 minutes related to incident)",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  { \"value\": 25, \"label\": \"25\" },\n  { \"value\": 50, \"label\": \"50\" },\n  { \"value\": 100, \"label\": \"100\" },\n  { \"value\": 250, \"label\": \"250\" },\n  { \"value\": 500, \"label\": \"500\" },\n  { \"value\": 1000, \"label\": \"1,000\" },\n  { \"value\": 10000, \"label\": \"10,000\" }\n]",
+            "value": "1000"
+          }
+        ],
+        "style": "formVertical",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "incident-parameters"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Connection Analysis",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle_s == '{SelectedIncident}'\n| distinct slot_identifier_s;\n\n// Get connections for those slot identifiers and count distinct connections by destination port\nGuardicoreEnrichingConnections_CL\n| where slot_identifier_s in (incident_slots)\n| distinct id_g, destination_port_d, source_ip_s, destination_ip_s, slot_identifier_s\n| where destination_port_d > 0\n| summarize DistinctConnections = count() by tostring(toint(destination_port_d))\n| top 10 by DistinctConnections desc\n| extend Port = strcat(destination_port_d, \" \", case(\n  toint(destination_port_d) == 80, \"(HTTP)\",\n  toint(destination_port_d) == 443, \"(HTTPS)\",\n  toint(destination_port_d) == 22, \"(SSH)\",\n  toint(destination_port_d) == 3389, \"(RDP)\",\n  toint(destination_port_d) == 21, \"(FTP)\",\n  toint(destination_port_d) == 25, \"(SMTP)\",\n  toint(destination_port_d) == 53, \"(DNS)\",\n  toint(destination_port_d) == 445, \"(SMB)\",\n  toint(destination_port_d) == 3306, \"(MySQL)\",\n  toint(destination_port_d) == 1433, \"(MSSQL)\",\n  toint(destination_port_d) == 8086, \"(InfluxDB)\",\n  toint(destination_port_d) == 8442, \"(Custom)\",\n  \"\"))\n| project Port, Count = DistinctConnections",
+              "size": 0,
+              "title": "Top Destination Ports",
+              "noDataMessage": "No connection data found for selected incident",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "Port",
+                "yAxis": [
+                  "Count"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Count",
+                    "color": "#0078D4"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  }
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "port-distribution-chart",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle_s == '{SelectedIncident}'\n| distinct slot_identifier_s;\n\n// Get connections for those slot identifiers and analyze internet traffic\nGuardicoreEnrichingConnections_CL\n| where slot_identifier_s in (incident_slots)\n| distinct id_g, source_node_type_s, destination_node_type_s, count_d\n| extend Direction = case(\n    source_node_type_s == \"internet\", \"From Internet\",\n    destination_node_type_s == \"internet\", \"To Internet\",\n    \"Internal\"\n)\n| where Direction != \"Internal\"\n| summarize ConnectionCount = sum(toint(count_d)) by Direction\n| order by ConnectionCount desc",
+              "size": 0,
+              "title": "Internet Traffic Connections",
+              "noDataMessage": "No internet traffic found for selected incident",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "From Internet",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "To Internet",
+                    "color": "blue"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "internet-traffic-chart",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle_s == '{SelectedIncident}'\n| distinct slot_identifier_s;\n\n// Get detailed connection information for internet traffic only\nGuardicoreEnrichingConnections_CL\n| where slot_identifier_s in (incident_slots)\n| extend Direction = case(\n    source_node_type_s == \"internet\", \"From Internet\",\n    destination_node_type_s == \"internet\", \"To Internet\",\n    \"Internal\"\n)\n| where Direction != \"Internal\"  // Only show internet traffic\n| extend ConnectionTime = datetime_add('millisecond', tolong(slot_start_time_d), datetime(1970-01-01))\n| project \n    ConnectionTime,\n    SourceIP = source_ip_s,\n    DestinationIP = destination_ip_s,\n    DestinationPort = destination_port_d,\n    Protocol = ip_protocol_s,\n    ConnectionType = connection_type_s,\n    ConnectionCount = count_d,\n    Direction,\n    PolicyVerdict = policy_verdict_s\n| order by ConnectionTime desc\n| limit toint({RowCount})",
+              "size": 0,
+              "title": "Internet Traffic Connections ({RowCount} entries)",
+              "noDataMessage": "No internet traffic found for selected incident",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Direction",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "From Internet",
+                          "representation": "redBright",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "To Internet",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "gray",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "columnMatch": "PolicyVerdict",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "colors",
+                      "thresholdsGrid": [
+                        {
+                          "operator": "==",
+                          "thresholdValue": "allowed",
+                          "representation": "green",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "blocked",
+                          "representation": "red",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "gray",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "rowLimit": 10000,
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "DestinationPort",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "DestinationPort",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "name": "detailed-connections-table"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "SelectedIncident",
+        "comparison": "isNotEqualTo"
+      },
+      "name": "connection-analysis-container"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/195e58c9-a052-4f34-aff2-d67c13145f29/resourcegroups/strategicalliances-rg/providers/microsoft.operationalinsights/workspaces/sentinel-integration"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

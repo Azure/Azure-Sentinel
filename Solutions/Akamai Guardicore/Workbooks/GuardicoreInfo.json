@@ -1,0 +1,241 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Policy Enforcement Effectiveness",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let timeRange = 24h;\nlet recentData = GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(timeRange);\n\nlet max_ts = toscalar(\n    recentData\n    | summarize max(sampling_timestamp_d)\n);\n\nrecentData\n| where sampling_timestamp_d == max_ts\n| where action_s contains \"block\"\n| extend RulesetName = case(\n    isempty(ruleset_name_s) or ruleset_name_s == \"\", \"default\",\n    ruleset_name_s\n)\n| summarize TotalHitCount = sum(hit_count_d) by RulesetName\n| top 10 by TotalHitCount desc\n| project RulesetName, BlockingHits = TotalHitCount",
+              "size": 0,
+              "title": "Top Blocking Rulesets",
+              "noDataMessage": "No blocked traffic found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "customWidth": "50",
+            "name": "top-blocking-rulesets",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let timeRange = 7d;\nlet startDate = endofday(ago(timeRange));\nlet endDate = endofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n\nlet recentAppData = GuardicoreApplications_CL\n| where TimeGenerated >= startDate\n| extend sampling_ts = unixtime_seconds_todatetime(sampling_timestamp_d)\n| extend day = endofday(sampling_ts);\n\n// Get max sampling timestamp per day\nlet daily_max_ts = recentAppData\n| summarize max_ts = max(sampling_ts) by day;\n\n// Join raw data with daily max timestamps to get latest app data per day\nlet latest_data_per_day = recentAppData\n| join kind=inner (daily_max_ts) on day, $left.sampling_ts == $right.max_ts;\n\n// Count applications by status per day\nlet daily_counts = latest_data_per_day\n| extend Status = case(\n    tolower(state_s) contains \"block\", \"Block\",\n    tolower(state_s) contains \"alert\", \"Alert\",\n    \"Other\"\n)\n| where Status in (\"Block\", \"Alert\")\n| summarize\n    Block = dcountif(project_name_s, Status == \"Block\"),\n    Alert = dcountif(project_name_s, Status == \"Alert\")\n    by day;\n\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend Block = coalesce(Block, 0),\n         Alert = coalesce(Alert, 0)\n| where day > startDate and day != endDate\n| project day = format_datetime(day, \"yyyy-MM-dd\"), Block, Alert\n| sort by day asc",
+              "size": 0,
+              "title": "Applications in Block vs. Alert Status",
+              "noDataMessage": "No applications with block/alert status found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "unstackedbar",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "day",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Block",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "day",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Block",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "xAxis": "day",
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Block",
+                    "color": "red"
+                  },
+                  {
+                    "seriesName": "Alert",
+                    "color": "orange"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "applications-block-alert-status",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let recentData = GuardicorePolicyRules_CL\n| where TimeGenerated >= ago(24h);\n\nlet max_ts = toscalar(\n    recentData\n    | summarize max(sampling_timestamp_d)\n);\n\nrecentData\n| where sampling_timestamp_d == max_ts\n| summarize count = count() by action_s\n| extend actionFormatted = replace(\"_\", \" \", tolower(action_s))\n| extend actionFormatted = strcat(toupper(substring(actionFormatted, 0, 1)), substring(actionFormatted, 1))\n| project Action = actionFormatted, Count = count\n| order by Count desc",
+              "size": 0,
+              "title": "Policy Rules by Action Type",
+              "noDataMessage": "No policy rules found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Allow",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Alert",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "Block",
+                    "color": "red"
+                  },
+                  {
+                    "seriesName": "Other",
+                    "color": "gray"
+                  }
+                ]
+              }
+            },
+            "name": "policy-rules-by-action"
+          }
+        ]
+      },
+      "name": "policy-enforcement-container"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "🛡️ Workload Protection Coverage Dashboard",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "This dashboard provides insights into workload protection status across your environment, including total workloads, protected workloads, and coverage trends over the last 7 days."
+            },
+            "name": "workload-protection-intro",
+            "styleSettings": {
+              "margin": "0 0 20px 0"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let startDate = endofday(ago(7d));\nlet endDate = endofday(now());\nlet all_days = range day from startDate to endDate step 1d;\n\nlet rawData = GuardicoreAgents_CL\n| where TimeGenerated >= startDate\n| extend sampling_ts = unixtime_seconds_todatetime(sampling_timestamp_d)\n| extend day = endofday(sampling_ts);\n\n// Step 1: Get max sampling timestamp per day\nlet daily_max_ts = rawData\n| summarize max_ts = max(sampling_ts) by day;\n\n// Step 2: Join raw data with daily max timestamps to get latest agent data per day\nlet latest_data_per_day = rawData\n| join kind=inner (daily_max_ts) on day, $left.sampling_ts == $right.max_ts;\n\n// Step 3: Count agents and protected agents per day\nlet daily_counts = latest_data_per_day\n| summarize\n    total_agents = count(),\n    protected_agents = countif(health_enforcement_agent_status_s == \"RUNNING\" and is_agent_enforcing_b == true)\n    by day;\n\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend total_agents = coalesce(total_agents, 0),\n         protected_agents = coalesce(protected_agents, 0)\n| where day > startDate and day != endDate\n| project day = format_datetime(day, \"yyyy-MM-dd\"), total_agents, protected_agents\n| sort by day asc\n",
+              "size": 1,
+              "title": "📈 Protection Coverage Trend (7 Days)",
+              "noDataMessage": "No policy rules found in the specified time range",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "unstackedbar",
+              "chartSettings": {
+                "xAxis": "day",
+                "yAxis": [
+                  "total_agents",
+                  "protected_agents"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "total_agents",
+                    "label": "Total Agents",
+                    "color": "#0078D4"
+                  },
+                  {
+                    "seriesName": "protected_agents",
+                    "label": "Protected Agents",
+                    "color": "#107C10"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                }
+              }
+            },
+            "customWidth": "60",
+            "name": "active-rules-trend",
+            "styleSettings": {
+              "maxWidth": "60%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let timeRange = 24h;\n\nlet recentAgentData = GuardicoreAgents_CL\n| where TimeGenerated >= ago(timeRange);\n\nlet max_ts_agents = toscalar(\n    recentAgentData\n    | summarize max(sampling_timestamp_d)\n);\n\nlet agentCount = toscalar(\n    recentAgentData\n    | where sampling_timestamp_d == max_ts_agents\n    | summarize count()\n);\n\nlet protectedCount = toscalar(\n    recentAgentData\n    | where sampling_timestamp_d == max_ts_agents\n    | where health_enforcement_agent_status_s == \"RUNNING\"\n    | where is_agent_enforcing_b == true\n    | summarize count()\n);\n\nprint Category = \"Total Workloads\", Count = agentCount\n| union (print Category = \"Protected Workloads\", Count = protectedCount)",
+              "size": 1,
+              "title": "🔢 Total vs Protected Workloads (Last 24h)",
+              "noDataMessage": "No workload data found",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "xAxis": "Category",
+                "yAxis": [
+                  "Count"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Count",
+                    "color": "blue"
+                  }
+                ]
+              }
+            },
+            "customWidth": "40",
+            "name": "workloads-protected-chart",
+            "styleSettings": {
+              "maxWidth": "40%"
+            }
+          }
+        ]
+      },
+      "name": "workload-protection-container"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/195e58c9-a052-4f34-aff2-d67c13145f29/resourcegroups/strategicalliances-rg/providers/microsoft.operationalinsights/workspaces/sentinel-integration"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
