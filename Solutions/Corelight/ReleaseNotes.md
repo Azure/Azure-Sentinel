@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.2.3       | 08-01-2025                     | Added Corelight AWS VPC Flow dashboard.                               |
+| 3.2.3       | 27-01-2026                     | Added Corelight AWS VPC Flow dashboard.                               |
 | 3.2.2       | 01-12-2025                     | Added Corelight Aggregation Parsers.                               |
 | 3.2.1       | 30-10-2025                     | Added corelight_first_seen and corelight_anomaly Parsers.          |
 | 3.2.0       | 05-03-2025                     | Added new Parsers, Workbooks and Watchlists.                       |
