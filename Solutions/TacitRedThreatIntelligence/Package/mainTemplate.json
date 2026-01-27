@@ -49,13 +49,6 @@
       "metadata": {
         "description": "Name for the workbook"
       }
-    },
-    "tacitRedApiKey": {
-      "type": "securestring",
-      "minLength": 1,
-      "metadata": {
-        "description": "TacitRed API Key for authentication. Obtain from your TacitRed admin console."
-      }
     }
   },
   "variables": {
@@ -93,141 +86,9 @@
     "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
     "_workbookContentId1": "[variables('workbookContentId1')]",
     "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
-    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
-    "dceName": "[concat('dce-', parameters('workspace'))]",
-    "tacitRedDcrName": "dcr-tacitred-findings"
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
-    {
-      "type": "Microsoft.Insights/dataCollectionEndpoints",
-      "apiVersion": "2024-03-11",
-      "name": "[variables('dceName')]",
-      "location": "[parameters('workspace-location')]",
-      "properties": {
-        "networkAcls": {
-          "publicNetworkAccess": "Enabled"
-        }
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/tables",
-      "apiVersion": "2025-07-01",
-      "name": "[concat(parameters('workspace'), '/TacitRed_Findings_CL')]",
-      "properties": {
-        "schema": {
-          "name": "TacitRed_Findings_CL",
-          "columns": [
-            {"name": "TimeGenerated", "type": "datetime"},
-            {"name": "email_s", "type": "string"},
-            {"name": "domain_s", "type": "string"},
-            {"name": "findingType_s", "type": "string"},
-            {"name": "confidence_d", "type": "int"},
-            {"name": "firstSeen_t", "type": "datetime"},
-            {"name": "lastSeen_t", "type": "datetime"},
-            {"name": "notes_s", "type": "string"},
-            {"name": "source_s", "type": "string"},
-            {"name": "severity_s", "type": "string"},
-            {"name": "status_s", "type": "string"},
-            {"name": "campaign_id_s", "type": "string"},
-            {"name": "user_id_s", "type": "string"},
-            {"name": "username_s", "type": "string"},
-            {"name": "detection_ts_t", "type": "datetime"},
-            {"name": "metadata_s", "type": "string"}
-          ]
-        },
-        "retentionInDays": 90,
-        "totalRetentionInDays": 90
-      }
-    },
-    {
-      "type": "Microsoft.Insights/dataCollectionRules",
-      "apiVersion": "2024-03-11",
-      "name": "[variables('tacitRedDcrName')]",
-      "location": "[parameters('workspace-location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), 'TacitRed_Findings_CL')]"
-      ],
-      "properties": {
-        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "streamDeclarations": {
-          "Custom-TacitRed_Findings_Raw": {
-            "columns": [
-              {"name": "finding", "type": "dynamic"},
-              {"name": "severity", "type": "string"}
-            ]
-          }
-        },
-        "destinations": {
-          "logAnalytics": [
-            {
-              "workspaceResourceId": "[variables('workspaceResourceId')]",
-              "name": "clv2ws1"
-            }
-          ]
-        },
-        "dataFlows": [
-          {
-            "streams": ["Custom-TacitRed_Findings_Raw"],
-            "destinations": ["clv2ws1"],
-            "transformKql": "source | extend f = todynamic(finding) | extend TimeGenerated = todatetime(f['supporting_data']['date_compromised']), email_s = tostring(f['supporting_data']['credential']), domain_s = tostring(f['supporting_data']['domain']), findingType_s = tostring(f['types'][0]), confidence_d = toint(50), firstSeen_t = todatetime(f['supporting_data']['date_compromised']), lastSeen_t = todatetime(f['supporting_data']['date_compromised']), notes_s = tostring(f['title']), source_s = tostring(f['supporting_data']['stealer']), severity_s = tostring(f['supporting_data']['subtype']), status_s = tostring(f['supporting_data']['subtype']), campaign_id_s = tostring(f['supporting_data']['stealer']), user_id_s = tostring(f['supporting_data']['machine_id']), username_s = tostring(f['supporting_data']['machine_name']), detection_ts_t = todatetime(f['supporting_data']['date_compromised']), metadata_s = tostring(f) | project TimeGenerated, email_s, domain_s, findingType_s, confidence_d, firstSeen_t, lastSeen_t, notes_s, source_s, severity_s, status_s, campaign_id_s, user_id_s, username_s, detection_ts_t, metadata_s",
-            "outputStream": "Custom-TacitRed_Findings_CL"
-          }
-        ]
-      }
-    },
-    {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-      "apiVersion": "2023-02-01-preview",
-      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'TacitRedFindings')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
-        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName'))]",
-        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', 'TacitRedThreatIntel')]"
-      ],
-      "kind": "RestApiPoller",
-      "properties": {
-        "connectorDefinitionName": "TacitRedThreatIntel",
-        "dataType": "TacitRed_Findings_CL",
-        "dcrConfig": {
-          "streamName": "Custom-TacitRed_Findings_Raw",
-          "dataCollectionEndpoint": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2024-03-11').logsIngestion.endpoint]",
-          "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('tacitRedDcrName')), '2024-03-11').immutableId]"
-        },
-        "auth": {
-          "type": "APIKey",
-          "ApiKeyName": "Authorization",
-          "ApiKey": "[parameters('tacitRedApiKey')]"
-        },
-        "request": {
-          "apiEndpoint": "https://app.tacitred.com/api/v1/findings",
-          "httpMethod": "GET",
-          "queryParameters": {
-            "page_size": 100
-          },
-          "queryWindowInMin": 120,
-          "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-          "startTimeAttributeName": "from",
-          "endTimeAttributeName": "until",
-          "rateLimitQPS": 10,
-          "retryCount": 3,
-          "timeoutInSeconds": 60,
-          "headers": {
-            "Accept": "application/json",
-            "User-Agent": "Microsoft-Sentinel-TacitRed/1.0"
-          }
-        },
-        "paging": {
-          "pagingType": "LinkHeader",
-          "linkHeaderRelLinkName": "next",
-          "pageSize": 100
-        },
-        "response": {
-          "eventsJsonPaths": ["$.results"],
-          "format": "json"
-        }
-      }
-    },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2025-09-01",
