@@ -1,0 +1,179 @@
+Parser:
+  Title: User Management ASIM parser for AWS Cloud Trail
+  Version: '0.1.0'
+  LastUpdated: Jan 26, 2026
+Product:
+  Name: AWS Cloud Trail
+Normalization:
+  Schema: UserManagement
+  Version: '0.1.12'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: User Management in AWS CloudTrail logs #################### (TODO: find documentation)
+  Link: https://www.cisco.com/c/en/us/td/docs/security/ise/3-2/admin_guide/b_ise_admin_3_2/b_ISE_admin_32_maintain_monitor.html#ID58
+Description: |
+  This ASIM parser supports normalizing user management activity in the AWS Cloud Trail for the following event sources: (iam.amazonaws.com)
+ParserName: ASimUserManagementAWSCloudTrail
+EquivalentBuiltInParser: _ASim_UserManagement_AWSCloudTrail
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool) {
+  let SupportedEventSources = dynamic([
+      "iam.amazonaws.com"
+  ]);
+  let IAMEventNameLookup = datatable(EventName: string, EventType: string)
+  [
+      "AddUserToGroup", "UserAddedToGroup",
+      "AttachGroupPolicy", "GroupModified",
+      "AttachUserPolicy", "UserModified",
+      "ChangePassword", "PasswordChanged",
+      "CreateGroup", "GroupCreated",
+      "CreateLoginProfile", "UserModified",
+      "CreateUser", "UserCreated",
+      "DeleteGroup", "GroupDeleted",
+      "DeleteGroupPolicy", "GroupModified",
+      "DeleteLoginProfile", "UserModified",
+      "DeleteRole", "UserDeleted",
+      "DeleteUser", "UserDeleted",
+      "DeleteUserPolicy", "UserModified",
+      "DetachGroupPolicy", "GroupModified",
+      "DetachRolePolicy", "UserModified",
+      "DetachUserPolicy", "UserModified",
+      "EnableMFADevice", "UserModified",
+      "GetGroup", "GroupRead",
+      "GetGroupPolicy", "GroupRead",
+      "GetLoginProfile", "UserRead",
+      "GetMFADevice", "UserRead",
+      "GetRole", "UserRead",
+      "GetUser", "UserRead",
+      "ListAttachedGroupPolicies", "GroupRead",
+      "ListAttachedRolePolicies", "UserRead",
+      "ListAttachedUserPolicies", "UserRead",
+      "ListGroups", "GroupEnumerated",
+      "ListGroupsForUser", "UserRead",
+      "ListMFADevices", "UserRead",
+      "ListRoles", "UserRead",
+      "ListUsers", "UserRead",
+      "PutGroupPolicy", "GroupModified",
+      "PutRolePolicy", "UserModified",
+      "PutUserPolicy", "UserModified",
+      "RemoveUserFromGroup", "UserRemovedFromGroup",
+      "TagRole", "UserModified",
+      "TagUser", "UserModified",
+      "UntagUser", "UserModified",
+      "UntagUser", "UserModified",
+      "UpdateGroup", "GroupModified",
+      "UpdateLoginProfile", "PasswordChanged",
+      "UpdateRole", "UserModified",
+      "UpdateRoleDescription", "UserModified",
+      "UpdateSigningCertificate", "PasswordChanged",
+      "UpdateSSHPublicKey", "PasswordChanged",
+      "UpdateUser", "UserModified",
+      "UploadSigningCertificate", "UserModified",
+      "UploadSSHPublicKey", "UserModified"
+  ];
+  database('SecurityInsights').table('AWSCloudTrail')
+  | where EventSource in (SupportedEventSources)
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "UserManagement",
+      EventSchemaVersion = "0.1.2",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure"),
+      EventMessage = ErrorMessage
+  | lookup IAMEventNameLookup on EventName
+  | extend EventType = coalesce(EventType, "Other")
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion
+  | project-rename
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, "")
+  | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+  | extend
+      TargetUserId = coalesce(tostring(ResponseElements.user.userId), tostring(ResponseElements.role.roleId)),
+      TargetUsername = coalesce(tostring(RequestParameters.userName), tostring(RequestParameters.roleName)),
+      GroupId = tostring(ResponseElements.group.groupName),
+      GroupName = tostring(RequestParameters.groupName)
+  | extend
+      TargetUserIdType = iff(isempty(TargetUserId), "", "AWSId"),
+      TargetUsernameType = iff(isempty(TargetUsername), "", "Simple"),
+      GroupIdType = iff(isempty(GroupId), "", "AWSId"),
+      GroupNameType = iff(isempty(GroupName), "", "Simple"),
+      GroupOriginalType = iff(isempty(GroupName), "", "IAM Group")
+  | extend AdditionalFields = bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "EventSource", EventSource,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "TargetUserARN", coalesce(tostring(ResponseElements.user.arn), tostring(ResponseElements.role.arn)),
+      "GroupARN", tostring(ResponseElements.group.arn)
+  )
+  // Alias
+  | extend
+      IpAddr = SrcIpAddr,
+      User = ActorUsername
+  | project
+      TimeGenerated,
+      Type,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventSeverity,
+      EventSchema,
+      EventSchemaVersion,
+      EventVendor,
+      EventProduct,
+      Dvc,
+      EventResult,
+      EventMessage,
+      EventType,
+      EventOriginalSubType,
+      EventOriginalType,
+      EventUid,
+      EventOriginalResultDetails,
+      EventProductVersion,
+      ActorUserId,
+      ActorUsername,
+      ActorOriginalUserType,
+      HttpUserAgent,
+      ActorUserIdType,
+      ActorUsernameType,
+      SrcIpAddr,
+      TargetUserIdType,
+      TargetUserId,
+      TargetUsername,
+      GroupId,
+      GroupName,
+      TargetUsernameType,
+      GroupIdType,
+      GroupNameType,
+      GroupOriginalType,
+      User,
+      IpAddr,
+      AdditionalFields
+  };
+  parser(disabled = disabled);
