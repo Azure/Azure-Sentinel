@@ -1,12 +1,9 @@
-# AWS CloudTrail ASIM UserManagement Normalization Parser
+# AWS Cloud Trail ASIM UserManagement Normalization Parser
 
-ARM template for ASIM UserManagement schema parser for AWS CloudTrail.
+ARM template for ASIM UserManagement schema parser for AWS Cloud Trail.
 
-This ASIM parser supports normalizing user management activity in the AWS CloudTrail events to the ASIM User Management schema.
+This ASIM parser supports normalizing user management activity in AWS Cloud Trail for the following event sources: (iam.amazonaws.com, cognito-idp.amazonaws.com)
 
-The parser supports the following EventSources:
-- cognito-idp.amazonaws.com
-- iam.amazonaws.com
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
