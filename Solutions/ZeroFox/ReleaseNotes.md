@@ -1,6 +1,7 @@
 | **Version**   | **Date Modified (DD-MM-YYYY)**   | **Change History**                                                                                  |
 |---------------|----------------------------------|-----------------------------------------------------------------------------------------------------|
-| 3.2.2         | 17-11-2025                       | Added **New CCF connector**.                                                                                   |
+| 3.2.3         | 01-12-2026                       | Added **Alerts Connector** using Azure functions                                                    |
+| 3.2.2         | 17-11-2025                       | Added **New CCF connector**.                                                                        |
 | 3.2.1         | 26-12-2024                       | Update alerts data connector version that fix issues in fetching updates                            |
 | 3.2.0         | 26-09-2024                       | Changed query parameter in alerts connector for fetching updates                                    |
 | 3.1.0         | 26-07-2024                       | Updated ZeroFox connector to generate result batches and implemented async Sentinel connector logic |
