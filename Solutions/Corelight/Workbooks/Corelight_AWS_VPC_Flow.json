@@ -1,0 +1,2050 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# AWS VPC Flow\nDashboard to visualize AWS VPC Flow data captured by Corelight."
+      },
+      "name": "workbook-header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "param-timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Global Time Restriction",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000,
+                  "displayText": "Last 1 hour"
+                },
+                {
+                  "durationMs": 14400000,
+                  "displayText": "Last 4 hours"
+                },
+                {
+                  "durationMs": 43200000,
+                  "displayText": "Last 12 hours"
+                },
+                {
+                  "durationMs": 86400000,
+                  "displayText": "Last 24 hours"
+                },
+                {
+                  "durationMs": 604800000,
+                  "displayText": "Last 7 days"
+                },
+                {
+                  "durationMs": 2592000000,
+                  "displayText": "Last 30 days"
+                }
+              ]
+            }
+          },
+          {
+            "id": "param-sensor-name",
+            "version": "KqlParameterItem/1.0",
+            "name": "SensorName",
+            "label": "Corelight Sensor",
+            "type": 2,
+            "isRequired": true,
+            "query": "// KQL query to populate sensor names\r\ncorelight_conn\r\n| where isnotempty(sensor_name)\r\n| distinct sensor_name",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "value::all"
+          },
+          {
+            "id": "param-vpc-id",
+            "version": "KqlParameterItem/1.0",
+            "name": "VpcId",
+            "label": "VPC ID",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "query": "// KQL query to populate VPC IDs\r\ncorelight_conn\r\n| where '{SensorName}' == \"*\" or sensor_name == '{SensorName}'\r\n| where capture_source == \"vpcflow\" and isnotempty(capture_metadata_vpc_vpc_id)\r\n| distinct capture_metadata_vpc_vpc_id",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": [
+              "value::all"
+            ]
+          },
+          {
+            "id": "param-org-id",
+            "version": "KqlParameterItem/1.0",
+            "name": "OrgId",
+            "label": "AWS Organization ID",
+            "type": 2,
+            "isRequired": true,
+            "query": "// KQL query to populate AWS Org IDs\r\ncorelight_conn\r\n| where '{SensorName}' == \"*\" or sensor_name == '{SensorName}'\r\n| where capture_source == \"vpcflow\" \r\n| where isnotempty(orig_inst_org_id) or isnotempty(resp_inst_org_id)\r\n| extend org_id=coalesce(orig_inst_org_id, resp_inst_org_id)\r\n| distinct org_id",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 604800000
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": "value::all"
+          },
+          {
+            "id": "param-direction",
+            "version": "KqlParameterItem/1.0",
+            "name": "Direction",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\":\"*\",\"label\":\"All\"},{\"value\":\"external\",\"label\":\"External\"},{\"value\":\"inbound\",\"label\":\"Inbound\"},{\"value\":\"internal\",\"label\":\"Internal\"},{\"value\":\"outbound\",\"label\":\"Outbound\"}]",
+            "value": [
+              "value::all"
+            ]
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters-global"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "tab-overview",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Overview",
+            "subTarget": "overview",
+            "style": "link"
+          },
+          {
+            "id": "tab-ip-interrogation",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "IP Interrogation",
+            "subTarget": "ip-interrogation",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "tabs-navigation"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize total_volume = sum(bytes)\n| project-rename [\"Total Volume\"] = total_volume",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Total Volume",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "Total Volume",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 36,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": true
+              },
+              "statSettings": {
+                "valueAggregation": "None",
+                "colorSettings": {
+                  "type": "static",
+                  "mode": "background",
+                  "staticColor": "green",
+                  "heatmapPalette": "greenRed",
+                  "thresholdsGrid": []
+                },
+                "iconSettings": {
+                  "thresholdsGrid": []
+                },
+                "tagText": "",
+                "valueFontStyle": "smallPlus"
+              }
+            },
+            "customWidth": "17",
+            "name": "tile-total-volume"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let interval_in_hrs=datetime_diff('hour', {TimeRange:end}, {TimeRange:start});\nlet interval_in_days=datetime_diff('day', {TimeRange:end}, {TimeRange:start});\nlet bin_duration=case(interval_in_hrs<=24, 1h, interval_in_days<=30, 1d, interval_in_days>=31 and interval_in_days<=90, 7d, 31d);\nlet TotalConnections=(corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize total_connections = dcount(session_id) | project total_connections);\nlet trendline=toscalar(\n    corelight_conn\n    | where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n    | where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n    | where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n    | where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n    | where capture_source == \"vpcflow\" and transport != \"icmp\"\n    | make-series Trend = dcount(session_id) default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step bin_duration | project Trend);\nTotalConnections\n| extend Trend = trendline\n                                      ",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Total Connections",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "total_connections",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "secondaryContent": {
+                  "columnMatch": "Trend",
+                  "formatter": 9,
+                  "formatOptions": {
+                    "min": 0,
+                    "palette": "blue"
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "17",
+            "name": "tile-total-connections"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let interval_in_hrs=datetime_diff('hour', {TimeRange:end}, {TimeRange:start});\nlet interval_in_days=datetime_diff('day', {TimeRange:end}, {TimeRange:start});\nlet bin_duration=case(interval_in_hrs<=24, 1h, interval_in_days<=30, 1d, interval_in_days>=31 and interval_in_days<=90, 7d, 31d);\nlet SrcIP=(corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize src_ips = dcount(src_ip) | project src_ips);\nlet trendline=toscalar(\n    corelight_conn\n    | where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n    | where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n    | where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n    | where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n    | where capture_source == \"vpcflow\" and transport != \"icmp\"\n    | make-series Trend = dcount(src_ip) default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step bin_duration | project Trend);\nSrcIP\n| extend Trend = trendline\n                                      ",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Unique Source IPs",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "src_ips",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "secondaryContent": {
+                  "columnMatch": "Trend",
+                  "formatter": 9,
+                  "formatOptions": {
+                    "palette": "blue"
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "17",
+            "name": "tile-unique-source-ips"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let interval_in_hrs=datetime_diff('hour', {TimeRange:end}, {TimeRange:start});\nlet interval_in_days=datetime_diff('day', {TimeRange:end}, {TimeRange:start});\nlet bin_duration=case(interval_in_hrs<=24, 1h, interval_in_days<=30, 1d, interval_in_days>=31 and interval_in_days<=90, 7d, 31d);\nlet DestinationIP=(corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize unique_destination_ips = dcount(dest_ip) | project unique_destination_ips);\nlet trendline=toscalar(\n    corelight_conn\n    | where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n    | where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n    | where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n    | where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n    | where capture_source == \"vpcflow\" and transport != \"icmp\"\n    | make-series Trend = dcount(dest_ip) default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step bin_duration | project Trend);\nDestinationIP\n| extend Trend = trendline\n                                      ",
+              "size": 4,
+              "title": "Unique Destination IPs",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "unique_destination_ips",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "secondaryContent": {
+                  "columnMatch": "Trend",
+                  "formatter": 9,
+                  "formatOptions": {
+                    "palette": "blue"
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "17",
+            "name": "tile-unique-dest-ips"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\"\n| summarize enriched_count = countif(isnotempty(orig_inst_org_id) or isnotempty(resp_inst_org_id))\n| extend [\"Cloud Enrichment\"] = iff(enriched_count > 0, \"Enriched Conn Logs are Present\", \"Enriched Conn Logs are not Present\")\n| project [\"Cloud Enrichment\"]",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Cloud Enrichment",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "Cloud Enrichment",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "blue",
+                    "compositeBarSettings": {
+                      "labelText": "",
+                      "columnSettings": [
+                        {
+                          "columnName": "Cloud Enrichment",
+                          "color": "lightBlue"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "showBorder": false,
+                "size": "auto"
+              },
+              "statSettings": {
+                "valueAggregation": "None",
+                "colorSettings": {
+                  "type": "static",
+                  "mode": "background",
+                  "staticColor": "green",
+                  "heatmapPalette": "greenRed",
+                  "thresholdsGrid": []
+                },
+                "iconSettings": {
+                  "thresholdsGrid": []
+                },
+                "tagText": "",
+                "valueFontStyle": "smallPlus"
+              },
+              "textSettings": {
+                "style": "header"
+              }
+            },
+            "customWidth": "31",
+            "name": "tile-cloud-enrichment"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize total_bytes = sum(bytes_out) by src_ip\n| top 10 by total_bytes desc\n| project-rename\n    [\"Source IP\"] = src_ip,\n    [\"Total Bytes Sent\"] = total_bytes",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Top 10 Source IPs with Most Sent Data",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Total Bytes Sent",
+                    "formatter": 1,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": false
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "selectedTab",
+                    "formatter": 5
+                  }
+                ]
+              }
+            },
+            "customWidth": "25",
+            "name": "table-top-source-ips",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize total_bytes = sum(bytes_in) by dest_ip\n| top 10 by total_bytes desc\n| project-rename\n    [\"Destination IP\"] = dest_ip,\n    [\"Total Bytes Received\"] = total_bytes",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Top 10 Destination IPs with Most Received Data",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Total Bytes Received",
+                    "formatter": 1,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": false
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "customWidth": "25",
+            "name": "table-top-dest-ips",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let interval_in_hrs= datetime_diff('hour', {TimeRange:end}, {TimeRange:start});\nlet interval_in_days= datetime_diff('day', {TimeRange:end}, {TimeRange:start});\nlet bin_duration=case(interval_in_hrs<=24, 1h, interval_in_days<=30, 1d, interval_in_days>=31 and interval_in_days<=90, 7d, 31d);\ncorelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| make-series  [\"Bytes Out\"] = sum(bytes_out), [\"Bytes In\"] = sum(bytes_in)  default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step bin_duration by direction\n",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Traffic by Direction and Bytes Transferred over Time",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "areachart",
+              "chartSettings": {
+                "group": null,
+                "createOtherGroup": 0,
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "inbound",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "outbound",
+                    "color": "blue"
+                  }
+                ],
+                "xSettings": {
+                  "label": ""
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "chart-traffic-over-time",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "1c6a653c-fd65-4c0e-aced-bd8cb5738906",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "source_ip",
+                        "label": "Source IP",
+                        "type": 1,
+                        "isRequired": true,
+                        "timeContext": {
+                          "durationMs": 86400000
+                        },
+                        "value": "*"
+                      },
+                      {
+                        "id": "d9481a5d-11a8-4bb1-bca0-82d46910cb77",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "protocol",
+                        "label": "Protocol",
+                        "type": 1,
+                        "isRequired": true,
+                        "value": "*"
+                      },
+                      {
+                        "id": "631c3bf8-66aa-4b91-b743-8cc96d8479ca",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "destination_port",
+                        "label": "Destination Port",
+                        "type": 1,
+                        "isRequired": true,
+                        "value": "*"
+                      },
+                      {
+                        "id": "d7c327e6-73c7-4554-91e0-d56940f76816",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "destination_ip",
+                        "label": "Destination IP",
+                        "type": 1,
+                        "isRequired": true,
+                        "value": "*"
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "parameters - 1"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where (\"{source_ip}\" == \"*\" or src_ip == \"{source_ip}\") and (\"{destination_port}\" == \"*\" or dest_port == \"{destination_port}\") and (\"{destination_ip}\" == \"*\" or dest_ip == \"{destination_ip}\") and (\"{protocol}\" == \"*\" or proto == \"{protocol}\")\n| summarize connections = dcount(session_id) by src_ip, transport, dest_port, dest_ip\n| top 20 by connections desc\n| project-rename\n    [\"Source IP\"] = src_ip,\n    [\"Protocol\"] = transport,\n    [\"Destination Port\"] = dest_port,\n    [\"Destination IP\"] = dest_ip,\n    [\"Connection Count\"] = connections\n| sort by [\"Connection Count\"] desc",
+                    "size": 0,
+                    "showAnalytics": true,
+                    "title": "Connections between Source IPs and Destination IPs",
+                    "noDataMessage": "No Data Found",
+                    "timeContextFromParameter": "TimeRange",
+                    "showRefreshButton": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "table",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "Destination Port",
+                          "formatter": 1
+                        },
+                        {
+                          "columnMatch": "Connection Count",
+                          "formatter": 1,
+                          "numberFormat": {
+                            "unit": 17,
+                            "options": {
+                              "style": "decimal"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "graphSettings": {
+                      "type": 0,
+                      "topContent": {
+                        "columnMatch": "Source IP",
+                        "formatter": 1
+                      },
+                      "leftContent": {
+                        "columnMatch": "Source IP"
+                      },
+                      "centerContent": {
+                        "columnMatch": "Destination Port",
+                        "formatter": 1,
+                        "numberFormat": {
+                          "unit": 17,
+                          "options": {
+                            "maximumSignificantDigits": 3,
+                            "maximumFractionDigits": 2
+                          }
+                        }
+                      },
+                      "rightContent": {
+                        "columnMatch": "Destination Port"
+                      },
+                      "bottomContent": {
+                        "columnMatch": "Volume"
+                      },
+                      "nodeIdField": "Source IP",
+                      "sourceIdField": "Destination Port",
+                      "targetIdField": "Volume",
+                      "graphOrientation": 3,
+                      "showOrientationToggles": false,
+                      "nodeSize": null,
+                      "staticNodeSize": 100,
+                      "colorSettings": null,
+                      "hivesMargin": 5,
+                      "edgeColorSettings": null
+                    }
+                  },
+                  "customWidth": "60",
+                  "name": "graph-src-dest-connections",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| extend transport_port = strcat(transport, \"/\", tostring(dest_port))\n| summarize count() by transport_port\n| top 20 by count_ desc\n| project-rename\n    [\"Transport/Port\"] = transport_port,\n    [\"Count\"] = count_",
+                    "size": 3,
+                    "showAnalytics": true,
+                    "title": "Top 20 Protocol and Port Distribution",
+                    "noDataMessage": "No Data Found",
+                    "timeContextFromParameter": "TimeRange",
+                    "showRefreshButton": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "piechart"
+                  },
+                  "customWidth": "40",
+                  "name": "pie-protocol-distribution",
+                  "styleSettings": {
+                    "padding": "20px"
+                  }
+                }
+              ]
+            },
+            "name": "group - 22"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize volume = sum(bytes) by src_ip, dest_port\n| top 20 by volume desc\n| project-rename\n    [\"Source IP\"] = src_ip,\n    [\"Destination Port\"] = dest_port,\n    [\"Volume\"] = volume",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Top 20 Largest Byte Transfers",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Source IP",
+                    "formatter": 1
+                  },
+                  {
+                    "columnMatch": "Destination Port",
+                    "formatter": 1
+                  },
+                  {
+                    "columnMatch": "Volume",
+                    "formatter": 1,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "sankey-byte-transfers",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value}))\n| where direction == \"outbound\" and duration > 0\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| project duration, bytes_out, src_ip",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Outbound Connection Outliers",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "scatterchart",
+              "chartSettings": {
+                "xAxis": "bytes_out",
+                "yAxis": [
+                  "duration"
+                ],
+                "xSettings": {
+                  "numberFormatSettings": {
+                    "unit": 2,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": false
+                    }
+                  },
+                  "label": ""
+                },
+                "ySettings": {
+                  "scale": "time",
+                  "label": "Duration (ms)"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "scatter-connection-outliers",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == \"inbound\"\n| where capture_source == \"vpcflow\"\n| where isnotempty(src_country)\n| summarize connections = count() by src_country\n| extend iso2 = src_country\n| lookup _GetWatchlist('CorelightGeoCountries') on iso2\n| project country, connections",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Inbound Connections by Source Country",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "map",
+              "mapSettings": {
+                "locInfo": "CountryRegion",
+                "locInfoColumn": "country",
+                "sizeSettings": "connections",
+                "sizeAggregation": "Sum",
+                "legendMetric": "connections",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "connections",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "map-inbound-by-country",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == \"inbound\"\n| where capture_source == \"vpcflow\"\n| where isnotempty(src_country)\n| summarize connections = count() by src_country\n| sort by connections desc\n| extend iso2 = src_country\n| lookup _GetWatchlist('CorelightGeoCountries') on iso2\n| project\n    [\"Country\"] = country,\n    [\"Connections\"] = connections,\n    iso2",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Inbound Connections by Source Country",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportedParameters": [
+                {
+                  "fieldName": "Country",
+                  "parameterName": "inbound_country_name",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "iso2",
+                  "parameterName": "inbound_iso2",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "iso2",
+                    "formatter": 5
+                  }
+                ],
+                "rowLimit": 10000
+              }
+            },
+            "customWidth": "50",
+            "name": "table-inbound-by-country",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": ""
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the records in the above panel **Inbound Connections by Source Country** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - 27 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == \"outbound\"\n| where capture_source == \"vpcflow\"\n| where src_country == '{inbound_iso2}'\n| extend iso2 = '{inbound_iso2}'\n| lookup _GetWatchlist('CorelightGeoCountries') on iso2\n",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Inbound Connection Details for Country: {inbound_country_name}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "inbound_country_name",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "table-inbound-by-country-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == \"outbound\"\n| where capture_source == \"vpcflow\"\n| where isnotempty(dest_country)\n| summarize connections = count() by dest_country\n| sort by connections desc\n| extend iso2 = dest_country\n| lookup _GetWatchlist('CorelightGeoCountries') on iso2\n| project country, connections",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Outbound Connections by Destination Country",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "map",
+              "mapSettings": {
+                "locInfo": "CountryRegion",
+                "locInfoColumn": "country",
+                "sizeSettings": "connections",
+                "sizeAggregation": "Sum",
+                "legendMetric": "connections",
+                "legendAggregation": "Sum",
+                "itemColorSettings": null
+              }
+            },
+            "customWidth": "50",
+            "name": "map-outbound-by-country",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == \"outbound\"\n| where capture_source == \"vpcflow\"\n| where isnotempty(dest_country)\n| summarize connections = count() by dest_country\n| sort by connections desc\n| extend iso2 = dest_country\n| lookup _GetWatchlist('CorelightGeoCountries') on iso2\n| project\n    [\"Country\"] = country,\n    [\"Connections\"] = connections,\n    iso2",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Outbound Connections by Destination Country",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportedParameters": [
+                {
+                  "fieldName": "Country",
+                  "parameterName": "outbound_country_name",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "iso2",
+                  "parameterName": "outbount_iso2",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "iso2",
+                    "formatter": 5
+                  }
+                ],
+                "rowLimit": 10000
+              }
+            },
+            "customWidth": "50",
+            "name": "table-outbound-by-country",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": ""
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the records in the above panel **Outbound Connections by Destination Country** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - 27"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == \"outbound\"\n| where capture_source == \"vpcflow\"\n| where dest_country == '{outbount_iso2}'\n| extend iso2 = '{outbount_iso2}'\n| lookup _GetWatchlist('CorelightGeoCountries') on iso2\n",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Outbound Connection Details for Country: {outbound_country_name}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "outbound_country_name",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "table-outbound-by-country-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## Additional VPC Insights will appear below when Cloud Enrichment Conn Logs are present within the selected time range",
+              "style": "info"
+            },
+            "name": "text-enrichment-note"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let interval_in_hrs=datetime_diff('hour', {TimeRange:end}, {TimeRange:start});\nlet interval_in_days=datetime_diff('day', {TimeRange:end}, {TimeRange:start});\nlet bin_duration=case(interval_in_hrs<=24, 1h, interval_in_days<=30, 1d, interval_in_days>=31 and interval_in_days<=90, 7d, 31d);\ncorelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where isnotempty(orig_inst_id) or isnotempty(resp_inst_id)\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where direction == \"inbound\"\n| extend security_groups = todynamic(orig_inst_sg_ids)\n| mv-expand security_group = security_groups\n| where isnotempty(security_group)\n| make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step bin_duration by security_group = tostring(security_group), dest_port\n| project\n    [\"AWS Security Group\"] = security_group,\n    [\"Destination Port\"] = dest_port,\n    [\"Connections\"] = Trend\n| sort by toreal(Connections) desc",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Inbound Traffic by Security Group",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportedParameters": [
+                {
+                  "fieldName": "Destination Port",
+                  "parameterName": "table_inbound_by_sg_destination_port",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "AWS Security Group",
+                  "parameterName": "table_inbound_by_sg_aws_security_group",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Destination Port",
+                    "formatter": 1
+                  },
+                  {
+                    "columnMatch": "Connections",
+                    "formatter": 9,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  }
+                ],
+                "rowLimit": 10000
+              }
+            },
+            "customWidth": "50",
+            "name": "table-inbound-by-sg",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where isnotempty(orig_inst_id) or isnotempty(resp_inst_id)\n| where isnotempty(orig_inst_az) and isnotempty(resp_inst_az)\n| summarize \n    total_bytes_sent = sum(bytes_out),\n    connections = dcount(session_id)\n    by orig_inst_az, resp_inst_az\n| top 20 by total_bytes_sent desc\n| project\n    [\"Originating Availability Zone\"] = orig_inst_az,\n    [\"Connections\"] = connections,\n    [\"Total Bytes Sent\"] = total_bytes_sent,\n    [\"Responding Availability Zone\"] = resp_inst_az",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Lateral Traffic between Availability Zones",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Connections",
+                    "formatter": 1,
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "Total Bytes Sent",
+                    "formatter": 1,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "table-lateral-az-traffic",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the records in the above panel **Inbound Traffic by Security Group** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - 26"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where capture_source == \"vpcflow\"\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where dest_port == \"{table_inbound_by_sg_destination_port}\"| where direction == \"inbound\"\n| where isnotempty(orig_inst_org_id) or isnotempty(resp_inst_org_id)\n| where  orig_inst_sg_ids contains \"{table_inbound_by_sg_aws_security_group}\"\n| sort by TimeGenerated desc",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details of Inbound Traffic for Security Group: {table_inbound_by_sg_aws_security_group} and Destination Port: {table_inbound_by_sg_destination_port}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "table_inbound_by_sg_destination_port",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "query - 21",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where isnotempty(org_id)\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where isnotempty(orig_inst_id) or isnotempty(resp_inst_id)\n| summarize count() by org_id\n| top 10 by count_ desc",
+              "size": 3,
+              "showAnalytics": true,
+              "title": "Traffic By AWS Account",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportFieldName": "series",
+              "exportParameterName": "account_org_id",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "showPin": false,
+            "name": "pie-traffic-by-account",
+            "styleSettings": {
+              "padding": "50px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where direction == \"outbound\"\n| where isnotempty(orig_inst_id) or isnotempty(resp_inst_id)\n| where isnotempty(orig_inst_name)\n| summarize total_bytes = sum(bytes_out) by orig_inst_name, src_ip, dest_ip\n| top 10 by total_bytes desc\n| project\n    [\"EC2 Instance Name\"] = orig_inst_name,\n    [\"Source IP\"] = src_ip,\n    [\"Destination IP\"] = dest_ip,\n    [\"Total Data Outbound\"] = total_bytes",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Outbound Traffic by EC2 Instance Names",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportedParameters": [
+                {
+                  "fieldName": "EC2 Instance Name",
+                  "parameterName": "orig_inst_name_ec2",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "Source IP",
+                  "parameterName": "src_ip_ec2",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "Destination IP",
+                  "parameterName": "dest_ip_ec2",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Total Data Outbound",
+                    "formatter": 1,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "table-traffic-by-ec2",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the sections in the above panel **Traffic By AWS Account** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the records in the above panel **Outbound Traffic by EC2 Instance Names** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - 27"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where isnotempty(org_id)\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where isnotempty(orig_inst_id) or isnotempty(resp_inst_id)\n| where org_id == \"{account_org_id}\"",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details of Traffic for AWS Account ID: {account_org_id}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "account_org_id",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "pie-traffic-by-account-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| where direction == \"outbound\"\n| where isnotempty(orig_inst_id) or isnotempty(resp_inst_id)\n| where isnotempty(orig_inst_name)\n| where orig_inst_name == \"{orig_inst_name_ec2}\" and src_ip == \"{src_ip_ec2}\" and dest_ip == \"{dest_ip_ec2}\"",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details of Outbound Traffic for EC2 Instance Name: {orig_inst_name_ec2}, Source IP: {src_ip_ec2}, Destination IP: {dest_ip_ec2}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "orig_inst_name_ec2",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "table-traffic-by-ec2-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "overview"
+      },
+      "name": "group-overview-tab"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "b137c2c1-5882-47b1-82c0-e0b6e68c7482",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "IpAddress",
+                  "label": "IP Address",
+                  "type": 1,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": "*"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "customWidth": "50",
+            "name": "parameters - 18"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### If Data does not appear, then the IP Address has not been seen during the selected time range",
+              "style": "info"
+            },
+            "customWidth": "50",
+            "name": "text - 19",
+            "styleSettings": {
+              "maxWidth": "50%"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\" and direction == \"inbound\"\r\n| summarize total_volume = sum(bytes)\r\n| project-rename [\"Total Data Inbound\"] = total_volume",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Total Data Inbound",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "Total Data Inbound",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 36,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "20",
+            "name": "tile-total-inbound"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\") \r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\" and direction == \"outbound\"\r\n| summarize total_volume = sum(bytes)\r\n| project-rename [\"Total Data Outbound\"] = total_volume",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Total Data Outbound",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "formatter": 1
+                },
+                "rightContent": {
+                  "columnMatch": "Total Data Outbound",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 36,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "20",
+            "name": "tile-total-outbound"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\r\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\r\n| summarize Connections = count(session_id)",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Total Connections",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "Connections",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "20",
+            "name": "tile-ip-total-connections"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\r\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\r\n| summarize sourceIP = dcount(src_ip)",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Unique Source IPs",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "sourceIP",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "20",
+            "name": "tile-ip-unique-source-ips"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\r\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\r\n| summarize destinationIP = dcount(dest_ip)",
+              "size": 4,
+              "showAnalytics": true,
+              "title": "Unique Destination IPs",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {},
+                "rightContent": {
+                  "columnMatch": "destinationIP",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "greenRed"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "20",
+            "name": "tile-ip-unique-dest-ips"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize Connections = dcount(uid) by capture_metadata_vpc_vpc_id\n",
+              "size": 3,
+              "showAnalytics": true,
+              "title": "VPC IDs by Connection Count",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportFieldName": "series",
+              "exportParameterName": "Vpc_Id",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "createOtherGroup": 10,
+                "showMetrics": false,
+                "showLegend": true
+              }
+            },
+            "customWidth": "33",
+            "name": "pie-vpc-id"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| summarize Connections = dcount(uid) by direction",
+              "size": 3,
+              "showAnalytics": true,
+              "title": "Connections by Direction",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportFieldName": "series",
+              "exportParameterName": "Direction_Val",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "createOtherGroup": 10,
+                "showMetrics": false,
+                "showLegend": true
+              }
+            },
+            "customWidth": "33",
+            "name": "pie-direction"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "union withsource=TableName Corelight_*\n| where TableName !has \"conn\"\n| where (\"*\" == \"{SensorName}\" or _system_name_s == \"{SensorName}\") \n| where (\"{IpAddress}\" == \"*\" or id_orig_h_s == \"{IpAddress}\" or id_resp_h_s == \"{IpAddress}\")\n| summarize Total = count() by TableName\n| top 20 by Total",
+              "size": 3,
+              "showAnalytics": true,
+              "title": "Corelight Data Sets",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportFieldName": "series",
+              "exportParameterName": "Table_Name",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "createOtherGroup": 10,
+                "showMetrics": false,
+                "showLegend": true
+              }
+            },
+            "customWidth": "34",
+            "name": "pie-corelight-datasets"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the sections in the above panel **VPC IDs by Connection Count** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "33",
+                  "name": "text - 1"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the sections in the above panel **Connections by Direction** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "33",
+                  "name": "text - 1"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the sections in the above panel **Corelight Data Sets** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "33",
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - 19"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (capture_metadata_vpc_vpc_id == '{Vpc_Id}')\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| sort by TimeGenerated desc",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details for VPC ID: {Vpc_Id}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "Vpc_Id",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "pie-vpc-id-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where direction == '{Direction_Val}'\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\"",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details for Direction: {Direction_Val}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "Direction_Val",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "pie-direction-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let dummy_table = datatable(\n    _system_name_s: string,id_orig_h_s: string, id_resp_h_s: string, uid_s: string, fuid_s: string, community_id_s: string, resp_fuids_s: string, uids_s: string, Type: string, TenantId: string, SourceSystem: string, MG: string, ManagementGroupName: string, Computer: string, RawData: string, _ResourceId: string\n)[];\nunion isfuzzy=true\n    dummy_table,\n    table('{Table_Name}')\n| where (\"{SensorName}\" == \"*\" or _system_name_s == \"{SensorName}\") \n| where (\"{IpAddress}\" == \"*\" or id_orig_h_s == \"{IpAddress}\" or id_resp_h_s == \"{IpAddress}\")\n| project-away \n    TenantId, \n    SourceSystem, \n    MG, \n    ManagementGroupName, \n    Computer, \n    RawData, \n    _ResourceId",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details for Log Data Type: {Table_Name}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "Table_Name",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "query - 13",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\" and direction == \"inbound\" \n| summarize Inbound_Ports = count() by transport_port = strcat(transport, \"/\", tostring(toint(dest_port)))\n| top 10 by Inbound_Ports desc",
+              "size": 3,
+              "showAnalytics": true,
+              "title": "Top Inbound Ports & Protocols",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportFieldName": "series",
+              "exportParameterName": "Porst_and_Protocol_2",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "createOtherGroup": 10,
+                "showMetrics": false,
+                "showLegend": true
+              }
+            },
+            "customWidth": "50",
+            "name": "pie-inbound-ports"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\" and direction == \"outbound\"\r\n| summarize Outbound_Ports = count() by transport_port = strcat(transport, \"/\", tostring(toint(dest_port)))\r\n| top 10 by Outbound_Ports desc",
+              "size": 3,
+              "showAnalytics": true,
+              "title": "Top Outbound Ports & Protocols",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportFieldName": "series",
+              "exportParameterName": "Porst_and_Protocol_1",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "showPin": false,
+            "name": "pie-outbound-ports"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the sections in the above panel **Top Inbound Ports & Protocols** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Click on the sections in the above panel **Top Outbound Ports & Protocols** to view more information.",
+                    "style": "info"
+                  },
+                  "customWidth": "50",
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - 20"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\" and direction == \"inbound\" \n| extend transport_port = strcat(transport, \"/\", tostring(toint(dest_port)))\n| where transport_port == '{Porst_and_Protocol_2}'",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details for Inbound Port/Protocol: {Porst_and_Protocol_2}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "Porst_and_Protocol_2",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "pie-inbound-ports-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value}))\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\n| where capture_source == \"vpcflow\" and transport != \"icmp\" and direction == \"outbound\" \n| extend transport_port = strcat(transport, \"/\", tostring(toint(dest_port)))\n| where transport_port == '{Porst_and_Protocol_1}'",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details for Outbound Port/Protocol: {Porst_and_Protocol_1}",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "Porst_and_Protocol_1",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "pie-outbound-ports-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\r\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \r\n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \r\n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\r\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \r\n| where (\"{IpAddress}\" == \"*\" or src_ip == \"{IpAddress}\" or dest_ip == \"{IpAddress}\")\r\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\r\n| extend transport_port = strcat(transport, \"/\", tostring(toint(dest_port)))\r\n| summarize \r\n    [\"First Seen\"] = min(TimeGenerated),\r\n    [\"Last Seen\"] = max(TimeGenerated),\r\n    [\"Total Duration\"] = sum(duration) / 1000,\r\n    [\"Bytes Sent\"] = sum(bytes_out),\r\n    [\"Bytes Received\"] = sum(bytes_in),\r\n    Total_Connections = count(),\r\n    direction_set = make_set(direction),\r\n    vpc_id_set = make_set(capture_metadata_vpc_vpc_id)\r\n    by src_ip, dest_ip, transport_port\r\n| extend \r\n    [\"Direction\"] = strcat_array(direction_set, \",\"),\r\n    [\"AWS VPC ID\"] = strcat_array(vpc_id_set, \",\")\r\n| order by Total_Connections desc\r\n| project \r\n    [\"First Seen\"], \r\n    [\"Last Seen\"], \r\n    [\"AWS VPC ID\"], \r\n    [\"Source IP\"] = src_ip, \r\n    [\"Bytes Sent\"], \r\n    [\"Direction\"], \r\n    [\"Destination IP\"] = dest_ip, \r\n    [\"Destination Port\"] = transport_port, \r\n    [\"Bytes Received\"], \r\n    [\"Total Duration\"], \r\n    [\"Total Connections\"] = Total_Connections",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connections (Top Connections/Services by Bytes Transferred)",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "exportedParameters": [
+                {
+                  "fieldName": "Destination IP",
+                  "parameterName": "Destination_ip",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "Source IP",
+                  "parameterName": "Source_ip",
+                  "parameterType": 1
+                },
+                {
+                  "fieldName": "Destination Port",
+                  "parameterName": "Destination_port",
+                  "parameterType": 1
+                }
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Bytes Sent",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "Bytes Received",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 36,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "Total Duration",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 24,
+                      "options": {
+                        "style": "decimal",
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "Total Connections",
+                    "formatter": 0,
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ],
+                "rowLimit": 10000,
+                "filter": true,
+                "sortBy": [
+                  {
+                    "itemKey": "Direction",
+                    "sortOrder": 1
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "Direction",
+                  "sortOrder": 1
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "table-connections",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "#### Click on the records in the above panel **Connections (Top Connections/Services by Bytes Transferred)** to view more information.",
+              "style": "info"
+            },
+            "name": "text - 21"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "corelight_conn\n| where (\"*\" == \"{SensorName}\" or sensor_name == \"{SensorName}\") \n| where (\"*\" in ({VpcId:value}) or capture_metadata_vpc_vpc_id in ({VpcId:value})) \n| where (\"*\" == \"{OrgId}\" or org_id == \"{OrgId}\")\n| where (\"*\" in ({Direction:value}) or direction in ({Direction:value})) \n| where src_ip == \"{Source_ip}\" and dest_ip == \"{Destination_ip}\"\n| where capture_source == \"vpcflow\" and transport != \"icmp\"\n| extend transport_port = strcat(transport, \"/\", tostring(toint(dest_port)))\n| where transport_port == '{Destination_port}'\n",
+              "size": 0,
+              "showAnalytics": true,
+              "title": "Connection Details",
+              "noDataMessage": "No Data Found",
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 10000,
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "Destination_ip",
+              "comparison": "isNotEqualTo"
+            },
+            "name": "table-connections-drilldown",
+            "styleSettings": {
+              "showBorder": true
+            }
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "ip-interrogation"
+      },
+      "name": "group-ip-interrogation-tab"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "📝 **Refresh the web page to fetch details of recently collected events**"
+      },
+      "name": "text - 5"
+    }
+  ],
+  "fromTemplateId": "sentinel-Corelight-AWS-VPC-Flow",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
