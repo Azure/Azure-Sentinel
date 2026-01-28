@@ -1,12 +1,12 @@
 Parser:
-  Title: User Management ASIM parser for AWS Cloud Trail
+  Title: User Management ASIM filtering parser for AWS Cloud Trail
   Version: '0.1.0'
   LastUpdated: Jan 26, 2026
 Product:
   Name: AWS Cloud Trail
 Normalization:
   Schema: UserManagement
-  Version: '0.1.12'
+  Version: '0.1.2'
 References:
 - Title: ASIM User Management Schema
   Link: https://aka.ms/ASimUserManagementDoc
@@ -15,10 +15,28 @@ References:
 - Title: User Management in AWS CloudTrail logs 
   Link: https://docs.aws.amazon.com/
 Description: |
-  This ASIM parser supports normalizing user management activity in AWS Cloud Trail for the following event sources: (iam.amazonaws.com, cognito-idp.amazonaws.com)
-ParserName: ASimUserManagementAWSCloudTrail
-EquivalentBuiltInParser: _ASim_UserManagement_AWSCloudTrail
+  This ASIM parser supports normalizing user management activity in the AWS Cloud Trail events to the ASIM User Management schema.
+ParserName: vimUserManagementAWSCloudTrail
+EquivalentBuiltInParser: _Im_UserManagement_AWSCloudTrail
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
@@ -82,6 +100,8 @@ ParserQuery: |
     | where EventSource == "iam.amazonaws.com"
     | lookup IAMEventNameLookup on EventName
     | extend EventType = coalesce(EventType, "Other")
+    // Filter on EventType
+    | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
     | extend
         TargetUserId = coalesce(tostring(ResponseElements.user.userId), tostring(ResponseElements.role.roleId)),
         TargetUsername = coalesce(tostring(RequestParameters.userName), tostring(RequestParameters.roleName)),
@@ -94,10 +114,10 @@ ParserQuery: |
             ""
         ),
         GroupOriginalType = iff(isempty(GroupName), "", "IAM Group")
-    | extend AdditionalData = bag_pack(
+    | extend AdditionalData = iff(pack, bag_pack(
         "TargetUserARN", coalesce(tostring(ResponseElements.user.arn), tostring(ResponseElements.role.arn)),
         "GroupARN", tostring(ResponseElements.group.arn)
-    )
+    ), dynamic([]))
     };
     let ParseCognitoEvents = (T: (EventSource: string, EventName: string, RequestParameters: dynamic)) {
         let CognitoIDPEventNameLookup = datatable(EventName: string, EventType: string)
@@ -156,6 +176,8 @@ ParserQuery: |
         | where EventSource == "cognito-idp.amazonaws.com"
         | lookup CognitoIDPEventNameLookup on EventName
         | extend EventType = coalesce(EventType, "Other")
+        // Filter on EventType
+        | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
         | extend
             TargetUsername = tostring(RequestParameters.username),
             GroupName = coalesce(tostring(RequestParameters.poolName), tostring(RequestParameters.groupName)),
@@ -164,112 +186,137 @@ ParserQuery: |
             isnotempty(tostring(RequestParameters.groupName)), "UserPool Group",
             isnotempty(GroupId), "UserPool",
             "")
-        | extend AdditionalData = bag_pack(
+        | extend AdditionalData = iff(pack, bag_pack(
             "UserPoolId", tostring(RequestParameters.UserPoolId)
-        )
+        ), dynamic([]))
     };
-    let parser = (disabled: bool, pack: bool) {
-      let SupportedEventSources = dynamic([
-          "cognito-idp.amazonaws.com",
-          "iam.amazonaws.com"
-      ]);
-      let EventSourceNameLookup = datatable(EventSource: string, TargetUserScope: string)
-      [
-          "cognito-idp.amazonaws.com", "Cognito User Pools",
-          "iam.amazonaws.com", "IAM"
-      ];
-      let SupportedEvents = AWSCloudTrail
-          | where EventSource in (SupportedEventSources)
-          | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements);
-      union isfuzzy=false
-      ParseIAMEvents(SupportedEvents),
-      ParseCognitoEvents(SupportedEvents)
-      | extend
-          Type = "AWSCloudTrail",
-          EventCount = int(1),
-          EventStartTime = TimeGenerated,
-          EventEndTime = TimeGenerated,
-          EventSeverity = "Informational",
-          EventSchema = "UserManagement",
-          EventSchemaVersion = "0.1.2",
-          EventVendor = "AWS",
-          EventProduct = "CloudTrail",
-          Dvc = "CloudTrail",
-          EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure"),
-          EventMessage = ErrorMessage
-      | lookup EventSourceNameLookup on EventSource
-      | project-rename
-          EventOriginalSubType = EventTypeName,
-          EventOriginalType = EventName,
-          EventUid = AwsEventId,
-          EventOriginalResultDetails = ErrorMessage,
-          EventProductVersion = EventVersion
-      | project-rename
-          ActorUserId = UserIdentityAccountId,
-          ActorUsername = UserIdentityUserName,
-          ActorOriginalUserType = UserIdentityType,
-          HttpUserAgent = UserAgent
-      | extend
-          ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
-          ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
-          SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, "")
-      | extend
-          TargetUsernameType = iff(isempty(TargetUsername), "", "Simple"),
-          GroupIdType = iff(isempty(GroupId), "", "Simple"),
-          GroupNameType = iff(isempty(GroupName), "", "Simple")
-      | extend AdditionalFields = iff(pack, bag_pack(
-          "ActorAccessKeyId", UserIdentityAccessKeyId,
-          "AWSRegion", AWSRegion,
-          "APIVersion", APIVersion,
-          "ManagementEvent", ManagementEvent,
-          "ReadOnly", ReadOnly,
-          "RequestParameters", RequestParameters,
-          "ResponseElements", ResponseElements
-      ), dynamic([]))
-      | extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, AdditionalData), dynamic([]))
-      // Alias
-      | extend
-          User = ActorUsername,
-          IpAddr = SrcIpAddr
-      | project
-          TimeGenerated,
-          Type,
-          EventCount,
-          EventStartTime,
-          EventEndTime,
-          EventSeverity,
-          EventSchema,
-          EventSchemaVersion,
-          EventVendor,
-          EventProduct,
-          TargetUserScope,
-          Dvc,
-          EventResult,
-          EventMessage,
-          EventType,
-          EventOriginalSubType,
-          EventOriginalType,
-          EventUid,
-          EventOriginalResultDetails,
-          EventProductVersion,
-          ActorUserId,
-          ActorUsername,
-          ActorOriginalUserType,
-          HttpUserAgent,
-          ActorUserIdType,
-          ActorUsernameType,
-          SrcIpAddr,
-          TargetUserId,
-          TargetUsername,
-          TargetUserIdType,
-          GroupId,
-          GroupName,
-          TargetUsernameType,
-          GroupIdType,
-          GroupNameType,
-          GroupOriginalType,
-          User,
-          IpAddr,
-          AdditionalFields
+    let parser = (
+        starttime:datetime = datetime(null),
+        endtime:datetime = datetime(null), srcipaddr_has_any_prefix:dynamic  = dynamic([]),
+        targetusername_has_any:dynamic = dynamic([]),
+        actorusername_has_any:dynamic = dynamic([]),
+        eventtype_in:dynamic = dynamic([]),
+        disabled:bool= false,
+        pack: bool= false
+    ) {
+    let SupportedEventSources = dynamic([
+        "cognito-idp.amazonaws.com",
+        "iam.amazonaws.com"
+    ]);
+    let EventSourceNameLookup = datatable(EventSource: string, TargetUserScope: string)
+    [
+        "cognito-idp.amazonaws.com", "Cognito User Pools",
+        "iam.amazonaws.com", "IAM"
+    ];
+    let SupportedEvents = AWSCloudTrail
+        | where not(disabled)
+        | where EventSource in (SupportedEventSources)
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+        | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+            and (array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any))
+        // Filter on EventType done later in parser
+        | where (array_length(targetusername_has_any) == 0 or RequestParameters has_any (targetusername_has_any))
+        | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements);
+    union isfuzzy=false
+    ParseIAMEvents(SupportedEvents),
+    ParseCognitoEvents(SupportedEvents)
+    | extend
+        Type = "AWSCloudTrail",
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventSeverity = "Informational",
+        EventSchema = "UserManagement",
+        EventSchemaVersion = "0.1.2",
+        EventVendor = "AWS",
+        EventProduct = "CloudTrail",
+        Dvc = "CloudTrail",
+        EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure"),
+        EventMessage = ErrorMessage
+    | lookup EventSourceNameLookup on EventSource
+    | project-rename
+        EventOriginalSubType = EventTypeName,
+        EventOriginalType = EventName,
+        EventUid = AwsEventId,
+        EventOriginalResultDetails = ErrorMessage,
+        EventProductVersion = EventVersion
+    | project-rename
+        ActorUserId = UserIdentityAccountId,
+        ActorUsername = UserIdentityUserName,
+        ActorOriginalUserType = UserIdentityType,
+        HttpUserAgent = UserAgent
+    | extend
+        ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+        ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+        SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, "")
+    | extend
+        TargetUsernameType = iff(isempty(TargetUsername), "", "Simple"),
+        GroupIdType = iff(isempty(GroupId), "", "Simple"),
+        GroupNameType = iff(isempty(GroupName), "", "Simple")
+    | extend AdditionalFields = iff(pack, bag_pack(
+        "ActorAccessKeyId", UserIdentityAccessKeyId,
+        "AWSRegion", AWSRegion,
+        "APIVersion", APIVersion,
+        "ManagementEvent", ManagementEvent,
+        "ReadOnly", ReadOnly,
+        "RequestParameters", RequestParameters,
+        "ResponseElements", ResponseElements
+    ), dynamic([]))
+    | extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, AdditionalData), dynamic([]))
+    // Alias
+    | extend
+        User = ActorUsername,
+        IpAddr = SrcIpAddr
+    | project
+        TimeGenerated,
+        Type,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventSeverity,
+        EventSchema,
+        EventSchemaVersion,
+        EventVendor,
+        EventProduct,
+        TargetUserScope,
+        Dvc,
+        EventResult,
+        EventMessage,
+        EventType,
+        EventOriginalSubType,
+        EventOriginalType,
+        EventUid,
+        EventOriginalResultDetails,
+        EventProductVersion,
+        ActorUserId,
+        ActorUsername,
+        ActorOriginalUserType,
+        HttpUserAgent,
+        ActorUserIdType,
+        ActorUsernameType,
+        SrcIpAddr,
+        TargetUserId,
+        TargetUsername,
+        TargetUserIdType,
+        GroupId,
+        GroupName,
+        TargetUsernameType,
+        GroupIdType,
+        GroupNameType,
+        GroupOriginalType,
+        User,
+        IpAddr,
+        AdditionalFields
   };
-  parser(disabled = disabled, pack = pack);
+  parser (
+    starttime                = starttime,
+    endtime                  = endtime,
+    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+    targetusername_has_any   = targetusername_has_any,
+    actorusername_has_any    = actorusername_has_any,
+    eventtype_in             = eventtype_in,
+    disabled                 = disabled,
+    pack                     = pack
+  )
+
