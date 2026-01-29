@@ -1,6 +1,21 @@
 [<img alt="Recorded Future" src="Enrichment\RecordedFuture-IOC_Enrichment\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
+> [!IMPORTANT]
+> ## Microsoft Defender XDR Unified Portal Migration - Breaking Changes
+>
+> With Microsoft's transition from the standalone Azure Sentinel Portal to the **unified Microsoft Defender XDR portal**, the following **breaking changes** affect these playbooks:
+>
+> ### Incident Creation via Logic Apps No Longer Supported
+> Incidents created using the Azure Sentinel Logic Apps connector (`/azuresentinel`) **will not appear** in the unified Microsoft Defender XDR incident queue. This affects:
+>
+> | Playbook | Previous Behavior | New Behavior (v2.0) |
+> |----------|-------------------|---------------------|
+> | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePortalAlerts_CL` log only |
+> | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_CL` log only |
+> | **RecordedFuture-Sandbox_StorageAccount** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
+> | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
+
 ## Prerequisites
 
 ### Solution Dependencies

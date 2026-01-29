@@ -1,9 +1,9 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.1.0.0",
+    "contentVersion": "2.0.0.0",
     "metadata": {
         "title": "RecordedFuture-Sandbox_StorageAccount",
-        "description": "This playbook will trigger on files in a Storage Account and send them to Recorded Future Sandbox. The result will be written as a reply and a Sentinel Incident will be created if the file attachment has a sandbox risk score grater then the configured threshold value.",
+        "description": "This playbook will trigger on files in a Storage Account and send them to Recorded Future Sandbox. The result will be written to a custom log (RecordedFutureSandboxResults_CL). To create Microsoft Defender XDR incidents from sandbox results, use a Scheduled Analytics Rule that queries the RecordedFutureSandboxResults_CL table. Direct incident creation via Logic Apps is no longer supported in the unified Microsoft Defender portal.",
         "prerequisites": "To use the Recorded Future Sandbox connector, you will need a valid API token from Recorded Future as described in the documentation https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/#how-to-get-credentials",
         "postDeployment": [
             "After deployment you have to open the playbook and configure and authorize all connections and press save."
@@ -36,6 +36,15 @@
                     "Adding Sandbox region parameter to allow users to select the appropriate region for their use."
                 ],
                 "title": "Sandbox region"
+            },
+            {
+                "version": "2.0",
+                "title": "RecordedFuture-Sandbox_StorageAccount",
+                "notes": [
+                    "BREAKING CHANGE: Removed direct incident creation due to Microsoft Defender XDR unified portal migration.",
+                    "Sandbox results are now written to RecordedFutureSandboxResults_CL custom log table.",
+                    "To create incidents, deploy a Scheduled Analytics Rule that queries RecordedFutureSandboxResults_CL."
+                ]
             }
         ]
     },
@@ -66,7 +75,7 @@
     },
     "variables": {
         "AzureblobConnectionName": "[concat('Azureblob-', parameters('PlaybookName'))]",
-        "MicrosoftSentinelConnectionName": "RecordedFuture-MicrosoftSentinelConnection",
+        "AzureloganalyticsdatacollectorConnectionName": "RecordedFuture-Azureloganalyticsdatacollector",
         "RecordedfuturesandboConnectionName": "Recordedfuture-SandboConnection"
     },
     "resources": [
@@ -105,28 +114,7 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)": {
-                            "runAfter": {
-                                "Create_incident": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "body": {
-                                    "incidentArmId": "@body('Create_incident')?['id']",
-                                    "message": "<p>@{body('Get_the_full_report')?['html_report']}</p>"
-                                },
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "post",
-                                "path": "/Incidents/Comment"
-                            }
-                        },
-                        "Create_incident": {
+                        "Send_sandbox_results_to_log_analytics": {
                             "runAfter": {
                                 "Get_the_full_report": [
                                     "Succeeded"
@@ -134,19 +122,17 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": {
-                                    "description": "Report from Recorded Future Sandbox of the file @{body('Get_Blob_Metadata_(V2)')?['DisplayName']}",
-                                    "severity": "Medium",
-                                    "status": "New",
-                                    "title": "Recorded Future Sandbox File Scan - File: @{body('Get_Blob_Metadata_(V2)')?['DisplayName']}"
+                                "body": "{\n\"FileName\": \"@{body('Get_Blob_Metadata_(V2)')?['DisplayName']}\",\n\"SandboxScore\": \"@{body('Get_the_full_report')?['analysis']?['score']}\",\n\"SandboxVerdict\": \"@{body('Get_the_full_report')?['analysis']?['verdict']}\",\n\"SampleId\": \"@{body('Get_the_full_report')?['id']}\",\n\"HtmlReport\": \"@{body('Get_the_full_report')?['html_report']}\",\n\"Source\": \"StorageAccount\",\n\"ScanTime\": \"@{utcNow()}\"\n}",
+                                "headers": {
+                                    "Log-Type": "RecordedFutureSandboxResults"
                                 },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
                                     }
                                 },
-                                "method": "put",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent('5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf')}/resourceGroups/@{encodeURIComponent('RF')}/workspaces/@{encodeURIComponent('RF-log-analyitics')}"
+                                "method": "post",
+                                "path": "/api/logs"
                             }
                         },
                         "Get_Blob_Metadata_(V2)": {
@@ -326,15 +312,10 @@
                                 "connectionName": "[variables('AzureblobConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
                             },
-                            "azuresentinel": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
-                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
-                                "connectionProperties": {
-                                    "authentication": {
-                                        "type": "ManagedServiceIdentity"
-                                    }
-                                }
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
                             },
                             "recordedfuturesandbo": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedfuturesandboConnectionName'))]",
@@ -350,7 +331,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "hidden-SentinelTemplateName": "RecordedFuture-Sandbox_StorageAccount",
-                "hidden-SentinelTemplateVersion": "1.2"
+                "hidden-SentinelTemplateVersion": "2.0"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -358,7 +339,7 @@
             "apiVersion": "2017-07-01",
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('RecordedfuturesandboConnectionName'))]"
             ]
         },
@@ -379,15 +360,14 @@
         {
             "type": "Microsoft.Web/connections",
             "apiVersion": "2016-06-01",
-            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
             "location": "[resourceGroup().location]",
             "kind": "V1",
             "properties": {
-                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
                 "customParameterValues": {},
-                "parameterValueType": "Alternative",
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
                 }
             }
         },
