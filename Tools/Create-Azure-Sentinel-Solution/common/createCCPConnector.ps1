@@ -101,6 +101,10 @@ function New-ParametersForConnectorInstuctions($instructions) {
             if (![bool]($templateParameter.PSobject.Properties.name -match "AuthorizationCode")) {
                 $templateParameter | Add-Member -MemberType NoteProperty -Name "AuthorizationCode" -Value $newParameter
             }
+
+            if (![bool]($templateParameter.PSobject.Properties.name -match "redirectUri" -and [bool]$instruction.parameters.sendRedirectUri)) {
+                $templateParameter | Add-Member -MemberType NoteProperty -Name "redirectUri" -Value $newParameter
+            }
         }
         elseif ($instruction.type -eq "ContextPane") {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
@@ -620,6 +624,17 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         }
 
                         $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $copyObject
+                    }
+    
+                    # redirectUri : this is optional field for users to add.
+                    $hasRedirectUri = [bool](($armResource.properties.auth).PSobject.Properties.name -match "redirectUri")
+                    if ($hasRedirectUri) {
+                        $redirectUriProperty = $armResource.properties.auth.redirectUri
+                        $placeHoldersMatched = $redirectUriProperty | Select-String $placeHolderPatternMatches -AllMatches
+    
+                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                            $armResource.properties.auth.redirectUri = "[[parameters('redirectUri')]"
+                        }
                     }
     
                     # dataCollectionEndpoint : this is optional field for users to add.
