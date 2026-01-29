@@ -1,17 +1,17 @@
 Parser:
   Title: Authentication ASIM filtering parser for Syslog sudo
-  Version: '0.1.1'
-  LastUpdated: Apr 10 2024
+  Version: '0.2.0'
+  LastUpdated: Jan 29, 2026
 Product:
   Name: sudo
 Normalization:
   Schema: Authentication
-  Version: '0.1.1'
+  Version: '0.1.4'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing Syslog sudo sign in logs to the ASIM Authentication schema.
 ParserName: vimAuthenticationSudo
@@ -48,8 +48,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let SudoSignInAuthorized=(
-    starttime: datetime=datetime(null), 
+  let parser = (starttime: datetime=datetime(null), 
     endtime: datetime=datetime(null), 
     username_has_any: dynamic = dynamic([]),
     targetappname_has_any: dynamic = dynamic([]),
@@ -58,201 +57,166 @@ ParserQuery: |
     eventtype_in: dynamic = dynamic([]),
     eventresultdetails_in: dynamic = dynamic([]),
     eventresult: string = '*',
-    disabled: bool=false
-    ) {
-    Syslog 
+    disabled: bool=false) {
+    let SeverityLevelLookup = datatable (SeverityLevel: string, EventSeverity: string)
+    [
+        "info", "Informational",
+        "notice", "Informational",
+        "alert", "Low",
+        "error", "Medium",
+        "err", "Medium",
+        "critical", "High",
+        "warning", "Low",
+        "warn", "Low",
+        "debug", "Informational",
+        "crit", "High"
+    ];
+    let SudoLogs = Syslog
     | where not(disabled)
-    | where ProcessName == "sudo" and 
-        SyslogMessage has 'TTY=' and 
-        SyslogMessage has 'USER=' and
-        SyslogMessage has 'COMMAND='
-        and (isnull(starttime) or TimeGenerated >= starttime)
+    | where ProcessName == "sudo"
+    // Initial pre-filtering
+    | where (isnull(starttime) or TimeGenerated >= starttime)
         and (isnull(endtime) or TimeGenerated <= endtime)
         and ((array_length(username_has_any) == 0) or SyslogMessage has_any (username_has_any))
-        and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
-        and ((array_length(srcipaddr_has_any_prefix) == 0)) // SrcIpAddr not available in source
-        and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
-        and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
-        and (array_length(eventresultdetails_in) == 0 or 'Other' in~ (eventresultdetails_in))
-        and (eventresult == "*" or ('Success' == eventresult))
-    | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with (pair_delimiter=' ', kv_delimiter='=')
-    | project-rename TargetUsername = USER
-    | extend
-        EventVendor                 = 'Linux',
-        EventProduct                = 'sudo',
-        EventCount                  = int(1),
-        EventSchema                 = 'Authentication',
-        EventSchemaVersion          = '0.1.1',
-        EventResult                 = 'Success',
-        EventStartTime              = TimeGenerated,
-        EventEndTime                = TimeGenerated,
-        EventType                   = 'Logon',
-        DvcHostname                 = Computer,
-        ActorUsernameType           = 'Simple',
-        ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
-        TargetUsernameType          = 'Simple',
-        EventResultDetails          = 'Other',
-        EventOriginalRestultDetails = 'Connection authorized'
-    // Post-filtering on username_has_any
-    | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
-    // mapping ASimMatchingUsername
-    | extend
-        temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
-        ,
-        temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
-    | extend ASimMatchingUsername = case
-        (
-                                    array_length(username_has_any) == 0,
-                                    "-",
-                                    temp_isMatchTargetUsername and temp_isMatchActorUsername,
-                                    "Both",
-                                    temp_isMatchTargetUsername,
-                                    "TargetUsername",
-                                    temp_isMatchActorUsername,
-                                    "ActorUsername",
-                                    "No match"
-                                )
-    // ************************
-    //      <Aliases>
-    // ************************
-    | extend
-        User  = TargetUsername,
-        Dvc   = Computer
-    // ************************
-    //      </Aliases>
-    // ************************
-    | project-away Computer, MG, SourceSystem, TenantId, temp_*
-  };
-  let SudoAuthFailure1=(
-      starttime: datetime=datetime(null), 
-      endtime: datetime=datetime(null), 
-      username_has_any: dynamic = dynamic([]),
-      targetappname_has_any: dynamic = dynamic([]),
-      srcipaddr_has_any_prefix: dynamic = dynamic([]),
-      srchostname_has_any: dynamic = dynamic([]),
-      eventtype_in: dynamic = dynamic([]),
-      eventresultdetails_in: dynamic = dynamic([]),
-      eventresult: string = '*',
-      disabled: bool=false
-      ) {
-      Syslog
-      | where not(disabled)
-      | where ProcessName == "sudo" and (SyslogMessage has 'user NOT in sudoers' or SyslogMessage has 'incorrect password attempts')
-          and (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and ((array_length(username_has_any) == 0) or SyslogMessage has_any (username_has_any))
-          and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
-          and ((array_length(srcipaddr_has_any_prefix) == 0)) // SrcIpAddr not available in source
-          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
-          and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
+        and (array_length(targetappname_has_any) == 0 or "sudo" in~ (targetappname_has_any))
+        and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(HostIP, srcipaddr_has_any_prefix))
+        and ((array_length(srchostname_has_any) == 0) or HostName has_any (srchostname_has_any));
+        // EventType, EventResult, EventResultDetails filtering done later in parser
+    let SudoSignInAuthorized = (disabled: bool) {
+        SudoLogs
+        | where ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
+            and (eventresult == "*" or ('Success' == eventresult))
+            and (array_length(eventresultdetails_in) == 0 or 'Other' in~ (eventresultdetails_in))
+        | where SyslogMessage has 'TTY=' and 
+            SyslogMessage has 'USER=' and
+            SyslogMessage has 'COMMAND='
+        | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with (pair_delimiter=' ', kv_delimiter='=')
+        | project-rename TargetUsername = USER
+        | extend
+            EventResult                 = 'Success',
+            EventType                   = 'Logon',
+            ActorUsernameType           = 'Simple',
+            ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
+            EventResultDetails          = 'Other',
+            EventOriginalResultDetails = 'Connection authorized'
+    };
+    let SudoAuthenticationFailure = (disabled: bool) {
+        SudoLogs
+        | where ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
           and (array_length(eventresultdetails_in) == 0 or 'No such user or password' in~ (eventresultdetails_in))
           and (eventresult == "*" or ('Failure' == eventresult))
-      | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with  (pair_delimiter=' ', kv_delimiter='=')
-      | project-rename 
-          EventUid       = _ItemId,
-          TargetUsername = USER
-      | extend
-          ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
-          ActorUsernameType           = 'Simple',
-          DvcHostname                 = Computer,
-          EventCount                  = int(1),
-          EventEndTime                = TimeGenerated,
-          EventOriginalRestultDetails = 'User authentication failed',
-          EventProduct                = 'sudo',
-          EventResult                 = 'Failure',
-          EventResultDetails          = 'No such user or password',
-          EventSchema                 = 'Authentication',
-          EventSchemaVersion          = '0.1.1',
-          EventStartTime              = TimeGenerated,
-          EventType                   = 'Logon',
-          EventVendor                 = 'Linux',
-          TargetUsernameType          = 'Simple'
-      // Post-filtering on username_has_any
-      | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
-      // mapping ASimMatchingUsername
-      | extend
-          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
-          ,
-          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
-      | extend ASimMatchingUsername = case
-          (
-                                      array_length(username_has_any) == 0,
-                                      "-",
-                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
-                                      "Both",
-                                      temp_isMatchTargetUsername,
-                                      "TargetUsername",
-                                      temp_isMatchActorUsername,
-                                      "ActorUsername",
-                                      "No match"
-                                  )
-      | project-away Computer, MG, SourceSystem, TenantId, temp_*
-  };
-  let SudoDisconnect=(
-      starttime: datetime=datetime(null), 
-      endtime: datetime=datetime(null), 
-      username_has_any: dynamic = dynamic([]),
-      targetappname_has_any: dynamic = dynamic([]),
-      srcipaddr_has_any_prefix: dynamic = dynamic([]),
-      srchostname_has_any: dynamic = dynamic([]),
-      eventtype_in: dynamic = dynamic([]),
-      eventresultdetails_in: dynamic = dynamic([]),
-      eventresult: string = '*',
-      disabled: bool=false
-      ) {
-      Syslog 
-      | where not(disabled)
-      | where ProcessName == "sudo"
-          and SyslogMessage has 'session closed for user '
-          and (isnull(starttime) or TimeGenerated >= starttime)
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and ((array_length(username_has_any) == 0) or SyslogMessage has_any (username_has_any))
-          and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
-          and ((array_length(srcipaddr_has_any_prefix) == 0)) // SrcIpAddr not available in source
-          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
-          and ((array_length(eventtype_in) == 0) or "Logoff" in~ (eventtype_in))
+        | where (SyslogMessage has 'user NOT in sudoers' or SyslogMessage has 'incorrect password attempts')
+        | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with  (pair_delimiter=' ', kv_delimiter='=')
+        | project-rename 
+            TargetUsername = USER
+        | extend
+            EventResult                 = 'Failure',
+            EventType                   = 'Logon',
+            ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
+            ActorUsernameType           = 'Simple',
+            EventResultDetails          = 'No such user or password',
+            EventOriginalResultDetails  = 'User authentication failed'
+    };
+    let SudoDisconnect = (disabled: bool) {
+        SudoLogs
+        | where ((array_length(eventtype_in) == 0) or "Logoff" in~ (eventtype_in))
           and (array_length(eventresultdetails_in) == 0 or 'Other' in~ (eventresultdetails_in))
           and (eventresult == "*" or ('Success' == eventresult))
-      | parse SyslogMessage with * "for user " TargetUsername: string
-      // Post-filtering on username_has_any
-      | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
-      // mapping ASimMatchingUsername
-      | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
-      // ActorUsername not coming from source. Hence, not mapped.
-      | extend ASimMatchingUsername = case
-          (
-                                      array_length(username_has_any) == 0,
-                                      "-",
-                                      temp_isMatchTargetUsername,
-                                      "TargetUsername",
-                                      "No match"
-                                  )
-      | extend
-          DvcHostname                 = Computer,
-          EventCount                  = int(1),
-          EventEndTime                = TimeGenerated,
-          EventOriginalRestultDetails = 'User session closed',
-          EventProduct                = 'sudo',
-          EventResult                 = 'Success',
-          EventResultDetails          = 'Other',
-          EventSchema                 = 'Authentication',
-          EventSchemaVersion          = '0.1.1',
-          EventStartTime              = TimeGenerated,
-          EventType                   = 'Logoff',
-          EventVendor                 = 'Linux',
-          TargetUsernameType          = 'Simple'
-      // ************************
-      //      <Aliases>
-      // ************************
-      | extend
-          Dvc   = Computer,
-          User  = TargetUsername
-      // ************************
-      //      </Aliases>
-      // ************************
-      | project-away Computer, MG, SourceSystem, TenantId, temp_*
+        | where SyslogMessage has 'session closed for user '
+        | parse SyslogMessage with * "for user " TargetUsername:string
+        | extend
+            EventResult                 = 'Success',
+            EventType                   = 'Logoff',
+            EventOriginalResultDetails = 'User session closed',
+            EventResultDetails          = 'Other'
+    };
+    union isfuzzy=false 
+        SudoSignInAuthorized(disabled), 
+        SudoAuthenticationFailure(disabled),
+        SudoDisconnect(disabled)
+        | extend
+            EventCount = int(1),
+            EventStartTime = TimeGenerated,
+            EventEndTime = TimeGenerated,
+            EventSchema = "Authentication",
+            EventSchemaVersion = "0.1.4",
+            EventVendor = "Linux",
+            EventProduct = "sudo",
+            TargetUsernameType = "Simple",
+            Type = "Syslog",
+            ActingAppId = tostring(ProcessID)
+        | extend
+            SrcIpAddr = iff(ipv4_is_in_range(HostIP, "0.0.0.0/0"), HostIP, ""),
+            TargetAppType = "Process"
+        | lookup SeverityLevelLookup on SeverityLevel
+        | project-rename
+            SrcHostname = HostName,
+            DvcHostname = Computer,
+            EventOriginalSeverity = SeverityLevel,
+            ActingAppName = ProcessName
+            //,EventUid = _ItemId
+        // mapping ASimMatchingUsername
+        | extend
+          temp_isMatchTargetUsername = TargetUsername has_any(username_has_any),
+          temp_isMatchActorUsername = ActorUsername has_any(username_has_any)
+        | extend ASimMatchingUsername = case(
+            array_length(username_has_any) == 0, "-",
+            temp_isMatchTargetUsername and temp_isMatchActorUsername, "Both",
+            temp_isMatchTargetUsername, "TargetUsername",
+            temp_isMatchActorUsername, "ActorUsername",
+            "No match")
+        // Alias
+        | extend
+            TargetAppName = ActingAppName,
+            Application = ActingAppName,
+            User = TargetUsername,
+            DvcIpAddr = SrcIpAddr,
+            IpAddr = SrcIpAddr,
+            Src = coalesce(SrcIpAddr, SrcHostname),
+            Dvc = coalesce(SrcIpAddr, DvcHostname)
+        | project
+            TimeGenerated,
+            EventCount,
+            EventStartTime,
+            EventEndTime,
+            EventSchema,
+            EventSchemaVersion,
+            EventVendor,
+            EventProduct,
+            EventResult,
+            EventType,
+            ActorUsername,
+            ActorUsernameType,
+            EventResultDetails,
+            EventOriginalResultDetails,
+            TargetUsername,
+            TargetUsernameType,
+            Type,
+            SrcIpAddr,
+            SrcHostname,
+            EventSeverity,
+            DvcHostname,
+            EventOriginalSeverity,
+            ActingAppName,
+            ActingAppId,
+            // EventUid,
+            Src,
+            Dvc,
+            TargetAppName,
+            TargetAppType,
+            Application,
+            User,
+            DvcIpAddr,
+            IpAddr,
+            ASimMatchingUsername
   };
-  union isfuzzy=false 
-    SudoSignInAuthorized(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled), 
-    SudoAuthFailure1(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled), 
-    SudoDisconnect(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
+  parser(starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=isDisabled);
