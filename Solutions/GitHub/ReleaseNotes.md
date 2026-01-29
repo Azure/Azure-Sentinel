@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
 |-------------|--------------------------------|--------------------------------------------------------------------------|
-| 3.1.3       | 29-01-2026                     | Promoted GitHub Enterprise Cloud CCF connector from Public Preview to GA. |
+| 3.1.3       | 29-01-2026                     | Promoted GitHub Enterprise Cloud Audit Log CCF connector from Public Preview to GA. |
 | 3.1.2       | 24-11-2025                     | Added clarity to Github Enterprise Audit CCF connector definition to use API URL. |
 | 3.1.1       | 13-11-2025                     | Fixed URL handling for GitHub Enterprise Audit CCF connector.|
 | 3.1.0       | 05-11-2025                     | Updated Github Enterprise Audit CCF connector to use full URL instead of enterprise name. |
