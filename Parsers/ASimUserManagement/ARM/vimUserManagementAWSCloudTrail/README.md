@@ -13,9 +13,6 @@ For more information, see:
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM UserManagement normalization schema reference](https://aka.ms/ASimUserManagementDoc)
 
-For the parser changelog, see:
-- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/ASIM/CHANGELOG/UserManagement/vimUserManagementAWSCloudTrail.md)
-
 <br>
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimUserManagement%2FARM%2FvimUserManagementAWSCloudTrail%2FvimUserManagementAWSCloudTrail.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimUserManagement%2FARM%2FvimUserManagementAWSCloudTrail%2FvimUserManagementAWSCloudTrail.json)
