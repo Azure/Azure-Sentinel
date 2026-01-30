@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.0.0       | 18-07-2025                     | New **CCF Connector** added to Solution - *Lookout Mobile Threat Detection Connector*.    |
+| 3.0.1       | 18-12-2025                     | **Parser** v3.1.0 with support for Streaming/Polling/REST API field structures. Enhanced workbooks and dashboards. **Analytic Rules** updated with MITRE ATT&CK mobile tactics. Added **Jupyter Notebooks** for threat hunting: Mobile Malware, Smishing, Device Compliance, and Audit/Insider Threat analysis. |
+| 3.0.0       | 07-11-2025                     | New **CCF Connector** added to Solution - *Lookout Mobile Threat Detection Connector*.    |

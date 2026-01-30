@@ -1,0 +1,41 @@
+id: c3d4e5f6-g7h8-9012-cdef-gh3456789012
+name: Anomalous First-Time Device Logon
+description: |
+  'Identifies anomalous device logon events from Microsoft Defender for Endpoint (MDE) where a user connects to a device for the first time or a device connects from a new IP address. The query filters high-priority anomalies and provides key details such as timestamp, action type, source IP, location, and associated user, device, and activity insights for investigation.'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+tactics:
+  - InitialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1078
+  - T1021
+query: |
+  BehaviorAnalytics
+  | where TimeGenerated > ago(7d)
+  | where EventSource == "MDE DeviceLogonEvents"
+  | where InvestigationPriority > 0
+  | extend FirstTimeUserConnectedToDevice = tostring(ActivityInsights.FirstTimeUserConnectedToDevice),
+           FirstTimeDeviceConnectedFromIPAddress = tostring(ActivityInsights.FirstTimeDeviceConnectedFromIPAddress)
+  | where FirstTimeUserConnectedToDevice == "True" or FirstTimeDeviceConnectedFromIPAddress == "True"
+  | project TimeGenerated, ActionType, InvestigationPriority, 
+            SourceIPAddress, SourceIPLocation, UsersInsights, ActivityInsights, DevicesInsights
+  | extend Account_0_Name = tostring(UsersInsights.UserPrincipalName)
+  | extend Host_0_HostName = tostring(DevicesInsights.DeviceName)
+  | extend IP_0_Address = SourceIPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account_0_Name
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host_0_HostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IP_0_Address
+version: 2.0.0

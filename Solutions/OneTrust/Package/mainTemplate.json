@@ -1,0 +1,1094 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Support - support@onetrust.com",
+    "comments": "Solution template for OneTrust"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@onetrust.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "OneTrust",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "onetrustllc1594047340198.azure-sentinel-solution-onetrust",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "OnetrustPush",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "OnetrustPushConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "OneTrust",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "OnetrustPush",
+                  "title": "OneTrust",
+                  "publisher": "OneTrust",
+                  "descriptionMarkdown": "The OneTrust connector for Microsoft Sentinel provides the capability to have near real time visibility into where sensitive data has been located or remediated across across Google Cloud and other OneTrust supported data sources.",
+                  "graphQueries": [
+                    {
+                      "metricName": "OneTrust Metadata Logs",
+                      "legend": "OneTrustMetadataV3_CL",
+                      "baseQuery": "OneTrustMetadataV3_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "OneTrust Logs - All Logs",
+                      "query": "OneTrustMetadataV3_CL\n | sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "OneTrustMetadataV3_CL",
+                      "lastDataReceivedQuery": "OneTrustMetadataV3_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "OneTrustMetadataV3_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                      },
+                      {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Create ARM Resources and Provide the Required Permissions",
+                      "description": "This connector reads data from the tables that OneTrust uses in a Microsoft Analytics Workspace. If OneTrust's data forwarding option is enabled then raw event data can be sent to the Microsoft Sentinel Ingestion API.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application \nClicking on \"Deploy\" will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). \nIt will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token."
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "Deploy OneTrust connector resources",
+                            "applicationDisplayName": "OneTrust Connector Application"
+                          },
+                          "type": "DeployPushConnectorButton"
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Push your logs into the workspace",
+                      "description": "Use the following parameters to configure the your machine to send the logs to the workspace.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "label": "Tenant ID (Directory ID)",
+                            "fillWith": [
+                              "TenantId"
+                            ]
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Entra App Registration Application ID",
+                            "fillWith": [
+                              "ApplicationId"
+                            ],
+                            "placeholder": "Deploy push connector to get the App Registration Application ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Entra App Registration Secret",
+                            "fillWith": [
+                              "ApplicationSecret"
+                            ],
+                            "placeholder": "Deploy push connector to get the App Registration Secret"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Data Collection Endpoint Uri",
+                            "fillWith": [
+                              "DataCollectionEndpoint"
+                            ],
+                            "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "Data Collection Rule Immutable ID",
+                            "fillWith": [
+                              "DataCollectionRuleId"
+                            ],
+                            "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "label": "OneTrust Metadata Stream Name",
+                            "value": "Custom-OneTrustMetadataV3"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Support",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "OneTrust, LLC",
+                  "email": "support@onetrust.com",
+                  "tier": "Partner",
+                  "link": "https://www.onetrust.com/support/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "OneTrustMetadataDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-OneTrustMetadataV3": {
+                    "columns": [
+                      {
+                        "name": "IngestionTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "AssetID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "CreatedDateTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "AssetOwner",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "AssetName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetPermissions",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "AdditionalFields",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "Provider",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetSource",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Workload",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SubWorkload",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Location",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Region",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Classification",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClassificationLastScanDateTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "IsProtectedByDlp",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "Risks",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IdentityDirectorySource",
+                        "type": "string"
+                      },
+                      {
+                        "name": "LastAccessDateTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "LastModifiedDateTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "SensitivityLabel",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ThreatDetected",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "ThreatCategory",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "ThreatName",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "RelatedIndicators",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestSourceIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestDestinationIP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetPath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "InternalUserWithPermissionCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "ExternalUserWithPermissionCount",
+                        "type": "int"
+                      },
+                      {
+                        "name": "DeviceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "UserName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AssetSize",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MD5",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SHA1",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SHA256",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Extension",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SignatureStatus",
+                        "type": "string"
+                      },
+                      {
+                        "name": "DomainName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Subdomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "TopLevelDomain",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IPAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "URL",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ISP",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ASN",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AADTenantID",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IsAssetRemoved",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "FeedType",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-OneTrustMetadataV3"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | extend IngestionTime = now(), Provider = \"OneTrust\"",
+                    "outputStream": "Custom-OneTrustMetadataV3_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+              }
+            },
+            {
+              "name": "OneTrustMetadataV3_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "plan": "Analytics",
+                "schema": {
+                  "name": "OneTrustMetadataV3_CL",
+                  "columns": [
+                    {
+                      "name": "IngestionTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AssetID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CreatedDateTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "AssetOwner",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "AssetName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetType",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetPermissions",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "AdditionalFields",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Provider",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetSource",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Workload",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SubWorkload",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Location",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Region",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Classification",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ClassificationLastScanDateTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "IsProtectedByDlp",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "Risks",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IdentityDirectorySource",
+                      "type": "string"
+                    },
+                    {
+                      "name": "LastAccessDateTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "LastModifiedDateTime",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SensitivityLabel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ThreatDetected",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "ThreatCategory",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "ThreatName",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "RelatedIndicators",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestSourceIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RequestDestinationIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetPath",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InternalUserWithPermissionCount",
+                      "type": "int"
+                    },
+                    {
+                      "name": "ExternalUserWithPermissionCount",
+                      "type": "int"
+                    },
+                    {
+                      "name": "DeviceName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AssetSize",
+                      "type": "string"
+                    },
+                    {
+                      "name": "MD5",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SHA1",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SHA256",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Extension",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SignatureStatus",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DomainName",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Subdomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TopLevelDomain",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IPAddress",
+                      "type": "string"
+                    },
+                    {
+                      "name": "URL",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ISP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ASN",
+                      "type": "string"
+                    },
+                    {
+                      "name": "AADTenantID",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IsAssetRemoved",
+                      "type": "boolean"
+                    },
+                    {
+                      "name": "FeedType",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "OnetrustPush",
+          "title": "OneTrust",
+          "publisher": "OneTrust",
+          "descriptionMarkdown": "The OneTrust connector for Microsoft Sentinel provides the capability to have near real time visibility into where sensitive data has been located or remediated across across Google Cloud and other OneTrust supported data sources.",
+          "graphQueries": [
+            {
+              "metricName": "OneTrust Metadata Logs",
+              "legend": "OneTrustMetadataV3_CL",
+              "baseQuery": "OneTrustMetadataV3_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "OneTrust Logs - All Logs",
+              "query": "OneTrustMetadataV3_CL\n | sort by TimeGenerated desc"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "OneTrustMetadataV3_CL",
+              "lastDataReceivedQuery": "OneTrustMetadataV3_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "OneTrustMetadataV3_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Microsoft Entra",
+                "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+              },
+              {
+                "name": "Microsoft Azure",
+                "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User Access Administrator role"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Create ARM Resources and Provide the Required Permissions",
+              "description": "This connector reads data from the tables that OneTrust uses in a Microsoft Analytics Workspace. If OneTrust's data forwarding option is enabled then raw event data can be sent to the Microsoft Sentinel Ingestion API.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "#### Automated Configuration and Secure Data Ingestion with Entra Application \nClicking on \"Deploy\" will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). \nIt will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token."
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "Deploy OneTrust connector resources",
+                    "applicationDisplayName": "OneTrust Connector Application"
+                  },
+                  "type": "DeployPushConnectorButton"
+                }
+              ]
+            },
+            {
+              "title": "2. Push your logs into the workspace",
+              "description": "Use the following parameters to configure the your machine to send the logs to the workspace.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "label": "Tenant ID (Directory ID)",
+                    "fillWith": [
+                      "TenantId"
+                    ]
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Entra App Registration Application ID",
+                    "fillWith": [
+                      "ApplicationId"
+                    ],
+                    "placeholder": "Deploy push connector to get the App Registration Application ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Entra App Registration Secret",
+                    "fillWith": [
+                      "ApplicationSecret"
+                    ],
+                    "placeholder": "Deploy push connector to get the App Registration Secret"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Data Collection Endpoint Uri",
+                    "fillWith": [
+                      "DataCollectionEndpoint"
+                    ],
+                    "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "Data Collection Rule Immutable ID",
+                    "fillWith": [
+                      "DataCollectionRuleId"
+                    ],
+                    "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "label": "OneTrust Metadata Stream Name",
+                    "value": "Custom-OneTrustMetadataV3"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Support",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "OneTrust, LLC",
+          "email": "support@onetrust.com",
+          "tier": "Partner",
+          "link": "https://www.onetrust.com/support/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "OneTrust",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "auth": {
+              "type": "object",
+              "defaultValue": {
+                "appId": "[[parameters('auth').appId]]",
+                "servicePrincipalId": "[[parameters('auth').servicePrincipalId]]"
+              }
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "OneTrust",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Support",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "OneTrust, LLC",
+                  "email": "support@onetrust.com",
+                  "tier": "Partner",
+                  "link": "https://www.onetrust.com/support/"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'OnetrustConnectorPolling', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Push",
+              "properties": {
+                "connectorDefinitionName": "OnetrustPush",
+                "dcrConfig": {
+                  "streamName": "Custom-OneTrustMetadataV3",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "Push",
+                  "AppId": "[[parameters('auth').appId]",
+                  "ServicePrincipalId": "[[parameters('auth').servicePrincipalId]"
+                },
+                "request": {
+                  "RetryCount": 1
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.messages"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "OneTrust",
+        "publisherDisplayName": "OneTrust, LLC",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/OneTrust/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.onetrust.com/\">OneTrust</a> solution for Microsoft Sentinel allows Purview to have near real time visibility into where sensitive data has been located or remediated across Google Cloud and other OneTrust supported data sources.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/onetrust.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "OneTrust",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Support",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "OneTrust, LLC",
+          "email": "support@onetrust.com",
+          "tier": "Partner",
+          "link": "https://www.onetrust.com/support/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-10-24",
+        "lastPublishDate": "2025-10-24",
+        "providers": [
+          "OneTrust"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Automation (SOAR)"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

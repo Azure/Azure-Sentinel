@@ -8,15 +8,18 @@ LOG_FORMAT = "{}(method = {}) : {} : {}"
 
 
 # *Sentinel related constants
-AZURE_CLIENT_ID = os.environ.get("Azure_Client_Id", "")
-AZURE_CLIENT_SECRET = os.environ.get("Azure_Client_Secret", "")
-AZURE_TENANT_ID = os.environ.get("Azure_Tenant_Id", "")
-WORKSPACE_KEY = os.environ.get("Workspace_Key", "")
-WORKSPACE_ID = os.environ.get("Workspace_Id", "")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID", "")
+SCOPE = os.environ["SCOPE"]
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ["AZURE_DATA_COLLECTION_ENDPOINT"]
+DCR_RULE_ID = os.environ["AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES"]
 
 # *Mimecast related constants
 MIMECAST_CLIENT_ID = os.environ.get("Mimecast_Client_Id")
 MIMECAST_CLIENT_SECRET = os.environ.get("Mimecast_Client_Secret")
+MIMECAST_CG_TABLE_NAME = os.environ.get("Mimecast_CG_Table_Name", "Seg_Cg")
+MIMECAST_DLP_TABLE_NAME = os.environ.get("Mimecast_DLP_Table_Name", "Seg_Dlp")
 
 BASE_URL = os.environ.get("BaseURL", "https://api.services.mimecast.com")
 ENDPOINTS = {
@@ -25,7 +28,8 @@ ENDPOINTS = {
     "SEG_CG": "/siem/v1/batch/events/cg",
 }
 
-TABLE_NAME = {"SEG_DLP": "Seg_Dlp", "SEG_CG": "Seg_Cg"}
+TABLE_NAME = {"SEG_DLP": MIMECAST_DLP_TABLE_NAME if MIMECAST_DLP_TABLE_NAME else "Seg_Dlp", 
+              "SEG_CG": MIMECAST_CG_TABLE_NAME if MIMECAST_CG_TABLE_NAME else "Seg_Cg"}
 SEG_DLP_FUNCTION_NAME = "SEG_DLP"
 SEG_CG_FUNCTION_NAME = "SEG_CG"
 

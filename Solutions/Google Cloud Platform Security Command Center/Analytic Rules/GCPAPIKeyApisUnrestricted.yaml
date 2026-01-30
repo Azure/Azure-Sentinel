@@ -1,0 +1,66 @@
+id: d8e30113-373a-4f49-a0ad-1a5d8b95b729
+name: GCP Security Command Center - Detect Open/Unrestricted API Keys
+description: |
+  Detects Google Cloud projects that have API keys with unrestricted API access using Security Command Center API_KEY_APIS_UNRESTRICTED findings.
+  These findings indicate API keys that are not restricted to specific APIs and may allow broader access than intended.
+severity: Medium
+status: Available
+requiredDataConnectors:                                                                                                                                                                                                                                                                                                                                                        
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1190
+  - T1552
+tags:
+  - CIS GCP Foundation 3.0 1.14
+  - NIST 800-53 R5 PL-8, SA-8
+  - PCI-DSS v4.0 2.2.2, 6.2.1
+  - ISO-27001 v2022 A.8.27
+  - Cloud Controls Matrix 4 DSP-07
+  - NIST Cybersecurity Framework 1.0 PR-IP-2
+  - CIS Controls 8.0 16.10
+query: |
+ GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory == "API_KEY_APIS_UNRESTRICTED"
+  | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)
+  | extend ResourceName = tostring(FindingsJson.resourceName)
+  | extend ProjectId = extract(@"projects/([^/]+)", 1, ResourceName)
+  | extend ProjectName = tostring(FindingsResourceJson.displayName)
+  | extend Severity = tostring(FindingsJson.severity),
+           FindingName = tostring(FindingsJson.name),
+           ExternalUri = tostring(FindingsJson.externalUri),
+           Description = tostring(FindingsJson.description)
+  // produce one row per project that has unrestricted API key findings
+  | summarize TimeGenerated = max(TimeGenerated),
+              FindingsCount = count(),
+              ExternalUri = any(ExternalUri),
+              Description = any(Description)
+    by ProjectId, ProjectName, Severity, ResourceName
+  | project TimeGenerated, ProjectId, ProjectName, ResourceName, Severity, ExternalUri, Description
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectName
+      - identifier: AppId
+        columnName: ProjectId
+customDetails:
+  ResourceName: ResourceName
+  ExternalUri: ExternalUri
+  Description: Description
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP project {{ProjectName}} has unrestricted API key(s)"
+  alertDescriptionFormat: |-
+    Project {{ProjectName}} ({{ProjectId}}) has {{ResourceName}} with unrestricted API keys (API_KEY_APIS_UNRESTRICTED). Review API key restrictions, rotate or remove keys as appropriate, and apply API restrictions to keys.
+version: 1.0.0
+kind: Scheduled

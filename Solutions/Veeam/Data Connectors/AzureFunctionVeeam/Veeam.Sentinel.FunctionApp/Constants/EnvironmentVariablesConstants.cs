@@ -36,10 +36,10 @@
 
         public static string CowareWatchlistAliasLabel = "COVEWARE_WATCHLIST_ALIAS";
         
-        public static string CovewareBaseUrlLabel = "COVEWARE_BASE_URL";
         public static string CovewareAuthUrlLabel = "COVEWARE_AUTH_URL";
         public static string CovewareEarliestEventTimeLabel = "COVEWARE_EARLIEST_EVENT_TIME";
         public static string CovewareMaxRiskLevelLabel = "COVEWARE_MAX_RISK_LEVEL";
+        public static string VeeamEarliestEventLabel = "VEEAM_EARLIEST_EVENT_TIME";
 
         internal static string CreateKeyVaultUri(string kvName)
         {

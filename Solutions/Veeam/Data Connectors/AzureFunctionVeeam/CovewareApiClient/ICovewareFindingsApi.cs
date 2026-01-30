@@ -4,6 +4,6 @@ namespace CovewareApiClient
 {
     public interface ICovewareFindingsApi
     {
-        Task<CovewareFindingsResponse> GetFindingsAsync();
+        Task<CovewareFindingsResponse> GetFindingsAsync(CovewareFindingFilter filter);
     }
 }

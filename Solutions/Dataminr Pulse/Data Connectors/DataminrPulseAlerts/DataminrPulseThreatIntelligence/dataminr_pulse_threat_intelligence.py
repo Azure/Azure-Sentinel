@@ -91,7 +91,7 @@ class DataMinrPulseThreatIntelligence:
                         mapped_data = map_indicator_fields(data)
                     except DataminrPulseException as error:
                         applogger.warning(
-                            "{}(method={}) : {} : Exception in mapping. Skipping this Indicator, Index-{}, Error:{}.".format(
+                            "{}(method={}) : {} : Exception in mapping. Skipping Indicator, Index-{}, Error:{}.".format(
                                 consts.LOGS_STARTS_WITH,
                                 __method_name,
                                 consts.DATAMINR_PULSE_THREAT_INTELLIGENCE,
@@ -216,7 +216,8 @@ class DataMinrPulseThreatIntelligence:
             )
             for data in self.batch(logs_data, 100):
                 response = await self.post_data_to_threat_intelligence(data)
-                total_indicators += response["success_count"] + response["failure_count"] + response["failed_mapping_count"]
+                total_indicators += (response["success_count"] +
+                                     response["failure_count"] + response["failed_mapping_count"])
                 total_success_indicators += response["success_count"]
                 total_fail_indicators += response["failure_count"]
                 total_failed_mapping += response["failed_mapping_count"]
@@ -254,8 +255,16 @@ class DataMinrPulseThreatIntelligence:
                     total_failed_mapping,
                 )
             )
-        except DataminrPulseException:
-            raise DataminrPulseException()
+        except DataminrPulseException as error:
+            applogger.error(
+                "{}(method={}) : {} : error occurred :{}.".format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    consts.DATAMINR_PULSE_THREAT_INTELLIGENCE,
+                    error,
+                )
+            )
+            raise DataminrPulseException(error)
         except Exception as error:
             applogger.error(
                 "{}(method={}) : {} : error occurred :{}.".format(

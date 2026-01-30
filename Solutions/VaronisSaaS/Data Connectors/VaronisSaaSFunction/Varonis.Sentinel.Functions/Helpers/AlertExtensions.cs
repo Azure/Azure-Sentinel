@@ -20,7 +20,8 @@ namespace Varonis.Sentinel.Functions.Helpers
             {
                 ["High"] = 0,
                 ["Medium"] = 1,
-                ["Low"] = 2
+                ["Low"] = 2,
+                ["Informational"] = 3
             };
     }
 }

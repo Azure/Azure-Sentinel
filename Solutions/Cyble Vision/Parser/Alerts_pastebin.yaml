@@ -1,0 +1,65 @@
+id: d8c1f6c4-3e72-4c76-9b9d-2a4e3b1a9f6e
+Function:
+  Title: Parser to extract Pastebin alerts from Cyble Vision Alerts
+  Version: '1.0.0'
+  LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_pastebin
+FunctionAlias: Alerts_pastebin
+FunctionQuery: |
+  CybleVisionAlerts_CL
+  | where Service == "pastebin"
+  // Parse main nested structure
+  | extend Data = parse_json(Data)
+  // Extract top level fields
+  | extend
+      PB_Author           = tostring(Data.author),
+      PB_ContentUpdatedOn = tostring(Content_Added_On),
+      PB_URL              = tostring(url)
+  // Extract nested metadata
+  | extend
+      PB_Data_Author      = tostring(Data.author),
+      PB_Data_ContentRaw  = tostring(Data.content),
+      PB_Data_Date        = tostring(Data.['date']),
+      PB_Data_PasteID     = tostring(Data.pastebin_id),
+      PB_Data_SourceName  = tostring(Data.source_name),
+      PB_Data_SourceID    = tostring(Data.source_id),
+      PB_Data_URL         = tostring(Data.url),
+      PB_Data_Meta        = tostring(Data.meta),
+      PB_Data_PasteType   = tostring(Data.paste_type)
+  // Clean escaped characters in content (double escaped Pastebin text)
+  | extend PB_Content = replace(@'\\\\n', '\n', PB_Data_ContentRaw)
+  // Standard risk score normalization
+  | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+  // Projection standard across all your parsers
+  | project
+      TimeGenerated,
+      AlertID = tostring(ID),
+      EntityID,
+      KeywordName,
+      CompanyID,
+      Status,
+      Severity,
+      UserSeverity,
+      BucketID,
+      Domain,
+      BucketName,
+      TruePositive,
+      LLMProcessed,
+      LLMExplanation,
+      IP,
+      Service,
+      Risk_Score,
+      // Pastebin specific extracted values
+      PB_Author,
+      PB_ContentUpdatedOn,
+      PB_URL,
+      PB_Data_Author,
+      PB_Content,
+      PB_Data_Date,
+      PB_Data_PasteID,
+      PB_Data_SourceName,
+      PB_Data_SourceID,
+      PB_Data_URL,
+      PB_Data_PasteType,
+      PB_Data_Meta

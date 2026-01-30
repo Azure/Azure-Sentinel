@@ -12,7 +12,7 @@
         BestPracticeAnalysis,
         AuthorizationEvents,
         TriggeredAlarms,
-        CowareFindings
+        CovewareFindings
     }
 
     public static class QueryConstants
