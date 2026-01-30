@@ -116,25 +116,10 @@ After deployment, verify that data is flowing into Microsoft Sentinel:
 2. Run sample queries to check for data in each table:
 
 ```kql
-// Check CrowdStrike Alerts
-CrowdStrikeAlerts
+// Check CrowdStrike Sensors
+CrowdStrikeSensors
 | take 10
 
-// Check CrowdStrike Detections  
-CrowdStrikeDetections
-| take 10
-
-// Check CrowdStrike Incidents
-CrowdStrikeIncidents
-| take 10
-
-// Check CrowdStrike Hosts
-CrowdStrikeHosts
-| take 10
-
-// Check CrowdStrike Vulnerabilities
-CrowdStrikeVulnerabilities
-| take 10
 ```
 
 ### **2. Monitor Connector Health**

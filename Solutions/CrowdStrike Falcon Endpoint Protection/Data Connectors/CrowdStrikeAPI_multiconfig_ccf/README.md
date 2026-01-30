@@ -14,7 +14,7 @@ This solution helps security teams monitor endpoints for threats, track security
 - Ingests five types of security data into custom Log Analytics tables:
   - `CrowdStrikeAlerts` - Security alerts and threat notifications
   - `CrowdStrikeDetections` - Threat detections and behavioral analysis
-  - `CrowdStrikeIncidents` - Security incidents and investigations
+  - `CrowdStrikeCases` - Security cases
   - `CrowdStrikeHosts` - Endpoint device information and status
   - `CrowdStrikeVulnerabilities` - Vulnerability data from Falcon Spotlight
 - Uses secure **OAuth 2.0 Client Credentials** for authentication with automatic token refresh.
@@ -132,8 +132,8 @@ CrowdStrikeAlerts
 CrowdStrikeDetections
 | take 10
 
-// Check CrowdStrike Incidents
-CrowdStrikeIncidents
+// Check CrowdStrike Cases
+CrowdStrikeCases
 | take 10
 
 // Check CrowdStrike Hosts

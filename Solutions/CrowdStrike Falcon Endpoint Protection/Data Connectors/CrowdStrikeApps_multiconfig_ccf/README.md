@@ -11,12 +11,8 @@ This solution helps security teams monitor endpoints for threats, track security
 ## **Features**
 
 - Connects to the **CrowdStrike Falcon REST API** using OAuth2 authentication.
-- Ingests five types of security data into custom Log Analytics tables:
-  - `CrowdStrikeAlerts` - Security alerts and threat notifications
-  - `CrowdStrikeDetections` - Threat detections and behavioral analysis
-  - `CrowdStrikeIncidents` - Security incidents and investigations
-  - `CrowdStrikeHosts` - Endpoint device information and status
-  - `CrowdStrikeVulnerabilities` - Vulnerability data from Falcon Spotlight
+- Ingests security data into custom Log Analytics tables:
+  - `CrowdStrikeApps` - Crowdstrike Apps
 - Uses secure **OAuth 2.0 Client Credentials** for authentication with automatic token refresh.
 - Supports DCR-based ingestion time transformations for optimized query performance.
 - Integrates seamlessly with Sentinel analytics, hunting queries, and incident detection.
@@ -51,11 +47,7 @@ This solution helps security teams monitor endpoints for threats, track security
 
 | **Data Type** | **CrowdStrike Scope** | **Description** |
 |---------------|----------------------|-----------------|
-| Alerts | `alerts:read` | Read access to security alerts |
-| Detections | `detects:read` | Read access to threat detections |
-| Hosts | `hosts:read` | Read access to endpoint device information |
-| Incidents | `incidents:read` | Read access to security incidents |
-| Vulnerabilities | `spotlight-vulnerabilities:read` | Read access to Falcon Spotlight vulnerability data |
+| Apps | `apps:read` | Read access to security apps |
 
 **Note**: You can grant only the scopes for the data types you need. If you want all data types, grant all scopes listed above.
 
@@ -124,25 +116,10 @@ After deployment, verify that data is flowing into Microsoft Sentinel:
 2. Run sample queries to check for data in each table:
 
 ```kql
-// Check CrowdStrike Alerts
-CrowdStrikeAlerts
+// Check CrowdStrike Apps
+CrowdStrikeApps
 | take 10
 
-// Check CrowdStrike Detections  
-CrowdStrikeDetections
-| take 10
-
-// Check CrowdStrike Incidents
-CrowdStrikeIncidents
-| take 10
-
-// Check CrowdStrike Hosts
-CrowdStrikeHosts
-| take 10
-
-// Check CrowdStrike Vulnerabilities
-CrowdStrikeVulnerabilities
-| take 10
 ```
 
 ### **2. Monitor Connector Health**
