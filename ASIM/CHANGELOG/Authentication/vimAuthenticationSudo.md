@@ -1,0 +1,11 @@
+## 0.2.0
+- Add normalization of `SeverityLevel` to `EventSeverity`
+- Add mapping of `SeverityLevel` to `EventOriginalSeverity`
+- Remove unnormalized columns
+- Add mapping of `HostIP` to `SrcIpAddr`
+- Add mapping of `ProcessName` (sudo) to `TargetAppName`, `Application`, `ActingAppName`
+- Add mapping of `ProcessID` to `ActingAppId`
+- Add Alias `Src`, `Dvc`, `IpAddr`
+- Correct mapping of EventProduct to `Linux`
+- Improve parser by removing code duplication
+- Improve filtering process of vim* parser
