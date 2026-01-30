@@ -15,6 +15,9 @@
 > | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_CL` log only |
 > | **RecordedFuture-Sandbox_StorageAccount** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
 > | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
+>
+> ## Incident Creation via Analytic Rules
+> Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents.
 
 ## Prerequisites
 
@@ -243,6 +246,17 @@ The following Analytic rules are provided in the Solution. All of them requires 
 |Threat Hunt|RecordedFutureThreatHuntingIPAllActors|
 |Threat Hunt|RecordedFutureThreatHuntingDomainAllActors|
 |Threat Hunt|RecordedFutureThreatHuntingUrlAllActors|
+
+Following changes made by Microsoft, removing the possibility to create incidents via Logic Apps, we now provide the following analytic rules. For these to work out of the box, it's important that the `Custom Log Names` in the corresponding Logic Apps are used.
+
+|User Case|Analytic Rule|
+|-|-|
+|Alerts|RecordedFutureAlerts|
+|Playbook Alerts| RecordedFuturePlaybookAlerts|
+|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|
+|Sandbox Storage Account|RecordedFutureSandboxStorage|
+
+These analytic should be available under `Configuration -> Analytics -> Rule Templates` - if not, there are importable versions provided under the `Recorded Future\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Configuration -> Analytics` then press the `Import` button.
 
 
 # Upgrade from previous versions
