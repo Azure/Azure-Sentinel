@@ -14,7 +14,7 @@ For more information, see:
 - [ASIM Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
 
 For the parser changelog, see:
-- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/ASIM/CHANGELOG/Authentication/ASimUserManagementSshd.md)
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/ASIM/CHANGELOG/Authentication/ASimAuthenticationSshd.md)
 
 <br>
 
