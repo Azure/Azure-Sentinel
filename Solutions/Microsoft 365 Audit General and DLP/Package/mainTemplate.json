@@ -1,0 +1,689 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Marko Lauren",
+    "comments": "Solution template for Microsoft 365 Audit General and DLP"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Microsoft 365 Audit General and DLP",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-microsoft365auditgeneraldlp",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "M365AuditGeneralCCPDefinition",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "M365AuditGeneralCCPDefinition",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "uiConfigId2": "M365AuditDLPCCPDefinition",
+    "_uiConfigId2": "[variables('uiConfigId2')]",
+    "dataConnectorContentId2": "M365AuditDLPCCPDefinition",
+    "_dataConnectorContentId2": "[variables('dataConnectorContentId2')]",
+    "dataConnectorId2": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+    "_dataConnectorId2": "[variables('dataConnectorId2')]",
+    "dataConnectorTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId2'))))]",
+    "dataConnectorVersion2": "1.0.0",
+    "_dataConnectorcontentProductId2": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId2'),'-', variables('dataConnectorVersion2'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Microsoft 365 Audit General and DLP data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Microsoft 365 Audit.General",
+                  "publisher": "Marko Lauren",
+                  "descriptionMarkdown": "Microsoft 365 Audit.General connector ingests **all SharePoint, Exchange, Teams, and Azure Active Directory events** from the Office 365 Management Activity API.\n\nData is ingested to a custom **M365AuditGeneral_CL** table with **304 columns** supporting all Office 365 record types and workloads.\n\n**Prerequisites:** Entra ID app with Office 365 Management API permissions and Audit.General subscription.",
+                  "graphQueriesTableName": "M365AuditGeneral_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "M365 Audit Events",
+                      "baseQuery": "M365AuditGeneral_CL | where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Microsoft 365 Audit Events",
+                      "query": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Events by Workload",
+                      "query": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize count() by Workload\n| render barchart"
+                    },
+                    {
+                      "description": "SharePoint File Operations",
+                      "query": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| where Workload == 'SharePoint'\n| where Operation in ('FileDownloaded', 'FileUploaded', 'FileDeleted')\n| project TimeGenerated, UserId, Operation, SourceFileName, ClientIP\n| sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "M365AuditGeneral_CL",
+                      "lastDataReceivedQuery": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Office 365 Management API credentials",
+                        "description": "An Entra ID application registration with **Client ID** and **Client Secret**. The application must have **Office 365 Management APIs - ActivityFeed.Read** permission and an active subscription to the **Audit.General** content type."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "1. Go to **Microsoft Entra ID** > **App registrations** > **New registration**\n2. Name: `Sentinel-M365Audit` (or your preferred name)\n3. **Supported account types**: Accounts in this organizational directory only\n4. Click **Register**\n5. Note the **Application (client) ID** - you'll need this later\n6. Go to **Certificates & secrets** > **New client secret**\n7. Add a description, set expiration, click **Add**\n8. **Copy the secret Value immediately** - it won't be shown again",
+                      "title": "1. Register an Entra ID Application"
+                    },
+                    {
+                      "description": "1. In your app registration, go to **API permissions** > **Add a permission**\n2. Select **Office 365 Management APIs**\n3. Choose **Application permissions**\n4. Select **ActivityFeed.Read**\n5. Click **Add permissions**\n6. Click **Grant admin consent** for your tenant\n7. Verify the permission shows as **Granted**",
+                      "title": "2. Configure API Permissions"
+                    },
+                    {
+                      "description": "Run this PowerShell script to subscribe to the Audit.General content type (required before data flows):\n\n```powershell\n# Replace with your values\n$tenantId = 'YOUR_TENANT_ID'\n$clientId = 'YOUR_CLIENT_ID'\n$clientSecret = 'YOUR_CLIENT_SECRET'\n$publisherId = $tenantId  # Publisher identifier is your tenant ID\n\n# Get OAuth token\n$body = @{\n    grant_type    = 'client_credentials'\n    client_id     = $clientId\n    client_secret = $clientSecret\n    resource      = 'https://manage.office.com'\n}\n$tokenResponse = Invoke-RestMethod -Method Post -Uri \"https://login.microsoftonline.com/$tenantId/oauth2/token\" -Body $body\n$token = $tokenResponse.access_token\n\n# Start subscription\n$headers = @{Authorization = \"Bearer $token\"}\n$subscribeUri = \"https://manage.office.com/api/v1.0/$tenantId/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$publisherId\"\nInvoke-RestMethod -Method Post -Uri $subscribeUri -Headers $headers\n```",
+                      "title": "3. Subscribe to Audit.General Content"
+                    },
+                    {
+                      "description": "Provide your Entra ID application credentials below. The connector will automatically use your subscription's tenant ID for authentication and API calls.",
+                      "instructions": [
+                        {
+                          "type": "OAuthForm",
+                          "parameters": {
+                            "clientIdLabel": "Application (Client) ID",
+                            "clientSecretLabel": "Client Secret Value",
+                            "connectButtonLabel": "Connect",
+                            "disconnectButtonLabel": "Disconnect"
+                          }
+                        }
+                      ],
+                      "title": "4. Connect the Data Connector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft 365 Audit General and DLP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Marko Lauren"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Microsoft 365 Audit.General",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft 365 Audit General and DLP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Marko Lauren"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Microsoft 365 Audit.General",
+          "publisher": "Marko Lauren",
+          "descriptionMarkdown": "Microsoft 365 Audit.General connector ingests **all SharePoint, Exchange, Teams, and Azure Active Directory events** from the Office 365 Management Activity API.\n\nData is ingested to a custom **M365AuditGeneral_CL** table with **304 columns** supporting all Office 365 record types and workloads.\n\n**Prerequisites:** Entra ID app with Office 365 Management API permissions and Audit.General subscription.",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "M365 Audit Events",
+              "baseQuery": "M365AuditGeneral_CL | where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "M365AuditGeneral_CL",
+              "lastDataReceivedQuery": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Microsoft 365 Audit Events",
+              "query": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Events by Workload",
+              "query": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize count() by Workload\n| render barchart"
+            },
+            {
+              "description": "SharePoint File Operations",
+              "query": "M365AuditGeneral_CL\n| where RecordType !in (11, 13, 33, 63, 99, 100, 107, 187)\n| where Workload == 'SharePoint'\n| where Operation in ('FileDownloaded', 'FileUploaded', 'FileDeleted')\n| project TimeGenerated, UserId, Operation, SourceFileName, ClientIP\n| sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Office 365 Management API credentials",
+                "description": "An Entra ID application registration with **Client ID** and **Client Secret**. The application must have **Office 365 Management APIs - ActivityFeed.Read** permission and an active subscription to the **Audit.General** content type."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "1. Go to **Microsoft Entra ID** > **App registrations** > **New registration**\n2. Name: `Sentinel-M365Audit` (or your preferred name)\n3. **Supported account types**: Accounts in this organizational directory only\n4. Click **Register**\n5. Note the **Application (client) ID** - you'll need this later\n6. Go to **Certificates & secrets** > **New client secret**\n7. Add a description, set expiration, click **Add**\n8. **Copy the secret Value immediately** - it won't be shown again",
+              "title": "1. Register an Entra ID Application"
+            },
+            {
+              "description": "1. In your app registration, go to **API permissions** > **Add a permission**\n2. Select **Office 365 Management APIs**\n3. Choose **Application permissions**\n4. Select **ActivityFeed.Read**\n5. Click **Add permissions**\n6. Click **Grant admin consent** for your tenant\n7. Verify the permission shows as **Granted**",
+              "title": "2. Configure API Permissions"
+            },
+            {
+              "description": "Run this PowerShell script to subscribe to the Audit.General content type (required before data flows):\n\n```powershell\n# Replace with your values\n$tenantId = 'YOUR_TENANT_ID'\n$clientId = 'YOUR_CLIENT_ID'\n$clientSecret = 'YOUR_CLIENT_SECRET'\n$publisherId = $tenantId  # Publisher identifier is your tenant ID\n\n# Get OAuth token\n$body = @{\n    grant_type    = 'client_credentials'\n    client_id     = $clientId\n    client_secret = $clientSecret\n    resource      = 'https://manage.office.com'\n}\n$tokenResponse = Invoke-RestMethod -Method Post -Uri \"https://login.microsoftonline.com/$tenantId/oauth2/token\" -Body $body\n$token = $tokenResponse.access_token\n\n# Start subscription\n$headers = @{Authorization = \"Bearer $token\"}\n$subscribeUri = \"https://manage.office.com/api/v1.0/$tenantId/activity/feed/subscriptions/start?contentType=Audit.General&PublisherIdentifier=$publisherId\"\nInvoke-RestMethod -Method Post -Uri $subscribeUri -Headers $headers\n```",
+              "title": "3. Subscribe to Audit.General Content"
+            },
+            {
+              "description": "Provide your Entra ID application credentials below. The connector will automatically use your subscription's tenant ID for authentication and API calls.",
+              "instructions": [
+                {
+                  "type": "OAuthForm",
+                  "parameters": {
+                    "clientIdLabel": "Application (Client) ID",
+                    "clientSecretLabel": "Client Secret Value",
+                    "connectButtonLabel": "Connect",
+                    "disconnectButtonLabel": "Disconnect"
+                  }
+                }
+              ],
+              "title": "4. Connect the Data Connector"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Microsoft 365 Audit General and DLP data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId2')]",
+                  "title": "Microsoft 365 Audit.DLP",
+                  "publisher": "Marko Lauren",
+                  "descriptionMarkdown": "Microsoft 365 Audit.DLP connector ingests **DLP events for all workloads** from the Office 365 Management Activity API.\n\nData is ingested to the same **M365AuditGeneral_CL** table with **304 columns** including dedicated DLP schema fields (SharePointMetaData, ExchangeMetaData, EndpointMetaData, ExceptionInfo, PolicyDetails, SensitiveInfoDetectionIsIncluded).\n\n**Prerequisites:** Entra ID app with Office 365 Management API permissions and DLP.All subscription.",
+                  "graphQueriesTableName": "M365AuditGeneral_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total DLP events received",
+                      "legend": "M365 DLP Events",
+                      "baseQuery": "M365AuditGeneral_CL | where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Microsoft 365 DLP Events",
+                      "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "DLP Events by Workload",
+                      "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize count() by Workload\n| render barchart"
+                    },
+                    {
+                      "description": "DLP Policy Violations",
+                      "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| where Operation == 'DlpRuleMatch'\n| summarize count() by tostring(PolicyDetails)\n| render barchart"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "M365AuditGeneral_CL",
+                      "lastDataReceivedQuery": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Office 365 Management API credentials",
+                        "description": "An Entra ID application registration with **Client ID** and **Client Secret**. The application must have **Office 365 Management APIs - ActivityFeed.Read** permission and an active subscription to the **DLP.All** content type. You can reuse the same app as the Audit.General connector."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "⚠️ If you already have an app from the Audit.General connector, you can **reuse the same app**. Otherwise:\n\n1. Go to **Microsoft Entra ID** > **App registrations** > **New registration**\n2. Name: `Sentinel-M365Audit` (or your preferred name)\n3. **Supported account types**: Accounts in this organizational directory only\n4. Click **Register**\n5. Note the **Application (client) ID** - you'll need this later\n6. Go to **Certificates & secrets** > **New client secret**\n7. Add a description, set expiration, click **Add**\n8. **Copy the secret Value immediately** - it won't be shown again",
+                      "title": "1. Register an Entra ID Application"
+                    },
+                    {
+                      "description": "⚠️ Audit.DLP requires **ActivityFeed.ReadDlp** permission (different from Audit.General which needs ActivityFeed.Read).\n\n1. In your app registration, go to **API permissions** > **Add a permission**\n2. Select **Office 365 Management APIs**\n3. Choose **Application permissions**\n4. Select **ActivityFeed.ReadDlp**\n5. Click **Add permissions**\n6. Click **Grant admin consent** for your tenant\n7. Verify the permission shows as **Granted**\n\nNote: If sharing the same app with Audit.General connector, add both ActivityFeed.Read and ActivityFeed.ReadDlp permissions.",
+                      "title": "2. Configure API Permissions"
+                    },
+                    {
+                      "description": "Run this PowerShell script to subscribe to the DLP.All content type (required before data flows):\n\n```powershell\n# Replace with your values\n$tenantId = 'YOUR_TENANT_ID'\n$clientId = 'YOUR_CLIENT_ID'\n$clientSecret = 'YOUR_CLIENT_SECRET'\n$publisherId = $tenantId  # Publisher identifier is your tenant ID\n\n# Get OAuth token\n$body = @{\n    grant_type    = 'client_credentials'\n    client_id     = $clientId\n    client_secret = $clientSecret\n    resource      = 'https://manage.office.com'\n}\n$tokenResponse = Invoke-RestMethod -Method Post -Uri \"https://login.microsoftonline.com/$tenantId/oauth2/token\" -Body $body\n$token = $tokenResponse.access_token\n\n# Start subscription\n$headers = @{Authorization = \"Bearer $token\"}\n$subscribeUri = \"https://manage.office.com/api/v1.0/$tenantId/activity/feed/subscriptions/start?contentType=DLP.All&PublisherIdentifier=$publisherId\"\nInvoke-RestMethod -Method Post -Uri $subscribeUri -Headers $headers\n```",
+                      "title": "3. Subscribe to DLP.All Content"
+                    },
+                    {
+                      "description": "Provide your Entra ID application credentials below. You can use the **same app credentials** as the Audit.General connector. The connector will automatically use your subscription's tenant ID for authentication and API calls.",
+                      "instructions": [
+                        {
+                          "type": "OAuthForm",
+                          "parameters": {
+                            "clientIdLabel": "Application (Client) ID",
+                            "clientSecretLabel": "Client Secret Value",
+                            "connectButtonLabel": "Connect",
+                            "disconnectButtonLabel": "Disconnect"
+                          }
+                        }
+                      ],
+                      "title": "4. Connect the Data Connector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+                "contentId": "[variables('_dataConnectorContentId2')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft 365 Audit General and DLP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Marko Lauren"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId2')]",
+        "contentKind": "DataConnector",
+        "displayName": "Microsoft 365 Audit.DLP",
+        "contentProductId": "[variables('_dataConnectorcontentProductId2')]",
+        "id": "[variables('_dataConnectorcontentProductId2')]",
+        "version": "[variables('dataConnectorVersion2')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId2'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId2')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId2'))]",
+        "contentId": "[variables('_dataConnectorContentId2')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion2')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft 365 Audit General and DLP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Marko Lauren"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId2'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Microsoft 365 Audit.DLP",
+          "publisher": "Marko Lauren",
+          "descriptionMarkdown": "Microsoft 365 Audit.DLP connector ingests **DLP events for all workloads** from the Office 365 Management Activity API.\n\nData is ingested to the same **M365AuditGeneral_CL** table with **304 columns** including dedicated DLP schema fields (SharePointMetaData, ExchangeMetaData, EndpointMetaData, ExceptionInfo, PolicyDetails, SensitiveInfoDetectionIsIncluded).\n\n**Prerequisites:** Entra ID app with Office 365 Management API permissions and DLP.All subscription.",
+          "graphQueries": [
+            {
+              "metricName": "Total DLP events received",
+              "legend": "M365 DLP Events",
+              "baseQuery": "M365AuditGeneral_CL | where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "M365AuditGeneral_CL",
+              "lastDataReceivedQuery": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Microsoft 365 DLP Events",
+              "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "DLP Events by Workload",
+              "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| summarize count() by Workload\n| render barchart"
+            },
+            {
+              "description": "DLP Policy Violations",
+              "query": "M365AuditGeneral_CL\n| where RecordType in (11, 13, 33, 63, 99, 100, 107, 187)\n| where Operation == 'DlpRuleMatch'\n| summarize count() by tostring(PolicyDetails)\n| render barchart"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Office 365 Management API credentials",
+                "description": "An Entra ID application registration with **Client ID** and **Client Secret**. The application must have **Office 365 Management APIs - ActivityFeed.Read** permission and an active subscription to the **DLP.All** content type. You can reuse the same app as the Audit.General connector."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "⚠️ If you already have an app from the Audit.General connector, you can **reuse the same app**. Otherwise:\n\n1. Go to **Microsoft Entra ID** > **App registrations** > **New registration**\n2. Name: `Sentinel-M365Audit` (or your preferred name)\n3. **Supported account types**: Accounts in this organizational directory only\n4. Click **Register**\n5. Note the **Application (client) ID** - you'll need this later\n6. Go to **Certificates & secrets** > **New client secret**\n7. Add a description, set expiration, click **Add**\n8. **Copy the secret Value immediately** - it won't be shown again",
+              "title": "1. Register an Entra ID Application"
+            },
+            {
+              "description": "⚠️ Audit.DLP requires **ActivityFeed.ReadDlp** permission (different from Audit.General which needs ActivityFeed.Read).\n\n1. In your app registration, go to **API permissions** > **Add a permission**\n2. Select **Office 365 Management APIs**\n3. Choose **Application permissions**\n4. Select **ActivityFeed.ReadDlp**\n5. Click **Add permissions**\n6. Click **Grant admin consent** for your tenant\n7. Verify the permission shows as **Granted**\n\nNote: If sharing the same app with Audit.General connector, add both ActivityFeed.Read and ActivityFeed.ReadDlp permissions.",
+              "title": "2. Configure API Permissions"
+            },
+            {
+              "description": "Run this PowerShell script to subscribe to the DLP.All content type (required before data flows):\n\n```powershell\n# Replace with your values\n$tenantId = 'YOUR_TENANT_ID'\n$clientId = 'YOUR_CLIENT_ID'\n$clientSecret = 'YOUR_CLIENT_SECRET'\n$publisherId = $tenantId  # Publisher identifier is your tenant ID\n\n# Get OAuth token\n$body = @{\n    grant_type    = 'client_credentials'\n    client_id     = $clientId\n    client_secret = $clientSecret\n    resource      = 'https://manage.office.com'\n}\n$tokenResponse = Invoke-RestMethod -Method Post -Uri \"https://login.microsoftonline.com/$tenantId/oauth2/token\" -Body $body\n$token = $tokenResponse.access_token\n\n# Start subscription\n$headers = @{Authorization = \"Bearer $token\"}\n$subscribeUri = \"https://manage.office.com/api/v1.0/$tenantId/activity/feed/subscriptions/start?contentType=DLP.All&PublisherIdentifier=$publisherId\"\nInvoke-RestMethod -Method Post -Uri $subscribeUri -Headers $headers\n```",
+              "title": "3. Subscribe to DLP.All Content"
+            },
+            {
+              "description": "Provide your Entra ID application credentials below. You can use the **same app credentials** as the Audit.General connector. The connector will automatically use your subscription's tenant ID for authentication and API calls.",
+              "instructions": [
+                {
+                  "type": "OAuthForm",
+                  "parameters": {
+                    "clientIdLabel": "Application (Client) ID",
+                    "clientSecretLabel": "Client Secret Value",
+                    "connectButtonLabel": "Connect",
+                    "disconnectButtonLabel": "Disconnect"
+                  }
+                }
+              ],
+              "title": "4. Connect the Data Connector"
+            }
+          ],
+          "id": "[variables('_uiConfigId2')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Microsoft 365 Audit General and DLP",
+        "publisherDisplayName": "Community",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Microsoft%20365%20Audit%20General%20and%20DLP/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Microsoft 365 Audit General &amp; DLP solution provides capability to ingest M365 Audit.General and Audit.DLP logs into Microsoft Sentinel using the Codeless Connector Platform. This solution enables comprehensive auditing and DLP monitoring for Microsoft 365 environments covering 29 specialty workloads including Copilot, Power BI, Viva suite, Security &amp; Compliance, eDiscovery, and Sentinel platform operations.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<p>• <a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n<p><strong>Data Connectors:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Workbooks/Images/Logos/office365_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft 365 Audit General and DLP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Marko Lauren"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId2')]",
+              "version": "[variables('dataConnectorVersion2')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-01-08",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Cloud Provider"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
