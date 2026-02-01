@@ -1,0 +1,36 @@
+id: 9e4f8a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
+name: AI Agents - Sending email to AI controlled input values
+description: |
+  This query identifies Copilot Studio AI agents using generative orchestration to send emails 
+  via the Outlook connector where all action input values are populated dynamically by the orchestrator. 
+  This configuration is risky because if an attacker successfully performs a prompt injection (XPIA) attack, 
+  the agent could be manipulated to exfiltrate sensitive data to arbitrary recipients.
+  Recommended Action: Confirm with the agent owner whether this behavior is required and understand the business justification. 
+  If feasible, hard-code the recipient address in the email action or apply strict validation to limit misuse.
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+  - Impact
+relevantTechniques:
+  - T1041
+  - T1565
+query: |
+  AIAgentsInfo 
+  | summarize arg_max(Timestamp, *) by AIAgentId 
+  | where AgentStatus != "Deleted" 
+  | where IsGenerativeOrchestrationEnabled
+  | mvexpand Action = AgentToolsDetails 
+  | extend  OperationId = tostring(Action.action.operationId), ActionName = tostring(Action.modelDisplayName), Action 
+  | where OperationId == "SendEmailV2"  
+  | where isempty(Action.inputs)
+  | project-reorder AgentCreationTime ,AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, ActionName 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0

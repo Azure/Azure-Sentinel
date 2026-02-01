@@ -180,7 +180,7 @@ def main(mytimer: func.TimerRequest) -> None:
             "sort": ["created"],
             "searchAfter": []
         }
-        audit_url = f'https://{tenant_id}.api.identitynow.com/v3/search/events'
+        audit_url = f'https://{tenant_id}.api.identitynow.com/v2025/search/events'
 
         # Initiate request
         audit_events_response = requests.request("POST", url=audit_url, params=queryparams, json=searchpayload,

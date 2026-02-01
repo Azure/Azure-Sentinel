@@ -1,0 +1,112 @@
+id: 8c2bfa74-7f21-4a0e-9e5f-5bb3d632c445
+Function:
+    Title: Parser to extract SSL Expiry alerts from Cyble Vision Alerts
+    Version: '1.0.0'
+    LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_ssl_expiry
+FunctionAlias: Alerts_ssl_expiry
+FunctionQuery: |
+    CybleVisionAlerts_CL
+    | where Service == "ssl_expiry"
+    | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+    | extend AlertID = ID
+    | extend Data = parse_json(Data)
+    // inner object (Data.data)
+    | extend Inner = Data.data
+    // Extract the nested SSL detail safely (detail is a doubleencoded JSON string)
+    | extend RawDetail = tostring(Data.data.detail)
+    // Normalize double escaping if present
+    | extend NormalizedDetail =
+        case(
+            isempty(RawDetail), "{}", 
+            RawDetail startswith "{\\\"", RawDetail,                      // already correct JSON string
+            RawDetail startswith "\\\\\"", replace(@'\\\\\"', '"', RawDetail), // fix double escaped JSON
+            RawDetail
+        )
+    // Parse JSON from the normalized string
+    | extend CertObj = parse_json(NormalizedDetail)
+    // If parsing failed fallback to empty object
+    | extend CertObj = iif(isnull(CertObj) or isempty(tostring(CertObj)), dynamic({}), CertObj)
+    // Certificate fields
+    | extend
+        SS_Asset                 = tostring(Inner.asset),
+        SS_Expiry                = tostring(Inner.expiry),
+        SS_Age                   = toint(Inner.age),
+        SS_DaysUntilExpiry       = toint(Inner.days),
+        SS_Expiry_ISO            = tostring(Inner.data.expiry)
+    // From parsed certificate object (CertObj)
+    | extend
+        SS_Cert_Fingerprint_MD5    = tostring(CertObj.certificate.fingerprint_md5),
+        SS_Cert_Fingerprint_SHA1   = tostring(CertObj.certificate.fingerprint_sha1),
+        SS_Cert_Fingerprint_SHA256 = tostring(CertObj.certificate.fingerprint_sha256),
+        SS_Cert_IsExpired          = tostring(CertObj.certificate.is_expired),
+        SS_Cert_Issuer_CN          = tostring(CertObj.certificate.issuer.common_name[0]),
+        SS_Cert_Issuer_O           = tostring(CertObj.certificate.issuer.organization[0]),
+        SS_Cert_Issuer_C           = tostring(CertObj.certificate.issuer.country[0]),
+        SS_Cert_Subject_CN         = tostring(CertObj.certificate.subject.common_name[0]),
+        SS_Cert_Serial             = tostring(CertObj.certificate.serial_number),
+        SS_Cert_Valid_NotBefore    = tostring(CertObj.certificate.validity.not_before),
+        SS_Cert_Valid_NotAfter     = tostring(CertObj.certificate.validity.not_after),
+        SS_Cert_Version            = tostring(CertObj.certificate.version),
+        SS_Cert_Raw                = tostring(CertObj.certificate.raw)
+    // Subject Alternative Names
+    | extend SS_SAN_Array = 
+        iif(isnull(CertObj.certificate.subject_alt_name) or isempty(tostring(CertObj.certificate.subject_alt_name)),
+            dynamic([]),
+            todynamic(CertObj.certificate.subject_alt_name.dns_names))
+    | extend SS_SANs = 
+        iif(isnull(SS_SAN_Array) or array_length(SS_SAN_Array) == 0, "", strcat_array(SS_SAN_Array, ","))
+    // Fallbacks: certificate payload nested inside Inner.data
+    | extend InnerData = parse_json(tostring(Inner.data))
+    | extend
+        SS_Title   = tostring(InnerData.['title']),
+        SS_Port    = toint(InnerData.port),
+        SS_Hash    = tostring(InnerData.hash),
+        SS_IsValid = tostring(InnerData.is_valid),
+        SS_Issued  = tostring(InnerData.issued)
+    // Tags
+    | extend SS_Tags = tostring(Tags)
+    // Final projection
+    | project
+        TimeGenerated,
+        AlertID,
+        EntityID,
+        KeywordName,
+        CompanyID,
+        Status,
+        Severity,
+        UserSeverity,
+        BucketID,
+        Domain,
+        BucketName,
+        TruePositive,
+        LLMProcessed,
+        LLMExplanation,
+        IP,
+        Service,
+        Risk_Score,
+        SS_Asset,
+        SS_Expiry,
+        SS_DaysUntilExpiry,
+        SS_Age,
+        SS_Title,
+        SS_Port,
+        SS_Hash,
+        SS_IsValid,
+        SS_Issued,
+        SS_Cert_Fingerprint_MD5,
+        SS_Cert_Fingerprint_SHA1,
+        SS_Cert_Fingerprint_SHA256,
+        SS_Cert_IsExpired,
+        SS_Cert_Issuer_CN,
+        SS_Cert_Issuer_O,
+        SS_Cert_Issuer_C,
+        SS_Cert_Subject_CN,
+        SS_SANs,
+        SS_Cert_Serial,
+        SS_Cert_Valid_NotBefore,
+        SS_Cert_Valid_NotAfter,
+        SS_Cert_Version,
+        SS_Cert_Raw,
+        SS_Tags

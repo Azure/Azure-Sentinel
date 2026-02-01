@@ -1,7 +1,7 @@
 import logging
 import azure.functions as func
-# Import DefaultAzureCredentials from the identity package that will be used for authenticatin
-from azure.identity import DefaultAzureCredential
+# Import ManagedIdentityCredential from the identity package that will be used for authentication
+from azure.identity import ManagedIdentityCredential
 # Import of SecurityInsights that allows to write to the Watclist API
 from azure.mgmt.securityinsight import SecurityInsights
 # Import the Watchlist model that allows us to create a watchlist
@@ -18,9 +18,10 @@ import os
 from azure.core.exceptions import HttpResponseError
 
 
+
 app = func.FunctionApp()
 
-credential = DefaultAzureCredential()
+credential = ManagedIdentityCredential()
 
 @app.timer_trigger(schedule="0 0 2 * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False) 

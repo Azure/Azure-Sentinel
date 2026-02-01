@@ -1,0 +1,108 @@
+Parser:
+  Title: Web Session ASIM parser for Azure Firewall
+  Version: '0.1.0'
+  LastUpdated: Dec 3, 2025
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Azure Firewall logs to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionAzureFirewall
+EquivalentBuiltInParser: _ASim_WebSession_AzureFirewall
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled:bool = false
+  )
+  {
+    let ActionLookup = datatable(Action:string, DvcAction:string, EventResult:string, EventSeverity:string)
+    [
+        "Allow", "Allow", "Success", "Informational",
+        "Deny", "Deny", "Failure", "Low",
+        "", "", "NA", "Informational"
+    ];
+    AZFWApplicationRule
+    | where not(disabled)
+    | lookup ActionLookup on Action
+    | project-rename
+        EventOriginalUid = _ItemId,
+        EventOriginalResultDetails = ActionReason,
+        Src = SourceIp,
+        SrcPortNumber = SourcePort,
+        DstPortNumber = DestinationPort,
+        DvcOriginalAction = Action,
+        DstFQDN = Fqdn,
+        NetworkApplicationProtocol = Protocol,
+        UrlCategory = WebCategory
+    | extend
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventType = "HTTPsession",
+        EventSchema = "WebSession",
+        EventSchemaVersion = "0.2.6",
+        EventVendor = "Microsoft",
+        EventProduct = "Azure Firewall",
+        EventCount = toint(1),
+        DvcIdType = "AzureResourceId",
+        SrcIpAddr = Src,
+        SrcHostname = Src,
+        Dvc = _ResourceId,
+        DvcId = _ResourceId,
+        DvcScopeId = _SubscriptionId,
+        IpAddr = Src,
+        AdditionalFields = bag_pack(
+            "Policy", Policy,
+            "RuleCollection", RuleCollection, 
+            "RuleCollectionGroup", RuleCollectionGroup,
+            "IsTlsInspected", IsTlsInspected,
+            "IsExplicitProxyRequest", IsExplicitProxyRequest,
+            "SourceSystem", SourceSystem
+        )
+    | project
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventSchema,
+        EventSchemaVersion,
+        EventVendor,
+        EventProduct,
+        EventCount,
+        EventOriginalResultDetails,
+        EventOriginalUid,
+        EventResult,
+        EventSeverity,
+        Type,
+        Src,
+        SrcIpAddr,
+        SrcPortNumber,
+        SrcHostname,
+        DstPortNumber,
+        Rule,
+        NetworkApplicationProtocol,
+        Dvc,
+        DvcId,
+        DvcIdType,
+        DvcScopeId,
+        DvcAction,
+        DvcOriginalAction,
+        IpAddr,
+        UrlCategory,
+        TimeGenerated,
+        AdditionalFields,
+        _BilledSize,
+        _IsBillable,
+        _ResourceId,
+        _SubscriptionId,
+        TenantId
+  };
+  parser (disabled = disabled)

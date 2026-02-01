@@ -1,17 +1,15 @@
 Parser:
   Title: Authentication ASIM parser for OpenSSH sshd
-  Version: '0.2.2'
-  LastUpdated: Sept 18, 2023
+  Version: '0.3.0'
+  LastUpdated: Jan 16, 2026
 Product:
   Name: OpenSSH
 Normalization:
   Schema: Authentication
-  Version: '0.1.2'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing OpenSSH server (sshd) sign in logs, collected using Syslog to the ASIM Authentication schema.
 Notes: |
@@ -26,26 +24,37 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (disabled:bool=false) {
+    let LogonMethodLookup = datatable(Method: string, LogonMethod: string)
+    [
+        'password', 'Username & password',
+        'publickey', 'PKI',
+        'keyboard-interactive/pam',  'PAM'
+    ];
     let SyslogProjects = Syslog | project TimeGenerated, Computer, SyslogMessage, ProcessName, ProcessID, HostIP, Type, _ItemId, _ResourceId, _SubscriptionId;
     //
-    // -- Successful login
+    // -- Successful login 
     let SSHDAccepted=(disabled:bool=false) { 
-        // -- Parse events with the format "Accepted password for <User> from <IP address> port <port> ssh2"
+        // -- Parse events with the format "Accepted (password|none|publickey|etc.)  for <User> from <IP address> port <port> ssh2"
         SyslogProjects 
         | where not(disabled)
         | where ProcessName == "sshd" and SyslogMessage startswith 'Accepted'
-        | parse SyslogMessage with "Accepted password for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | parse SyslogMessage with "Accepted " Method: string " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
         | extend
             EventCount    = int(1),
             EventResult   = 'Success',
             EventSeverity = 'Informational',
             EventType     = 'Logon'
-        | project-away SyslogMessage, ProcessName
+        | lookup LogonMethodLookup on Method
+        | extend LogonMethod = case(
+            isnotempty(LogonMethod), LogonMethod,
+            SyslogMessage has "key RSA", "PKI",
+            "Other")
+        | project-away SyslogMessage, ProcessName, Method
     };
     //
     // -- Failed login - incorrect password
     let SSHDFailed=(disabled:bool=false) {
-        // -- Parse events with the format "Failed (password|none|publickey) for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
+        // -- Parse events with the format "Failed (password|none|publickey|etc.) for <User> from <IP address> port <port> ssh2[: RSA <cipher>:<key>]"
         // -- Or a number of such events message repeated <n> times: [ <message> ]
         SyslogProjects 
         | where not(disabled)
@@ -53,16 +62,20 @@ ParserQuery: |
             SyslogMessage startswith 'Failed' 
             or (SyslogMessage startswith 'message repeated' and SyslogMessage has 'Failed')
         )
-        | parse SyslogMessage with * "Failed " * " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
+        | parse SyslogMessage with * "Failed " Method: string " for " TargetUsername:string " from " SrcIpAddr:string " port" SrcPortNumber:int *
         | parse SyslogMessage with "message repeated" EventCount:int " times:" * 
         | extend
             EventCount         = toint(coalesce(EventCount,1)),
             EventResult        = 'Failure',
             EventResultDetails = iff (SyslogMessage has 'publickey', 'Incorrect key', 'Incorrect password'),
             EventSeverity      = 'Low' ,
-            EventType          = 'Logon',
-            LogonMethod        = iff (SyslogMessage has 'publickey', 'PKI', 'Username & password')
-        | project-away SyslogMessage, ProcessName
+            EventType          = 'Logon'
+        | lookup LogonMethodLookup on Method
+        | extend LogonMethod = case(
+            isnotempty(LogonMethod), LogonMethod,
+            SyslogMessage has "key RSA", "PKI",
+            "Other")
+        | project-away SyslogMessage, ProcessName, Method
     };
     //
     // -- Logoff - Timeout
@@ -173,7 +186,7 @@ ParserQuery: |
         EventEndTime          = TimeGenerated,
         EventProduct          = 'OpenSSH',
         EventSchema           = 'Authentication',
-        EventSchemaVersion    = '0.1.2',
+        EventSchemaVersion    = '0.1.3',
         EventStartTime        = TimeGenerated,
         EventSubType          = 'Remote',
         EventVendor           = 'OpenBSD',
@@ -182,7 +195,8 @@ ParserQuery: |
         TargetAppName         = 'sshd',
         TargetAppType         = 'Service',
         TargetDvcOs           = 'Linux',
-        TargetUsernameType    = 'Simple'
+        TargetUsernameType    = 'Simple',
+        Type                  = 'Syslog'
     | project-away Computer, ProcessID
     | project-rename 
         DvcId                 = _ResourceId,
@@ -193,17 +207,19 @@ ParserQuery: |
     // -- Aliases
     | extend
         Dst                   = coalesce (DvcFQDN, DvcHostname, DvcIpAddr),
-        Dvc                   = DvcHostname,
-        IpAddr                = DvcIpAddr,
+        IpAddr                = SrcIpAddr,
+        Src                   = SrcIpAddr,
         TargetDomain          = DvcDomain,
         TargetDomainType      = DvcDomainType,
         TargetDvcId           = DvcId,
-        TargetDvcIdType       = DvcDomainType,
+        TargetDvcIdType       = DvcIdType,
         TargetDvcScopeId      = DvcScopeId,
         TargetFQDN            = DvcFQDN,
         TargetHostname        = DvcHostname,
         TargetIpAddr          = DvcIpAddr,
-        User                  = TargetUsername
+        User                  = TargetUsername,
+        Application           = TargetAppName
+    | extend Dvc = Dst
     };
     parser (
         disabled=disabled

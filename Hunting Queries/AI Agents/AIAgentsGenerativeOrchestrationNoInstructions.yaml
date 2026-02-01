@@ -1,0 +1,50 @@
+id: 8f0a7b1c-2d3e-4f5a-6b7c-8d9e0f1a2b3c
+name: AI Agents - Published Generative Orchestration without Instructions
+description: |
+  This query identifies Copilot Studio AI agents that are published with generative orchestration enabled but lack configured instructions. 
+  Missing instructions increase the risk of prompt injection attacks, where malicious input can influence the agent to deviate from its intended behavior. 
+  Without clear guidance, the agent may respond unpredictably or expose sensitive data.
+  Recommended Action: Ensure all generative orchestration components have well-defined instructions that specify the agent`s purpose, boundaries, and allowed actions. 
+  Regularly review and update instructions to maintain security and prevent misuse.
+requiredDataConnectors: []
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1499
+  - T1562
+query: |
+  AIAgentsInfo 
+  | summarize arg_max(Timestamp, *) by AIAgentId 
+  | where AgentStatus != "Deleted" 
+  | where IsGenerativeOrchestrationEnabled 
+  | extend  BotComponents = todynamic(RawAgentInfo).BotComponents 
+  | mv-expand BotComponent = BotComponents 
+  | where BotComponent has "GptComponentMetadata" 
+  | where BotComponent.FormattedValues.componenttype == "Custom GPT" 
+  | extend InstructionsRaw = tostring(BotComponent.Attributes.data), AIAgentName 
+  | where InstructionsRaw has "instructions" 
+  | where BotComponent.Attributes.schemaname endswith ".gpt.default" 
+  | extend DisplayNamePos = indexof(InstructionsRaw, "displayName", indexof(InstructionsRaw, "instructions:") + strlen("instructions:")) 
+  | extend CapabilitiesPos = indexof(InstructionsRaw, "gptCapabilities", indexof(InstructionsRaw, "instructions:") + strlen("instructions:")) 
+  | extend InstructionsStart = indexof(InstructionsRaw, "instructions:") + strlen("instructions:") 
+  | extend InstructionsEnd = iif( 
+      DisplayNamePos != -1 and CapabilitiesPos != -1,  
+      iif(DisplayNamePos < CapabilitiesPos, DisplayNamePos, CapabilitiesPos), 
+      iif(DisplayNamePos != -1, DisplayNamePos, 
+      iif(CapabilitiesPos != -1, CapabilitiesPos, strlen(InstructionsRaw))) 
+  ) 
+  | extend Instructions = substring(InstructionsRaw, InstructionsStart, InstructionsEnd - InstructionsStart) 
+  | where isempty(Instructions) 
+  | project-away DisplayNamePos, CapabilitiesPos, InstructionsStart, InstructionsEnd 
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, AgentStatus, CreatorAccountUpn, OwnerAccountUpns
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+version: 1.0.0

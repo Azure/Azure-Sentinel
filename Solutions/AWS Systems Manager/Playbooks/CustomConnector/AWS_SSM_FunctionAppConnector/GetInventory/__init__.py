@@ -39,7 +39,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if not (filters and aggregators and result_attributes and next_token and max_results):
         try:
-            req_body = json.loads(req.get_json())
+            req_body = req.get_json() 
         except ValueError:
             pass
         else:
@@ -49,6 +49,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             next_token = req_body.get('NextToken')
             max_results = req_body.get('MaxResults')
     
+    logging.info(f'Parsed Parameters - Filters: {filters}, Aggregators: {aggregators}, ResultAttributes: {result_attributes}, MaxResults: {max_results}')
     # Set parameter dictionary based on the request parameters
     kwargs = {}
     if filters:
@@ -58,7 +59,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if result_attributes:
         kwargs['DocumentVersion'] = result_attributes
     if next_token:
-        kwargs['DocumentFormat'] = next_token
+        kwargs['NextToken'] = next_token
     if max_results:
         kwargs['MaxResults'] = max_results
 
@@ -72,18 +73,41 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         )
 
         try:
-            logging.info('Calling function to get AWS SSM Inventory.')
+            logging.info('Pagination handling.')
+            
+            all_entities = []
+            next_token = kwargs.get('NextToken')
+            while True:
+                if next_token:
+                    kwargs['NextToken'] = next_token
+                else:
+                    kwargs.pop('NextToken', None)
+                
+                logging.info('Calling function to get AWS SSM Inventory.')
 
-            results = ssm_client.get_inventory(**kwargs)
+                results = ssm_client.get_inventory(**kwargs)
+                
+                logging.info('Call to get AWS SSM Inventory successful.')
 
-            logging.info('Call to get AWS SSM Inventory successful.')
+                all_entities.extend(results.get("Entities", []))
 
-            # Return the results
+                next_token = results.get("NextToken")
+                if not next_token:
+                    break
+            
+            logging.info('Pagination handling completed.')
+
+            base_url = req.url.split('?')[0]
+
+            response = {
+                "value": all_entities,
+                "nextLink": None
+            }
             return func.HttpResponse(
-                json.dumps(results),
-                headers = {"Content-Type": "application/json"},
-                status_code = 200
-            )
+                json.dumps(response),
+                headers={"Content-Type": "application/json"},
+                status_code=200
+            )                                 
             
         except ssm_client.exceptions.InternalServerError as ex:
             logging.error(f"Internal Server Exception: {str(ex)}")

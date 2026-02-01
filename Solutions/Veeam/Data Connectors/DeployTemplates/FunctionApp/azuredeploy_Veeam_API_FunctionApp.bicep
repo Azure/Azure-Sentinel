@@ -1,5 +1,5 @@
 @description('Sentinel workspace name')
-param workspaceName string 
+param workspaceName string
 
 param location string = resourceGroup().location
 param functionAppName string = 'veeamapp'
@@ -25,18 +25,17 @@ module Roles '../CustomTables/CustomTablesRoles.bicep' = {
 param packageUri string = 'https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Veeam/Data%20Connectors/VeeamConn.zip?raw=true'
 
 @description('App Service Plan SKU for the Function App')
-@allowed(['B1', 'S3', 'P2v3'])
-param appServicePlanSku string = 'B1'
+@allowed(['B1 - up to 5 Hybrid Connections', 'S3 - up to 25 Hybrid Connections', 'P2v3 - up to 220 Hybrid Connections'])
+param appServicePlanSKU string = 'B1 - up to 5 Hybrid Connections'
 
 param keyVaultName string = '${functionAppName}kv'
-param vbrWatchlistAlias string = 'vbr_settings'
-param voneWatchlistAlias string = 'vone_settings'
+param firstFetchTime string = substring(dateTimeAdd(utcNow(), '-P30D'), 0, 10)
+param VBRWatchlistAlias string = 'vbr_settings'
+param VeeamONEWatchlistAlias string = 'vone_settings'
 param covewareFindingsWatchlistAlias string = 'coveware_settings'
 
-param  covewareBaseUrl string = 'https://api.coveware.com/recon/v1'
-param  covewareAuthUrl string = 'https://cognito-idp.us-east-1.amazonaws.com/'
+param covewareAuthorizationServerURL string = 'https://auth.api.coveware.com'
 param covewareEarliestEventTime string = substring(dateTimeAdd(utcNow(), '-P90D'), 0, 10) 
-param covewareMaxRiskLevel string = 'high'
 
 var dceMalwareEventsIngestionEndpoint string = customTables.outputs.malwareDCEIngestionEndpoint
 var dcrMalwareEventsImmutableId string = customTables.outputs.malwareDCRImmutableId
@@ -61,7 +60,6 @@ var dcrCovewareFindingsStreamName string = 'Custom-${customTables.outputs.Covewa
 var dceSessionIngestionEndpoint string = customTables.outputs.sessionDCEIngestionEndpoint
 var dcrSessionImmutableId string = customTables.outputs.sessionDCRImmutableId
 var dcrSessionStreamName string = 'Custom-${customTables.outputs.sessionTableName}'
- 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2021-06-01' existing = {
   name: workspaceName
 }
@@ -88,22 +86,17 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 
 // Define SKU mappings for different App Service Plan tiers
 var skuMappings = {
-  B1: {
+  'B1 - up to 5 Hybrid Connections': {
     name: 'B1'
     tier: 'Basic'
     capacity: 1
   }
-  S3: {
+  'S3 - up to 25 Hybrid Connections': {
     name: 'S3'
     tier: 'Standard'
     capacity: 1
   }
-  P1v2: {
-    name: 'P1v2'
-    tier: 'PremiumV2'
-    capacity: 1
-  }
-  P2v3: {
+  'P2v3 - up to 220 Hybrid Connections': {
     name: 'P2v3'
     tier: 'PremiumV3'
     capacity: 1
@@ -113,7 +106,7 @@ var skuMappings = {
 resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' = {
   name: functionAppName
   location: location
-  sku: skuMappings[appServicePlanSku]
+  sku: skuMappings[appServicePlanSKU]
 }
 
 resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
@@ -171,7 +164,6 @@ resource covewareServerUsernameIdSecret 'Microsoft.KeyVault/vaults/secrets@2024-
   }
 }
 
-
 resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
   name: functionAppName
   location: location
@@ -187,7 +179,8 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         allowedOrigins: ['*']
         supportCredentials: false
       }
-      appSettings: [        {
+      appSettings: [
+        {
           name: 'AzureWebJobsStorage'
           value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${listKeys(storageAccount.id, '2021-04-01').keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
         }
@@ -234,8 +227,8 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         {
           name: 'DCR_BEST_PRACTICE_ANALYSIS_STREAM_NAME'
           value: dcrBestPracticeAnalysisStreamName
-        }     
-           {
+        }
+        {
           name: 'DCE_AUTHORIZATION_EVENTS_INGESTION_ENDPOINT'
           value: dceAuthorizationEventsIngestionEndpoint
         }
@@ -293,11 +286,11 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         }
         {
           name: 'VBR_WATCHLIST_ALIAS'
-          value: vbrWatchlistAlias
+          value: VBRWatchlistAlias
         }
         {
           name: 'VONE_WATCHLIST_ALIAS'
-          value: voneWatchlistAlias
+          value: VeeamONEWatchlistAlias
         }
         {
           name: 'COVEWARE_WATCHLIST_ALIAS'
@@ -305,19 +298,11 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
         }     
            {
           name: 'COVEWARE_AUTH_URL'
-          value: covewareAuthUrl
-        }
-        {
-          name: 'COVEWARE_BASE_URL'
-          value: covewareBaseUrl
+          value: covewareAuthorizationServerURL
         }
         {
           name: 'COVEWARE_EARLIEST_EVENT_TIME'
           value: covewareEarliestEventTime
-        }
-        {
-          name: 'COVEWARE_MAX_RISK_LEVEL'
-          value: covewareMaxRiskLevel
         }
         {
           name: 'SUBSCRIPTION_ID'
@@ -332,8 +317,12 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
           value: workspaceName
         }
         {
-          name:'WEBSITE_RUN_FROM_PACKAGE'
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
           value: packageUri
+        }
+        {
+          name: 'VEEAM_EARLIEST_EVENT_TIME'
+          value: firstFetchTime
         }
       ]
     }
@@ -358,7 +347,6 @@ resource relayNamespace 'Microsoft.Relay/namespaces@2024-01-01' = {
   }
 }
 
-
 @description('Name for the diagnostic setting on the Function App')
 param diagnosticSettingName string = '${functionAppName}-diag'
 
@@ -372,8 +360,7 @@ resource functionDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'
       {
         category: 'FunctionAppLogs'
         enabled: true
-        retentionPolicy: { enabled: false
-           days: 0 }
+        retentionPolicy: { enabled: false, days: 0 }
       }
     ]
 
@@ -381,8 +368,7 @@ resource functionDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview'
       {
         category: 'AllMetrics'
         enabled: true
-        retentionPolicy: { enabled: false
-           days: 0 }
+        retentionPolicy: { enabled: false, days: 0 }
       }
     ]
   }

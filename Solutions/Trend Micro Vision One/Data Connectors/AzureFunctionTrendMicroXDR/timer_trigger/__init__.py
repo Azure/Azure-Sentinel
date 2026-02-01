@@ -1,4 +1,4 @@
-# ver: 1.2.6
+# ver: 1.2.7
 import typing
 import json
 
