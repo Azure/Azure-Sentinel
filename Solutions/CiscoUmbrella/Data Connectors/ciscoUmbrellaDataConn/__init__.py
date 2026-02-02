@@ -343,6 +343,7 @@ class UmbrellaClient:
                 yield event
                 
     def parse_csv_dlp(self, csv_file):
+        csv.field_size_limit(1 * 1024 * 1024)  # Set 1MB limit for large fields
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
@@ -382,6 +383,7 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
+        csv.field_size_limit(1 * 1024 * 1024)  # Set 1MB limit for large fields
         sanitized_csv_file = csv_file.replace('\x00', '')
         
         csv_reader = csv.reader(sanitized_csv_file.split('\n'), delimiter=',')
@@ -572,6 +574,7 @@ class UmbrellaClient:
                 continue
 
     def parse_csv_dns(self, csv_file):
+        csv.field_size_limit(1 * 1024 * 1024)  # Set 1MB limit for large fields
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:

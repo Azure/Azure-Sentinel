@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                        |
 |-------------|--------------------------------|-------------------------------------------------------------------------------------------|
+| 3.0.4       | 29-01-2026                     | Added new UEBA Behaviors Analysis **Workbook** to solution      |      
 | 3.0.3       | 24-11-2025                     | Added new **Hunting Queries**                                          	               |
 | 3.0.2       | 04-11-2025                     | Enhance UEBA Essentials with multi-cloud detection capabilities        	               |
 | 3.0.1       | 23-09-2024                     | Updated query logic in **Hunting Query** [Anomalous Sign-in Activity]                     |
