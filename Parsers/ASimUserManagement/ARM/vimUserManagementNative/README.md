@@ -13,6 +13,9 @@ For more information, see:
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM UserManagement normalization schema reference](https://aka.ms/ASimUserManagementDoc)
 
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimUserManagement/CHANGELOG/vimUserManagementNative.md)
+
 <br>
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimUserManagement%2FARM%2FvimUserManagementNative%2FvimUserManagementNative.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimUserManagement%2FARM%2FvimUserManagementNative%2FvimUserManagementNative.json)
