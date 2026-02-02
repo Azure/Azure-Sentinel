@@ -7,15 +7,15 @@ function isAllPng(previewImagesFileNames) {
     return previewImagesFileNames.every((previewImageFileName) => previewImageFileName.toLowerCase().endsWith('.png'));
 }
 function isAllIncludeBlackOrWhite(previewImagesFileNames) {
-    return previewImagesFileNames.every((previewImageFileName) => ["Black", "black", "white", "White"].some(color => previewImageFileName.includes(color)));
+    return previewImagesFileNames.every((previewImageFileName) => ["Black", "black", "white", "White", "Light", "light", "Dark", "dark"].some(color => previewImageFileName.includes(color)));
 }
 function isMissingImages(previewImagesFileNames) {
     let blackImageCount = 0;
     let whiteImageCount = 0;
     previewImagesFileNames.forEach((filename) => {
-        if (filename.includes("black") || filename.includes("Black"))
+        if (filename.includes("black") || filename.includes("Black") || filename.includes("dark") || filename.includes("Dark"))
             blackImageCount++;
-        if (filename.includes("white") || filename.includes("White"))
+        if (filename.includes("white") || filename.includes("White") || filename.includes("light") || filename.includes("Light"))
             whiteImageCount++;
     });
     return blackImageCount === 0 || whiteImageCount === 0;
@@ -30,10 +30,10 @@ export function isValidPreviewImageFileNames(items) {
             throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview images must be png files`);
         }
         if (!isAllIncludeBlackOrWhite(workbookMetadata.previewImagesFileNames)) {
-            throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview image file names must include either "Black" or "White"`);
+            throw new WorkbookValidationError(`Invalid Preview Images for workbook ${workbookMetadata.workbookKey}. All preview image file names must include either "Black", "Dark", "White" or "Light"`);
         }
         if (isMissingImages(workbookMetadata.previewImagesFileNames)) {
-            throw new WorkbookValidationError(`Preview Image Validation failed for ${workbookMetadata.workbookKey}. Preview images must contain at least one white background image and one image black background image.`);
+            throw new WorkbookValidationError(`Preview Image Validation failed for ${workbookMetadata.workbookKey}. Preview images must contain at least one white or light background image and one black or dark background image.`);
         }
     });
 }
