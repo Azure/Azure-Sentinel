@@ -1,5 +1,10 @@
 # Changelog for vimAuthenticationSshd.yaml
 
+## Version 0.3.1
+- (2026-01-26) [ASIM] Authentication - SSHD Fix invalid user parsing - [PR #13531](https://github.com/Azure/Azure-Sentinel/pull/13531)
+- Fix bug where "Invalid user" failed login events were not parsed correctly if it did not include port number.
+  - There is a difference in parsing "Invalid user root from 0.0.0.0 port 0" and "Invalid user root from 0.0.0.0"
+
 ## Version 0.3.0
 
 - (2026-01-20) [ASIM] Authentication - Sshd Parser fixes (#13460) - [PR #13460](https://github.com/Azure/Azure-Sentinel/pull/13460)
