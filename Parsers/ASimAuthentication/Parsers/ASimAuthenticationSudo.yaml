@@ -53,34 +53,8 @@ ParserQuery: |
             EventResultDetails          = 'Other',
             EventOriginalResultDetails = 'Connection authorized'
     };
-    let SudoAuthenticationFailure = () {
-        SudoLogs
-        | where (SyslogMessage has 'user NOT in sudoers' or SyslogMessage has 'incorrect password attempts')
-        | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with  (pair_delimiter=' ', kv_delimiter='=')
-        | project-rename 
-            TargetUsername = USER
-        | extend
-            EventResult                 = 'Failure',
-            EventType                   = 'Logon',
-            ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
-            ActorUsernameType           = 'Simple',
-            EventResultDetails          = 'No such user or password',
-            EventOriginalResultDetails  = 'User authentication failed'
-    };
-    let SudoDisconnect = () {
-        SudoLogs
-        | where SyslogMessage has 'session closed for user '
-        | parse SyslogMessage with * "for user " TargetUsername:string
-        | extend
-            EventResult                 = 'Success',
-            EventType                   = 'Logoff',
-            EventOriginalResultDetails = 'User session closed',
-            EventResultDetails          = 'Other'
-    };
     union isfuzzy=false 
-        SudoSignInAuthorized(), 
-        SudoAuthenticationFailure(),
-        SudoDisconnect()
+        SudoSignInAuthorized()
         | extend
             EventCount = int(1),
             EventStartTime = TimeGenerated,
