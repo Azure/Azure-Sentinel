@@ -35,7 +35,7 @@ def _get_blob_container():
     try:
         if not container_client.exists():
             container_client.create_container()
-            logging.info(f"Created blob container: {BLOB_CONTAINER}")
+            logging.debug(f"Created blob container: {BLOB_CONTAINER}")
         else:
             logging.debug(f"Blob container already present: {BLOB_CONTAINER}")
     except ResourceExistsError:
@@ -140,37 +140,42 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
         # Get blob container
         container_client = _get_blob_container()
         
-        # Phase 1: Stream data to blob storage
-        logging.info("=== PHASE 1: STREAMING TO BLOB STORAGE ===")
+        # Phase 1: Stream delta data to blob storage
+        logging.info("=== PHASE 1: DELTA SYNC - STREAMING TO BLOB STORAGE ===")
         
-        # Get presigned URLs
-        presigned_urls = updater.get_lumen_presigned_urls(INDICATOR_TYPES)
-        
-        if not presigned_urls:
-            logging.error("No presigned URLs obtained")
+        # Get delta results URL via POST → Poll → Extract
+        try:
+            presigned_url = updater.get_delta_results_url()
+            logging.info(f"✓ Delta results URL obtained")
+        except TimeoutError as e:
+            logging.error(f"✗ Delta query timeout: {e}")
+            logging.info("Waiting for next scheduled cycle (15 minutes)")
+            return
+        except Exception as e:
+            logging.error(f"✗ Failed to get delta results: {e}")
+            logging.info("Waiting for next scheduled cycle (15 minutes)")
             return
 
-        # Stream data to blobs with optional global cap
+        # Stream delta data to blobs with optional global cap
         blob_sources = []  # flattened list of chunk descriptors
         remaining_total = MAX_TOTAL_INDICATORS if MAX_TOTAL_INDICATORS > 0 else None
-        for indicator_type, presigned_url in presigned_urls.items():
-            try:
-                # Calculate per-type max_remaining for this call
-                per_call_remaining = remaining_total if remaining_total is not None else None
-                chunks = updater.stream_and_filter_to_blob(
-                    container_client, indicator_type, presigned_url, run_id, max_remaining=per_call_remaining
-                )
-                blob_sources.extend(chunks)
-                total_filtered = sum(c.get('filtered_count', 0) for c in chunks)
-                logging.info(f"✓ Streamed {indicator_type}: {total_filtered:,} objects in {len(chunks)} chunk(s)")
-                # Decrement global remaining budget
-                if remaining_total is not None:
-                    remaining_total = max(0, remaining_total - total_filtered)
-                    if remaining_total == 0:
-                        logging.info("Reached MAX_TOTAL_INDICATORS limit; stopping further streaming")
-                        break
-            except Exception as e:
-                logging.error(f"✗ Failed to stream {indicator_type}: {e}")
+        
+        try:
+            # Delta endpoint returns combined indicator types
+            indicator_type = "delta"
+            
+            # Calculate max_remaining for this call
+            per_call_remaining = remaining_total if remaining_total is not None else None
+            chunks = updater.stream_and_filter_to_blob(
+                container_client, indicator_type, presigned_url, run_id, max_remaining=per_call_remaining
+            )
+            blob_sources.extend(chunks)
+            total_filtered = sum(c.get('filtered_count', 0) for c in chunks)
+            logging.info(f"✓ Streamed delta indicators: {total_filtered:,} objects in {len(chunks)} chunk(s)")
+            
+        except Exception as e:
+            logging.error(f"✗ Failed to stream delta indicators: {e}")
+            return
         
         if not blob_sources:
             logging.error("No data was successfully streamed to blobs")
@@ -188,7 +193,7 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
         try:
             manifest_client = container_client.get_blob_client(manifest_name)
             manifest_client.upload_blob(json.dumps(manifest_items).encode('utf-8'), overwrite=True)
-            logging.info(f"✓ Wrote manifest: {manifest_name} ({len(manifest_items)} items)")
+            logging.debug(f"✓ Wrote manifest: {manifest_name} ({len(manifest_items)} items)")
         except Exception as e:
             logging.error(f"Failed to write manifest {manifest_name}: {e}")
             return

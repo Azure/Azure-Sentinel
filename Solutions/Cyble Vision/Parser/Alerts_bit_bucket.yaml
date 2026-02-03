@@ -1,0 +1,76 @@
+id: E885BC44-AF9A-47FE-9026-CB22A92BD821
+Function:
+  Title: Parser to extract Bit Bucket alerts from Cyble Vision Alerts
+  Version: '1.0.0'
+  LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_bit_bucket
+FunctionAlias: Alerts_bit_bucket
+FunctionQuery: |
+  CybleVisionAlerts_CL
+  | where Service == "bit_bucket"
+  | extend MappedSeverity = Severity
+  // Parse the outer data array
+  | extend Data = parse_json(Data)
+  | extend DataArray = (Data.data)
+  // Expand each secret finding into its own row
+  | mv-expand Entry = DataArray
+  // Extract Bitbucket level fields
+  | extend
+      BB_DecoderName   = tostring(Entry.DecoderName),
+      BB_DetectorName  = tostring(Entry.DetectorName),
+      BB_DetectorType  = tostring(Entry.DetectorType),
+      BB_Raw           = tostring(Entry.Raw),
+      BB_Verified      = tostring(Entry.Verified),
+      BB_SourceName    = tostring(Entry.SourceName),
+      BB_SourceType    = tostring(Entry.SourceType),
+      BB_Timestamp     = tostring(Entry.ts),
+      // ExtraData fields (optional)
+      BB_RotationGuide = tostring(Entry.ExtraData.rotation_guide),
+      // SourceMetadata Bitbucket tree
+      BB_Commit        = tostring(Entry.SourceMetadata.Data.Bitbucket.commit),
+      BB_Email         = tostring(Entry.SourceMetadata.Data.Bitbucket.email),
+      BB_File          = tostring(Entry.SourceMetadata.Data.Bitbucket.file),
+      BB_Line          = tostring(Entry.SourceMetadata.Data.Bitbucket.line),
+      BB_Link          = tostring(Entry.SourceMetadata.Data.Bitbucket.link),
+      BB_Repository    = tostring(Entry.SourceMetadata.Data.Bitbucket.repository),
+      BB_RepoTimestamp = tostring(Entry.SourceMetadata.Data.Bitbucket.timestamp)
+  // Pack risk score like your other parsers  
+  | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+  // Final projection (same structure as all your parsers)
+  | project
+      TimeGenerated,
+      AlertID = tostring(ID),
+      EntityID,
+      KeywordName,
+      CompanyID,
+      Status,
+      Severity,
+      UserSeverity,
+      BucketID,
+      Domain,
+      BucketName,
+      TruePositive,
+      LLMProcessed,
+      LLMExplanation,
+      IP,
+      Service,
+      Risk_Score,
+      // Bitbucket secret fields
+      BB_DecoderName,
+      BB_DetectorName,
+      BB_DetectorType,
+      BB_Raw,
+      BB_Verified,
+      BB_SourceName,
+      BB_SourceType,
+      BB_Timestamp,
+      BB_RotationGuide,
+      BB_Commit,
+      BB_Email,
+      BB_File,
+      BB_Line,
+      BB_Link,
+      BB_Repository,
+      BB_RepoTimestamp,
+      Entry

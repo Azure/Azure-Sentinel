@@ -184,7 +184,7 @@ def callLogAnalyticsAPI(j_array_events, dce_endpoint, immutableid, stream_name):
     # To have further info on the Log Analytics API implementation, please check: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-code?tabs=python
 
     # Resources for API call
-    api_credentials = DefaultAzureCredential()
+    api_credentials = DefaultAzureCredential()      # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
     
     # Create JSON Array for thelist of processed events
     j_processed_events = []

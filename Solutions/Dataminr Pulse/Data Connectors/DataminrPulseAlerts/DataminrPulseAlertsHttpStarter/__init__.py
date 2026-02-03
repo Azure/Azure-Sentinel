@@ -46,7 +46,7 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
         data = get_data_from_request_body(req)
         if data:
             client = df.DurableOrchestrationClient(starter)
-            if type(data) == dict:
+            if isinstance(data, dict):
                 keys_list = [key.lower() for key in list(data)]
                 if "integration-settings" in keys_list:
                     instance_id = await client.start_new(

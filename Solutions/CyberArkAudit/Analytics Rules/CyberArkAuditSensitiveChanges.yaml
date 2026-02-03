@@ -1,0 +1,48 @@
+kind: Scheduled
+name: CyberArk - Sensitive Safe/Permission/Entitlement Changes (with customData)
+description: >
+  Alerts on control-plane modifications: safes, permissions, roles, entitlements, policy changes.
+  Leverages customData fields such as changeType/role/permission/policy/entitlement to reduce misses.
+severity: Low
+tactics:
+  - PrivilegeEscalation
+queryFrequency: 10M
+queryPeriod: 1D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+query: |
+  let indicators = dynamic(["SafeMember","Permission","Access","ACL","Owner","Role","Entitlement","Policy"]);
+  let changeVerbs = dynamic(["grant","revoke","assign","elevate","enable","disable","remove","delete","update"]);
+  let actions = dynamic(["policy-add", "policy-change"]);
+  CyberArk_AuditEvents_CL
+  | extend cd = parse_json(tostring(customData))
+  | extend cd_changeType = tolower(tostring(cd.changeType)),
+           cd_role       = tostring(cd.role),
+           cd_perm       = tostring(cd.permission),
+           cd_policy     = tostring(cd.policy),
+           cd_entitle    = tostring(cd.entitlement),
+           cd_description= tostring(cd.description),
+           cd_action     = tostring(cd.action)
+  | where 
+      action has_any(actions) and
+      (auditType has_any (indicators)
+      or message has_any (indicators)
+      or cd_description has_any (indicators)
+      or cd_action has_any (indicators)
+      or cd_role !~ "" or cd_perm !~ "" or cd_policy !~ "" or cd_entitle !~ ""
+      or cd_changeType in (changeVerbs))
+  | project TimeGenerated, CyberArkTenantId, serviceName, username, userId, safe,
+            action, actionType, auditType,
+            cd_action, cd_description, cd_changeType, cd_role, cd_perm, cd_policy, cd_entitle,
+            target, message
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: username
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: target
+suppressionEnabled: false
+version: 1.0.0

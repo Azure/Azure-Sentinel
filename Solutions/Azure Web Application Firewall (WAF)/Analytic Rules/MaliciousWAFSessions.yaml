@@ -22,42 +22,43 @@ query: |
   let mode = dynamic(['Blocked', 'Detected']);
   let successCode = dynamic(['200', '101','204', '400','504','304','401','500']);
   let sessionBin = 30m;
-  AzureDiagnostics
+  AGWFirewallLogs
   | where TimeGenerated > ago(queryperiod)
-  | where ResourceProvider == 'MICROSOFT.NETWORK' and Category =~ 'ApplicationGatewayFirewallLog' and action_s in (mode)
-  | sort by hostname_s asc, clientIp_s asc, TimeGenerated asc
-  | extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((clientIp_s != prev(clientIp_s)) or (hostname_s != prev(hostname_s))))
-  | summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by hostname_s, clientIp_s, SessionBlockedStarted
+  | where Action  in (mode)
+  | sort by Hostname asc, ClientIp asc, TimeGenerated asc
+  | extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((ClientIp != prev(ClientIp)) or (Hostname != prev(Hostname))))
+  | summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by Hostname, ClientIp, SessionBlockedStarted
   | extend TimeKey = range(bin(SessionBlockedStarted, sessionBin), bin(SessionBlockedEnded, sessionBin), sessionBin)
   | mv-expand TimeKey to typeof(datetime)
   | join kind = inner(
-      AzureDiagnostics
+      AGWAccessLogs
       | where TimeGenerated > ago(queryperiod)
-      | where Category =~ 'ApplicationGatewayAccessLog' and (isempty(httpStatus_d) or httpStatus_d in (successCode))
+      | where  (isempty(HttpStatus) or HttpStatus in (successCode))
       | extend TimeKey = bin(TimeGenerated, sessionBin)
-      | extend hostname_s = coalesce(hostname_s,host_s), clientIp_s = coalesce(clientIp_s,clientIP_s)
-  ) on TimeKey, hostname_s , clientIp_s
+      | extend Hostname = coalesce(Host,OriginalHost)
+      | extend ClientIp = tostring(ClientIp)
+  ) on TimeKey, Hostname, ClientIp
   | where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)
   | extend
-      originalRequestUriWithArgs_s = column_ifexists("originalRequestUriWithArgs_s", ""),
-      serverStatus_s = column_ifexists("serverStatus_s", "")
+      OriginalRequestUriWithArgs = column_ifexists("OriginalRequestUriWithArgs", ""),
+      ServerStatus = column_ifexists("ServerStatus", "")
   | summarize
       SuccessfulAccessCount = count(),
-      UserAgents = make_set(userAgent_s, 250),
-      RequestURIs = make_set(requestUri_s, 250),
-      OriginalRequestURIs = make_set(originalRequestUriWithArgs_s, 250),
-      SuccessCodes = make_set(httpStatus_d, 250),
-      SuccessCodes_BackendServer = make_set(serverStatus_s, 250),
+      UserAgents = make_set(UserAgent, 250),
+      RequestURIs = make_set(RequestUri, 250),
+      OriginalRequestURIs = make_set(OriginalRequestUriWithArgs, 250),
+      SuccessCodes = make_set(HttpStatus, 250),
+      SuccessCodes_BackendServer = make_set(ServerStatus, 250),
       take_any(SessionBlockedEnded, SessionBlockedCount)
-      by hostname_s, clientIp_s, SessionBlockedStarted
+      by Hostname, ClientIp, SessionBlockedStarted 
   | where SessionBlockedCount > SuccessfulAccessCount
   | extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)
   | sort by BlockvsSuccessRatio desc, SessionBlockedStarted asc
-  | project-reorder SessionBlockedStarted, SessionBlockedEnded, hostname_s, clientIp_s, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents
+  | project-reorder SessionBlockedStarted, SessionBlockedEnded, Hostname, ClientIp, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: clientIp_s
-version: 1.0.5
+        columnName: ClientIp
+version: 1.0.6
 kind: Scheduled

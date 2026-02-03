@@ -31,7 +31,7 @@ def _get_blob_container():
     try:
         if not container_client.exists():
             container_client.create_container()
-            logging.info(f"Created blob container: {container_name}")
+            logging.debug(f"Created blob container: {container_name}")
         else:
             logging.debug(f"Blob container already present: {container_name}")
     except ResourceExistsError:
@@ -57,7 +57,7 @@ def main(work_unit):
     # Default to internal backoff to avoid orchestrator timer floods
     external_backoff = bool(work_unit.get('external_backoff', False))
 
-    logging.debug(f"Processing work unit: {work_unit_id}")
+    logging.info(f"Processing work unit: {work_unit_id}")
 
     uploaded_total = 0
     error_total = 0

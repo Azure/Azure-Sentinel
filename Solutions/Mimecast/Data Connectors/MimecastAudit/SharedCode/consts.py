@@ -10,15 +10,17 @@ LOG_FORMAT = "{}(method = {}) : {} : {}"
 
 
 # *Sentinel related constants
-AZURE_CLIENT_ID = os.environ.get("Azure_Client_Id", "")
-AZURE_CLIENT_SECRET = os.environ.get("Azure_Client_Secret", "")
-AZURE_TENANT_ID = os.environ.get("Azure_Tenant_Id", "")
-WORKSPACE_KEY = os.environ.get("WorkspaceKey", "")
-WORKSPACE_ID = os.environ.get("WorkspaceID", "")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID", "")
+SCOPE = os.environ["SCOPE"]
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ["AZURE_DATA_COLLECTION_ENDPOINT"]
+DCR_RULE_ID = os.environ["AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES"]
 
 # *Mimecast related constants
 MIMECAST_CLIENT_ID = os.environ.get("MimecastClientID")
 MIMECAST_CLIENT_SECRET = os.environ.get("MimecastClientSecret")
+MIMECAST_AUDIT_TABLE_NAME = os.environ.get("MimecastAuditTableName", "Audit")
 
 BASE_URL = os.environ.get("BaseURL", "https://api.services.mimecast.com")
 ENDPOINTS = {
@@ -30,7 +32,7 @@ ENDPOINTS = {
 
 MAX_PAGE_SIZE = 500
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
-TABLE_NAME = {"TTP_URL": "Ttp_Url", "SEG_DLP": "Seg_Dlp", "Audit": "Audit"}
+TABLE_NAME = {"TTP_URL": "Ttp_Url", "SEG_DLP": "Seg_Dlp", "Audit": MIMECAST_AUDIT_TABLE_NAME if MIMECAST_AUDIT_TABLE_NAME else "Audit"}
 TTP_URL_FUNCTION_NAME = "TTP_URL"
 SEG_DLP_FUNCTION_NAME = "SEG_DLP"
 AUDIT_FUNCTION_NAME = "Audit"

@@ -17,13 +17,10 @@ namespace Sentinel.Client
             _triggeredAlarmsApi = new TriggeredAlarmsApi(_voneConfig, logger);
         }
 
-        public async Task<List<TriggeredAlarm>> GetTriggeredAlarmsAsync()
+        public async Task<List<TriggeredAlarm>> GetTriggeredAlarmsAsync(TriggeredAlarmFilter filter)
         {
-            var offset = 0;
-            var limit = 1000;
-
-            _logger.LogInformation($"{nameof(GetTriggeredAlarmsAsync)} called for \"{_voneId}\" with Offset={offset}, Limit={limit}");
-            var response = await SendAsync(async (cancellationToken) => await _triggeredAlarmsApi.GetTriggeredAlarmsAsync(offset, limit), default);
+            _logger.LogInformation($"{nameof(GetTriggeredAlarmsAsync)} called for \"{_voneId}\" with Offset={filter.Offset}, Limit={filter.Limit}");
+            var response = await SendAsync(async (cancellationToken) => await _triggeredAlarmsApi.GetTriggeredAlarmsAsync(filter), default);
             _logger.LogInformation($"{nameof(GetTriggeredAlarmsAsync)} response fetched \"{_voneId}\": {response.Count} events.");
             return response;
         }

@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                           |
 |-------------|--------------------------------|--------------------------------------------------------------|
+| 3.1.2       | 22-01-2026                     | Removed **Playbook** GetProofpointTAPEvents for TAP connector. |
+| 3.1.1       | 03-11-2025                     | Update support url in **SolutionMetadata.json**.|  
 | 3.1.0       | 31-07-2025                     | Updated Support details and publisherId in **SolutionMetadata.json**, updated Author details and Logo in **Solution_ProofTap.json** from Microsoft to Proofpoint.|
 | 3.0.10      | 28-07-2025                     | Removed Deprecated **Data Connector**.							|  
 | 3.0.9       | 20-06-2025                     | Expanded the query for *ProofpointTAPEvent* **Parser** to include additional columns and data sources (V2).               |
