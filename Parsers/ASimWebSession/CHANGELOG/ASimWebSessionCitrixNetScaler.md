@@ -6,5 +6,5 @@
 
 ## Version 0.1.0
 
-- (2023-08-31) ASIM WebSession Event schema parser with its sample and test data for CitrixNetscalerWAF - [PR #8923](https://github.com/Azure/Azure-Sentinel/pull/8923)
+- (2023-10-17) ASIM WebSession Event schema parser with its sample and test data for CitrixNetscalerWAF - [PR #8923](https://github.com/Azure/Azure-Sentinel/pull/8923)
 

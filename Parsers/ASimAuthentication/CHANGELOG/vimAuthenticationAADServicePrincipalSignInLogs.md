@@ -2,7 +2,7 @@
 
 ## Version 0.2.2
 
-- (2024-03-20) ServicePrincipal parser - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
+- (2024-03-26) Authentication parsers update - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
 
 ## Version 0.2.1
 
@@ -10,9 +10,9 @@
 
 ## Version 0.1.1
 
-- (2023-02-05) Update vimAuthenticationAADServicePrincipalSignInLogs.yaml - [PR #7296](https://github.com/Azure/Azure-Sentinel/pull/7296)
+- (2023-02-07) Asim/update aad parsers - [PR #7296](https://github.com/Azure/Azure-Sentinel/pull/7296)
 
 ## Version 0.0
 
-- (2022-06-13) Rebuild folder structure and update texts - [PR #5296](https://github.com/Azure/Azure-Sentinel/pull/5296)
+- (2021-06-24) First commit - take 2 - [PR #2553](https://github.com/Azure/Azure-Sentinel/pull/2553)
 
