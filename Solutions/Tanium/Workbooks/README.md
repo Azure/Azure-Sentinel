@@ -9,7 +9,7 @@ The Tanium Workbook contains 20+ visualizations across 5 tabs (Threat Response, 
 ## Setup Data Flow
 To populate that data for the Tanium Workbook you'll need to create connections using the Tanium Connect Module in your Tanium Server.
 
-Use the [JSON file found here](./Workbooks/connect-module-connections.json) along with the [instructions on the Tanium Help site](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Overview.htm) to setup the necessary connections.
+Use the [JSON file found here](./connect-module-connections.json) along with the [instructions on the Tanium Help site](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Overview.htm) to setup the necessary connections.
 
 ## Help
 Having issues? See our [Tanium Help documentation](https://help.tanium.com/bundle/ConnectAzureSentinel/page/Integrations/MSFT/ConnectAzureSentinel/Overview.htm) for common issues, questions and FAQs.

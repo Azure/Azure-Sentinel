@@ -1,0 +1,83 @@
+id: f4f92ca4-6ebe-4f2a-90e5-b0d04b709651
+name: GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports
+description: |
+  This query detects GCP Firewall rules that allow unrestricted (0.0.0.0/0) ingress to high-risk ports using Google Cloud Security Command Center OPEN_FIREWALL findings.
+  Publicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - LateralMovement
+  - Discovery
+relevantTechniques:
+  - T1133
+  - T1021
+  - T1046
+tags:
+  - PCI-DSS v3.2.1 1.2.1
+query: |
+  let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);
+  GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory == "OPEN_FIREWALL"
+  | extend FindingsJson = parse_json(Findings)
+  | extend SourcePropertiesJson = parse_json(tostring(FindingsJson.sourceProperties))
+  | extend IpRulesJson = parse_json(tostring(FindingsJson.ipRules))
+  | where tostring(FindingsJson.state) == "ACTIVE"
+  | where tostring(SourcePropertiesJson.ExternalSourceRanges) contains "0.0.0.0/0"
+  | extend AllowedIpRules = parse_json(tostring(IpRulesJson.allowed.ipRules))
+  | mv-expand IpRule = AllowedIpRules
+  | extend PortRanges = parse_json(tostring(IpRule.portRanges))
+  | mv-expand PortRange = PortRanges
+  | extend MinPort = toint(PortRange.min), MaxPort = toint(PortRange.max)
+  | where MinPort in (HighRiskPorts) or MaxPort in (HighRiskPorts)
+  | extend 
+      ResourceName = tostring(FindingsJson.resourceName),
+      FindingName = tostring(FindingsJson.name),
+      Protocol = tostring(IpRule.protocol),
+      Severity = tostring(FindingsJson.severity),
+      Description = tostring(FindingsJson.description),
+      ExternalUri = tostring(FindingsJson.externalUri),
+      AttackExposureScore = todouble(FindingsJson.attackExposure.score),
+      ProjectName = extract(@"projects/([^/]+)", 1, tostring(FindingsJson.resourceName)),
+      FirewallName = extract(@"firewalls/([^/]+)", 1, tostring(FindingsJson.resourceName))
+  | extend PortInfo = case(
+      MinPort == MaxPort, tostring(MinPort),
+      strcat(tostring(MinPort), "-", tostring(MaxPort))
+  )
+  | summarize 
+      TimeGenerated = max(TimeGenerated), 
+      OpenHighRiskPorts = make_set(PortInfo),
+      Protocols = make_set(Protocol),
+      AttackExposureScore = max(AttackExposureScore)
+      by ProjectName, FirewallName, ResourceName, FindingName, Severity, Description, ExternalUri
+  | extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, ", ")
+  | extend Protocols = strcat_array(Protocols, ", ")
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ResourceName
+customDetails:
+  ProjectName: ProjectName
+  FirewallName: FirewallName
+  FindingId: FindingName
+  OpenHighRiskPorts: OpenHighRiskPorts
+  Protocols: Protocols
+  AttackExposureScore: AttackExposureScore
+  ExternalUri: ExternalUri
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP Firewall {{FirewallName}} allows unrestricted high-risk ports"
+  alertDescriptionFormat: |-
+    GCP Firewall {{FirewallName}} in project {{ProjectName}} allows unrestricted (0.0.0.0/0) ingress to high-risk ports: {{OpenHighRiskPorts}}.
+version: 1.0.0
+kind: Scheduled
