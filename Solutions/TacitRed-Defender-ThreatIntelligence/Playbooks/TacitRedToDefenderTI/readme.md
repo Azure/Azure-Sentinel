@@ -8,7 +8,7 @@ This playbook automatically synchronizes threat intelligence from TacitRed to Mi
 
 1. **Microsoft Sentinel workspace** - Must be onboarded to Microsoft Sentinel
 2. **TacitRed API Key** - Obtain from your TacitRed account
-3. **Azure Function App** - Deployed automatically with this solution
+3. **Azure Function App** - Deployed automatically with this solution (note the FunctionAppName prefix used)
 4. **RBAC Permissions**:
    - Reader role on the workspace
    - Microsoft Sentinel Contributor role on the workspace
@@ -23,8 +23,9 @@ This playbook is deployed automatically as part of the TacitRed Defender Threat 
 2. Fill in the required parameters:
    - **Subscription**: Your Azure subscription
    - **Resource Group**: Target resource group
-   - **Workspace**: Your Microsoft Sentinel workspace name
+   - **PlaybookName**: Name of the Logic App
    - **TacitRed API Key**: Your TacitRed API key
+   - **FunctionAppName**: Prefix used when deploying the TacitRed Defender TI Function App (before uniqueString is applied)
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTacitRed-Defender-ThreatIntelligence%2FPlaybooks%2FTacitRedToDefenderTI%2Fazuredeploy.json)
 
@@ -56,6 +57,7 @@ This playbook is deployed automatically as part of the TacitRed Defender Threat 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | TacitRed_ApiKey | Your TacitRed API key | Required |
+| FunctionAppName | Prefix for the Azure Function App name | tacitreddefenderti |
 | Domains | Filter by specific domains (empty = all) | [] |
 | DateRange | How far back to look for findings | 30 days |
 

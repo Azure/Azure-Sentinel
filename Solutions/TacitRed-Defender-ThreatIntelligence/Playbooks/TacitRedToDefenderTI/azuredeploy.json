@@ -10,16 +10,17 @@
             "3. The Azure Function retrieves compromised credentials from TacitRed and ingests them into Defender Threat Intelligence."
         ],
         "prerequisites": [
-            "1. Deploy the TacitRed Defender TI Function App before deploying this playbook under the same subscription and resource group.",
-            "2. TacitRed API Key is required for authentication.",
-            "3. Microsoft Sentinel workspace with Defender TI enabled."
+            "1. Deploy the TacitRed Defender TI Function App under the same subscription and resource group.",
+            "2. Use the same FunctionAppName prefix in this playbook as the Function App deployment.",
+            "3. TacitRed API Key is required for authentication.",
+            "4. Microsoft Sentinel workspace with Defender TI enabled."
         ],
         "prerequisitesDeployTemplateFile": "../TacitRedDefenderTI_FunctionApp/azuredeploy.json",
         "postDeployment": [
             "**a. Configure playbook parameters**",
             "1. Open the Logic App in the Azure portal.",
             "2. Enter the TacitRed API Key.",
-            "3. Enter the Function App URL from the deployed Function App.",
+            "3. Confirm the FunctionAppName prefix matches the deployed Function App.",
             "**b. Configure in Sentinel**",
             "1. Optionally configure automation rules to trigger the playbook."
         ],
@@ -60,15 +61,18 @@
                 "description": "TacitRed API Key for authentication"
             }
         },
-        "FunctionAppUrl": {
+        "FunctionAppName": {
+            "defaultValue": "tacitreddefenderti",
             "type": "string",
             "metadata": {
-                "description": "Full URL to the TacitRed Defender TI Function App endpoint (e.g., https://tacitreddefendertixxxx.azurewebsites.net/api/TacitRedToDefenderTI). Deploy the Function App first, then copy its URL here."
+                "description": "Prefix for the Azure Function App name. Must match the Function App deployment parameter (before uniqueString is applied)."
             }
         }
     },
     "variables": {
-        "logicAppName": "[parameters('PlaybookName')]"
+        "logicAppName": "[parameters('PlaybookName')]",
+        "functionAppName": "[concat(parameters('FunctionAppName'), uniqueString(resourceGroup().id))]",
+        "functionAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]"
     },
     "resources": [
         {
@@ -92,8 +96,9 @@
                         "TacitRed_ApiKey": {
                             "type": "securestring"
                         },
-                        "FunctionAppUrl": {
-                            "type": "string"
+                        "FunctionAppName": {
+                            "type": "string",
+                            "defaultValue": "[parameters('FunctionAppName')]"
                         }
                     },
                     "triggers": {
@@ -121,12 +126,11 @@
                             "runAfter": {}
                         },
                         "Call_Function_App": {
-                            "type": "Http",
+                            "type": "Function",
                             "inputs": {
                                 "method": "POST",
-                                "uri": "@parameters('FunctionAppUrl')",
-                                "headers": {
-                                    "Content-Type": "application/json"
+                                "function": {
+                                    "id": "[concat(variables('functionAppId'), '/functions/TacitRedToDefenderTI')]"
                                 },
                                 "body": {
                                     "domains": "@variables('Domains')",
@@ -145,8 +149,8 @@
                     "TacitRed_ApiKey": {
                         "value": "[parameters('TacitRed_ApiKey')]"
                     },
-                    "FunctionAppUrl": {
-                        "value": "[parameters('FunctionAppUrl')]"
+                    "FunctionAppName": {
+                        "value": "[parameters('FunctionAppName')]"
                     }
                 }
             }
