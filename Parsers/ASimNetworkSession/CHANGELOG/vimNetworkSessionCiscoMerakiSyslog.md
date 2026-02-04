@@ -18,7 +18,7 @@
 
 ## Version 0.1
 
-- (2023-07-22) ASIM NetworkSession schema parser with its sample and test data for CΓÇª - [PR #8330](https://github.com/Azure/Azure-Sentinel/pull/8330)
+- (2023-07-22) ASIM NetworkSession schema parser with its sample and test data - [PR #8330](https://github.com/Azure/Azure-Sentinel/pull/8330)
 
 ## Version 1.0
 
