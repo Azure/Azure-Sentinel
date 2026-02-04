@@ -1,8 +1,10 @@
 # Changelog for imFileEvent.yaml
 
-## Version 0.1.5
+## Version 0.2.2
 
-- (2024-06-06) ASimFileEventMicrosoftSysmon.yaml-27 - [PR #10605](https://github.com/Azure/Azure-Sentinel/pull/10605)
+- (2026-02-04) PR name - [PR #123123](link)
+- Fix Exclude statement in some parsers in the disabled statement
+- Add vimFileEventAWSCloudTrail parser
 
 ## Version 0.2.1
 
