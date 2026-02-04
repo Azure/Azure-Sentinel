@@ -302,6 +302,7 @@ See the script documentation for details:
 
 ### v7.3 - Standalone Content Items
 
+
 **Standalone Content Collection:**
 - Collects content items from top-level repository directories (not part of Solutions):
   - `Detections/` - Analytic rules (YAML)
