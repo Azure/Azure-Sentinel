@@ -2,7 +2,7 @@
 
 ## Version 0.2.0
 
-- (2026-01-22) [ASIM] Authentication M365Defender - Parser Fixes (#13441) - [PR #13441](https://github.com/Azure/Azure-Sentinel/pull/13441)
+- (2026-01-22) [ASIM] Authentication M365Defender - Parser Fixes - [PR #13441](https://github.com/Azure/Azure-Sentinel/pull/13441)
 
 ## Version 0.1.3
 
@@ -10,7 +10,7 @@
 
 ## Version 0.1.2
 
-- (2024-03-20) M365Defender - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
+- (2024-03-20) Authentication parsers update - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
 
 ## Version 0.1.1
 
@@ -18,5 +18,5 @@
 
 ## Version 0.1.0
 
-- (2022-06-13) Rebuild folder structure and update texts - [PR #5296](https://github.com/Azure/Azure-Sentinel/pull/5296)
+- (2021-07-05) Fix DvcHostName -> DvcHostname - [PR #2623](https://github.com/Azure/Azure-Sentinel/pull/2623)
 

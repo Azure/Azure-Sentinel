@@ -2,7 +2,7 @@
 
 ## Version 0.3.0
 
-- (2026-01-22) [ASIM] Authentication su parser fixes (#13453) - [PR #13453](https://github.com/Azure/Azure-Sentinel/pull/13453)
+- (2026-01-22) [ASIM] Authentication su parser fixes - [PR #13453](https://github.com/Azure/Azure-Sentinel/pull/13453)
 
 ## Version 0.2.1
 
@@ -14,5 +14,5 @@
 
 ## Version 0.1.1
 
-- (2023-01-14) add ASimAuthentication Parsers for syslog sshd, su and sudo - [PR #7098](https://github.com/Azure/Azure-Sentinel/pull/7098)
+- (2023-01-21) add ASimAuthentication Parsers for syslog sshd, su and sudo - [PR #7098](https://github.com/Azure/Azure-Sentinel/pull/7098)
 
