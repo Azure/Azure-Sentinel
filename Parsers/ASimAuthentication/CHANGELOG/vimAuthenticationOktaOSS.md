@@ -9,10 +9,6 @@
 - (2024-06-19) april entity mapping updates diana p3 - [PR #10342](https://github.com/Azure/Azure-Sentinel/pull/10342)
 - (2024-04-18) Authentication parser filter update - [PR #10243](https://github.com/Azure/Azure-Sentinel/pull/10243)
 
-## Version 0.3.0
-
-- (2024-06-14) SPLITED PARSER FOR OKTA AND OKTAV2 - [PR #10499](https://github.com/Azure/Azure-Sentinel/pull/10499)
-
 ## Version 0.2.1
 
 - (2023-09-11) Okta connector - [PR #8982](https://github.com/Azure/Azure-Sentinel/pull/8982)

@@ -7,7 +7,6 @@
 
 ## Version 0.1.2
 
-- (2024-05-30) Cisco umbrella playbook changes and repackage - [PR #11603](https://github.com/Azure/Azure-Sentinel/pull/11603)
 - (2023-10-12) Applying Filters for Registry Parsers - [PR #9187](https://github.com/Azure/Azure-Sentinel/pull/9187)
 
 ## Version 0.1.0
