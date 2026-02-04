@@ -2,15 +2,11 @@
 
 ## Version 0.7
 
-- (2023-03-01) Updated Parser Version and Date - [PR #7462](https://github.com/Azure/Azure-Sentinel/pull/7462)
-
-## Version 0.6.1
-
-- (2023-03-01) [Update vimDnsNative.yaml](https://github.com/Azure/Azure-Sentinel/commit/01d0abfd0891c5d3749e402c0b39a32d063123b8)
+- (2023-03-01) Duplicate column error fixed - DvcScopeId - [PR #7462](https://github.com/Azure/Azure-Sentinel/pull/7462)
 
 ## Version 0.6
 
-- (2023-02-02) Version updated - [PR #7248](https://github.com/Azure/Azure-Sentinel/pull/7248)
+- (2023-02-02) Update Dvc in Dns Native parameters - [PR #7248](https://github.com/Azure/Azure-Sentinel/pull/7248)
 
 ## Version 0.5
 
@@ -22,9 +18,13 @@
 
 ## Version 0.3
 
-- (2022-06-15) And update version numbers - [PR #5319](https://github.com/Azure/Azure-Sentinel/pull/5319)
+- (2022-06-16) Asim/fixing qaws errors - [PR #5319](https://github.com/Azure/Azure-Sentinel/pull/5319)
 
 ## Version 0.2
 
-- (2022-03-19) ASIM Dns - Rearrangement (#4402) - [PR #4402](https://github.com/Azure/Azure-Sentinel/pull/4402)
+- (2022-02-03) Dns aliases - [PR #3898](https://github.com/Azure/Azure-Sentinel/pull/3898)
+
+## Version 0.1
+
+- (2022-01-03) native DNS ASIM parsers - [PR #3823](https://github.com/Azure/Azure-Sentinel/pull/3823)
 
