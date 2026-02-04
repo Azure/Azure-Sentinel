@@ -1,7 +1,7 @@
 id: 2757535d-ca8d-4083-8ea2-ac9ba5237b95
 Function:
   Title: Parser for Snowflake
-  Version: '1.0.3'
+  Version: '1.0.4'
   LastUpdated: '2025-12-11'
 Category: Microsoft Sentinel Parser
 FunctionName: Snowflake
@@ -11,7 +11,7 @@ FunctionQuery: |
     Snowflake_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend 
+    | extend
       EventStartTime = column_ifexists('START_TIME_t', ''),
       EventType = column_ifexists('EVENT_TYPE_s', ''),
       TargetUsername = column_ifexists('USER_NAME_s', ''),
@@ -21,10 +21,10 @@ FunctionQuery: |
       QueryExecutionStatus = column_ifexists('EXECUTION_STATUS_s', ''),
       QueryTotalElapsedTime = toreal(column_ifexists('TOTAL_ELAPSED_TIME_d', '0')),
       LoginIsSuccess = column_ifexists('IS_SUCCESS_s',''),
-      QueryCreditsUsedCloudServices = toreal(column_ifexists('CREDITS_USED_CLOUD_SERVICES_d','0')),
+      QueryCreditsUsedCloudServices = iff(isempty(CREDITS_USED_CLOUD_SERVICES_d), toreal(0), toreal(CREDITS_USED_CLOUD_SERVICES_d)),
       QueryExecutionTime = toreal(column_ifexists('EXECUTION_TIME_d','0')),
       RoleName = column_ifexists('ROLE_NAME_s','')
-    | extend 
+    | extend
       User=TargetUsername,
       EventEndTime=iff(isnotempty(EVENT_TIMESTAMP_t), EVENT_TIMESTAMP_t, END_TIME_t)
   };
@@ -32,11 +32,10 @@ FunctionQuery: |
     SnowflakeLogin_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeLogin'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
-    | extend Time = toreal(extractjson("$.EVENT_TIMESTAMP", JsonString))
+    | extend Time = extractjson("$.EVENT_TIMESTAMP", JsonString)
     | extend
       SrcDvcIpAddr = extractjson("$.CLIENT_IP", JsonString),
       LoginClientPrivateLinkId = extractjson("$.CLIENT_PRIVATE_LINK_ID", JsonString),
@@ -44,7 +43,7 @@ FunctionQuery: |
       LoginErrorCode = extractjson("$.ERROR_CODE", JsonString),
       LoginErrorMessage = extractjson("$.ERROR_MESSAGE", JsonString),
       LoginEventId = extractjson("$.EVENT_ID", JsonString),
-      LoginEventEndTime = unixtime_seconds_todatetime(Time),
+      LoginEventEndTime = todatetime(substring(Time, 0, 23)) - tolong(substring(Time, 24, 3)) * 1h,
       LoginEventType = extractjson("$.EVENT_TYPE", JsonString),
       LoginFirstAuthenticationFactor = extractjson("$.FIRST_AUTHENTICATION_FACTOR", JsonString),
       LoginIsSuccess = extractjson("$.IS_SUCCESS", JsonString),
@@ -56,19 +55,18 @@ FunctionQuery: |
     | extend User = TargetUsername
   };
   let SnowflakeUserGrant_view = view () {
-    SnowflakeUserGrant_CL
+  SnowflakeUserGrant_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeUserGrant'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
     | extend
-      CTime = toreal(extractjson("$.CREATED_ON", JsonString)),
-      DTime = toreal(extractjson("$.DELETED_ON", JsonString))
+      CTime = extractjson("$.CREATED_ON", JsonString),
+      DTime = extractjson("$.DELETED_ON", JsonString)
     | extend
-      UserGrantCreatedOn = unixtime_seconds_todatetime(CTime),
-      UserGrantDeletedOn = unixtime_seconds_todatetime(DTime),
+      UserGrantCreatedOn = todatetime(substring(CTime, 0, 23)) - tolong(substring(CTime, 24, 3)) * 1h,
+      UserGrantDeletedOn = todatetime(substring(DTime, 0, 23)) - tolong(substring(DTime, 24, 3)) * 1h,
       UserRole = extractjson("$.ROLE", JsonString),
       UserGrantGrantedTo = extractjson("$.GRANTED_TO", JsonString),
       UserGrantGranteeName = extractjson("$.GRANTEE_NAME", JsonString),
@@ -78,16 +76,15 @@ FunctionQuery: |
     SnowflakeMaterializedView_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeMaterializedView'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
     | extend
-      STime = toreal(extractjson("$.START_TIME", JsonString)),
-      ETime = toreal(extractjson("$.END_TIME", JsonString))
+      STime = extractjson("$.START_TIME", JsonString),
+      ETime = extractjson("$.END_TIME", JsonString)
     | extend
-      MaterializedViewStartTime = unixtime_seconds_todatetime(STime),
-      MaterializedViewEndTime = unixtime_seconds_todatetime(ETime),
+      MaterializedViewStartTime = todatetime(substring(STime, 0, 23)) - tolong(substring(STime, 24, 3)) * 1h,
+      MaterializedViewEndTime = todatetime(substring(ETime, 0, 23)) - tolong(substring(ETime, 24, 3)) * 1h,
       MaterializedViewCreditsUsed = extractjson("$.CREDITS_USED", JsonString),
       MaterializedViewTableId = extractjson("$.TABLE_ID", JsonString),
       MaterializedViewTableName = extractjson("$.TABLE_NAME", JsonString),
@@ -100,17 +97,16 @@ FunctionQuery: |
     SnowflakeRoles_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeRoles'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
-    | extend 
-      CTime = toreal(extractjson("$.CREATED_ON", JsonString)),
-      DTime = toreal(extractjson("$.DELETED_ON", JsonString))
+    | extend
+      CTime = extractjson("$.CREATED_ON", JsonString),
+      DTime = extractjson("$.DELETED_ON", JsonString)
     | extend
       RoleId = extractjson("$.ROLE_ID", JsonString),
-      RoleCreatedOn = unixtime_seconds_todatetime(CTime),
-      RoleDeletedOn = unixtime_seconds_todatetime(DTime),
+      RoleCreatedOn = todatetime(substring(CTime, 0, 23)) - tolong(substring(CTime, 24, 3)) * 1h,
+      RoleDeletedOn = todatetime(substring(DTime, 0, 23)) - tolong(substring(DTime, 24, 3)) * 1h,
       RoleName = extractjson("$.NAME", JsonString),
       RoleComment = extractjson("$.COMMENT", JsonString),
       RoleOwner = extractjson("$.OWNER", JsonString),
@@ -123,17 +119,16 @@ FunctionQuery: |
     SnowflakeRoleGrant_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeRoleGrant'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
-    | extend 
-      CTime = toreal(extractjson("$.CREATED_ON", JsonString)),
-      MTime = toreal(extractjson("$.MODIFIED_ON", JsonString)),
-      DTime = toreal(extractjson("$.DELETED_ON", JsonString))
     | extend
-      RoleGrantCreatedOn = unixtime_seconds_todatetime(CTime),
-      RoleGrantModifiedOn = unixtime_seconds_todatetime(MTime),
+      CTime = extractjson("$.CREATED_ON", JsonString),
+      MTime = extractjson("$.MODIFIED_ON", JsonString),
+      DTime = extractjson("$.DELETED_ON", JsonString)
+    | extend
+      RoleGrantCreatedOn = todatetime(substring(CTime, 0, 23)) - tolong(substring(CTime, 24, 3)) * 1h,
+      RoleGrantModifiedOn = todatetime(substring(MTime, 0, 23)) - tolong(substring(MTime, 24, 3)) * 1h,
       RoleGrantPrivilege = extractjson("$.PRIVILEGE", JsonString),
       RoleGrantGrantedOn = extractjson("$.GRANTED_ON", JsonString),
       RoleGrantName = extractjson("$.NAME", JsonString),
@@ -143,7 +138,7 @@ FunctionQuery: |
       RoleGrantGranteeName = extractjson("$.GRANTEE_NAME", JsonString),
       RoleGrantGrantOption = extractjson("$.GRANT_OPTION", JsonString),
       RoleGrantGrantedBy = extractjson("$.GRANTED_BY", JsonString),
-      RoleGrantDeletedOn = unixtime_seconds_todatetime(DTime),
+      RoleGrantDeletedOn = todatetime(substring(DTime, 0, 23)) - tolong(substring(DTime, 24, 3)) * 1h,
       RoleGrantGrantedByRoleType = extractjson("$.GRANTED_BY_ROLE_TYPE", JsonString),
       RoleGrantObjectInstance = extractjson("$.OBJECT_INSTANCE", JsonString)
   };
@@ -151,11 +146,10 @@ FunctionQuery: |
     SnowflakeLoad_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeLoad'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
-    | extend LTime = toreal(extractjson("$.LAST_LOAD_TIME", JsonString))
+    | extend LTime = extractjson("$.LAST_LOAD_TIME", JsonString)
     | extend
       LoadTableId = extractjson("$.TABLE_ID", JsonString),
       LoadTableName = extractjson("$.TABLE_NAME", JsonString),
@@ -164,7 +158,7 @@ FunctionQuery: |
       LoadCatalogId = extractjson("$.CATALOG_ID", JsonString),
       LoadCatalogName = extractjson("$.CATALOG_NAME", JsonString),
       LoadFileName = extractjson("$.FILE_NAME", JsonString),
-      LastLoadTime = unixtime_seconds_todatetime(LTime),
+      LastLoadTime = todatetime(substring(LTime, 0, 23)) - tolong(substring(LTime, 24, 3)) * 1h,
       LoadStatus = extractjson("$.STATUS", JsonString),
       LoadRowCount = extractjson("$.ROW_COUNT", JsonString),
       LoadRowParsed = extractjson("$.ROW_PARSED", JsonString),
@@ -179,18 +173,17 @@ FunctionQuery: |
     SnowflakeTableStorageMetrics_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeTableStorageMetrics'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
     | extend
-      TCTime = toreal(extractjson("$.TABLE_CREATED", JsonString)),
-      TDTime = toreal(extractjson("$.TABLE_DROPPED", JsonString)),
-      TFTime = toreal(extractjson("$.TABLE_ENTERED_FAILSAFE", JsonString)),
-      SCTime = toreal(extractjson("$.SCHEMA_CREATED", JsonString)),
-      SDTime = toreal(extractjson("$.SCHEMA_DROPPED", JsonString)),
-      CCTime = toreal(extractjson("$.CATALOG_CREATED", JsonString)),
-      CDTime = toreal(extractjson("$.CATALOG_DROPPED", JsonString))
+      TCTime = extractjson("$.TABLE_CREATED", JsonString),
+      TDTime = extractjson("$.TABLE_DROPPED", JsonString),
+      TFTime = extractjson("$.TABLE_ENTERED_FAILSAFE", JsonString),
+      SCTime = extractjson("$.SCHEMA_CREATED", JsonString),
+      SDTime = extractjson("$.SCHEMA_DROPPED", JsonString),
+      CCTime = extractjson("$.CATALOG_CREATED", JsonString),
+      CDTime = extractjson("$.CATALOG_DROPPED", JsonString)
     | extend
       TableStorageMetricsId = extractjson("$.ID", JsonString),
       TableStorageMetricsTableName = extractjson("$.TABLE_NAME", JsonString),
@@ -205,13 +198,13 @@ FunctionQuery: |
       TableStorageMetricsFailsafeBytes = extractjson("$.FAILSAFE_BYTES", JsonString),
       TableStorageMetricsRetainedForCloneBytes = extractjson("$.RETAINED_FOR_CLONE_BYTES", JsonString),
       TableStorageMetricsDeleted = extractjson("$.DELETED", JsonString),
-      TableStorageMetricsTableCreated = unixtime_seconds_todatetime(TCTime),
-      TableStorageMetricsTableDropped = unixtime_seconds_todatetime(TDTime),
-      TableStorageMetricsTableEnteredFailsafe = unixtime_seconds_todatetime(TFTime),
-      TableStorageMetricsSchemaCreated = unixtime_seconds_todatetime(SCTime),
-      TableStorageMetricsSchemaDropped = unixtime_seconds_todatetime(SDTime),
-      TableStorageMetricsCatalogCreated = unixtime_seconds_todatetime(CCTime),
-      TableStorageMetricsCatalogDropped = unixtime_seconds_todatetime(CDTime),
+      TableStorageMetricsTableCreated = todatetime(substring(TCTime, 0, 23)) - tolong(substring(TCTime, 24, 3)) * 1h,
+      TableStorageMetricsTableDropped = todatetime(substring(TDTime, 0, 23)) - tolong(substring(TDTime, 24, 3)) * 1h,
+      TableStorageMetricsTableEnteredFailsafe = todatetime(substring(TFTime, 0, 23)) - tolong(substring(TFTime, 24, 3)) * 1h,
+      TableStorageMetricsSchemaCreated = todatetime(substring(SCTime, 0, 23)) - tolong(substring(SCTime, 24, 3)) * 1h,
+      TableStorageMetricsSchemaDropped = todatetime(substring(SDTime, 0, 23)) - tolong(substring(SDTime, 24, 3)) * 1h,
+      TableStorageMetricsCatalogCreated = todatetime(substring(CCTime, 0, 23)) - tolong(substring(CCTime, 24, 3)) * 1h,
+      TableStorageMetricsCatalogDropped = todatetime(substring(CDTime, 0, 23)) - tolong(substring(CDTime, 24, 3)) * 1h,
       TableStorageMetricsComment = extractjson("$.COMMENT", JsonString),
       TableStorageMetricsInstanceId = extractjson("$.INSTANCE_ID", JsonString)
   };
@@ -219,15 +212,14 @@ FunctionQuery: |
     SnowflakeTables_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeTables'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
     | extend
-      TCTime = toreal(extractjson("$.CREATED", JsonString)),
-      LATime = toreal(extractjson("$.LAST_ALTERED", JsonString)),
-      LDTime = toreal(extractjson("$.LAST_DDL", JsonString)),
-      TDTime = toreal(extractjson("$.DELETED", JsonString))
+      TCTime = extractjson("$.CREATED", JsonString),
+      LATime = extractjson("$.LAST_ALTERED", JsonString),
+      LDTime = extractjson("$.LAST_DDL", JsonString),
+      TDTime = extractjson("$.DELETED", JsonString)
     | extend
       TableId = extractjson("$.TABLE_ID", JsonString),
       TableName = extractjson("$.TABLE_NAME", JsonString),
@@ -253,11 +245,11 @@ FunctionQuery: |
       TableIsInsertableInto = extractjson("$.IS_INSERTABLE_INTO", JsonString),
       TableIsTyped = extractjson("$.IS_TYPED", JsonString),
       TableCommitAction = extractjson("$.COMMIT_ACTION", JsonString),
-      TableCreated = unixtime_seconds_todatetime(TCTime),
-      TableLastAltered = unixtime_seconds_todatetime(LATime),
-      TableLastDDL = unixtime_seconds_todatetime(LDTime),
+      TableCreated = todatetime(substring(TCTime, 0, 23)) - tolong(substring(TCTime, 24, 3)) * 1h,
+      TableLastAltered = todatetime(substring(LATime, 0, 23)) - tolong(substring(LATime, 24, 3)) * 1h,
+      TableLastDDL = todatetime(substring(LDTime, 0, 23)) - tolong(substring(LDTime, 24, 3)) * 1h,
       TableLastDDLBy = extractjson("$.LAST_DDL_BY", JsonString),
-      TableDeleted = unixtime_seconds_todatetime(TDTime),
+      TableDeleted = todatetime(substring(TDTime, 0, 23)) - tolong(substring(TDTime, 24, 3)) * 1h,
       TableAutoClusteringOn = extractjson("$.AUTO_CLUSTERING_ON", JsonString),
       TableComment = extractjson("$.COMMENT", JsonString),
       TableOwnerRoleType = extractjson("$.OWNER_ROLE_TYPE", JsonString),
@@ -267,18 +259,17 @@ FunctionQuery: |
     SnowflakeUsers_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeUsers'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
     | extend
-      CTime = toreal(extractjson("$.CREATED_ON", JsonString)),
-      DTime = toreal(extractjson("$.DELETED_ON", JsonString)),
-      BMTime = toreal(extractjson("$.BYPASS_MFA_UNTIL", JsonString)),
-      LSLTime = toreal(extractjson("$.LAST_SUCCESS_LOGIN", JsonString)),
-      ETime = toreal(extractjson("$.EXPIRES_AT", JsonString)),
-      LUTime = toreal(extractjson("$.LOCKED_UNTIL_TIME", JsonString)),
-      PLSTime = toreal(extractjson("$.PASSWORD_LAST_SET_TIME", JsonString))
+      CTime = extractjson("$.CREATED_ON", JsonString),
+      DTime = extractjson("$.DELETED_ON", JsonString),
+      BMTime = extractjson("$.BYPASS_MFA_UNTIL", JsonString),
+      LSLTime = extractjson("$.LAST_SUCCESS_LOGIN", JsonString),
+      ETime = extractjson("$.EXPIRES_AT", JsonString),
+      LUTime = extractjson("$.LOCKED_UNTIL_TIME", JsonString),
+      PLSTime = extractjson("$.PASSWORD_LAST_SET_TIME", JsonString)
     | extend
       UserId = extractjson("$.USER_ID", JsonString),
       UserName = extractjson("$.NAME", JsonString),
@@ -300,12 +291,12 @@ FunctionQuery: |
       UserExtAuthnDuo = extractjson("$.EXT_AUTHN_DUO", JsonString),
       UserExtAuthnUid = extractjson("$.EXT_AUTHN_UID", JsonString),
       UserHasMFA = extractjson("$.HAS_MFA", JsonString),
-      UserBypassMFAUntil = unixtime_seconds_todatetime(BMTime),
-      UserLastSuccessLogin = unixtime_seconds_todatetime(LSLTime),
-      UserExpiresAt = unixtime_seconds_todatetime(ETime),
-      UserLockedUntilTime = unixtime_seconds_todatetime(LUTime),
+      UserBypassMFAUntil = todatetime(substring(BMTime, 0, 23)) - tolong(substring(BMTime, 24, 3)) * 1h,
+      UserLastSuccessLogin = todatetime(substring(LSLTime, 0, 23)) - tolong(substring(LSLTime, 24, 3)) * 1h,
+      UserExpiresAt = todatetime(substring(ETime, 0, 23)) - tolong(substring(ETime, 24, 3)) * 1h,
+      UserLockedUntilTime = todatetime(substring(LUTime, 0, 23)) - tolong(substring(LUTime, 24, 3)) * 1h,
       UserHasRSAPublicKey = extractjson("$.HAS_RSA_PUBLIC_KEY", JsonString),
-      UserPasswordLastSetTime = unixtime_seconds_todatetime(PLSTime),
+      UserPasswordLastSetTime = todatetime(substring(PLSTime, 0, 23)) - tolong(substring(PLSTime, 24, 3)) * 1h,
       UserOwner = extractjson("$.OWNER", JsonString),
       UserDefaultSecondaryRole = extractjson("$.DEFAULT_SECONDARY_ROLE", JsonString),
       UserType = extractjson("$.TYPE", JsonString),
@@ -318,15 +309,17 @@ FunctionQuery: |
     SnowflakeQuery_CL
     | extend EventVendor = 'Snowflake'
     | extend EventProduct = 'Snowflake'
-    | extend EventType = 'SnowflakeQuery'
     | mv-expand OuterArray = todynamic(Data)
     | mv-expand innerArray = OuterArray
     | extend JsonString = tostring(innerArray)
     | extend
-      QueryStartTime = unixtime_seconds_todatetime(toreal(extractjson("$.START_TIME", JsonString))),
-      QueryEndTime = unixtime_seconds_todatetime(toreal(extractjson("$.END_TIME", JsonString))),
+      QSTime = extractjson("$.START_TIME", JsonString),
+      QETime = extractjson("$.END_TIME", JsonString),
       QueryTotalElapsedTime = toreal(extractjson("$.TOTAL_ELAPSED_TIME", JsonString)),
       QueryExecutionTime = toreal(extractjson("$.EXECUTION_TIME", JsonString))
+    | extend
+      QueryStartTime = todatetime(substring(QSTime, 0, 23)) - tolong(substring(QSTime, 24, 3)) * 1h,
+      QueryEndTime = todatetime(substring(QETime, 0, 23)) - tolong(substring(QETime, 24, 3)) * 1h
     | extend
       QueryId = extractjson("$.QUERY_ID", JsonString),
       QueryText = extractjson("$.QUERY_TEXT", JsonString),
@@ -336,7 +329,6 @@ FunctionQuery: |
       QuerySchemaName = extractjson("$.SCHEMA_NAME", JsonString),
       QueryType = extractjson("$.QUERY_TYPE", JsonString),
       QuerySessionId = extractjson("$.SESSION_ID", JsonString),
-      QueryAuthnEventId = extractjson("$.AUTHN_EVENT_ID", JsonString),
       QueryUserName = extractjson("$.USER_NAME", JsonString),
       QueryRoleName = extractjson("$.ROLE_NAME", JsonString),
       QueryWarehouseId = extractjson("$.WAREHOUSE_ID", JsonString),
@@ -376,7 +368,7 @@ FunctionQuery: |
       QueryErrorCode = extractjson("$.ERROR_CODE", JsonString),
       QueryErrorMessage = extractjson("$.ERROR_MESSAGE", JsonString),
       QueryListExternalFilesTime = extractjson("$.LIST_EXTERNAL_FILES_TIME", JsonString),
-      QueryCreditsUsedCloudServices = extractjson("$.CREDITS_USED_CLOUD_SERVICES", JsonString),
+      QueryCreditsUsedCloudServices = iff(isempty(extractjson("$.CREDITS_USED_CLOUD_SERVICES", JsonString)), toreal(0), toreal(extractjson("$.CREDITS_USED_CLOUD_SERVICES", JsonString))),
       QueryReleaseVersion = extractjson("$.RELEASE_VERSION", JsonString),
       QueryExternalFunctionTotalInvocations = extractjson("$.EXTERNAL_FUNCTION_TOTAL_INVOCATIONS", JsonString),
       QueryExternalFunctionTotalSentRows = extractjson("$.EXTERNAL_FUNCTION_TOTAL_SENT_ROWS", JsonString),
@@ -407,6 +399,7 @@ FunctionQuery: |
       QueryUserSchemaName = extractjson("$.USER_SCHEMA_NAME", JsonString)
   };
   union isfuzzy=true
+      (Snowflake_view),
       (SnowflakeLogin_view),
       (SnowflakeUserGrant_view),
       (SnowflakeMaterializedView_view),
@@ -421,9 +414,8 @@ FunctionQuery: |
   | extend TableNames = coalesce(TableName, MaterializedViewTableName, LoadTableName, TableStorageMetricsTableName)
   | extend EventStartTime = column_ifexists('EventStartTime', '')
   | project
-      EventVendor, 
+      EventVendor,
       EventProduct,
-      EventType, 
       EventStartTime,
       LoginEventType,
       TargetUsername,
@@ -666,4 +658,5 @@ FunctionQuery: |
       QueryUserSchemaName,
       QueryUserSchemaId,
       DatabaseName,
-      TimeGenerated
+      TimeGenerated,
+      Type

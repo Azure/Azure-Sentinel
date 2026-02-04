@@ -1,0 +1,106 @@
+name: AWS-S3 DataConnector Bundle Auto-Update
+run-name: Auto-updating AWS-S3 bundles for ${{ github.event.pull_request.head.ref }}
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      # Trigger when any of these files in AWS-S3 directory change
+      - 'DataConnectors/AWS-S3/*.ps1'
+      - 'DataConnectors/AWS-S3/*.py'
+      - 'DataConnectors/AWS-S3/*.md'
+      - 'DataConnectors/AWS-S3/CloudFormation/**'
+      - 'DataConnectors/AWS-S3/Enviornment/**'
+      - 'DataConnectors/AWS-S3/Utils/**'
+      # Don't trigger on zip file changes (to avoid recursion)
+      - '!DataConnectors/AWS-S3/*.zip'
+      # Don't trigger on bundle automation documentation changes (not bundled)
+      - '!DataConnectors/AWS-S3/BUNDLE_AUTOMATION.md'
+  
+  # Allow manual workflow dispatch for testing
+  workflow_dispatch:
+
+jobs:
+  auto-update-bundles:
+    # Security: Block workflow execution on forked repositories
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APPLICATION_ID }}
+          private-key: ${{ secrets.APPLICATION_PRIVATE_KEY }}
+      
+      - name: Checkout PR branch with sparse checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 2  # Just need HEAD and parent for git diff
+          persist-credentials: false  # Security: Don't persist credentials after checkout
+          sparse-checkout: |
+            DataConnectors/AWS-S3
+            .script
+          sparse-checkout-cone-mode: false
+      
+      - name: Restore bundling script from base branch
+        run: |
+          # Security: Use trusted script from base branch to prevent malicious PR modifications
+          # Fetch the base branch to ensure we have the reference
+          git fetch origin ${{ github.base_ref || 'master' }}:refs/remotes/origin/${{ github.base_ref || 'master' }}
+          git checkout origin/${{ github.base_ref || 'master' }} -- .script/bundleAwsS3Scripts.sh
+          chmod +x .script/bundleAwsS3Scripts.sh
+      
+      - name: Check if auto-update needed
+        id: check_update
+        run: |
+          # Skip if this commit already updated bundles (prevent loops)
+          if git log -1 --name-only | grep -q "ConfigAwsS3DataConnectorScripts.*\.zip"; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Bundles already updated in latest commit"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Update bundles
+        if: steps.check_update.outputs.skip != 'true'
+        run: |
+          .script/bundleAwsS3Scripts.sh
+      
+      - name: Commit updated bundles
+        if: steps.check_update.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Configure remote with token for push (needed due to persist-credentials: false)
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          
+          # Stage zip files
+          git add DataConnectors/AWS-S3/ConfigAwsS3DataConnectorScripts*.zip
+          
+          # Check if there are changes to commit
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto-update AWS-S3 DataConnector bundles
+            
+            - Updated ConfigAwsS3DataConnectorScripts.zip
+            - Updated ConfigAwsS3DataConnectorScriptsGov.zip
+            - Changes triggered by: ${{ github.event.pull_request.head.sha }}
+            
+            [skip ci]"
+            
+            git push origin ${{ github.event.pull_request.head.ref }}
+            
+            echo "✅ Successfully updated and committed bundle files"
+          else
+            echo "ℹ️ No bundle changes detected"
+          fi
