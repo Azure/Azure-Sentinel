@@ -60,11 +60,138 @@ ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" height="16">'
 UNPUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions/connectors/content
 DEPRECATED_ICON = "🚫"   # Deprecated/no-entry icon for deprecated connectors
 DISCOVERED_ICON = "🔍"   # Magnifying glass for discovered items not in solution JSON
+ADDITIONAL_INFO_ICON = "➕"  # Plus icon for items with additional documentation/info
 
 # Footnotes for icons
-UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace."
+UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace or not installed in Content Hub."
 DEPRECATED_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This connector has been deprecated and may be removed in future versions."
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
+ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
+
+# Collection method metadata: descriptions and documentation links
+COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
+    "AMA": {
+        "name": "Azure Monitor Agent (AMA)",
+        "description": "The Azure Monitor Agent (AMA) is the recommended agent for collecting logs from Azure VMs, on-premises servers, and multi-cloud environments. It replaces the legacy Log Analytics agent (MMA) and provides improved performance, security, and manageability.",
+        "links": [
+            ("📖 Azure Monitor Agent overview", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-overview"),
+            ("📖 Install and manage the Azure Monitor Agent", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage"),
+            ("📖 Connect via Windows agent-based connectors", "https://learn.microsoft.com/azure/sentinel/connect-services-windows-based"),
+            ("📖 Migrate to Azure Monitor Agent from Log Analytics agent", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-migration"),
+            ("📖 AMA migration for Microsoft Sentinel", "https://learn.microsoft.com/azure/sentinel/ama-migrate"),
+            ("📖 Data collection rules in Azure Monitor", "https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview"),
+            ("📖 CEF and Syslog via AMA overview", "https://learn.microsoft.com/azure/sentinel/cef-syslog-ama-overview"),
+            ("📖 Connect CEF and Syslog via AMA", "https://learn.microsoft.com/azure/sentinel/connect-cef-syslog-ama"),
+            ("📖 Device configuration for CEF via AMA", "https://learn.microsoft.com/azure/sentinel/unified-connector-cef-device"),
+            ("📖 Syslog device configuration", "https://learn.microsoft.com/azure/sentinel/unified-connector-syslog-device"),
+            ("📖 Troubleshoot CEF and Syslog via AMA", "https://learn.microsoft.com/azure/sentinel/cef-syslog-ama-troubleshooting"),
+            ("📖 Collect logs from text files via AMA", "https://learn.microsoft.com/azure/sentinel/connect-custom-logs-ama"),
+            ("📖 Custom logs device configuration", "https://learn.microsoft.com/azure/sentinel/unified-connector-custom-device"),
+            ("📖 DNS via AMA", "https://learn.microsoft.com/azure/sentinel/connect-dns-ama"),
+        ],
+    },
+    "MMA": {
+        "name": "Microsoft Monitoring Agent (Legacy)",
+        "description": "The Microsoft Monitoring Agent (MMA), also known as the Log Analytics agent, is a legacy agent for collecting logs. **Note:** The MMA is deprecated and will be retired on August 31, 2024. Microsoft recommends migrating to the Azure Monitor Agent (AMA).",
+        "links": [
+            ("⚠️ Log Analytics agent retirement", "https://learn.microsoft.com/azure/azure-monitor/agents/log-analytics-agent"),
+            ("📖 Migrate to Azure Monitor Agent", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-migration"),
+            ("📖 AMA migration for Microsoft Sentinel", "https://learn.microsoft.com/azure/sentinel/ama-migrate"),
+        ],
+    },
+    "Azure Diagnostics": {
+        "name": "Azure Diagnostics Settings",
+        "description": "Azure Diagnostics Settings enable native log collection from Azure resources directly to Log Analytics workspaces. This is the recommended method for collecting logs from Azure services like Azure Firewall, Azure Key Vault, Azure SQL, and other Azure PaaS services.",
+        "links": [
+            ("📖 Connect via diagnostic settings-based connectors", "https://learn.microsoft.com/azure/sentinel/connect-services-diagnostic-setting-based"),
+            ("📖 Diagnostic settings in Azure Monitor", "https://learn.microsoft.com/azure/azure-monitor/essentials/diagnostic-settings"),
+            ("📖 Azure resource logs", "https://learn.microsoft.com/azure/azure-monitor/essentials/resource-logs"),
+            ("📖 Supported services for diagnostic logs", "https://learn.microsoft.com/azure/azure-monitor/essentials/resource-logs-categories"),
+        ],
+    },
+    "Azure Function": {
+        "name": "Azure Functions",
+        "description": "Azure Functions-based connectors use serverless functions to pull data from external APIs and ingest it into Microsoft Sentinel. These connectors are commonly used for third-party SaaS applications and cloud services that provide REST APIs.",
+        "links": [
+            ("📖 Azure Functions overview", "https://learn.microsoft.com/azure/azure-functions/functions-overview"),
+            ("📖 Deploy Azure Function connectors", "https://learn.microsoft.com/azure/sentinel/connect-azure-functions-template"),
+            ("📖 Create custom connectors with Azure Functions", "https://learn.microsoft.com/azure/sentinel/create-custom-connector"),
+        ],
+    },
+    "CCF": {
+        "name": "Codeless Connector Framework (CCF)",
+        "description": "The Codeless Connector Framework (CCF) enables creating data connectors using a declarative JSON configuration without writing code. CCF connectors can poll REST APIs, process responses, and ingest data into custom log tables. This framework is used for many modern Microsoft Sentinel connectors.",
+        "links": [
+            ("📖 Create a codeless connector", "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"),
+            ("📖 Codeless Connector Platform reference", "https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference"),
+            ("📖 Connector definition reference", "https://learn.microsoft.com/azure/sentinel/data-connector-ui-definitions-reference"),
+        ],
+    },
+    "Native": {
+        "name": "Native Microsoft Integration",
+        "description": "Native connectors provide built-in integration with Microsoft services and are typically enabled directly in the Microsoft Sentinel portal or through Azure Policy. These connectors offer the most seamless experience for Microsoft-to-Microsoft data ingestion.",
+        "links": [
+            ("📖 Connect via API-based connectors", "https://learn.microsoft.com/azure/sentinel/connect-services-api-based"),
+            ("📖 Connect Microsoft Sentinel to Microsoft connectors", "https://learn.microsoft.com/azure/sentinel/connect-azure-windows-microsoft-services"),
+            ("📖 Connect Microsoft 365 Defender", "https://learn.microsoft.com/azure/sentinel/connect-microsoft-365-defender"),
+            ("📖 Connect Microsoft Entra ID", "https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory"),
+            ("📖 Connect Microsoft Defender for Cloud", "https://learn.microsoft.com/azure/sentinel/connect-defender-for-cloud"),
+        ],
+    },
+    "REST API": {
+        "name": "REST API / Custom Integration",
+        "description": "REST API-based connectors use the Azure Monitor Data Collector API or Logs Ingestion API to send data to Microsoft Sentinel. These connectors may use custom scripts, Logic Apps, or other integration methods to collect and ingest data.",
+        "links": [
+            ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
+            ("📖 Send data using the Logs Ingestion API", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-walkthrough"),
+            ("📖 Create custom logs", "https://learn.microsoft.com/azure/sentinel/create-custom-connector"),
+        ],
+    },
+    "Unknown": {
+        "name": "Unknown Collection Method",
+        "description": "The collection method for these connectors could not be automatically determined. Please refer to the individual connector documentation for setup instructions.",
+        "links": [
+            ("📖 Microsoft Sentinel data connectors", "https://learn.microsoft.com/azure/sentinel/connect-data-sources"),
+        ],
+    },
+    "Unknown (Custom Log)": {
+        "name": "Custom Log Integration",
+        "description": "These connectors use custom log tables to store ingested data. The specific collection method may vary - some use the Logs Ingestion API, Azure Functions, or other custom integration approaches.",
+        "links": [
+            ("📖 Custom logs overview", "https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-overview"),
+            ("📖 Create custom logs tables", "https://learn.microsoft.com/azure/azure-monitor/logs/create-custom-logs"),
+        ],
+    },
+}
+
+
+def get_collection_method_filename(method: str) -> str:
+    """Get the sanitized filename for a collection method page.
+    
+    Args:
+        method: The collection method name
+    
+    Returns:
+        Sanitized filename (without .md extension)
+    """
+    # Create a URL-safe filename
+    return sanitize_filename(method.lower().replace(" ", "-").replace("(", "").replace(")", ""))
+
+
+def get_collection_method_link(method: str, relative_path: str = "") -> str:
+    """Get a markdown link to a collection method page.
+    
+    Args:
+        method: The collection method name
+        relative_path: Relative path prefix (e.g., "../" or "methods/")
+    
+    Returns:
+        Markdown link to the collection method page
+    """
+    if not method or method == '—':
+        return '—'
+    filename = get_collection_method_filename(method)
+    return f"[{method}]({relative_path}methods/{filename}.md)"
 
 
 def get_asim_icon(relative_path: str = "../tables/") -> str:
@@ -282,6 +409,41 @@ def is_asim_parser(table_name: str) -> bool:
     return False
 
 
+def get_asim_changelog_url(parser: Dict[str, str]) -> str:
+    """
+    Generate the changelog URL for an ASIM parser.
+    
+    The changelog is located at:
+    https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASim<schema>/CHANGELOG/<parser_name>.md
+    
+    Args:
+        parser: Parser data dictionary containing 'source_file' and 'parser_name'
+    
+    Returns:
+        The GitHub URL to the changelog file, or empty string if cannot be constructed
+    """
+    source_file = parser.get('source_file', '')
+    parser_name = parser.get('parser_name', '')
+    
+    if not source_file or not parser_name:
+        return ''
+    
+    # Extract the schema folder from source_file
+    # source_file format: Parsers\ASimDns\Parsers\ASimDnsAzureFirewall.yaml
+    # We need to get: ASimDns (the schema folder name)
+    parts = source_file.replace('\\', '/').split('/')
+    if len(parts) < 2 or parts[0] != 'Parsers':
+        return ''
+    
+    schema_folder = parts[1]  # e.g., "ASimDns"
+    
+    # Construct the changelog URL
+    # Format: https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/<schema_folder>/CHANGELOG/<parser_name>.md
+    changelog_url = f"https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/{schema_folder}/CHANGELOG/{parser_name}.md"
+    
+    return changelog_url
+
+
 def load_asim_parser_names(asim_parsers_path: Path) -> None:
     """
     Load ASIM parser names from CSV file into global set.
@@ -338,9 +500,73 @@ def load_asim_parser_names(asim_parsers_path: Path) -> None:
         print(f"Warning: Could not load ASIM parser names from {asim_parsers_path}: {e}")
 
 
+def is_connector_deprecated(connector_id: str,
+                            connectors_reference: Dict[str, Dict[str, str]]) -> bool:
+    """
+    Check if a specific connector is deprecated.
+    
+    Args:
+        connector_id: The connector ID to check
+        connectors_reference: Dictionary of connector_id -> connector info
+        
+    Returns:
+        True if the connector is deprecated
+    """
+    if not connector_id:
+        return False
+    
+    conn_info = connectors_reference.get(connector_id.strip(), {})
+    is_deprecated = conn_info.get('is_deprecated', 'false') == 'true'
+    if not is_deprecated:
+        # Check title fallback
+        title = conn_info.get('title', '')
+        is_deprecated = '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]')
+    return is_deprecated
+
+
+def format_solution_link_with_legacy(solution_name: str,
+                                     connector_id: str,
+                                     connectors_reference: Dict[str, Dict[str, str]],
+                                     relative_path: str = "../solutions/") -> str:
+    """
+    Format a solution link, adding "(legacy connector)" suffix if the connector is deprecated.
+    
+    Args:
+        solution_name: Name of the solution
+        connector_id: The specific connector ID that relates the parser to this solution
+        connectors_reference: Dictionary of connector_id -> connector info
+        relative_path: Relative path to solutions directory
+        
+    Returns:
+        Markdown link with optional "(legacy connector)" suffix
+    """
+    # Don't add suffix if solution name already contains "Legacy"
+    if '(legacy)' in solution_name.lower():
+        return f"[{solution_name}]({relative_path}{sanitize_filename(solution_name)}.md)"
+    
+    is_legacy = is_connector_deprecated(connector_id, connectors_reference)
+    display_name = f"{solution_name} (legacy connector)" if is_legacy else solution_name
+    return f"[{display_name}]({relative_path}{sanitize_filename(solution_name)}.md)"
+
+
 def sanitize_anchor(text: str) -> str:
-    """Convert text to URL-safe anchor."""
-    return text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+    """Convert text to URL-safe anchor and filename-safe identifier.
+    
+    This function should produce the same result as sanitize_filename to ensure
+    consistency between file creation and link generation.
+    """
+    result = text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+    # Remove or replace characters invalid in Windows filenames: \ / : * ? " < > |
+    result = result.replace(":", "-").replace("*", "-").replace("?", "-")
+    result = result.replace('"', "-").replace("<", "-").replace(">", "-").replace("|", "-")
+    # Remove parentheses and percent signs (these break file systems or cause issues)
+    result = result.replace("(", "-").replace(")", "-").replace("%", "-")
+    # Clean up multiple consecutive hyphens
+    while "--" in result:
+        result = result.replace("--", "-")
+    # Remove leading/trailing hyphens
+    result = result.strip("-")
+    return result
 
 
 def sanitize_filename(text: str) -> str:
@@ -1004,9 +1230,10 @@ def parse_filter_fields(filter_fields: str) -> Dict[str, List[str]]:
 
 def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[str, str]], 
                        relative_path: str = "../tables/", filter_fields: str = "",
-                       include_transforms: bool = True, include_ingestion_api: bool = True) -> None:
+                       include_transforms: bool = True, include_ingestion_api: bool = True,
+                       include_lake_only: bool = True) -> None:
     """
-    Write a standardized tables table with optional Selection Criteria, Transformations, and Ingestion API columns.
+    Write a standardized tables table with optional Selection Criteria, Transformations, Ingestion API, and Lake-Only columns.
     
     This function is used by connector pages, ASIM parser pages, and content item pages to display
     a consistent tables table format.
@@ -1019,6 +1246,7 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
         filter_fields: Filter fields string from CSV to parse for selection criteria
         include_transforms: Whether to include Transformations column (default: True)
         include_ingestion_api: Whether to include Ingestion API column (default: True)
+        include_lake_only: Whether to include Lake-Only column (default: True)
     """
     if not tables:
         return
@@ -1035,6 +1263,8 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
         headers.append("Transformations")
     if include_ingestion_api:
         headers.append("Ingestion API")
+    if include_lake_only:
+        headers.append("Lake-Only")
     
     # Write header row
     f.write("| " + " | ".join(headers) + " |\n")
@@ -1047,6 +1277,8 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
         separators.append(":---------------:")  # Transformations centered
     if include_ingestion_api:
         separators.append(":-------------:")  # Ingestion API centered
+    if include_lake_only:
+        separators.append(":---------:")  # Lake-Only centered
     f.write("|" + "|".join(separators) + "|\n")
     
     # Write data rows
@@ -1080,6 +1312,12 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
             ingestion_api = table_ref.get('ingestion_api_supported', '')
             ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
             row.append(ingestion_cell)
+        
+        # Lake-Only
+        if include_lake_only:
+            lake_only = table_ref.get('lake_only_supported', '')
+            lake_only_cell = "✓" if lake_only.lower() == 'yes' else "✗" if lake_only.lower() == 'no' else "—"
+            row.append(lake_only_cell)
         
         f.write("| " + " | ".join(row) + " |\n")
     
@@ -1129,7 +1367,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         page_type: Type of current page ('solutions', 'connectors', 'tables', 'content', 'asim', 
                    'solution-page', 'connector-page', 'table-page', 'content-item-page', 'content-type', 
                    'content-type-letter', 'content-type-letter-header', 'asim-parser', 'asim-index', 'asim-products',
-                   'parser', 'parser-index')
+                   'parser', 'parser-index', 'methods', 'method-page')
         relative_to_root: Path prefix to get from current directory to root 
                           (e.g., "../" for pages in subdirectories, "" for root pages)
         **kwargs: Additional parameters:
@@ -1140,11 +1378,12 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
             - type_slug: For content-type-letter, the slug for the content type index
     """
     # Define the navigation items - all pages should include all items
-    # Use a compact format: Home | Solutions | Connectors | Tables | Content | Parsers | ASIM Parsers | ASIM Products | Statistics
+    # Use a compact format: Home | Solutions | Connectors | Methods | Tables | Content | Parsers | ASIM Parsers | ASIM Products | Statistics
     nav_items = [
-        ('🏠', f'{relative_to_root}readme.md', 'Home'),
+        ('🏠', f'{relative_to_root}README.md', 'Home'),
         ('Solutions', f'{relative_to_root}solutions-index.md', None),
         ('Connectors', f'{relative_to_root}connectors-index.md', None),
+        ('Methods', f'{relative_to_root}methods-index.md', None),
         ('Tables', f'{relative_to_root}tables-index.md', None),
         ('Content', f'{relative_to_root}content/content-index.md', None),
         ('Parsers', f'{relative_to_root}parsers/parsers-index.md', None),
@@ -1163,6 +1402,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         elif page_type == 'solutions' and name == 'Solutions':
             is_current = True
         elif page_type == 'connectors' and name == 'Connectors':
+            is_current = True
+        elif page_type == 'methods' and name == 'Methods':
             is_current = True
         elif page_type == 'tables' and name == 'Tables':
             is_current = True
@@ -1203,6 +1444,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         f.write(f"↑ [Back to Connectors Index]({relative_to_root}connectors-index.md)\n\n")
     elif page_type == 'solution-page':
         f.write(f"↑ [Back to Solutions Index]({relative_to_root}solutions-index.md)\n\n")
+    elif page_type == 'method-page':
+        f.write(f"↑ [Back to Methods Index]({relative_to_root}methods-index.md)\n\n")
     elif page_type == 'content-type':
         f.write("↑ [Back to Content Index](content-index.md)\n\n")
     elif page_type == 'content-page':
@@ -2249,7 +2492,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                                  solutions_dir: Path = None,
                                  tables_reference: Dict[str, Dict[str, str]] = None,
                                  content_table_parser_mapping: Dict[str, Dict[str, str]] = None,
-                                 parser_filter_fields: Dict[str, str] = None) -> int:
+                                 parser_filter_fields: Dict[str, str] = None,
+                                 connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
     """
     Generate individual documentation pages for each content item.
     
@@ -2261,6 +2505,7 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
         tables_reference: Dictionary of table metadata for transformations/ingestion API info
         content_table_parser_mapping: Dict mapping content_key -> table_name -> source_parser
         parser_filter_fields: Dict mapping parser_name (lowercase) -> filter_fields string
+        connectors_reference: Dictionary of connector metadata for looking up solution names
     
     Returns:
         Number of pages generated
@@ -2274,6 +2519,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
         content_table_parser_mapping = {}
     if parser_filter_fields is None:
         parser_filter_fields = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     
     pages_created = 0
     
@@ -2443,6 +2690,55 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                         
                         write_tables_table(f, tables_list, tables_reference, "../tables/", merged_filter_fields,
                                           include_transforms=True, include_ingestion_api=True)
+                
+                # Associated Connectors (for standalone/GitHub Only content items)
+                content_source = item.get('content_source', 'Solution')
+                if content_source in ('Standalone', 'GitHub Only'):
+                    associated_connectors = item.get('associated_connectors', '')
+                    associated_solutions = item.get('associated_solutions', '')
+                    if associated_connectors:
+                        f.write("## Associated Connectors\n\n")
+                        f.write("The following connectors provide data for this content item:\n\n")
+                        
+                        connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+                        solution_list = [s.strip() for s in associated_solutions.split(',') if s.strip()] if associated_solutions else []
+                        
+                        f.write("| Connector | Solution |\n")
+                        f.write("|:----------|:---------|\n")
+                        for connector in connector_list:
+                            # Each connector links to its connector page
+                            connector_link = f"[{connector}](../connectors/{sanitize_filename(connector)}.md)"
+                            # Look up solution_name from connectors_reference
+                            solution_name_for_conn = ''
+                            if connector in connectors_reference:
+                                solution_name_for_conn = connectors_reference[connector].get('solution_name', '')
+                            if solution_name_for_conn:
+                                solution_link = format_solution_link_with_legacy(solution_name_for_conn, connector, connectors_reference, "../solutions/")
+                                f.write(f"| {connector_link} | {solution_link} |\n")
+                            else:
+                                f.write(f"| {connector_link} | |\n")
+                        f.write("\n")
+                        
+                        # List unique solutions separately with legacy markers
+                        if solution_list:
+                            f.write("**Solutions:** ")
+                            solution_links = []
+                            for s in solution_list:
+                                # Find connectors for this solution - check if any are deprecated
+                                solution_connectors = [c for c in connector_list
+                                                       if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                                # Use the first deprecated connector, or first connector if none deprecated
+                                connector_for_legacy = ''
+                                for c in solution_connectors:
+                                    if is_connector_deprecated(c, connectors_reference):
+                                        connector_for_legacy = c
+                                        break
+                                if not connector_for_legacy and solution_connectors:
+                                    connector_for_legacy = solution_connectors[0]
+                                link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                                solution_links.append(link)
+                            f.write(", ".join(solution_links))
+                            f.write("\n\n")
                 
                 # Additional Documentation section for playbooks (embedded README content)
                 if content_type == 'playbook' and content_readme_file and solution_folder and solutions_dir:
@@ -2987,6 +3283,11 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         if solutions_using_asim:
             f.write(f"> {ASIM_ICON_ROOT} **Uses ASIM:** This icon indicates the solution uses ASIM parsers for normalized data.\n\n")
         
+        # Check if any solutions have additional_information
+        has_additional_info = any(get_doc_override('solution', sol_name, 'additional_information') for sol_name in solutions.keys())
+        if has_additional_info:
+            f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
+        
         # Generate sections by letter
         for letter in letters:
             f.write(f"### {letter}\n\n")
@@ -3003,7 +3304,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 # Add logo column
                 logo_url = connectors[0].get('solution_logo_url', '')
                 if logo_url:
-                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                    logo_cell = f'<img src="{logo_url}" alt="" width="40" height="40">'
                 else:
                     logo_cell = ''
                 
@@ -3011,10 +3312,15 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 # Use ASIM_ICON_ROOT since index file is in root directory
                 asim_prefix = f"{ASIM_ICON_ROOT} " if solution_name in solutions_using_asim else ""
                 
-                # Add unpublished icon if solution is not published
-                unpublished_suffix = f" {UNPUBLISHED_ICON}" if solution_name in unpublished_solutions else ""
+                # Add status suffix icons
+                status_suffix = ""
+                if solution_name in unpublished_solutions:
+                    status_suffix += f" {UNPUBLISHED_ICON}"
+                # Check for additional_information override
+                if get_doc_override('solution', solution_name, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
-                solution_link = f"{asim_prefix}[{solution_name}](solutions/{sanitize_filename(solution_name)}.md){unpublished_suffix}"
+                solution_link = f"{asim_prefix}[{solution_name}](solutions/{sanitize_filename(solution_name)}.md){status_suffix}"
                 f.write(f"| {logo_cell} | {solution_link} | {first_published} | {support_name} |\n")
             
             f.write("\n")
@@ -3138,6 +3444,10 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             f.write(DEPRECATED_FOOTNOTE + "\n\n")
         if discovered_connectors:
             f.write(DISCOVERED_FOOTNOTE + "\n\n")
+        # Check if any connectors have additional_information
+        has_additional_info = any(get_doc_override('connector', cid, 'additional_information') for cid in connectors_map.keys())
+        if has_additional_info:
+            f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
         
         # Generate sections by letter with table format
         for letter in letters:
@@ -3152,12 +3462,13 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
                 collection_method = info.get('collection_method', '') or '—'
+                collection_method_cell = get_collection_method_link(collection_method, "")
                 solution_folder = info.get('solution_folder', '')
                 
                 # Get solution logo from first entry
                 logo_url = info.get('logo_url', '')
                 if logo_url:
-                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                    logo_cell = f'<img src="{logo_url}" alt="" width="40" height="40">'
                 else:
                     logo_cell = ''
                 
@@ -3167,12 +3478,15 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     status_suffix += f" {UNPUBLISHED_ICON}"
                 if connector_id in discovered_connectors:
                     status_suffix += f" {DISCOVERED_ICON}"
+                # Check for additional_information override
+                if get_doc_override('connector', connector_id, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 tables_count = str(len(tables)) if tables else '—'
                 
-                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method} | {tables_count} | {solution_link} |\n")
+                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
             f.write("\n")
         
@@ -3190,11 +3504,12 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
                 collection_method = info.get('collection_method', '') or '—'
+                collection_method_cell = get_collection_method_link(collection_method, "")
                 
                 # Get solution logo
                 logo_url = info.get('logo_url', '')
                 if logo_url:
-                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                    logo_cell = f'<img src="{logo_url}" alt="" width="40" height="40">'
                 else:
                     logo_cell = ''
                 
@@ -3204,12 +3519,15 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     status_suffix += f" {UNPUBLISHED_ICON}"
                 if connector_id in discovered_connectors:
                     status_suffix += f" {DISCOVERED_ICON}"
+                # Check for additional_information override
+                if get_doc_override('connector', connector_id, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 connector_link = f"{DEPRECATED_ICON} [{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 tables_count = str(len(tables)) if tables else '—'
                 
-                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method} | {tables_count} | {solution_link} |\n")
+                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
             f.write("\n")
         
@@ -3218,6 +3536,253 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         write_browse_section(f, 'connectors', "")
     
     print(f"Generated connectors index: {index_path}")
+
+
+def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> Dict[str, Dict[str, any]]:
+    """Generate the collection methods index page and individual method pages.
+    
+    Args:
+        solutions: Dictionary of solution_name to list of connector rows (same as generate_connectors_index)
+        output_dir: Output directory for documentation
+    
+    Returns:
+        Dictionary mapping method names to their stats and connectors
+    """
+    # Build connectors_map the same way as generate_connectors_index
+    connectors_map: Dict[str, Dict[str, any]] = {}
+    
+    for solution_name, connectors in solutions.items():
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if not connector_id or connector_id in connectors_map:
+                continue
+            
+            connector_title = conn.get('connector_title', connector_id)
+            connectors_map[connector_id] = {
+                'title': connector_title,
+                'publisher': conn.get('connector_publisher', 'N/A'),
+                'solution_name': solution_name,
+                'solution_folder': conn.get('solution_folder', ''),
+                'tables': set(),
+                'description': conn.get('connector_description', ''),
+                'collection_method': conn.get('collection_method', ''),
+                'is_published': conn.get('is_published', 'true'),
+                'is_deprecated': conn.get('is_deprecated', 'false'),
+                'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
+                'logo_url': conn.get('solution_logo_url', ''),
+                'support_tier': conn.get('solution_support_tier', ''),
+            }
+        
+        # Collect all tables for each connector
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if connector_id in connectors_map:
+                table = conn.get('Table', '')
+                if table:
+                    connectors_map[connector_id]['tables'].add(table)
+    
+    # Build deprecated and unpublished sets from connector data
+    deprecated_connectors: Set[str] = {
+        cid for cid, info in connectors_map.items()
+        if info.get('is_deprecated', 'false') == 'true'
+    }
+    unpublished_connectors: Set[str] = {
+        cid for cid, info in connectors_map.items()
+        if info.get('is_published', 'true') == 'false'
+    }
+    
+    # Create methods directory
+    methods_dir = output_dir / "methods"
+    methods_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Build method stats
+    method_stats: Dict[str, Dict[str, any]] = defaultdict(lambda: {
+        'total': 0, 'active': 0, 'deprecated': 0, 'unpublished': 0, 'connectors': []
+    })
+    
+    for connector_id, info in connectors_map.items():
+        method = info.get('collection_method', '') or 'Unknown'
+        method_stats[method]['total'] += 1
+        method_stats[method]['connectors'].append((connector_id, info))
+        
+        if connector_id in deprecated_connectors:
+            method_stats[method]['deprecated'] += 1
+        elif connector_id in unpublished_connectors:
+            method_stats[method]['unpublished'] += 1
+        else:
+            method_stats[method]['active'] += 1
+    
+    # Generate the methods index page
+    index_path = output_dir / "methods-index.md"
+    with index_path.open("w", encoding="utf-8") as f:
+        f.write("# Collection Methods Index\n\n")
+        f.write("Data connectors use different collection methods to ingest data into Microsoft Sentinel. ")
+        f.write("This page provides an overview of all collection methods and the connectors that use each method.\n\n")
+        
+        f.write("📚 **Learn more:** [Microsoft Sentinel data connectors overview](https://learn.microsoft.com/azure/sentinel/connect-data-sources)\n\n")
+        
+        # Navigation
+        write_browse_section(f, 'methods', "")
+        f.write("---\n\n")
+        
+        # Summary table
+        f.write("## Collection Methods Summary\n\n")
+        f.write(f"| Collection Method | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
+        f.write("|:------------------|------:|-------:|-------------:|---------------:|\n")
+        
+        sorted_methods = sorted(method_stats.items(), key=lambda x: x[1]['total'], reverse=True)
+        
+        for method, stats in sorted_methods:
+            method_link = f"[{method}](methods/{get_collection_method_filename(method)}.md)"
+            f.write(f"| {method_link} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
+        
+        total_all = sum(s['total'] for s in method_stats.values())
+        total_active = sum(s['active'] for s in method_stats.values())
+        total_deprecated = sum(s['deprecated'] for s in method_stats.values())
+        total_unpub = sum(s['unpublished'] for s in method_stats.values())
+        f.write(f"| **Total** | **{total_all}** | **{total_active}** | **{total_deprecated}** | **{total_unpub}** |\n")
+        f.write("\n")
+        
+        # Add icon footnotes
+        f.write("---\n\n")
+        f.write(DEPRECATED_FOOTNOTE + "\n\n")
+        f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'methods', "")
+    
+    print(f"Generated collection methods index: {index_path}")
+    
+    # Generate individual method pages
+    for method, stats in method_stats.items():
+        generate_collection_method_page(method, stats, methods_dir, deprecated_connectors, unpublished_connectors)
+    
+    print(f"Generated {len(method_stats)} collection method pages")
+    
+    return dict(method_stats)
+
+
+def generate_collection_method_page(method: str, stats: Dict[str, any], methods_dir: Path,
+                                     deprecated_connectors: Set[str], unpublished_connectors: Set[str]) -> None:
+    """Generate an individual collection method page.
+    
+    Args:
+        method: Collection method name
+        stats: Stats dict with total, active, deprecated, unpublished, and connectors list
+        methods_dir: Directory for method pages
+        deprecated_connectors: Set of deprecated connector IDs
+        unpublished_connectors: Set of unpublished connector IDs
+    """
+    filename = get_collection_method_filename(method)
+    page_path = methods_dir / f"{filename}.md"
+    
+    # Get metadata for this method
+    metadata = COLLECTION_METHODS_METADATA.get(method, COLLECTION_METHODS_METADATA.get('Unknown'))
+    display_name = metadata.get('name', method)
+    description = metadata.get('description', '')
+    links = metadata.get('links', [])
+    
+    with page_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {display_name}\n\n")
+        
+        # Navigation
+        write_browse_section(f, 'method-page', "../")
+        f.write("---\n\n")
+        
+        # Description
+        if description:
+            f.write(f"{description}\n\n")
+        
+        # Documentation links
+        if links:
+            f.write("## Documentation\n\n")
+            for link_text, link_url in links:
+                f.write(f"- [{link_text}]({link_url})\n")
+            f.write("\n")
+        
+        # Stats summary
+        f.write("## Statistics\n\n")
+        f.write(f"| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| Total Connectors | **{stats['total']}** |\n")
+        f.write(f"| Active | {stats['active']} |\n")
+        f.write(f"| Deprecated {DEPRECATED_ICON} | {stats['deprecated']} |\n")
+        f.write(f"| Unpublished {UNPUBLISHED_ICON} | {stats['unpublished']} |\n")
+        f.write("\n")
+        
+        # Connectors list
+        f.write("## Connectors Using This Method\n\n")
+        
+        # Separate into active and deprecated
+        active_connectors = []
+        deprecated_list = []
+        
+        for connector_id, info in stats['connectors']:
+            if connector_id in deprecated_connectors:
+                deprecated_list.append((connector_id, info))
+            else:
+                active_connectors.append((connector_id, info))
+        
+        # Active connectors table
+        if active_connectors:
+            f.write("### Active Connectors\n\n")
+            f.write("| Connector | Publisher | Tables | Solution |\n")
+            f.write("|:----------|:----------|:------:|:---------|\n")
+            
+            for connector_id, info in sorted(active_connectors, key=lambda x: x[1].get('title', '').lower()):
+                title = info.get('title', connector_id)
+                publisher = info.get('publisher', '')
+                solution_name = info.get('solution_name', '')
+                tables = info.get('tables', [])
+                tables_count = str(len(tables)) if tables else '—'
+                
+                # Status icons
+                status_suffix = ""
+                if connector_id in unpublished_connectors:
+                    status_suffix += f" {UNPUBLISHED_ICON}"
+                if info.get('discovered', False):
+                    status_suffix += f" {DISCOVERED_ICON}"
+                if get_doc_override('connector', connector_id, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
+                
+                connector_link = f"[{title}](../connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                
+                f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
+        
+        # Deprecated connectors table
+        if deprecated_list:
+            f.write(f"### Deprecated Connectors {DEPRECATED_ICON}\n\n")
+            f.write("| Connector | Publisher | Tables | Solution |\n")
+            f.write("|:----------|:----------|:------:|:---------|\n")
+            
+            for connector_id, info in sorted(deprecated_list, key=lambda x: x[1].get('title', '').lower()):
+                title = info.get('title', connector_id)
+                publisher = info.get('publisher', '')
+                solution_name = info.get('solution_name', '')
+                tables = info.get('tables', [])
+                tables_count = str(len(tables)) if tables else '—'
+                
+                connector_link = f"{DEPRECATED_ICON} [{title}](../connectors/{sanitize_filename(connector_id)}.md)"
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                
+                f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
+        
+        # Icon footnotes
+        f.write("---\n\n")
+        if stats['deprecated'] > 0:
+            f.write(DEPRECATED_FOOTNOTE + "\n\n")
+        if stats['unpublished'] > 0:
+            f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'method-page', "../")
 
 
 def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]],
@@ -3341,6 +3906,11 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
         f.write("\n\n")
         
+        # Check if any tables have additional_information and add footnote
+        has_additional_info = any(get_doc_override('table', t, 'additional_information') for t in tables_map.keys())
+        if has_additional_info:
+            f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
+        
         # Generate sections by letter - compact format with counts linking to table pages
         for letter in letters:
             f.write(f"## {letter}\n\n")
@@ -3355,6 +3925,10 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 
                 # All tables get individual pages now - use format_table_link for proper ASIM handling
                 table_cell = format_table_link(table, "tables/", "asim/")
+                
+                # Add ADDITIONAL_INFO_ICON if table has additional_information
+                if get_doc_override('table', table, 'additional_information'):
+                    table_cell += f" {ADDITIONAL_INFO_ICON}"
                 
                 # Get the link target for this table
                 if is_asim_parser(table):
@@ -3537,6 +4111,11 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             if ingestion_api:
                 ingestion_display = "✓ Yes" if ingestion_api.lower() == 'yes' else "✗ No" if ingestion_api.lower() == 'no' else ingestion_api
                 attributes.append(('Ingestion API Supported', ingestion_display))
+            
+            lake_only = table_ref.get('lake_only_supported', '')
+            if lake_only:
+                lake_only_display = "✓ Yes" if lake_only.lower() == 'yes' else "✗ No" if lake_only.lower() == 'no' else lake_only
+                attributes.append(('Lake-Only Ingestion', lake_only_display))
             
             search_job = table_ref.get('search_job_support', '')
             if search_job:
@@ -3761,18 +4340,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 if has_unlisted:
                     f.write("> ⚠️ Items marked with ⚠️ are not listed in their Solution JSON file. They were discovered by scanning solution folders.\n\n")
             
-            # Additional reference information
-            resource_types = table_ref.get('resource_types', '')
-            if resource_types and resource_types != '-':
-                f.write("## Resource Types\n\n")
-                f.write("This table collects data from the following Azure resource types:\n\n")
-                for rt in resource_types.split(','):
-                    rt = rt.strip()
-                    if rt:
-                        f.write(f"- `{rt}`\n")
-                f.write("\n")
-            
             # Parsers section - show both ASIM and non-ASIM parsers that use this table
+            # (Moved before Resource Types per user request)
             table_asim_parsers = asim_parsers_by_table.get(table, [])
             table_non_asim_parsers = parsers_by_table.get(table, [])
             total_parsers = len(table_asim_parsers) + len(table_non_asim_parsers)
@@ -3902,6 +4471,17 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     has_discovered = any(p.get('discovered', 'false') == 'true' for p in table_non_asim_parsers)
                     if has_discovered:
                         f.write("> ⚠️ Parsers marked with ⚠️ are not listed in their Solution JSON file.\n\n")
+            
+            # Additional reference information (moved after Parsers section)
+            resource_types = table_ref.get('resource_types', '')
+            if resource_types and resource_types != '-':
+                f.write("## Resource Types\n\n")
+                f.write("This table collects data from the following Azure resource types:\n\n")
+                for rt in resource_types.split(','):
+                    rt = rt.strip()
+                    if rt:
+                        f.write(f"- `{rt}`\n")
+                f.write("\n")
             
             # Selection Criteria Summary section
             if criteria_stats:
@@ -4170,7 +4750,8 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             # Collection Method
             collection_method = first_entry.get('collection_method', '')
             if collection_method:
-                f.write(f"| **Collection Method** | {collection_method} |\n")
+                collection_method_link = get_collection_method_link(collection_method, "../")
+                f.write(f"| **Collection Method** | {collection_method_link} |\n")
             
             # Connector files
             connector_files = first_entry.get('connector_files', '')
@@ -4182,17 +4763,17 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             
             f.write("\n")
             
-            # Additional Information section (from overrides) - placed early for visibility
-            additional_info = get_doc_override('connector', connector_id, 'additional_information')
-            if additional_info:
-                f.write("## Additional Information\n\n")
-                f.write(f"{format_additional_info(additional_info)}\n\n")
-            
             # Description
             description = first_entry.get('connector_description', '')
             if description:
                 description = description.replace('<br>', '\n\n')
                 f.write(f"{description}\n\n")
+            
+            # Additional Information section (from overrides) - placed after description
+            additional_info = get_doc_override('connector', connector_id, 'additional_information')
+            if additional_info:
+                f.write("## Additional Information\n\n")
+                f.write(f"{format_additional_info(additional_info)}\n\n")
             
             # Tables Ingested Section - using standardized tables table with Selection Criteria
             tables = sorted([t for t in data['tables'] if t])
@@ -4841,7 +5422,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
 # =============================================================================
 
 def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_union: Dict[str, List[str]] = None, 
-                              parser_product_map: Dict[str, str] = None, tables_reference: Dict[str, Dict[str, str]] = None) -> None:
+                              parser_product_map: Dict[str, str] = None, tables_reference: Dict[str, Dict[str, str]] = None,
+                              connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate a single ASIM parser documentation page.
     
     Args:
@@ -4850,6 +5432,7 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         sub_to_union: Optional mapping from sub-parser names to their parent union parsers
         parser_product_map: Optional mapping from parser equivalent_builtin to product_name
         tables_reference: Optional dictionary of table metadata for transformations/ingestion API info
+        connectors_reference: Optional dictionary of connector metadata (includes solution_name)
     """
     if sub_to_union is None:
         sub_to_union = {}
@@ -4857,6 +5440,8 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         parser_product_map = {}
     if tables_reference is None:
         tables_reference = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     parser_name = parser.get('parser_name', 'Unknown')
     safe_name = sanitize_filename(parser_name)
     parsers_dir = output_dir / "asim"
@@ -4906,7 +5491,12 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         
         version = parser.get('parser_version', '')
         if version:
-            f.write(f"| **Parser Version** | {version} |\n")
+            # Add version with changelog link
+            changelog_url = get_asim_changelog_url(parser)
+            if changelog_url:
+                f.write(f"| **Parser Version** | {version} ([version history]({changelog_url})) |\n")
+            else:
+                f.write(f"| **Parser Version** | {version} |\n")
         
         last_updated = parser.get('parser_last_updated', '')
         if last_updated:
@@ -4983,6 +5573,56 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
                     else:
                         f.write(f"| `{name}` | {rest} | |\n")
             f.write("\n")
+        
+        # Associated Connectors (for source parsers with connector associations)
+        associated_connectors = parser.get('associated_connectors', '')
+        associated_solutions = parser.get('associated_solutions', '')
+        if associated_connectors:
+            f.write("## Associated Connectors\n\n")
+            f.write("The following connectors provide data for this parser:\n\n")
+            f.write("| Connector | Solution |\n")
+            f.write("|:----------|:---------|\n")
+            
+            # Parse connector and solution lists
+            connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+            solution_list = [s.strip() for s in associated_solutions.split(',') if s.strip()] if associated_solutions else []
+            
+            # Create a lookup from connector to solutions for better formatting
+            for connector in connector_list:
+                # Each connector links to its connector page
+                connector_link = f"[{connector}](../connectors/{sanitize_filename(connector)}.md)"
+                # Look up solution_name from connectors_reference
+                solution_name = ''
+                if connector in connectors_reference:
+                    solution_name = connectors_reference[connector].get('solution_name', '')
+                if solution_name:
+                    solution_link = format_solution_link_with_legacy(solution_name, connector, connectors_reference, "../solutions/")
+                    f.write(f"| {connector_link} | {solution_link} |\n")
+                else:
+                    f.write(f"| {connector_link} | |\n")
+            
+            f.write("\n")
+            
+            # If there are solutions, list them separately with legacy markers
+            if solution_list:
+                f.write(f"**Solutions:** ")
+                solution_links = []
+                for s in solution_list:
+                    # Find connectors for this solution - check if any are deprecated
+                    solution_connectors = [c for c in connector_list
+                                           if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                    # Use the first deprecated connector, or first connector if none deprecated
+                    connector_for_legacy = ''
+                    for c in solution_connectors:
+                        if is_connector_deprecated(c, connectors_reference):
+                            connector_for_legacy = c
+                            break
+                    if not connector_for_legacy and solution_connectors:
+                        connector_for_legacy = solution_connectors[0]
+                    link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                    solution_links.append(link)
+                f.write(", ".join(solution_links))
+                f.write("\n\n")
         
         # References
         refs = parser.get('references', '')
@@ -5257,10 +5897,20 @@ def generate_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, solut
     return pages_created
 
 
-def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
-    """Generate ASIM parsers index page grouped by schema."""
+def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
+                        connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
+    """Generate ASIM parsers index page grouped by schema.
+    
+    Args:
+        parsers: List of ASIM parser dictionaries
+        output_dir: Output directory path
+        connectors_reference: Dictionary of connector_id -> connector info (for legacy detection)
+    """
     if not parsers:
         return 0
+    
+    if connectors_reference is None:
+        connectors_reference = {}
     
     asim_dir = output_dir / "asim"
     asim_dir.mkdir(parents=True, exist_ok=True)
@@ -5337,19 +5987,17 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
             if union_parsers:
                 f.write("### Union Parsers\n\n")
                 f.write("These are the main entry points that combine all source parsers:\n\n")
-                f.write("| Parser | Built-in Name | Version | Description |\n")
-                f.write("|:-------|:--------------|:--------|:------------|\n")
+                f.write("| Parser | Built-in Name | Version |\n")
+                f.write("|:-------|:--------------|:--------|\n")
                 for p in sorted(union_parsers, key=lambda x: x.get('parser_name', '')):
                     name = p.get('parser_name', '')
                     safe_name = sanitize_filename(name)
                     builtin = p.get('equivalent_builtin', '')
                     version = p.get('parser_version', '')
-                    desc = p.get('description', '')
-                    # Truncate description for table
-                    if len(desc) > 80:
-                        desc = desc[:77] + "..."
-                    desc = desc.replace('\n', ' ').replace('|', '\\|')
-                    f.write(f"| [{name}]({safe_name}.md) | `{builtin}` | {version} | {desc} |\n")
+                    # Link version to changelog
+                    changelog_url = get_asim_changelog_url(p)
+                    version_display = f"[{version}]({changelog_url})" if changelog_url and version else version
+                    f.write(f"| [{name}]({safe_name}.md) | `{builtin}` | {version_display} |\n")
                 f.write("\n")
             
             # Products list before source parsers
@@ -5372,24 +6020,65 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
             # Source parsers
             if source_parsers:
                 f.write("### Source Parsers\n\n")
-                f.write("| Parser | Product | Tables | Version |\n")
-                f.write("|:-------|:--------|:-------|:--------|\n")
+                f.write("| Parser | Product | Solution | Version |\n")
+                f.write("|:-------|:--------|:---------|:--------|\n")
                 for p in sorted(source_parsers, key=lambda x: x.get('parser_name', '')):
                     name = p.get('parser_name', '')
                     safe_name = sanitize_filename(name)
-                    # Derive vim parser name from ASim name
+                    
+                    # Extract display name: remove ASim/vim prefix and schema name
+                    # e.g., ASimProcessCreateMicrosoftSecurityEvents -> MicrosoftSecurityEvents
+                    display_name = name
                     if name.startswith('ASim'):
-                        vim_name = 'vim' + name[4:]
-                        vim_safe_name = sanitize_filename(vim_name)
-                        parser_cell = f"ASim: [{name}]({safe_name}.md)<br>vim: [{vim_name}]({vim_safe_name}.md)"
-                    else:
-                        parser_cell = f"[{name}]({safe_name}.md)"
+                        # Remove 'ASim' prefix
+                        display_name = name[4:]
+                        # Remove schema name (first part in CamelCase)
+                        # Schema is the first word before the product name
+                        # We'll use the schema field to determine what to strip
+                        parser_schema = p.get('schema', '')
+                        if parser_schema and display_name.startswith(parser_schema):
+                            display_name = display_name[len(parser_schema):]
+                    elif name.startswith('vim'):
+                        display_name = name[3:]
+                        parser_schema = p.get('schema', '')
+                        if parser_schema and display_name.startswith(parser_schema):
+                            display_name = display_name[len(parser_schema):]
+                    
+                    # Link to the parser page
+                    parser_cell = f"[{display_name}]({safe_name}.md)"
+                    
                     product = p.get('product_name', '')
-                    tables = p.get('tables', '')
-                    # Count tables
-                    table_count = len([t for t in tables.split(';') if t.strip()]) if tables else 0
+                    
+                    # Get solutions from associated_solutions - show all, separated by <br>
+                    # Mark solutions with "(legacy connector)" if the connector relating them is deprecated
+                    solutions = p.get('associated_solutions', '')
+                    associated_connectors = p.get('associated_connectors', '')
+                    solution_display = ''
+                    if solutions:
+                        solution_list = [s.strip() for s in solutions.split(',') if s.strip()]
+                        connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+                        solution_links = []
+                        for s in solution_list:
+                            # Find connectors for this solution - check if any are deprecated
+                            solution_connectors = [c for c in connector_list
+                                                   if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                            # Use the first deprecated connector, or first connector if none deprecated
+                            connector_for_legacy = ''
+                            for c in solution_connectors:
+                                if is_connector_deprecated(c, connectors_reference):
+                                    connector_for_legacy = c
+                                    break
+                            if not connector_for_legacy and solution_connectors:
+                                connector_for_legacy = solution_connectors[0]
+                            link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                            solution_links.append(link)
+                        solution_display = '<br>'.join(solution_links)
+                    
                     version = p.get('parser_version', '')
-                    f.write(f"| {parser_cell} | {product} | {table_count} | {version} |\n")
+                    # Link version to changelog
+                    changelog_url = get_asim_changelog_url(p)
+                    version_display = f"[{version}]({changelog_url})" if changelog_url and version else version
+                    f.write(f"| {parser_cell} | {product} | {solution_display} | {version_display} |\n")
                 f.write("\n")
             
             # Empty parsers (collapsed)
@@ -5555,19 +6244,23 @@ def generate_asim_products_index(parsers: List[Dict[str, str]], output_dir: Path
 
 
 def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, 
-                               tables_reference: Dict[str, Dict[str, str]] = None) -> int:
+                               tables_reference: Dict[str, Dict[str, str]] = None,
+                               connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
     """Generate individual ASIM parser documentation pages.
     
     Args:
         parsers: List of ASIM parser dictionaries from CSV
         output_dir: Output directory for documentation
         tables_reference: Optional dictionary of table metadata for transformations/ingestion API info
+        connectors_reference: Optional dictionary of connector metadata (includes solution_name)
     """
     if not parsers:
         return 0
     
     if tables_reference is None:
         tables_reference = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     
     # Build reverse mapping: sub-parser equivalent_builtin -> list of union parser names
     sub_to_union: Dict[str, List[str]] = defaultdict(list)
@@ -5591,7 +6284,7 @@ def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path,
                         sub_to_union[sub].append(union_name)
     
     for parser in parsers:
-        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map, tables_reference)
+        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map, tables_reference, connectors_reference)
     
     return len(parsers)
 
@@ -5624,6 +6317,23 @@ def generate_statistics_page(
         # Navigation
         write_browse_section(f, 'statistics', "")
         f.write("---\n\n")
+        
+        # ===================== TERMINOLOGY DEFINITIONS =====================
+        f.write("## Terminology\n\n")
+        f.write("| Term | Description |\n")
+        f.write("|:-----|:------------|\n")
+        f.write("| **Published** | Available in Microsoft Sentinel Content Hub for installation |\n")
+        f.write(f"| **Unpublished** {UNPUBLISHED_ICON} | Present on GitHub but not available in Content Hub |\n")
+        f.write(f"| **Active** | Published and not deprecated |\n")
+        f.write(f"| **Deprecated** {DEPRECATED_ICON} | Marked as no longer maintained or replaced by newer solution |\n")
+        f.write(f"| **Discovered** {DISCOVERED_ICON} | Found in solution folders but not listed in Solution JSON definitions |\n")
+        f.write("| **In Solutions** | Listed in the Solution JSON definition file |\n")
+        f.write("| **📦 Solution** | Content that is part of a published Content Hub package |\n")
+        f.write("| **📄 Standalone** | GitHub content with metadata but not part of a Solution |\n")
+        f.write("| **🔗 GitHub Only** | GitHub content without formal metadata |\n")
+        f.write("| **Standalone Reference Tables** | Tables in Azure Monitor reference not used by any Sentinel solution |\n")
+        f.write("| **Support Tier** | Support level: Microsoft, Partner, or Community |\n")
+        f.write("\n")
         
         # ===================== SOLUTIONS STATISTICS =====================
         f.write("## Solutions\n\n")
@@ -5710,7 +6420,7 @@ def generate_statistics_page(
         
         # Solutions Availability Table
         f.write("### Availability\n\n")
-        f.write("| Metric | Total | Published | Unpublished |\n")
+        f.write(f"| Metric | Total | Published | Unpublished {UNPUBLISHED_ICON} |\n")
         f.write("|:-------|------:|----------:|------------:|\n")
         f.write(f"| Solutions | **{len(solutions)}** | {published_solutions_count} | {len(unpublished_solutions)} |\n")
         f.write(f"| With Connectors | **{solutions_with_connectors}** | {solutions_with_connectors_published} | {solutions_with_connectors_unpublished} |\n")
@@ -5719,7 +6429,7 @@ def generate_statistics_page(
         
         # Solutions Support Ownership Table
         f.write("### Support Ownership\n\n")
-        f.write("| Support Tier | Total | Published | Unpublished |\n")
+        f.write(f"| Support Tier | Total | Published | Unpublished {UNPUBLISHED_ICON} |\n")
         f.write("|:-------------|------:|----------:|------------:|\n")
         for tier in ['Microsoft', 'Partner', 'Community']:
             total = support_tier_counts.get(tier, 0)
@@ -5808,19 +6518,17 @@ def generate_statistics_page(
         
         # Connectors Availability Table
         f.write("### Availability\n\n")
-        f.write("| Metric | Total | Active | Deprecated | Unpublished |\n")
+        f.write(f"| Metric | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
         f.write("|:-------|------:|-------:|-----------:|------------:|\n")
         f.write(f"| In Solutions | **{in_solution_count}** | {active_in_solution - unpub_in_solution} | {deprecated_in_solution} | {unpub_in_solution} |\n")
         if discovered_connectors:
-            f.write(f"| Discovered* | **{len(discovered_connectors)}** | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} |\n")
+            f.write(f"| Discovered {DISCOVERED_ICON} | **{len(discovered_connectors)}** | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} |\n")
             f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** |\n")
         f.write("\n")
-        if discovered_connectors:
-            f.write("*\\* Discovered connectors are found in solution folders but not listed in Solution JSON definitions.*\n\n")
         
         # Connectors Support Ownership Table
         f.write("### Support Ownership\n\n")
-        f.write("| Support Tier | Total | Active | Deprecated | Unpublished |\n")
+        f.write(f"| Support Tier | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
         f.write("|:-------------|------:|-------:|-----------:|------------:|\n")
         for tier in ['Microsoft', 'Partner', 'Community']:
             total = tier_counts.get(tier, 0)
@@ -5847,13 +6555,14 @@ def generate_statistics_page(
         
         if collection_method_stats:
             f.write("### Collection Methods\n\n")
-            f.write("| Collection Method | Total | Active | Deprecated | Unpublished |\n")
+            f.write(f"| Collection Method | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
             f.write("|:-----------------|------:|-------:|-----------:|------------:|\n")
             
             sorted_methods = sorted(collection_method_stats.items(), key=lambda x: x[1]['total'], reverse=True)
             
             for method, stats in sorted_methods:
-                f.write(f"| {method} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
+                method_link = get_collection_method_link(method, "")
+                f.write(f"| {method_link} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
             
             total_all = sum(s['total'] for s in collection_method_stats.values())
             total_active_cm = sum(s['active'] for s in collection_method_stats.values())
@@ -5861,7 +6570,81 @@ def generate_statistics_page(
             total_unpub_cm = sum(s['unpublished'] for s in collection_method_stats.values())
             f.write(f"| **Total** | **{total_all}** | **{total_active_cm}** | **{total_deprecated_cm}** | **{total_unpub_cm}** |\n")
             f.write("\n")
-            f.write("*Active = Published and not deprecated.*\n\n")
+        
+        # Collection Methods by Support Tier table
+        # Build a 2D dict: method -> tier -> {active, deprecated, unpublished, total}
+        method_tier_stats: Dict[str, Dict[str, Dict[str, int]]] = defaultdict(
+            lambda: defaultdict(lambda: {'active': 0, 'deprecated': 0, 'unpublished': 0, 'total': 0})
+        )
+        
+        for connector_id, info in connectors_map.items():
+            method = info.get('collection_method', '') or 'Unknown'
+            tier = info.get('support_tier', '') or 'Unknown'
+            method_tier_stats[method][tier]['total'] += 1
+            if connector_id in deprecated_connectors:
+                method_tier_stats[method][tier]['deprecated'] += 1
+            elif connector_id in unpub_active:
+                method_tier_stats[method][tier]['unpublished'] += 1
+            else:
+                method_tier_stats[method][tier]['active'] += 1
+        
+        if method_tier_stats:
+            f.write("### Collection Methods by Support Tier\n\n")
+            f.write("Each cell shows: Active / Deprecated / Unpublished / **Total**\n\n")
+            
+            # Define tier order
+            tier_order = ['Microsoft', 'Partner', 'Community']
+            # Add Unknown if present
+            all_tiers = set()
+            for method_tiers in method_tier_stats.values():
+                all_tiers.update(method_tiers.keys())
+            if 'Unknown' in all_tiers:
+                tier_order.append('Unknown')
+            
+            # Header
+            f.write("| Collection Method |")
+            for tier in tier_order:
+                f.write(f" {tier} |")
+            f.write("\n")
+            
+            # Alignment row
+            f.write("|:-----------------|")
+            for _ in tier_order:
+                f.write(":---------:|")
+            f.write("\n")
+            
+            # Data rows - sort by total across all tiers
+            sorted_methods = sorted(
+                method_tier_stats.items(),
+                key=lambda x: sum(t['total'] for t in x[1].values()),
+                reverse=True
+            )
+            
+            # Calculate tier totals
+            tier_totals: Dict[str, Dict[str, int]] = defaultdict(lambda: {'active': 0, 'deprecated': 0, 'unpublished': 0, 'total': 0})
+            
+            for method, tiers in sorted_methods:
+                method_link = get_collection_method_link(method, "")
+                f.write(f"| {method_link} |")
+                for tier in tier_order:
+                    stats = tiers.get(tier, {'active': 0, 'deprecated': 0, 'unpublished': 0, 'total': 0})
+                    tier_totals[tier]['active'] += stats['active']
+                    tier_totals[tier]['deprecated'] += stats['deprecated']
+                    tier_totals[tier]['unpublished'] += stats['unpublished']
+                    tier_totals[tier]['total'] += stats['total']
+                    if stats['total'] > 0:
+                        f.write(f" {stats['active']} / {stats['deprecated']} / {stats['unpublished']} / **{stats['total']}** |")
+                    else:
+                        f.write(" - |")
+                f.write("\n")
+            
+            # Total row
+            f.write("| **Total** |")
+            for tier in tier_order:
+                stats = tier_totals[tier]
+                f.write(f" {stats['active']} / {stats['deprecated']} / {stats['unpublished']} / **{stats['total']}** |")
+            f.write("\n")
+            f.write("\n")
         
         # ===================== TABLES STATISTICS =====================
         f.write("## Tables\n\n")
@@ -5881,14 +6664,12 @@ def generate_statistics_page(
         f.write(f"| Tables Ingested by Connectors | {tables_with_connectors} |\n")
         f.write(f"| Tables Referenced by Content Only | {tables_with_content} |\n")
         if reference_only_tables > 0:
-            f.write(f"| Standalone Reference Tables* | {reference_only_tables} |\n")
+            f.write(f"| Standalone Reference Tables | {reference_only_tables} |\n")
         if xdr_only_tables > 0:
             f.write(f"| Defender XDR Only Tables | {xdr_only_tables} |\n")
         if reference_tables > 0 and reference_tables < len(tables_map):
             f.write(f"| Tables in Azure Monitor Reference | {reference_tables} |\n")
         f.write("\n")
-        if reference_only_tables > 0:
-            f.write("*\\*Standalone Reference Tables are tables documented in the Azure Monitor or Defender XDR reference that are not currently used by any Sentinel solution, connector, or content item.*\n\n")
         
         # ===================== CONTENT STATISTICS =====================
         f.write("## Content\n\n")
@@ -5924,8 +6705,6 @@ def generate_statistics_page(
         total_published = sum(published_count_by_type.values())
         total_standalone = source_counts.get('Standalone', 0)
         total_github_only = source_counts.get('GitHub Only', 0)
-        
-        f.write("> **Source Legend:** 📦 Solution (published package) | 📄 Standalone (GitHub with metadata) | 🔗 GitHub Only (no metadata)\n\n")
         
         f.write("### Content Items Summary\n\n")
         f.write("| Metric | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
@@ -5975,7 +6754,7 @@ def generate_statistics_page(
         f.write(f"| Legacy Parsers | {len(legacy_parsers)} |\n")
         f.write(f"| Solution Parsers (in Solution JSON) | {len(listed_solution_parsers)} |\n")
         if discovered_parsers:
-            f.write(f"| Discovered Parsers⚠️ | {len(discovered_parsers)} |\n")
+            f.write(f"| Discovered Parsers {DISCOVERED_ICON} | {len(discovered_parsers)} |\n")
         f.write(f"| **Total Parsers** | **{len(non_asim_parsers)}** |\n")
         f.write(f"| Solutions with Parsers | {len(solutions_with_parsers)} |\n")
         f.write("\n")
@@ -6285,7 +7064,7 @@ def generate_docs_readme(
             if sol_name not in deprecated_solutions:
                 collection_method_stats[method]['active_solutions'].add(sol_name)
     
-    readme_path = output_dir / "readme.md"
+    readme_path = output_dir / "README.md"
     
     with readme_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Solutions Documentation\n\n")
@@ -6299,6 +7078,8 @@ def generate_docs_readme(
         f.write(f"| [Solutions](solutions-index.md) | {solutions_count} | {solutions_with_connectors} with connectors, {solutions_with_content} with content |\n")
         total_connectors_with_discovered = len(all_connector_ids) + len(all_discovered_connector_ids)
         f.write(f"| [Connectors](connectors-index.md) | {total_connectors_with_discovered} | Data ingestion methods |\n")
+        methods_count = len(collection_method_stats)
+        f.write(f"| [Methods](methods-index.md) | {methods_count} | Data collection methods |\n")
         f.write(f"| [Tables](tables-index.md) | {tables_count} | Log Analytics tables |\n")
         f.write(f"| [Content](content/content-index.md) | {content_count:,} | Analytics, hunting, playbooks, workbooks |\n")
         if parser_count > 0:
@@ -6308,6 +7089,7 @@ def generate_docs_readme(
             f.write(f"| [ASIM Parsers](asim/asim-index.md) | {asim_total} pairs | Normalized schema parsers |\n")
         if asim_products_count > 0:
             f.write(f"| [ASIM Products](asim/asim-products-index.md) | {asim_products_count} | Products with ASIM support |\n")
+        f.write(f"| [Statistics](statistics.md) | - | Comprehensive statistics and metrics |\n")
         f.write("\n")
         
         # Footnotes for icons if needed
@@ -6774,6 +7556,7 @@ def main() -> None:
     
     # Generate index pages - generate tables_index first to get accurate count
     generate_connectors_index(by_solution, args.output_dir)
+    generate_collection_methods_index(by_solution, args.output_dir)
     tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference, solution_table_content_types)
     
     # Count tables that are linked to solutions via connectors (vs all documented tables)
@@ -6864,7 +7647,7 @@ def main() -> None:
     generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table, content_filter_fields_lookup, content_source_lookup)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
-    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields)
+    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference)
     
     # Generate ASIM parser documentation
     asim_source_pairs = 0
@@ -6879,9 +7662,9 @@ def main() -> None:
         asim_source_pairs = asim_source_count // 2
         asim_union_pairs = asim_union_count // 2
         
-        generate_asim_index(asim_parsers, args.output_dir)
+        generate_asim_index(asim_parsers, args.output_dir, connectors_reference)
         asim_products_count = generate_asim_products_index(asim_parsers, args.output_dir)
-        asim_parsers_count = generate_asim_parser_pages(asim_parsers, args.output_dir, tables_reference)
+        asim_parsers_count = generate_asim_parser_pages(asim_parsers, args.output_dir, tables_reference, connectors_reference)
         print(f"  Generated {asim_parsers_count} ASIM parser pages")
     else:
         asim_products_count = 0
