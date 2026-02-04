@@ -1,6 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 | ----------- | ------------------------------ | --------------------------------------------------------------------------------------- |
-| 3.0.7       | 22-01-2025                     | Updated solution description by eliminating legacy streaming text                       |
+| 3.0.8       | 26-01-2026                     | Updated **Data Connector** to support dynamic Redirect URI |
+| 3.0.7       | 22-01-2026                     | Updated solution description by eliminating legacy streaming text                       |
 | 3.0.6       | 19-06-2025                     | Updated **Data Connector** instructions to include a note about User permissions.       |
 | 3.0.5       | 05-05-2025                     | Updated **Data Connector** instructions.                                                |
 | 3.0.4       | 15-04-2025                     | Added new **CCP Connector** - Azure DevOps Audit Logs.                                  |

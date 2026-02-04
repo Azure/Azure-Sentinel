@@ -2,11 +2,11 @@
 
 ## Version 0.3.0
 
-- (2026-01-22) [ASIM] Authentication su parser fixes (#13453) - [PR #13453](https://github.com/Azure/Azure-Sentinel/pull/13453)
+- (2026-01-22) [ASIM] Authentication su parser fixes - [PR #13453](https://github.com/Azure/Azure-Sentinel/pull/13453)
 
 ## Version 0.2.2
 
-- (2024-03-21) [updating su parser](https://github.com/Azure/Azure-Sentinel/commit/0b54310e8b4a6cd819002ee52c5ff7806eeee71a)
+- (2024-03-26) Authentication parsers update - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
 
 ## Version 0.2.1
 
