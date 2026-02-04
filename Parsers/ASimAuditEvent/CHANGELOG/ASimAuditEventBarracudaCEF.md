@@ -6,5 +6,5 @@
 
 ## Version 0.1
 
-- (2023-08-01) ASIM Audit schema parser with its sample and test data for Barracuda ΓÇª - [PR #8332](https://github.com/Azure/Azure-Sentinel/pull/8332)
+- (2023-08-01) ASIM Audit schema parser with its sample and test data for Barracuda - [PR #8332](https://github.com/Azure/Azure-Sentinel/pull/8332)
 

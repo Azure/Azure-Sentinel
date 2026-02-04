@@ -6,5 +6,5 @@
 
 ## Version 0.1
 
-- (2023-07-22) ASIM WebSession schema parser with its sample and test data for CiscoΓÇª - [PR #8279](https://github.com/Azure/Azure-Sentinel/pull/8279)
+- (2023-07-22) ASIM WebSession schema parser with its sample and test data for Cisco- [PR #8279](https://github.com/Azure/Azure-Sentinel/pull/8279)
 
