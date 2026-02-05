@@ -11,11 +11,12 @@
     ],
     "postDeployment": [
       "1. The Function App code is automatically deployed from the pre-built package - no manual code deployment needed",
-      "2. Verify the Function App is running successfully in Azure Portal",
-      "3. Check Application Insights for any errors or warnings",
-      "4. Custom tables (BeyondTrustPM_ActivityAudits_CL, BeyondTrustPM_ClientEvents_CL) are automatically created by the deployment",
-      "5. Data should appear in tables within 15-30 minutes of deployment",
-      "6. To change polling intervals, update BOTH the interval (minutes) AND cron expression app settings together"
+      "2. For Flex Consumption (FC1), a deployment script automatically uploads the package to blob storage during deployment",
+      "3. Verify the Function App is running successfully in Azure Portal",
+      "4. Check Application Insights for any errors or warnings",
+      "5. Custom tables (BeyondTrustPM_ActivityAudits_CL, BeyondTrustPM_ClientEvents_CL) are automatically created by the deployment",
+      "6. Data should appear in tables within 15-30 minutes of deployment",
+      "7. To change polling intervals, update BOTH the interval (minutes) AND cron expression app settings together"
     ],
     "lastUpdateTime": "2026-02-03T00:00:00.000Z",
     "entities": [
@@ -175,6 +176,8 @@
     "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
     "functionWorkerRuntime": "dotnet-isolated",
     "packageUri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/BeyondTrustPMCloud/Data%20Connectors/BeyondTrustPMCloud.Functions.zip",
+    "packageFileName": "BeyondTrustPMCloud.Functions.zip",
+    "deploymentScriptName": "[concat(parameters('FunctionAppName'), '-deploy-script')]",
     "isFlexConsumption": "[equals(parameters('HostingPlanSku'), 'FC1')]",
     "isConsumption": "[equals(parameters('HostingPlanSku'), 'Y1')]",
     "isPremium": "[or(equals(parameters('HostingPlanSku'), 'EP1'), or(equals(parameters('HostingPlanSku'), 'EP2'), equals(parameters('HostingPlanSku'), 'EP3')))]",
@@ -751,6 +754,74 @@
       }
     },
     {
+      "condition": "[variables('isFlexConsumption')]",
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "[variables('deploymentScriptName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "AzurePowerShell",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(variables('deploymentScriptName'), '-identity'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', 'deployments')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(variables('deploymentScriptName'), '-identity'))]",
+        "[extensionResourceId(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(variables('deploymentScriptName'), '-identity')), 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'))]"
+      ],
+      "properties": {
+        "azPowerShellVersion": "11.3",
+        "retentionInterval": "PT1H",
+        "timeout": "PT10M",
+        "cleanupPreference": "OnSuccess",
+        "environmentVariables": [
+          {
+            "name": "STORAGE_ACCOUNT_NAME",
+            "value": "[variables('storageAccountName')]"
+          },
+          {
+            "name": "RESOURCE_GROUP_NAME",
+            "value": "[resourceGroup().name]"
+          },
+          {
+            "name": "PACKAGE_URI",
+            "value": "[variables('packageUri')]"
+          },
+          {
+            "name": "PACKAGE_FILE_NAME",
+            "value": "[variables('packageFileName')]"
+          }
+        ],
+        "scriptContent": "$ErrorActionPreference = 'Stop'\n$ProgressPreference = 'SilentlyContinue'\n$WarningPreference = 'SilentlyContinue'\n\n$storageAccountName = $env:STORAGE_ACCOUNT_NAME\n$packageUri = $env:PACKAGE_URI\n$packageFileName = $env:PACKAGE_FILE_NAME\n\nWrite-Host \"Downloading package from: $packageUri\"\n$tempDir = if ($env:TEMP) { $env:TEMP } elseif ($env:HOME) { $env:HOME } else { '/tmp' }\n$zipPath = Join-Path $tempDir $packageFileName\n\ntry {\n    Invoke-WebRequest -Uri $packageUri -OutFile $zipPath -UseBasicParsing | Out-Null\n    $fileSize = (Get-Item $zipPath).Length\n    Write-Host \"Downloaded: $fileSize bytes\"\n} catch {\n    Write-Host \"Download failed: $_\"\n    throw\n}\n\nWrite-Host \"Creating storage context...\"\n$ctx = New-AzStorageContext -StorageAccountName $storageAccountName -UseConnectedAccount\n\nWrite-Host \"Uploading package as released-package.zip...\"\nSet-AzStorageBlobContent -File $zipPath -Container 'deployments' -Blob 'released-package.zip' -Context $ctx -Force -ErrorAction Stop | Out-Null\n\n$deploymentId = [guid]::NewGuid().ToString()\n$timestamp = [DateTime]::UtcNow.ToString('o')\n$kuduState = @{\n    ActiveDeploymentId = $deploymentId\n    LatestDeploymentId = $deploymentId\n    Deployments = @{\n        $deploymentId = @{\n            Id = $deploymentId\n            StartTime = $timestamp\n            EndTime = $timestamp\n            LastSuccessEndTime = $timestamp\n            LastModifiedTime = $timestamp\n            Deployer = 'ARM-Template'\n            Complete = $true\n            Status = 4\n            UploadedPackageName = 'released-package.zip'\n        }\n    }\n} | ConvertTo-Json -Depth 10\n\nWrite-Host \"Creating kudu-state.json...\"\n$kuduStatePath = Join-Path $tempDir 'kudu-state.json'\n$kuduState | Out-File -FilePath $kuduStatePath -Encoding UTF8\nSet-AzStorageBlobContent -File $kuduStatePath -Container 'deployments' -Blob 'kudu-state.json' -Context $ctx -Force -ErrorAction Stop | Out-Null\n\nWrite-Host \"Deployment package uploaded successfully!\"\n$DeploymentScriptOutputs = @{}\n$DeploymentScriptOutputs['status'] = 'Success'\n"
+      }
+    },
+    {
+      "condition": "[variables('isFlexConsumption')]",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[concat(variables('deploymentScriptName'), '-identity')]",
+      "location": "[resourceGroup().location]"
+    },
+    {
+      "condition": "[variables('isFlexConsumption')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(variables('deploymentScriptName'), '-identity')), 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(variables('deploymentScriptName'), '-identity'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', concat(variables('deploymentScriptName'), '-identity')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
       "type": "Microsoft.Web/serverfarms",
       "apiVersion": "2022-03-01",
       "name": "[variables('hostingPlanName')]",
@@ -787,13 +858,14 @@
       "dependsOn": [
         "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-        "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]"
+        "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
+        "[resourceId('Microsoft.Resources/deploymentScripts', variables('deploymentScriptName'))]"
       ],
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
         "reserved": "[variables('reserved')]",
         "siteConfig": {
-          "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('functionAppName'))))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'dotnet-isolated'))), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', variables('packageUri')), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).InstrumentationKey), createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).ConnectionString), createObject('name', 'DataCollectionEndpoint', 'value', reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint), createObject('name', 'ActivityAuditsDcrImmutableId', 'value', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleActivityAuditsName'))).immutableId), createObject('name', 'ClientEventsDcrImmutableId', 'value', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleClientEventsName'))).immutableId), createObject('name', 'ActivityAuditsStreamName', 'value', 'Custom-BeyondTrustPM_ActivityAudits_CL'), createObject('name', 'ClientEventsStreamName', 'value', 'Custom-BeyondTrustPM_ClientEvents_CL'), createObject('name', concat(variables('settingPrefix'), 'PMCloudBaseUrl'), 'value', parameters('BeyondTrustPMCloudBaseUrl')), createObject('name', concat(variables('settingPrefix'), 'ClientId'), 'value', parameters('BeyondTrustClientId')), createObject('name', concat(variables('settingPrefix'), 'ClientSecret'), 'value', parameters('BeyondTrustClientSecret')), createObject('name', concat(variables('settingPrefix'), 'ActivityAuditsPollingIntervalMinutes'), 'value', parameters('ActivityAuditsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'ClientEventsPollingIntervalMinutes'), 'value', parameters('ClientEventsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'HistoricalDataTimeframe'), 'value', parameters('HistoricalDataTimeframe')), createObject('name', 'ActivityAuditsCron', 'value', concat('0 */', string(parameters('ActivityAuditsPollingIntervalMinutes')), ' * * * *')), createObject('name', 'ClientEventsCron', 'value', concat('0 */', string(parameters('ClientEventsPollingIntervalMinutes')), ' * * * *')), createObject('name', if(variables('isFlexConsumption'), 'Logging__LogLevel__Default', 'Logging:LogLevel:Default'), 'value', parameters('LogLevel'))))]",
+          "appSettings": "[concat(createArray(createObject('name', 'AzureWebJobsStorage', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', 'value', concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-04-01').keys[0].value)), createObject('name', 'WEBSITE_CONTENTSHARE', 'value', toLower(variables('functionAppName'))))), if(variables('isFlexConsumption'), createArray(), createArray(createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'dotnet-isolated'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', variables('packageUri')))), createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'APPINSIGHTS_INSTRUMENTATIONKEY', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).InstrumentationKey), createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))).ConnectionString), createObject('name', 'DataCollectionEndpoint', 'value', reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))).logsIngestion.endpoint), createObject('name', 'ActivityAuditsDcrImmutableId', 'value', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleActivityAuditsName'))).immutableId), createObject('name', 'ClientEventsDcrImmutableId', 'value', reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleClientEventsName'))).immutableId), createObject('name', 'ActivityAuditsStreamName', 'value', 'Custom-BeyondTrustPM_ActivityAudits_CL'), createObject('name', 'ClientEventsStreamName', 'value', 'Custom-BeyondTrustPM_ClientEvents_CL'), createObject('name', concat(variables('settingPrefix'), 'PMCloudBaseUrl'), 'value', parameters('BeyondTrustPMCloudBaseUrl')), createObject('name', concat(variables('settingPrefix'), 'ClientId'), 'value', parameters('BeyondTrustClientId')), createObject('name', concat(variables('settingPrefix'), 'ClientSecret'), 'value', parameters('BeyondTrustClientSecret')), createObject('name', concat(variables('settingPrefix'), 'ActivityAuditsPollingIntervalMinutes'), 'value', parameters('ActivityAuditsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'ClientEventsPollingIntervalMinutes'), 'value', parameters('ClientEventsPollingIntervalMinutes')), createObject('name', concat(variables('settingPrefix'), 'HistoricalDataTimeframe'), 'value', parameters('HistoricalDataTimeframe')), createObject('name', 'ActivityAuditsCron', 'value', concat('0 */', string(parameters('ActivityAuditsPollingIntervalMinutes')), ' * * * *')), createObject('name', 'ClientEventsCron', 'value', concat('0 */', string(parameters('ClientEventsPollingIntervalMinutes')), ' * * * *')), createObject('name', if(variables('isFlexConsumption'), 'Logging__LogLevel__Default', 'Logging:LogLevel:Default'), 'value', parameters('LogLevel'))))]",
           "ftpsState": "FtpsOnly",
           "minTlsVersion": "1.2"
         },
