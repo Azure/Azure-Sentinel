@@ -60,11 +60,138 @@ ASIM_ICON_ROOT = '<img src="images/asim-logo-small.png" alt="ASIM" height="16">'
 UNPUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions/connectors/content
 DEPRECATED_ICON = "🚫"   # Deprecated/no-entry icon for deprecated connectors
 DISCOVERED_ICON = "🔍"   # Magnifying glass for discovered items not in solution JSON
+ADDITIONAL_INFO_ICON = "➕"  # Plus icon for items with additional documentation/info
 
 # Footnotes for icons
-UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace."
+UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace or not installed in Content Hub."
 DEPRECATED_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This connector has been deprecated and may be removed in future versions."
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
+ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
+
+# Collection method metadata: descriptions and documentation links
+COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
+    "AMA": {
+        "name": "Azure Monitor Agent (AMA)",
+        "description": "The Azure Monitor Agent (AMA) is the recommended agent for collecting logs from Azure VMs, on-premises servers, and multi-cloud environments. It replaces the legacy Log Analytics agent (MMA) and provides improved performance, security, and manageability.",
+        "links": [
+            ("📖 Azure Monitor Agent overview", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-overview"),
+            ("📖 Install and manage the Azure Monitor Agent", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage"),
+            ("📖 Connect via Windows agent-based connectors", "https://learn.microsoft.com/azure/sentinel/connect-services-windows-based"),
+            ("📖 Migrate to Azure Monitor Agent from Log Analytics agent", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-migration"),
+            ("📖 AMA migration for Microsoft Sentinel", "https://learn.microsoft.com/azure/sentinel/ama-migrate"),
+            ("📖 Data collection rules in Azure Monitor", "https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview"),
+            ("📖 CEF and Syslog via AMA overview", "https://learn.microsoft.com/azure/sentinel/cef-syslog-ama-overview"),
+            ("📖 Connect CEF and Syslog via AMA", "https://learn.microsoft.com/azure/sentinel/connect-cef-syslog-ama"),
+            ("📖 Device configuration for CEF via AMA", "https://learn.microsoft.com/azure/sentinel/unified-connector-cef-device"),
+            ("📖 Syslog device configuration", "https://learn.microsoft.com/azure/sentinel/unified-connector-syslog-device"),
+            ("📖 Troubleshoot CEF and Syslog via AMA", "https://learn.microsoft.com/azure/sentinel/cef-syslog-ama-troubleshooting"),
+            ("📖 Collect logs from text files via AMA", "https://learn.microsoft.com/azure/sentinel/connect-custom-logs-ama"),
+            ("📖 Custom logs device configuration", "https://learn.microsoft.com/azure/sentinel/unified-connector-custom-device"),
+            ("📖 DNS via AMA", "https://learn.microsoft.com/azure/sentinel/connect-dns-ama"),
+        ],
+    },
+    "MMA": {
+        "name": "Microsoft Monitoring Agent (Legacy)",
+        "description": "The Microsoft Monitoring Agent (MMA), also known as the Log Analytics agent, is a legacy agent for collecting logs. **Note:** The MMA is deprecated and will be retired on August 31, 2024. Microsoft recommends migrating to the Azure Monitor Agent (AMA).",
+        "links": [
+            ("⚠️ Log Analytics agent retirement", "https://learn.microsoft.com/azure/azure-monitor/agents/log-analytics-agent"),
+            ("📖 Migrate to Azure Monitor Agent", "https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-migration"),
+            ("📖 AMA migration for Microsoft Sentinel", "https://learn.microsoft.com/azure/sentinel/ama-migrate"),
+        ],
+    },
+    "Azure Diagnostics": {
+        "name": "Azure Diagnostics Settings",
+        "description": "Azure Diagnostics Settings enable native log collection from Azure resources directly to Log Analytics workspaces. This is the recommended method for collecting logs from Azure services like Azure Firewall, Azure Key Vault, Azure SQL, and other Azure PaaS services.",
+        "links": [
+            ("📖 Connect via diagnostic settings-based connectors", "https://learn.microsoft.com/azure/sentinel/connect-services-diagnostic-setting-based"),
+            ("📖 Diagnostic settings in Azure Monitor", "https://learn.microsoft.com/azure/azure-monitor/essentials/diagnostic-settings"),
+            ("📖 Azure resource logs", "https://learn.microsoft.com/azure/azure-monitor/essentials/resource-logs"),
+            ("📖 Supported services for diagnostic logs", "https://learn.microsoft.com/azure/azure-monitor/essentials/resource-logs-categories"),
+        ],
+    },
+    "Azure Function": {
+        "name": "Azure Functions",
+        "description": "Azure Functions-based connectors use serverless functions to pull data from external APIs and ingest it into Microsoft Sentinel. These connectors are commonly used for third-party SaaS applications and cloud services that provide REST APIs.",
+        "links": [
+            ("📖 Azure Functions overview", "https://learn.microsoft.com/azure/azure-functions/functions-overview"),
+            ("📖 Deploy Azure Function connectors", "https://learn.microsoft.com/azure/sentinel/connect-azure-functions-template"),
+            ("📖 Create custom connectors with Azure Functions", "https://learn.microsoft.com/azure/sentinel/create-custom-connector"),
+        ],
+    },
+    "CCF": {
+        "name": "Codeless Connector Framework (CCF)",
+        "description": "The Codeless Connector Framework (CCF) enables creating data connectors using a declarative JSON configuration without writing code. CCF connectors can poll REST APIs, process responses, and ingest data into custom log tables. This framework is used for many modern Microsoft Sentinel connectors.",
+        "links": [
+            ("📖 Create a codeless connector", "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"),
+            ("📖 Codeless Connector Platform reference", "https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference"),
+            ("📖 Connector definition reference", "https://learn.microsoft.com/azure/sentinel/data-connector-ui-definitions-reference"),
+        ],
+    },
+    "Native": {
+        "name": "Native Microsoft Integration",
+        "description": "Native connectors provide built-in integration with Microsoft services and are typically enabled directly in the Microsoft Sentinel portal or through Azure Policy. These connectors offer the most seamless experience for Microsoft-to-Microsoft data ingestion.",
+        "links": [
+            ("📖 Connect via API-based connectors", "https://learn.microsoft.com/azure/sentinel/connect-services-api-based"),
+            ("📖 Connect Microsoft Sentinel to Microsoft connectors", "https://learn.microsoft.com/azure/sentinel/connect-azure-windows-microsoft-services"),
+            ("📖 Connect Microsoft 365 Defender", "https://learn.microsoft.com/azure/sentinel/connect-microsoft-365-defender"),
+            ("📖 Connect Microsoft Entra ID", "https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory"),
+            ("📖 Connect Microsoft Defender for Cloud", "https://learn.microsoft.com/azure/sentinel/connect-defender-for-cloud"),
+        ],
+    },
+    "REST API": {
+        "name": "REST API / Custom Integration",
+        "description": "REST API-based connectors use the Azure Monitor Data Collector API or Logs Ingestion API to send data to Microsoft Sentinel. These connectors may use custom scripts, Logic Apps, or other integration methods to collect and ingest data.",
+        "links": [
+            ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
+            ("📖 Send data using the Logs Ingestion API", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-walkthrough"),
+            ("📖 Create custom logs", "https://learn.microsoft.com/azure/sentinel/create-custom-connector"),
+        ],
+    },
+    "Unknown": {
+        "name": "Unknown Collection Method",
+        "description": "The collection method for these connectors could not be automatically determined. Please refer to the individual connector documentation for setup instructions.",
+        "links": [
+            ("📖 Microsoft Sentinel data connectors", "https://learn.microsoft.com/azure/sentinel/connect-data-sources"),
+        ],
+    },
+    "Unknown (Custom Log)": {
+        "name": "Custom Log Integration",
+        "description": "These connectors use custom log tables to store ingested data. The specific collection method may vary - some use the Logs Ingestion API, Azure Functions, or other custom integration approaches.",
+        "links": [
+            ("📖 Custom logs overview", "https://learn.microsoft.com/azure/azure-monitor/logs/custom-logs-overview"),
+            ("📖 Create custom logs tables", "https://learn.microsoft.com/azure/azure-monitor/logs/create-custom-logs"),
+        ],
+    },
+}
+
+
+def get_collection_method_filename(method: str) -> str:
+    """Get the sanitized filename for a collection method page.
+    
+    Args:
+        method: The collection method name
+    
+    Returns:
+        Sanitized filename (without .md extension)
+    """
+    # Create a URL-safe filename
+    return sanitize_filename(method.lower().replace(" ", "-").replace("(", "").replace(")", ""))
+
+
+def get_collection_method_link(method: str, relative_path: str = "") -> str:
+    """Get a markdown link to a collection method page.
+    
+    Args:
+        method: The collection method name
+        relative_path: Relative path prefix (e.g., "../" or "methods/")
+    
+    Returns:
+        Markdown link to the collection method page
+    """
+    if not method or method == '—':
+        return '—'
+    filename = get_collection_method_filename(method)
+    return f"[{method}]({relative_path}methods/{filename}.md)"
 
 
 def get_asim_icon(relative_path: str = "../tables/") -> str:
@@ -282,6 +409,41 @@ def is_asim_parser(table_name: str) -> bool:
     return False
 
 
+def get_asim_changelog_url(parser: Dict[str, str]) -> str:
+    """
+    Generate the changelog URL for an ASIM parser.
+    
+    The changelog is located at:
+    https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/ASim<schema>/CHANGELOG/<parser_name>.md
+    
+    Args:
+        parser: Parser data dictionary containing 'source_file' and 'parser_name'
+    
+    Returns:
+        The GitHub URL to the changelog file, or empty string if cannot be constructed
+    """
+    source_file = parser.get('source_file', '')
+    parser_name = parser.get('parser_name', '')
+    
+    if not source_file or not parser_name:
+        return ''
+    
+    # Extract the schema folder from source_file
+    # source_file format: Parsers\ASimDns\Parsers\ASimDnsAzureFirewall.yaml
+    # We need to get: ASimDns (the schema folder name)
+    parts = source_file.replace('\\', '/').split('/')
+    if len(parts) < 2 or parts[0] != 'Parsers':
+        return ''
+    
+    schema_folder = parts[1]  # e.g., "ASimDns"
+    
+    # Construct the changelog URL
+    # Format: https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/<schema_folder>/CHANGELOG/<parser_name>.md
+    changelog_url = f"https://github.com/Azure/Azure-Sentinel/tree/master/Parsers/{schema_folder}/CHANGELOG/{parser_name}.md"
+    
+    return changelog_url
+
+
 def load_asim_parser_names(asim_parsers_path: Path) -> None:
     """
     Load ASIM parser names from CSV file into global set.
@@ -338,9 +500,73 @@ def load_asim_parser_names(asim_parsers_path: Path) -> None:
         print(f"Warning: Could not load ASIM parser names from {asim_parsers_path}: {e}")
 
 
+def is_connector_deprecated(connector_id: str,
+                            connectors_reference: Dict[str, Dict[str, str]]) -> bool:
+    """
+    Check if a specific connector is deprecated.
+    
+    Args:
+        connector_id: The connector ID to check
+        connectors_reference: Dictionary of connector_id -> connector info
+        
+    Returns:
+        True if the connector is deprecated
+    """
+    if not connector_id:
+        return False
+    
+    conn_info = connectors_reference.get(connector_id.strip(), {})
+    is_deprecated = conn_info.get('is_deprecated', 'false') == 'true'
+    if not is_deprecated:
+        # Check title fallback
+        title = conn_info.get('title', '')
+        is_deprecated = '[DEPRECATED]' in title.upper() or title.startswith('[Deprecated]')
+    return is_deprecated
+
+
+def format_solution_link_with_legacy(solution_name: str,
+                                     connector_id: str,
+                                     connectors_reference: Dict[str, Dict[str, str]],
+                                     relative_path: str = "../solutions/") -> str:
+    """
+    Format a solution link, adding "(legacy connector)" suffix if the connector is deprecated.
+    
+    Args:
+        solution_name: Name of the solution
+        connector_id: The specific connector ID that relates the parser to this solution
+        connectors_reference: Dictionary of connector_id -> connector info
+        relative_path: Relative path to solutions directory
+        
+    Returns:
+        Markdown link with optional "(legacy connector)" suffix
+    """
+    # Don't add suffix if solution name already contains "Legacy"
+    if '(legacy)' in solution_name.lower():
+        return f"[{solution_name}]({relative_path}{sanitize_filename(solution_name)}.md)"
+    
+    is_legacy = is_connector_deprecated(connector_id, connectors_reference)
+    display_name = f"{solution_name} (legacy connector)" if is_legacy else solution_name
+    return f"[{display_name}]({relative_path}{sanitize_filename(solution_name)}.md)"
+
+
 def sanitize_anchor(text: str) -> str:
-    """Convert text to URL-safe anchor."""
-    return text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+    """Convert text to URL-safe anchor and filename-safe identifier.
+    
+    This function should produce the same result as sanitize_filename to ensure
+    consistency between file creation and link generation.
+    """
+    result = text.lower().replace(" ", "-").replace("/", "-").replace("_", "-")
+    # Remove or replace characters invalid in Windows filenames: \ / : * ? " < > |
+    result = result.replace(":", "-").replace("*", "-").replace("?", "-")
+    result = result.replace('"', "-").replace("<", "-").replace(">", "-").replace("|", "-")
+    # Remove parentheses and percent signs (these break file systems or cause issues)
+    result = result.replace("(", "-").replace(")", "-").replace("%", "-")
+    # Clean up multiple consecutive hyphens
+    while "--" in result:
+        result = result.replace("--", "-")
+    # Remove leading/trailing hyphens
+    result = result.strip("-")
+    return result
 
 
 def sanitize_filename(text: str) -> str:
@@ -450,6 +676,291 @@ def format_tactics(tactics: str) -> str:
         return '-'
     # Split by comma, strip whitespace, and rejoin with comma-space
     return ', '.join(t.strip() for t in tactics.split(',') if t.strip())
+
+
+def normalize_selection_criteria(criteria: str) -> str:
+    """
+    Normalize selection criteria by converting case-insensitive operators to case-sensitive versions.
+    This allows for deduplication and consistent counting of equivalent filters.
+    
+    Args:
+        criteria: Selection criteria string like 'field1 =~ "value1" and field2 in~ ("a","b")'
+    
+    Returns:
+        Normalized string with case-sensitive operators:
+        - =~ becomes ==
+        - !~ becomes !=
+        - in~ becomes in
+        - !in~ becomes !in
+        - has_cs becomes has
+        - !has_cs becomes !has
+        - hasprefix_cs becomes hasprefix
+        - !hasprefix_cs becomes !hasprefix
+        - hassuffix_cs becomes hassuffix
+        - !hassuffix_cs becomes !hassuffix
+        - contains_cs becomes contains
+        - !contains_cs becomes !contains
+        - startswith_cs becomes startswith
+        - !startswith_cs becomes !startswith
+        - endswith_cs becomes endswith
+        - !endswith_cs becomes !endswith
+    """
+    if not criteria:
+        return ''
+    
+    import re
+    result = criteria
+    
+    # Normalize case-insensitive operators to case-sensitive versions
+    # Order matters - longer patterns first to avoid partial matches
+    operator_mappings = [
+        (r'\s+!hasprefix_cs\s+', ' !hasprefix '),
+        (r'\s+hasprefix_cs\s+', ' hasprefix '),
+        (r'\s+!hassuffix_cs\s+', ' !hassuffix '),
+        (r'\s+hassuffix_cs\s+', ' hassuffix '),
+        (r'\s+!startswith_cs\s+', ' !startswith '),
+        (r'\s+startswith_cs\s+', ' startswith '),
+        (r'\s+!endswith_cs\s+', ' !endswith '),
+        (r'\s+endswith_cs\s+', ' endswith '),
+        (r'\s+!contains_cs\s+', ' !contains '),
+        (r'\s+contains_cs\s+', ' contains '),
+        (r'\s+!has_cs\s+', ' !has '),
+        (r'\s+has_cs\s+', ' has '),
+        (r'\s+!in~\s+', ' !in '),
+        (r'\s+in~\s+', ' in '),
+        (r'\s+!~\s+', ' != '),
+        (r'\s+=~\s+', ' == '),
+    ]
+    
+    for pattern, replacement in operator_mappings:
+        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+    
+    return result
+
+
+def parse_criteria_into_field_values(criteria: str) -> Dict[str, List[Tuple[str, str]]]:
+    """
+    Parse selection criteria into individual field-value pairs, splitting 'and' conditions
+    and expanding 'in' operators into individual values.
+    
+    Args:
+        criteria: Normalized selection criteria string like 'field1 == "value1" and field2 in "a,b,c"'
+    
+    Returns:
+        Dictionary mapping field names to list of (operator, value) tuples.
+        For == operator, operator is empty string.
+        For 'in' operator, each value in the list is expanded to a separate ('' , value) tuple.
+        
+    Example:
+        Input: 'DeviceVendor == "Cisco" and DeviceProduct in "ASA,FTD"'
+        Output: {
+            'DeviceVendor': [('', 'Cisco')],
+            'DeviceProduct': [('', 'ASA'), ('', 'FTD')]
+        }
+    """
+    if not criteria:
+        return {}
+    
+    import re
+    result: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
+    
+    # First normalize the criteria
+    normalized = normalize_selection_criteria(criteria)
+    
+    # Split by ' and ' to get individual conditions
+    conditions = [c.strip() for c in normalized.split(' and ') if c.strip()]
+    
+    # Regex patterns for different operator types
+    # Pattern for equality operators: field == "value" or field != "value"
+    eq_pattern = re.compile(r'^(\w+)\s*(==|!=)\s*["\']?([^"\']+)["\']?$')
+    
+    # Pattern for 'in' operators: field in "a,b,c" or field in ("a","b") or field !in "a,b"
+    in_pattern = re.compile(r'^(\w+)\s*(!?in)\s*[\("\']?([^)"\'\|]+)[\)"\']?$')
+    
+    # Pattern for string operators: field has "value", field startswith "value", etc.
+    str_op_pattern = re.compile(r'^(\w+)\s+(!?(?:has|hasprefix|hassuffix|startswith|endswith|contains|has_any|has_all))\s+["\']?([^"\']+)["\']?$')
+    
+    for condition in conditions:
+        condition = condition.strip()
+        
+        # Try equality pattern first
+        match = eq_pattern.match(condition)
+        if match:
+            field, op, value = match.groups()
+            value = value.strip().strip('"\'')
+            if op == '==':
+                result[field].append(('', value))
+            else:
+                result[field].append((op, value))
+            continue
+        
+        # Try 'in' pattern - expand to individual values
+        match = in_pattern.match(condition)
+        if match:
+            field, op, values_str = match.groups()
+            # Split values by comma, handling quoted values
+            values_str = values_str.strip().strip('()"\'')
+            # Split by comma and clean up each value
+            values = [v.strip().strip('"\'') for v in values_str.split(',') if v.strip()]
+            for val in values:
+                if op == 'in':
+                    # in becomes == (empty operator for display)
+                    result[field].append(('', val))
+                else:
+                    # !in becomes != for individual values
+                    result[field].append(('!=', val))
+            continue
+        
+        # Try string operator pattern
+        match = str_op_pattern.match(condition)
+        if match:
+            field, op, value = match.groups()
+            value = value.strip().strip('"\'')
+            # For has_any with multiple values, split them
+            if op in ('has_any', 'has_all') and ',' in value:
+                values = [v.strip().strip('"\'') for v in value.split(',') if v.strip()]
+                for val in values:
+                    result[field].append((op, val))
+            else:
+                result[field].append((op, value))
+            continue
+    
+    return dict(result)
+
+
+def format_field_value_display(op: str, value: str) -> str:
+    """
+    Format a field value for display in markdown tables.
+    
+    Args:
+        op: The operator (empty string for ==, or the actual operator)
+        value: The value
+    
+    Returns:
+        Formatted string. For == (empty op), just the value in backticks.
+        For other operators, "op value" in backticks.
+    """
+    if not op:
+        return f'`{value}`'
+    else:
+        return f'`{op} {value}`'
+
+
+def format_selection_criteria(criteria: str, use_backticks: bool = True) -> str:
+    """
+    Format selection criteria for display in markdown tables.
+    Normalizes operators to case-sensitive versions, adds line breaks, and wraps parts in backticks.
+    
+    Args:
+        criteria: Selection criteria string like 'field1 =~ "value1" and field2 in~ ("a","b")'
+        use_backticks: If True, wrap each part in backticks (default True)
+    
+    Returns:
+        Formatted string with normalized operators and <br> between backtick-wrapped parts
+    """
+    if not criteria:
+        return ''
+    # First normalize operators to case-sensitive versions
+    normalized = normalize_selection_criteria(criteria)
+    # Split by ' and ', wrap each part in backticks, join with <br>
+    parts = normalized.split(' and ')
+    if use_backticks:
+        # Wrap each part in backticks, with <br> between them (outside backticks)
+        return '<br>'.join(f'`{part.strip()}`' for part in parts if part.strip())
+    else:
+        # Just add line breaks without backticks
+        return '<br>and '.join(parts)
+
+
+def get_item_selection_criteria(item: Dict[str, str], table: str, 
+                                  content_filter_fields_lookup: Dict[str, str]) -> str:
+    """
+    Get the selection criteria for a content item for a specific table.
+    
+    Args:
+        item: Content item dictionary
+        table: Table name to get criteria for
+        content_filter_fields_lookup: Dictionary of content_id/key to filter_fields
+    
+    Returns:
+        Raw selection criteria string (not formatted with <br>)
+    """
+    content_id = item.get('content_id', '')
+    content_name = item.get('content_name', '')
+    item_solution = item.get('solution_name', '')
+    content_key = get_content_key(content_id, content_name, item_solution)
+    
+    # Try both content_id and content_key for lookup
+    filter_fields = content_filter_fields_lookup.get(content_id, '')
+    if not filter_fields:
+        filter_fields = content_filter_fields_lookup.get(content_key, '')
+    
+    if filter_fields:
+        criteria_by_table = parse_filter_fields(filter_fields)
+        if table in criteria_by_table:
+            criteria_list = criteria_by_table[table]
+            if criteria_list:
+                return ' and '.join(criteria_list)
+    return ''
+
+
+def write_content_items_section(f, items: List[Dict[str, str]], section_header: str, 
+                                  table: str, content_filter_fields_lookup: Dict[str, str],
+                                  relative_path: str = "../content/") -> List[str]:
+    """
+    Write a section of content items with smart selection criteria handling.
+    If all items have the same selection criteria, put it in the header.
+    
+    Args:
+        f: File handle to write to
+        items: List of content items
+        section_header: Header text for the section (e.g., "**In solution [Name](link):**")
+        table: Table name to get criteria for
+        content_filter_fields_lookup: Dictionary of content_id/key to filter_fields
+        relative_path: Relative path to content directory
+        
+    Returns:
+        List of selection criteria strings found (for summary stats)
+    """
+    if not items:
+        return []
+    
+    # Collect selection criteria for all items
+    items_with_criteria = []
+    all_criteria = []
+    for item in sorted(items, key=lambda x: x.get('content_name', '')):
+        criteria = get_item_selection_criteria(item, table, content_filter_fields_lookup)
+        items_with_criteria.append((item, criteria))
+        all_criteria.append(criteria)
+    
+    # Check if all items have the same criteria (including empty)
+    unique_criteria = set(all_criteria)
+    all_same_criteria = len(unique_criteria) == 1
+    common_criteria = all_criteria[0] if all_same_criteria else None
+    
+    # Write section header
+    if all_same_criteria and common_criteria:
+        # Put criteria in header, omit column
+        f.write(f"{section_header} {format_selection_criteria(common_criteria)}\n\n")
+        f.write("| Content Item |\n")
+        f.write("|:-------------|\n")
+    else:
+        # Different criteria, use column
+        f.write(f"{section_header}\n\n")
+        f.write("| Content Item | Selection Criteria |\n")
+        f.write("|:-------------|:-------------------|\n")
+    
+    # Write items
+    for item, criteria in items_with_criteria:
+        content_link = get_content_item_link(item, relative_path, show_not_in_json=True)
+        if all_same_criteria and common_criteria:
+            f.write(f"| {content_link} |\n")
+        else:
+            formatted_criteria = format_selection_criteria(criteria) if criteria else ""
+            f.write(f"| {content_link} | {formatted_criteria} |\n")
+    
+    f.write("\n")
+    return all_criteria
 
 
 # Mapping from content type to possible folder names in the Solutions directory
@@ -681,6 +1192,138 @@ def format_tables_simple(tables_with_usage: List[Tuple[str, str]], relative_path
     return '<br>'.join(result_parts) if result_parts else '-'
 
 
+def parse_filter_fields(filter_fields: str) -> Dict[str, List[str]]:
+    """
+    Parse a filter_fields string into a dictionary mapping table names to their selection criteria.
+    
+    The filter_fields format is: "Table.Field operator value | Table.Field operator value"
+    Each criterion is separated by ' | ' and specifies Table.Field operator "value".
+    
+    Args:
+        filter_fields: The filter_fields string from CSV (e.g., 
+            "CommonSecurityLog.DeviceProduct == \"X Series\" | CommonSecurityLog.DeviceVendor == \"Vectra Networks\"")
+    
+    Returns:
+        Dictionary mapping table names to list of criteria for that table (e.g.,
+            {"CommonSecurityLog": ["DeviceProduct == \"X Series\"", "DeviceVendor == \"Vectra Networks\""]})
+    """
+    if not filter_fields:
+        return {}
+    
+    criteria_by_table: Dict[str, List[str]] = defaultdict(list)
+    
+    # Split by ' | ' to get individual criteria
+    criteria = [c.strip() for c in filter_fields.split(' | ') if c.strip()]
+    
+    for criterion in criteria:
+        # Parse "Table.Field operator value" pattern
+        # The table name is everything before the first '.'
+        # The rest is the field and condition
+        dot_pos = criterion.find('.')
+        if dot_pos > 0:
+            table_name = criterion[:dot_pos].strip()
+            field_condition = criterion[dot_pos + 1:].strip()
+            criteria_by_table[table_name].append(field_condition)
+    
+    return dict(criteria_by_table)
+
+
+def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[str, str]], 
+                       relative_path: str = "../tables/", filter_fields: str = "",
+                       include_transforms: bool = True, include_ingestion_api: bool = True,
+                       include_lake_only: bool = True) -> None:
+    """
+    Write a standardized tables table with optional Selection Criteria, Transformations, Ingestion API, and Lake-Only columns.
+    
+    This function is used by connector pages, ASIM parser pages, and content item pages to display
+    a consistent tables table format.
+    
+    Args:
+        f: File handle to write to
+        tables: List of table names to include in the table
+        tables_reference: Dictionary of table metadata (for transformations/ingestion API info)
+        relative_path: Relative path to tables directory (default: ../tables/)
+        filter_fields: Filter fields string from CSV to parse for selection criteria
+        include_transforms: Whether to include Transformations column (default: True)
+        include_ingestion_api: Whether to include Ingestion API column (default: True)
+        include_lake_only: Whether to include Lake-Only column (default: True)
+    """
+    if not tables:
+        return
+    
+    # Parse filter_fields to get selection criteria by table
+    criteria_by_table = parse_filter_fields(filter_fields)
+    has_selection_criteria = bool(criteria_by_table)
+    
+    # Build header based on what columns to include
+    headers = ["Table"]
+    if has_selection_criteria:
+        headers.append("Selection Criteria")
+    if include_transforms:
+        headers.append("Transformations")
+    if include_ingestion_api:
+        headers.append("Ingestion API")
+    if include_lake_only:
+        headers.append("Lake-Only")
+    
+    # Write header row
+    f.write("| " + " | ".join(headers) + " |\n")
+    
+    # Write separator row with appropriate alignment
+    separators = [":------"]  # Table column left-aligned
+    if has_selection_criteria:
+        separators.append(":-------------")  # Selection Criteria left-aligned
+    if include_transforms:
+        separators.append(":---------------:")  # Transformations centered
+    if include_ingestion_api:
+        separators.append(":-------------:")  # Ingestion API centered
+    if include_lake_only:
+        separators.append(":---------:")  # Lake-Only centered
+    f.write("|" + "|".join(separators) + "|\n")
+    
+    # Write data rows
+    for table in sorted(tables):
+        table_ref = tables_reference.get(table, {})
+        
+        # Format table link
+        table_link = format_table_link(table, relative_path)
+        
+        row = [table_link]
+        
+        # Selection criteria for this table
+        if has_selection_criteria:
+            criteria = criteria_by_table.get(table, [])
+            if criteria:
+                # Join multiple criteria with " and " and format with line breaks
+                raw_criteria = ' and '.join(criteria)
+                criteria_text = format_selection_criteria(raw_criteria)
+            else:
+                criteria_text = ""
+            row.append(criteria_text)
+        
+        # Transformations
+        if include_transforms:
+            supports_transforms = table_ref.get('supports_transformations', '')
+            transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
+            row.append(transforms_cell)
+        
+        # Ingestion API
+        if include_ingestion_api:
+            ingestion_api = table_ref.get('ingestion_api_supported', '')
+            ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
+            row.append(ingestion_cell)
+        
+        # Lake-Only
+        if include_lake_only:
+            lake_only = table_ref.get('lake_only_supported', '')
+            lake_only_cell = "✓" if lake_only.lower() == 'yes' else "✗" if lake_only.lower() == 'no' else "—"
+            row.append(lake_only_cell)
+        
+        f.write("| " + " | ".join(row) + " |\n")
+    
+    f.write("\n")
+
+
 def get_asim_products_from_tables(tables: Set[str]) -> Set[str]:
     """
     Extract the set of ASIM product names from a set of table names.
@@ -724,7 +1367,7 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         page_type: Type of current page ('solutions', 'connectors', 'tables', 'content', 'asim', 
                    'solution-page', 'connector-page', 'table-page', 'content-item-page', 'content-type', 
                    'content-type-letter', 'content-type-letter-header', 'asim-parser', 'asim-index', 'asim-products',
-                   'parser', 'parser-index')
+                   'parser', 'parser-index', 'methods', 'method-page')
         relative_to_root: Path prefix to get from current directory to root 
                           (e.g., "../" for pages in subdirectories, "" for root pages)
         **kwargs: Additional parameters:
@@ -735,16 +1378,18 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
             - type_slug: For content-type-letter, the slug for the content type index
     """
     # Define the navigation items - all pages should include all items
-    # Use a compact format: Home | Solutions | Connectors | Tables | Content | Parsers | ASIM Parsers | ASIM Products
+    # Use a compact format: Home | Solutions | Connectors | Methods | Tables | Content | Parsers | ASIM Parsers | ASIM Products | Statistics
     nav_items = [
-        ('🏠', f'{relative_to_root}readme.md', 'Home'),
+        ('🏠', f'{relative_to_root}README.md', 'Home'),
         ('Solutions', f'{relative_to_root}solutions-index.md', None),
         ('Connectors', f'{relative_to_root}connectors-index.md', None),
+        ('Methods', f'{relative_to_root}methods-index.md', None),
         ('Tables', f'{relative_to_root}tables-index.md', None),
         ('Content', f'{relative_to_root}content/content-index.md', None),
         ('Parsers', f'{relative_to_root}parsers/parsers-index.md', None),
         ('ASIM Parsers', f'{relative_to_root}asim/asim-index.md', None),
         ('ASIM Products', f'{relative_to_root}asim/asim-products-index.md', None),
+        ('📊', f'{relative_to_root}statistics.md', 'Statistics'),
     ]
     
     # Build navigation line
@@ -752,9 +1397,13 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
     for name, path, alt_name in nav_items:
         # Check if this is the current page
         is_current = False
-        if page_type == 'solutions' and name == 'Solutions':
+        if page_type == 'statistics' and name == '📊':
+            is_current = True
+        elif page_type == 'solutions' and name == 'Solutions':
             is_current = True
         elif page_type == 'connectors' and name == 'Connectors':
+            is_current = True
+        elif page_type == 'methods' and name == 'Methods':
             is_current = True
         elif page_type == 'tables' and name == 'Tables':
             is_current = True
@@ -781,7 +1430,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         content_type_slug = kwargs.get('content_type_slug', 'content-index')
         solution_name = kwargs.get('solution_name', '')
         f.write(f"↑ [Back to {content_type_plural}]({content_type_slug}.md)")
-        if solution_name:
+        # Don't link to solution page for GitHub Only or synthetic solution names (no page exists)
+        if solution_name and solution_name not in ('GitHub Only', 'Standalone Content'):
             f.write(f" · [Back to {solution_name}]({relative_to_root}solutions/{sanitize_filename(solution_name)}.md)")
         f.write("\n\n")
     elif page_type == 'content-type-letter':
@@ -794,6 +1444,8 @@ def write_browse_section(f, page_type: str, relative_to_root: str = "", **kwargs
         f.write(f"↑ [Back to Connectors Index]({relative_to_root}connectors-index.md)\n\n")
     elif page_type == 'solution-page':
         f.write(f"↑ [Back to Solutions Index]({relative_to_root}solutions-index.md)\n\n")
+    elif page_type == 'method-page':
+        f.write(f"↑ [Back to Methods Index]({relative_to_root}methods-index.md)\n\n")
     elif page_type == 'content-type':
         f.write("↑ [Back to Content Index](content-index.md)\n\n")
     elif page_type == 'content-page':
@@ -1837,7 +2489,11 @@ def get_content_item_link(item: Dict[str, str], relative_path: str = "../content
 def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[str, str]]],
                                  content_tables_mapping: Dict[str, List[Tuple[str, str]]],
                                  output_dir: Path,
-                                 solutions_dir: Path = None) -> int:
+                                 solutions_dir: Path = None,
+                                 tables_reference: Dict[str, Dict[str, str]] = None,
+                                 content_table_parser_mapping: Dict[str, Dict[str, str]] = None,
+                                 parser_filter_fields: Dict[str, str] = None,
+                                 connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
     """
     Generate individual documentation pages for each content item.
     
@@ -1846,12 +2502,25 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
         content_tables_mapping: Dict mapping content_key to list of (table, usage) tuples
         output_dir: Output directory for documentation
         solutions_dir: Path to Solutions directory for checking folder variants
+        tables_reference: Dictionary of table metadata for transformations/ingestion API info
+        content_table_parser_mapping: Dict mapping content_key -> table_name -> source_parser
+        parser_filter_fields: Dict mapping parser_name (lowercase) -> filter_fields string
+        connectors_reference: Dictionary of connector metadata for looking up solution names
     
     Returns:
         Number of pages generated
     """
     content_dir = output_dir / "content"
     content_dir.mkdir(parents=True, exist_ok=True)
+    
+    if tables_reference is None:
+        tables_reference = {}
+    if content_table_parser_mapping is None:
+        content_table_parser_mapping = {}
+    if parser_filter_fields is None:
+        parser_filter_fields = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     
     pages_created = 0
     
@@ -1863,6 +2532,11 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
             content_id = item.get('content_id', '')
             content_name = item.get('content_name', 'Unknown')
             content_type = item.get('content_type', 'unknown')
+            
+            # Skip parsers - they have dedicated pages in the parsers directory
+            if content_type == 'parser':
+                continue
+            
             content_description = item.get('content_description', '')
             content_file = item.get('content_file', '')
             content_readme_file = item.get('content_readme_file', '')
@@ -1900,8 +2574,8 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
             # Check if this content item uses any ASIM parsers
             uses_asim = any(is_asim_parser(t[0]) for t in tables_with_usage) if tables_with_usage else False
             
-            # Get GitHub URL (pass solutions_dir to check which folder variant exists)
-            github_url = get_content_item_github_url(item, solutions_dir)
+            # Get GitHub URL - prefer content_github_url from CSV, fall back to generated URL
+            github_url = item.get('content_github_url', '') or get_content_item_github_url(item, solutions_dir)
             
             with page_path.open("w", encoding="utf-8") as f:
                 # Title with ASIM badge if applicable
@@ -1931,7 +2605,11 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                 f.write("| Attribute | Value |\n")
                 f.write("|:----------|:------|\n")
                 f.write(f"| **Type** | {type_display} |\n")
-                f.write(f"| **Solution** | [{solution_name}](../solutions/{sanitize_filename(solution_name)}.md) |\n")
+                # Don't link to solution page for GitHub Only or synthetic solution names (no page exists)
+                if solution_name in ('GitHub Only', 'Standalone Content'):
+                    f.write(f"| **Solution** | {solution_name} |\n")
+                else:
+                    f.write(f"| **Solution** | [{solution_name}](../solutions/{sanitize_filename(solution_name)}.md) |\n")
                 
                 if content_id:
                     f.write(f"| **ID** | `{content_id}` |\n")
@@ -1963,12 +2641,6 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                     connectors_formatted = ', '.join(connector_links)
                     f.write(f"| **Required Connectors** | {connectors_formatted} |\n")
                 
-                # Event Vendor/Product (from query analysis)
-                if content_event_vendor:
-                    f.write(f"| **Event Vendor** | {content_event_vendor.replace(';', ', ')} |\n")
-                if content_event_product:
-                    f.write(f"| **Event Product** | {content_event_product.replace(';', ', ')} |\n")
-                
                 if github_url:
                     f.write(f"| **Source** | [View on GitHub]({github_url}) |\n")
                 
@@ -1979,7 +2651,7 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                 if not_in_solution_json == 'true':
                     f.write("> ⚠️ **Not listed in Solution JSON:** This content item was discovered by scanning the solution folder but is not included in the official Solution JSON file. It may be a legacy item, under development, or excluded from the official solution package.\n\n")
                 
-                # Tables section
+                # Tables section - using standardized tables table with Selection Criteria
                 if tables_with_usage:
                     # Separate ASIM parsers from regular tables
                     asim_parsers_used = [(t, u) for t, u in tables_with_usage if is_asim_parser(t)]
@@ -1996,24 +2668,77 @@ def generate_content_item_pages(content_items_by_solution: Dict[str, List[Dict[s
                     
                     # Regular Tables section
                     if regular_tables_used:
-                        f.write("## Tables Used\n\n")
+                        content_filter_fields = item.get('content_filter_fields', '')
+                        tables_list = sorted(set(t for t, _ in regular_tables_used))
                         
-                        # For playbooks, show read/write usage
-                        if content_type == 'playbook':
-                            f.write("| Table | Usage |\n")
-                            f.write("|:------|:------|\n")
-                            for table, usage in sorted(regular_tables_used, key=lambda x: x[0]):
-                                table_link = format_table_link(table, "../tables/")
-                                usage_display = usage if usage else 'read'
-                                f.write(f"| {table_link} | {usage_display} |\n")
-                            f.write("\n")
-                        else:
-                            # For other content types, just list the tables
-                            f.write("This content item queries data from the following tables:\n\n")
-                            for table, _ in sorted(set(regular_tables_used), key=lambda x: x[0]):
-                                table_link = format_table_link(table, "../tables/")
-                                f.write(f"- {table_link}\n")
-                            f.write("\n")
+                        # Merge parser filter_fields for tables that came from parsers
+                        table_parser_map = content_table_parser_mapping.get(content_key, {})
+                        merged_filter_fields = content_filter_fields
+                        for table in tables_list:
+                            source_parser = table_parser_map.get(table, '')
+                            if source_parser:
+                                parser_ff = parser_filter_fields.get(source_parser.lower(), '')
+                                if parser_ff:
+                                    # Merge parser filter_fields with content's own filter_fields
+                                    if merged_filter_fields:
+                                        merged_filter_fields = merged_filter_fields + " | " + parser_ff
+                                    else:
+                                        merged_filter_fields = parser_ff
+                        
+                        f.write("## Tables Used\n\n")
+                        f.write("This content item queries data from the following tables:\n\n")
+                        
+                        write_tables_table(f, tables_list, tables_reference, "../tables/", merged_filter_fields,
+                                          include_transforms=True, include_ingestion_api=True)
+                
+                # Associated Connectors (for standalone/GitHub Only content items)
+                content_source = item.get('content_source', 'Solution')
+                if content_source in ('Standalone', 'GitHub Only'):
+                    associated_connectors = item.get('associated_connectors', '')
+                    associated_solutions = item.get('associated_solutions', '')
+                    if associated_connectors:
+                        f.write("## Associated Connectors\n\n")
+                        f.write("The following connectors provide data for this content item:\n\n")
+                        
+                        connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+                        solution_list = [s.strip() for s in associated_solutions.split(',') if s.strip()] if associated_solutions else []
+                        
+                        f.write("| Connector | Solution |\n")
+                        f.write("|:----------|:---------|\n")
+                        for connector in connector_list:
+                            # Each connector links to its connector page
+                            connector_link = f"[{connector}](../connectors/{sanitize_filename(connector)}.md)"
+                            # Look up solution_name from connectors_reference
+                            solution_name_for_conn = ''
+                            if connector in connectors_reference:
+                                solution_name_for_conn = connectors_reference[connector].get('solution_name', '')
+                            if solution_name_for_conn:
+                                solution_link = format_solution_link_with_legacy(solution_name_for_conn, connector, connectors_reference, "../solutions/")
+                                f.write(f"| {connector_link} | {solution_link} |\n")
+                            else:
+                                f.write(f"| {connector_link} | |\n")
+                        f.write("\n")
+                        
+                        # List unique solutions separately with legacy markers
+                        if solution_list:
+                            f.write("**Solutions:** ")
+                            solution_links = []
+                            for s in solution_list:
+                                # Find connectors for this solution - check if any are deprecated
+                                solution_connectors = [c for c in connector_list
+                                                       if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                                # Use the first deprecated connector, or first connector if none deprecated
+                                connector_for_legacy = ''
+                                for c in solution_connectors:
+                                    if is_connector_deprecated(c, connectors_reference):
+                                        connector_for_legacy = c
+                                        break
+                                if not connector_for_legacy and solution_connectors:
+                                    connector_for_legacy = solution_connectors[0]
+                                link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                                solution_links.append(link)
+                            f.write(", ".join(solution_links))
+                            f.write("\n\n")
                 
                 # Additional Documentation section for playbooks (embedded README content)
                 if content_type == 'playbook' and content_readme_file and solution_folder and solutions_dir:
@@ -2341,6 +3066,10 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
         if not items:
             continue
         
+        # Skip parser type - it's covered by the comprehensive parsers/parsers-index.md
+        if content_type == 'parser':
+            continue
+        
         # Use letter pages for large types (analytic rules, hunting queries)
         use_letter_pages = content_type in ('analytic_rule',) and len(items) > 500
         generate_content_type_index(content_type, items, output_dir, use_letter_pages)
@@ -2357,68 +3086,14 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
         write_browse_section(f, 'content', "../")
         f.write("---\n\n")
         
-        # Track unpublished content and source counts
-        unpublished_count_by_type: Dict[str, int] = defaultdict(int)
-        published_count_by_type: Dict[str, int] = defaultdict(int)
-        source_counts: Dict[str, int] = defaultdict(int)
-        source_counts_by_type: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        
-        for solution_name, items in content_items_by_solution.items():
-            for item in items:
-                content_type = item.get('content_type', 'unknown')
-                content_source = item.get('content_source', 'Solution')
-                source_counts[content_source] += 1
-                source_counts_by_type[content_type][content_source] += 1
-                # Track published/unpublished only for Solution items
-                if content_source == 'Solution':
-                    if item.get('is_published', 'true') == 'false':
-                        unpublished_count_by_type[content_type] += 1
-                    else:
-                        published_count_by_type[content_type] += 1
-        
-        total_unpublished = sum(unpublished_count_by_type.values())
-        total_published = sum(published_count_by_type.values())
-        total_solution = source_counts.get('Solution', 0)
-        total_standalone = source_counts.get('Standalone', 0)
-        total_github_only = source_counts.get('GitHub Only', 0)
-        
-        # Statistics section
-        f.write("## Statistics\n\n")
-        
-        # Source legend at the top
-        f.write("> **Source Legend:** 📦 Solution (published package) | 📄 Standalone (GitHub with metadata) | 🔗 GitHub Only (no metadata)\n\n")
-        
-        f.write("### Content Items Summary\n\n")
-        f.write("| Metric | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
-        f.write("|:-------|------:|-------------:|---------------:|--------------:|---------------:|\n")
-        f.write(f"| **Content Items** | **{total_items:,}** | {total_published:,} | {total_unpublished:,} | {total_standalone:,} | {total_github_only:,} |\n")
-        f.write("\n")
-        
-        f.write("### Content Items by Type\n\n")
-        f.write("| Type | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
-        f.write("|:-----|------:|-------------:|---------------:|--------------:|---------------:|\n")
-        
-        for content_type in type_order:
-            if content_type in content_by_type:
-                type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
-                total = len(content_by_type[content_type])
-                pub_count = published_count_by_type.get(content_type, 0)
-                unpub_count = unpublished_count_by_type.get(content_type, 0)
-                standalone_count = source_counts_by_type[content_type].get('Standalone', 0)
-                github_only_count = source_counts_by_type[content_type].get('GitHub Only', 0)
-                # Add note for parsers
-                note = "*" if content_type == 'parser' else ""
-                f.write(f"| {type_name}{note} | {total:,} | {pub_count:,} | {unpub_count:,} | {standalone_count:,} | {github_only_count:,} |\n")
-        
-        f.write("\n")
-        f.write("*\\* Parsers from solution content. See [Parsers](../parsers/parsers-index.md) section for all parsers including legacy.*\n\n")
+        # Summary count
+        f.write(f"**{total_items:,} content items** across all Microsoft Sentinel solutions. ")
+        f.write(f"See [📊 Statistics](../statistics.md) for detailed breakdowns by type and source.\n\n")
         
         f.write("---\n\n")
         
         # Overview
-        f.write("## Content Index\n\n")
-        f.write(f"This index provides access to **{total_items:,} content items** across all Microsoft Sentinel solutions.\n\n")
-        f.write("Content is organized by type. Click on a content type below to browse all items of that type.\n\n")
+        f.write(f"Content is organized by type. Click on a content type below to browse all items of that type.\n\n")
         
         # Summary by type with links to sub-indexes
         f.write("| Content Type | Count | Description |\n")
@@ -2440,7 +3115,11 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
                 type_slug = get_content_type_slug(content_type)
                 count = len(content_by_type[content_type])
                 description = type_descriptions.get(content_type, '')
-                f.write(f"| [{type_name}]({type_slug}.md) | {count} | {description} |\n")
+                # Parser links to parsers-index.md which is more comprehensive
+                if content_type == 'parser':
+                    f.write(f"| [{type_name}](../parsers/parsers-index.md) | {count}* | {description} |\n")
+                else:
+                    f.write(f"| [{type_name}]({type_slug}.md) | {count} | {description} |\n")
         
         # Add any other types not in the order list
         for content_type in sorted(content_by_type.keys()):
@@ -2450,6 +3129,7 @@ def generate_content_index(content_items_by_solution: Dict[str, List[Dict[str, s
                 f.write(f"| {type_name} | {count} | |\n")
         
         f.write("\n")
+        f.write("\\* *Parser count shows solution parsers only. The [Parsers Index](../parsers/parsers-index.md) includes additional legacy and discovered parsers.*\n\n")
         
         # Navigation footer
         f.write("---\n\n")
@@ -2559,21 +3239,13 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                         all_tables.add(table)
             tables_in_solutions = len(all_tables)
         
-        # Statistics section (combined with Overview data)
-        f.write("## Statistics\n\n")
-        f.write("| Metric | Total | Published | Unpublished |\n")
-        f.write("|:-------|------:|----------:|------------:|\n")
-        f.write(f"| Solutions | {len(solutions)} | {published_solutions_count} | {len(unpublished_solutions)} |\n")
-        f.write(f"| With Connectors | {solutions_with_connectors} | {solutions_with_connectors_published} | {solutions_with_connectors_unpublished} |\n")
-        f.write(f"| With Content | {solutions_with_content} | {solutions_with_content_published} | {solutions_with_content_unpublished} |\n")
-        f.write(f"| Unique Connectors | {len(all_connector_ids)} | | |\n")
-        f.write(f"| Tables Used | {tables_in_solutions} | | |\n")
-        f.write("\n")
+        # Summary counts
+        f.write(f"**{len(solutions)} solutions** with {len(all_connector_ids)} unique connectors and {solutions_with_content} providing content items. ")
+        f.write(f"See [📊 Statistics](statistics.md) for detailed breakdowns.\n\n")
         
         f.write("---\n\n")
         
         # Generate alphabetical index
-        f.write("## Solutions Index\n\n")
         f.write("Browse solutions alphabetically:\n\n")
         
         # Create alphabetical sections
@@ -2611,6 +3283,11 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
         if solutions_using_asim:
             f.write(f"> {ASIM_ICON_ROOT} **Uses ASIM:** This icon indicates the solution uses ASIM parsers for normalized data.\n\n")
         
+        # Check if any solutions have additional_information
+        has_additional_info = any(get_doc_override('solution', sol_name, 'additional_information') for sol_name in solutions.keys())
+        if has_additional_info:
+            f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
+        
         # Generate sections by letter
         for letter in letters:
             f.write(f"### {letter}\n\n")
@@ -2627,7 +3304,7 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 # Add logo column
                 logo_url = connectors[0].get('solution_logo_url', '')
                 if logo_url:
-                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                    logo_cell = f'<img src="{logo_url}" alt="" width="40" height="40">'
                 else:
                     logo_cell = ''
                 
@@ -2635,10 +3312,15 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 # Use ASIM_ICON_ROOT since index file is in root directory
                 asim_prefix = f"{ASIM_ICON_ROOT} " if solution_name in solutions_using_asim else ""
                 
-                # Add unpublished icon if solution is not published
-                unpublished_suffix = f" {UNPUBLISHED_ICON}" if solution_name in unpublished_solutions else ""
+                # Add status suffix icons
+                status_suffix = ""
+                if solution_name in unpublished_solutions:
+                    status_suffix += f" {UNPUBLISHED_ICON}"
+                # Check for additional_information override
+                if get_doc_override('solution', solution_name, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
-                solution_link = f"{asim_prefix}[{solution_name}](solutions/{sanitize_filename(solution_name)}.md){unpublished_suffix}"
+                solution_link = f"{asim_prefix}[{solution_name}](solutions/{sanitize_filename(solution_name)}.md){status_suffix}"
                 f.write(f"| {logo_cell} | {solution_link} | {first_published} | {support_name} |\n")
             
             f.write("\n")
@@ -2677,6 +3359,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 'is_deprecated': conn.get('is_deprecated', 'false'),  # Track deprecation status
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),  # Track discovered connectors
                 'logo_url': conn.get('solution_logo_url', ''),  # Solution logo for connector display
+                'support_tier': conn.get('solution_support_tier', ''),  # Support tier for statistics
             }
         
         # Collect all tables for each connector
@@ -2728,85 +3411,13 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             if info.get('not_in_solution_json', 'false') == 'true'
         }
         
-        # Statistics section
-        f.write("## Statistics\n\n")
-        
-        # Compute mutually exclusive categories for cleaner statistics:
-        # - Deprecated: has [Deprecated] in title (regardless of publication status)
-        # - Unpublished: NOT deprecated AND solution not published
-        # - Active: NOT deprecated AND solution IS published
-        
-        # Connectors that are active (not deprecated) AND unpublished
-        unpub_active = set(cid for cid in unpublished_connectors if cid in active_connectors)
-        # Connectors that are deprecated AND unpublished (should still count as deprecated)
-        unpub_deprecated = set(cid for cid in unpublished_connectors if cid in deprecated_connectors)
-        
-        # Total counts (mutually exclusive)
-        total_deprecated = len(deprecated_connectors)
-        total_unpublished = len(unpub_active)  # Only count unpublished non-deprecated as "Unpublished"
-        total_active = len(active_connectors) - len(unpub_active)  # Active minus unpublished active
-        
-        # Connectors Statistics table
-        in_solution_count = len(connectors_map) - len(discovered_connectors)
-        active_in_solution = len(active_connectors) - len([cid for cid in discovered_connectors if cid in active_connectors])
-        deprecated_in_solution = len(deprecated_connectors) - len([cid for cid in discovered_connectors if cid in deprecated_connectors])
-        unpub_in_solution = len([cid for cid in unpub_active if cid not in discovered_connectors])
-        
-        discovered_active = len([cid for cid in discovered_connectors if cid in active_connectors])
-        discovered_deprecated = len([cid for cid in discovered_connectors if cid in deprecated_connectors])
-        discovered_unpub = len([cid for cid in discovered_connectors if cid in unpub_active])
-        
-        f.write("### Connectors Overview\n\n")
-        f.write("| Metric | Total | Active | Deprecated | Unpublished |\n")
-        f.write("|:-------|------:|-------:|-----------:|------------:|\n")
-        f.write(f"| In Solutions | {in_solution_count} | {active_in_solution - unpub_in_solution} | {deprecated_in_solution} | {unpub_in_solution} |\n")
-        if discovered_connectors:
-            f.write(f"| Discovered* | {len(discovered_connectors)} | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} |\n")
-            f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** |\n")
-        f.write("\n")
-        if discovered_connectors:
-            f.write("*\\* Discovered connectors are found in solution folders but not listed in Solution JSON definitions.*\n\n")
-        
-        # Collection Methods table
-        # Use the same mutually exclusive logic as Connectors Overview:
-        # - Deprecated: in deprecated_connectors
-        # - Unpublished: in unpub_active (unpublished AND not deprecated)
-        # - Active: in active_connectors AND not in unpub_active
-        collection_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'total': 0, 'active': 0, 'deprecated': 0, 'unpublished': 0})
-        for connector_id, info in connectors_map.items():
-            method = info.get('collection_method', '') or 'Unknown'
-            collection_method_stats[method]['total'] += 1
-            if connector_id in deprecated_connectors:
-                collection_method_stats[method]['deprecated'] += 1
-            elif connector_id in unpub_active:
-                collection_method_stats[method]['unpublished'] += 1
-            else:
-                # Active: not deprecated and not unpublished
-                collection_method_stats[method]['active'] += 1
-        
-        if collection_method_stats:
-            f.write("### Collection Methods\n\n")
-            f.write("| Collection Method | Total | Active | Deprecated | Unpublished |\n")
-            f.write("|:-----------------|------:|-------:|-----------:|------------:|\n")
-            
-            sorted_methods = sorted(collection_method_stats.items(), key=lambda x: x[1]['total'], reverse=True)
-            
-            for method, stats in sorted_methods:
-                f.write(f"| {method} | {stats['total']} | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
-            
-            # Totals row
-            total_all = sum(s['total'] for s in collection_method_stats.values())
-            total_active_cm = sum(s['active'] for s in collection_method_stats.values())
-            total_deprecated_cm = sum(s['deprecated'] for s in collection_method_stats.values())
-            total_unpub_cm = sum(s['unpublished'] for s in collection_method_stats.values())
-            f.write(f"| **Total** | **{total_all}** | **{total_active_cm}** | **{total_deprecated_cm}** | **{total_unpub_cm}** |\n")
-            f.write("\n")
-            f.write("*Active = Published and not deprecated.*\n\n")
+        # Summary count
+        f.write(f"**{len(connectors_map)} unique connectors** ({len(active_connectors)} active, {len(deprecated_connectors)} deprecated). ")
+        f.write(f"See [📊 Statistics](statistics.md) for detailed breakdowns.\n\n")
         
         f.write("---\n\n")
         
-        f.write(f"## Connectors Index\n\n")
-        f.write(f"This page lists **{len(connectors_map)} unique connectors** across all solutions.\n\n")
+        f.write(f"Browse connectors alphabetically:\n\n")
         
         # Create alphabetical index for active connectors
         by_letter: Dict[str, List[str]] = defaultdict(list)
@@ -2833,6 +3444,10 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
             f.write(DEPRECATED_FOOTNOTE + "\n\n")
         if discovered_connectors:
             f.write(DISCOVERED_FOOTNOTE + "\n\n")
+        # Check if any connectors have additional_information
+        has_additional_info = any(get_doc_override('connector', cid, 'additional_information') for cid in connectors_map.keys())
+        if has_additional_info:
+            f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
         
         # Generate sections by letter with table format
         for letter in letters:
@@ -2847,12 +3462,13 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
                 collection_method = info.get('collection_method', '') or '—'
+                collection_method_cell = get_collection_method_link(collection_method, "")
                 solution_folder = info.get('solution_folder', '')
                 
                 # Get solution logo from first entry
                 logo_url = info.get('logo_url', '')
                 if logo_url:
-                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                    logo_cell = f'<img src="{logo_url}" alt="" width="40" height="40">'
                 else:
                     logo_cell = ''
                 
@@ -2862,12 +3478,15 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     status_suffix += f" {UNPUBLISHED_ICON}"
                 if connector_id in discovered_connectors:
                     status_suffix += f" {DISCOVERED_ICON}"
+                # Check for additional_information override
+                if get_doc_override('connector', connector_id, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 tables_count = str(len(tables)) if tables else '—'
                 
-                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method} | {tables_count} | {solution_link} |\n")
+                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
             f.write("\n")
         
@@ -2885,11 +3504,12 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
                 collection_method = info.get('collection_method', '') or '—'
+                collection_method_cell = get_collection_method_link(collection_method, "")
                 
                 # Get solution logo
                 logo_url = info.get('logo_url', '')
                 if logo_url:
-                    logo_cell = f'<img src="{logo_url}" alt="" width="32" height="32">'
+                    logo_cell = f'<img src="{logo_url}" alt="" width="40" height="40">'
                 else:
                     logo_cell = ''
                 
@@ -2899,12 +3519,15 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                     status_suffix += f" {UNPUBLISHED_ICON}"
                 if connector_id in discovered_connectors:
                     status_suffix += f" {DISCOVERED_ICON}"
+                # Check for additional_information override
+                if get_doc_override('connector', connector_id, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 connector_link = f"{DEPRECATED_ICON} [{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
                 tables_count = str(len(tables)) if tables else '—'
                 
-                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method} | {tables_count} | {solution_link} |\n")
+                f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
             f.write("\n")
         
@@ -2913,6 +3536,253 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
         write_browse_section(f, 'connectors', "")
     
     print(f"Generated connectors index: {index_path}")
+
+
+def generate_collection_methods_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path) -> Dict[str, Dict[str, any]]:
+    """Generate the collection methods index page and individual method pages.
+    
+    Args:
+        solutions: Dictionary of solution_name to list of connector rows (same as generate_connectors_index)
+        output_dir: Output directory for documentation
+    
+    Returns:
+        Dictionary mapping method names to their stats and connectors
+    """
+    # Build connectors_map the same way as generate_connectors_index
+    connectors_map: Dict[str, Dict[str, any]] = {}
+    
+    for solution_name, connectors in solutions.items():
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if not connector_id or connector_id in connectors_map:
+                continue
+            
+            connector_title = conn.get('connector_title', connector_id)
+            connectors_map[connector_id] = {
+                'title': connector_title,
+                'publisher': conn.get('connector_publisher', 'N/A'),
+                'solution_name': solution_name,
+                'solution_folder': conn.get('solution_folder', ''),
+                'tables': set(),
+                'description': conn.get('connector_description', ''),
+                'collection_method': conn.get('collection_method', ''),
+                'is_published': conn.get('is_published', 'true'),
+                'is_deprecated': conn.get('is_deprecated', 'false'),
+                'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
+                'logo_url': conn.get('solution_logo_url', ''),
+                'support_tier': conn.get('solution_support_tier', ''),
+            }
+        
+        # Collect all tables for each connector
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if connector_id in connectors_map:
+                table = conn.get('Table', '')
+                if table:
+                    connectors_map[connector_id]['tables'].add(table)
+    
+    # Build deprecated and unpublished sets from connector data
+    deprecated_connectors: Set[str] = {
+        cid for cid, info in connectors_map.items()
+        if info.get('is_deprecated', 'false') == 'true'
+    }
+    unpublished_connectors: Set[str] = {
+        cid for cid, info in connectors_map.items()
+        if info.get('is_published', 'true') == 'false'
+    }
+    
+    # Create methods directory
+    methods_dir = output_dir / "methods"
+    methods_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Build method stats
+    method_stats: Dict[str, Dict[str, any]] = defaultdict(lambda: {
+        'total': 0, 'active': 0, 'deprecated': 0, 'unpublished': 0, 'connectors': []
+    })
+    
+    for connector_id, info in connectors_map.items():
+        method = info.get('collection_method', '') or 'Unknown'
+        method_stats[method]['total'] += 1
+        method_stats[method]['connectors'].append((connector_id, info))
+        
+        if connector_id in deprecated_connectors:
+            method_stats[method]['deprecated'] += 1
+        elif connector_id in unpublished_connectors:
+            method_stats[method]['unpublished'] += 1
+        else:
+            method_stats[method]['active'] += 1
+    
+    # Generate the methods index page
+    index_path = output_dir / "methods-index.md"
+    with index_path.open("w", encoding="utf-8") as f:
+        f.write("# Collection Methods Index\n\n")
+        f.write("Data connectors use different collection methods to ingest data into Microsoft Sentinel. ")
+        f.write("This page provides an overview of all collection methods and the connectors that use each method.\n\n")
+        
+        f.write("📚 **Learn more:** [Microsoft Sentinel data connectors overview](https://learn.microsoft.com/azure/sentinel/connect-data-sources)\n\n")
+        
+        # Navigation
+        write_browse_section(f, 'methods', "")
+        f.write("---\n\n")
+        
+        # Summary table
+        f.write("## Collection Methods Summary\n\n")
+        f.write(f"| Collection Method | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
+        f.write("|:------------------|------:|-------:|-------------:|---------------:|\n")
+        
+        sorted_methods = sorted(method_stats.items(), key=lambda x: x[1]['total'], reverse=True)
+        
+        for method, stats in sorted_methods:
+            method_link = f"[{method}](methods/{get_collection_method_filename(method)}.md)"
+            f.write(f"| {method_link} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
+        
+        total_all = sum(s['total'] for s in method_stats.values())
+        total_active = sum(s['active'] for s in method_stats.values())
+        total_deprecated = sum(s['deprecated'] for s in method_stats.values())
+        total_unpub = sum(s['unpublished'] for s in method_stats.values())
+        f.write(f"| **Total** | **{total_all}** | **{total_active}** | **{total_deprecated}** | **{total_unpub}** |\n")
+        f.write("\n")
+        
+        # Add icon footnotes
+        f.write("---\n\n")
+        f.write(DEPRECATED_FOOTNOTE + "\n\n")
+        f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'methods', "")
+    
+    print(f"Generated collection methods index: {index_path}")
+    
+    # Generate individual method pages
+    for method, stats in method_stats.items():
+        generate_collection_method_page(method, stats, methods_dir, deprecated_connectors, unpublished_connectors)
+    
+    print(f"Generated {len(method_stats)} collection method pages")
+    
+    return dict(method_stats)
+
+
+def generate_collection_method_page(method: str, stats: Dict[str, any], methods_dir: Path,
+                                     deprecated_connectors: Set[str], unpublished_connectors: Set[str]) -> None:
+    """Generate an individual collection method page.
+    
+    Args:
+        method: Collection method name
+        stats: Stats dict with total, active, deprecated, unpublished, and connectors list
+        methods_dir: Directory for method pages
+        deprecated_connectors: Set of deprecated connector IDs
+        unpublished_connectors: Set of unpublished connector IDs
+    """
+    filename = get_collection_method_filename(method)
+    page_path = methods_dir / f"{filename}.md"
+    
+    # Get metadata for this method
+    metadata = COLLECTION_METHODS_METADATA.get(method, COLLECTION_METHODS_METADATA.get('Unknown'))
+    display_name = metadata.get('name', method)
+    description = metadata.get('description', '')
+    links = metadata.get('links', [])
+    
+    with page_path.open("w", encoding="utf-8") as f:
+        f.write(f"# {display_name}\n\n")
+        
+        # Navigation
+        write_browse_section(f, 'method-page', "../")
+        f.write("---\n\n")
+        
+        # Description
+        if description:
+            f.write(f"{description}\n\n")
+        
+        # Documentation links
+        if links:
+            f.write("## Documentation\n\n")
+            for link_text, link_url in links:
+                f.write(f"- [{link_text}]({link_url})\n")
+            f.write("\n")
+        
+        # Stats summary
+        f.write("## Statistics\n\n")
+        f.write(f"| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| Total Connectors | **{stats['total']}** |\n")
+        f.write(f"| Active | {stats['active']} |\n")
+        f.write(f"| Deprecated {DEPRECATED_ICON} | {stats['deprecated']} |\n")
+        f.write(f"| Unpublished {UNPUBLISHED_ICON} | {stats['unpublished']} |\n")
+        f.write("\n")
+        
+        # Connectors list
+        f.write("## Connectors Using This Method\n\n")
+        
+        # Separate into active and deprecated
+        active_connectors = []
+        deprecated_list = []
+        
+        for connector_id, info in stats['connectors']:
+            if connector_id in deprecated_connectors:
+                deprecated_list.append((connector_id, info))
+            else:
+                active_connectors.append((connector_id, info))
+        
+        # Active connectors table
+        if active_connectors:
+            f.write("### Active Connectors\n\n")
+            f.write("| Connector | Publisher | Tables | Solution |\n")
+            f.write("|:----------|:----------|:------:|:---------|\n")
+            
+            for connector_id, info in sorted(active_connectors, key=lambda x: x[1].get('title', '').lower()):
+                title = info.get('title', connector_id)
+                publisher = info.get('publisher', '')
+                solution_name = info.get('solution_name', '')
+                tables = info.get('tables', [])
+                tables_count = str(len(tables)) if tables else '—'
+                
+                # Status icons
+                status_suffix = ""
+                if connector_id in unpublished_connectors:
+                    status_suffix += f" {UNPUBLISHED_ICON}"
+                if info.get('discovered', False):
+                    status_suffix += f" {DISCOVERED_ICON}"
+                if get_doc_override('connector', connector_id, 'additional_information'):
+                    status_suffix += f" {ADDITIONAL_INFO_ICON}"
+                
+                connector_link = f"[{title}](../connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                
+                f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
+        
+        # Deprecated connectors table
+        if deprecated_list:
+            f.write(f"### Deprecated Connectors {DEPRECATED_ICON}\n\n")
+            f.write("| Connector | Publisher | Tables | Solution |\n")
+            f.write("|:----------|:----------|:------:|:---------|\n")
+            
+            for connector_id, info in sorted(deprecated_list, key=lambda x: x[1].get('title', '').lower()):
+                title = info.get('title', connector_id)
+                publisher = info.get('publisher', '')
+                solution_name = info.get('solution_name', '')
+                tables = info.get('tables', [])
+                tables_count = str(len(tables)) if tables else '—'
+                
+                connector_link = f"{DEPRECATED_ICON} [{title}](../connectors/{sanitize_filename(connector_id)}.md)"
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                
+                f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
+            
+            f.write("\n")
+        
+        # Icon footnotes
+        f.write("---\n\n")
+        if stats['deprecated'] > 0:
+            f.write(DEPRECATED_FOOTNOTE + "\n\n")
+        if stats['unpublished'] > 0:
+            f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        # Navigation footer
+        f.write("---\n\n")
+        write_browse_section(f, 'method-page', "../")
 
 
 def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]],
@@ -2935,6 +3805,18 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         """Check if table is an ASIM parser/function (starts with underscore)."""
         return table_name.startswith('_')
     
+    def is_valid_table_name(table_name: str) -> bool:
+        """Check if table name is valid (not too short, not special characters)."""
+        if not table_name or len(table_name) < 3:
+            return False
+        # Reject names that are just special characters or single digits
+        if not any(c.isalnum() for c in table_name):
+            return False
+        # First character should be a letter
+        if not table_name[0].isalpha() and table_name[0] != '_':
+            return False
+        return True
+    
     # Collect all unique tables with their usage
     tables_map: Dict[str, Dict[str, any]] = defaultdict(lambda: {
         'solutions': set(),
@@ -2947,7 +3829,7 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     for solution_name, connectors in solutions.items():
         for conn in connectors:
             table = conn.get('Table', '')
-            if not table or is_asim_parser_table(table):
+            if not table or is_asim_parser_table(table) or not is_valid_table_name(table):
                 continue
             
             connector_id = conn.get('connector_id', '')
@@ -2965,14 +3847,14 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     # Add tables from content items (analytics rules, hunting queries, etc.)
     for solution_name, tables_info in content_table_info.items():
         for table_name, info in tables_info.items():
-            if table_name and not is_asim_parser_table(table_name):  # Skip empty and ASIM parser tables
+            if table_name and not is_asim_parser_table(table_name) and is_valid_table_name(table_name):  # Skip empty, ASIM parser, and invalid tables
                 tables_map[table_name]['solutions'].add(solution_name)
                 tables_map[table_name]['content_types'].update(info.get('types', set()))
     
     # Add tables from tables_reference that aren't already in the map
     # These are reference tables that may not be actively used by solutions
     for table_name in tables_reference.keys():
-        if table_name and table_name not in tables_map and not is_asim_parser_table(table_name):
+        if table_name and table_name not in tables_map and not is_asim_parser_table(table_name) and is_valid_table_name(table_name):
             tables_map[table_name]  # Initialize with defaults from defaultdict
     
     with index_path.open("w", encoding="utf-8") as f:
@@ -3001,28 +3883,13 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                              and tables_reference[t].get('source_azure_monitor', '').lower() == 'no'
                              and tables_reference[t].get('source_defender_xdr', '').lower() == 'yes')
         
-        # Statistics section
-        f.write("## Statistics\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|:-------|------:|\n")
-        f.write(f"| **Total Tables Documented** | **{len(tables_map)}** |\n")
-        f.write(f"| Tables Ingested by Connectors | {tables_with_connectors} |\n")
-        f.write(f"| Tables Referenced by Content Only | {tables_with_content} |\n")
-        if reference_only_tables > 0:
-            f.write(f"| Standalone Reference Tables* | {reference_only_tables} |\n")
-        if xdr_only_tables > 0:
-            f.write(f"| Defender XDR Only Tables | {xdr_only_tables} |\n")
-        if reference_tables > 0 and reference_tables < len(tables_map):
-            f.write(f"| Tables in Azure Monitor Reference | {reference_tables} |\n")
-        f.write("\n")
-        
-        # Add footnote for standalone reference tables if any
-        if reference_only_tables > 0:
-            f.write("*\\*Standalone Reference Tables are tables documented in the Azure Monitor or Defender XDR reference that are not currently used by any Sentinel solution, connector, or content item.*\n\n")
+        # Summary count
+        f.write(f"**{len(tables_map)} tables** documented ({tables_with_connectors} ingested by connectors, {tables_with_content} referenced by content only). ")
+        f.write(f"See [📊 Statistics](statistics.md) for detailed breakdowns.\n\n")
         
         f.write("---\n\n")
         
-        f.write(f"## Tables Index\n\n")
+        f.write(f"Browse tables alphabetically:\n\n")
         
         # Create alphabetical index
         by_letter: Dict[str, List[str]] = defaultdict(list)
@@ -3039,6 +3906,11 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         f.write(" | ".join(f"[{letter}](#{letter.lower()})" for letter in letters))
         f.write("\n\n")
         
+        # Check if any tables have additional_information and add footnote
+        has_additional_info = any(get_doc_override('table', t, 'additional_information') for t in tables_map.keys())
+        if has_additional_info:
+            f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
+        
         # Generate sections by letter - compact format with counts linking to table pages
         for letter in letters:
             f.write(f"## {letter}\n\n")
@@ -3053,6 +3925,10 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 
                 # All tables get individual pages now - use format_table_link for proper ASIM handling
                 table_cell = format_table_link(table, "tables/", "asim/")
+                
+                # Add ADDITIONAL_INFO_ICON if table has additional_information
+                if get_doc_override('table', table, 'additional_information'):
+                    table_cell += f" {ADDITIONAL_INFO_ICON}"
                 
                 # Get the link target for this table
                 if is_asim_parser(table):
@@ -3126,7 +4002,9 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                          content_tables_by_table: Dict[str, List[Dict[str, str]]] = None,
                          connectors_reference: Dict[str, Dict[str, str]] = None,
                          parsers_by_table: Dict[str, List[Dict[str, str]]] = None,
-                         asim_parsers_by_table: Dict[str, List[Dict[str, str]]] = None) -> None:
+                         asim_parsers_by_table: Dict[str, List[Dict[str, str]]] = None,
+                         content_filter_fields_lookup: Dict[str, str] = None,
+                         content_source_lookup: Dict[str, str] = None) -> None:
     """Generate individual table documentation pages for ALL tables.
     
     Args:
@@ -3137,6 +4015,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         connectors_reference: Dictionary of connector metadata from connectors CSV (includes event_vendor/event_product)
         parsers_by_table: Dictionary mapping table name to list of non-ASIM parsers using that table
         asim_parsers_by_table: Dictionary mapping table name to list of ASIM parsers using that table
+        content_filter_fields_lookup: Dictionary of content_id to content_filter_fields string
+        content_source_lookup: Dictionary of content_key to content_source ('Solution', 'Standalone', 'GitHub Only')
     """
     if content_tables_by_table is None:
         content_tables_by_table = {}
@@ -3146,6 +4026,10 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         parsers_by_table = {}
     if asim_parsers_by_table is None:
         asim_parsers_by_table = {}
+    if content_filter_fields_lookup is None:
+        content_filter_fields_lookup = {}
+    if content_source_lookup is None:
+        content_source_lookup = {}
     
     table_dir = output_dir / "tables"
     table_dir.mkdir(parents=True, exist_ok=True)
@@ -3228,6 +4112,11 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 ingestion_display = "✓ Yes" if ingestion_api.lower() == 'yes' else "✗ No" if ingestion_api.lower() == 'no' else ingestion_api
                 attributes.append(('Ingestion API Supported', ingestion_display))
             
+            lake_only = table_ref.get('lake_only_supported', '')
+            if lake_only:
+                lake_only_display = "✓ Yes" if lake_only.lower() == 'yes' else "✗ No" if lake_only.lower() == 'no' else lake_only
+                attributes.append(('Lake-Only Ingestion', lake_only_display))
+            
             search_job = table_ref.get('search_job_support', '')
             if search_job:
                 search_display = "✓ Yes" if search_job.lower() == 'yes' else "✗ No" if search_job.lower() == 'no' else search_job
@@ -3273,12 +4162,55 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     f.write(f"- [{name}](../solutions/{sanitize_filename(name)}.md)\n")
                 f.write("\n")
             
-            # Connectors ingesting this table - bullet list
+            # Connectors ingesting this table - table format with selection criteria
             if info['connectors']:
                 f.write(f"## Connectors ({len(info['connectors'])})\n\n")
                 f.write("This table is ingested by the following connectors:\n\n")
-                for cid, title in sorted(info['connectors']):
-                    f.write(f"- [{title}](../connectors/{sanitize_filename(cid)}.md)\n")
+                
+                # Check if all connectors have the same selection criteria
+                connector_criteria_list = []
+                for cid, title in info['connectors']:
+                    if connectors_reference and cid in connectors_reference:
+                        conn_filter_fields = connectors_reference[cid].get('filter_fields', '')
+                        if conn_filter_fields:
+                            criteria_by_table = parse_filter_fields(conn_filter_fields)
+                            if table in criteria_by_table and criteria_by_table[table]:
+                                raw_criteria = ' and '.join(criteria_by_table[table])
+                                connector_criteria_list.append(raw_criteria)
+                            else:
+                                connector_criteria_list.append('')
+                        else:
+                            connector_criteria_list.append('')
+                    else:
+                        connector_criteria_list.append('')
+                
+                # Check if all criteria are the same (and non-empty)
+                unique_conn_criteria = set(c for c in connector_criteria_list if c)
+                all_same_conn_criteria = len(unique_conn_criteria) == 1 and len([c for c in connector_criteria_list if c]) == len(info['connectors'])
+                
+                if all_same_conn_criteria:
+                    common_criteria = format_selection_criteria(list(unique_conn_criteria)[0])
+                    f.write(f"**Selection Criteria:** {common_criteria}\n\n")
+                    f.write("| Connector |\n")
+                    f.write("|:----------|\n")
+                    for cid, title in sorted(info['connectors']):
+                        f.write(f"| [{title}](../connectors/{sanitize_filename(cid)}.md) |\n")
+                else:
+                    f.write("| Connector | Selection Criteria |\n")
+                    f.write("|:----------|:-------------------|\n")
+                    for cid, title in sorted(info['connectors']):
+                        # Get selection criteria for this table from connector's filter_fields
+                        selection_criteria = ""
+                        if connectors_reference and cid in connectors_reference:
+                            conn_filter_fields = connectors_reference[cid].get('filter_fields', '')
+                            if conn_filter_fields:
+                                criteria_by_table = parse_filter_fields(conn_filter_fields)
+                                if table in criteria_by_table:
+                                    criteria_list = criteria_by_table[table]
+                                    if criteria_list:
+                                        raw_criteria = ' and '.join(criteria_list)
+                                        selection_criteria = format_selection_criteria(raw_criteria)
+                        f.write(f"| [{title}](../connectors/{sanitize_filename(cid)}.md) | {selection_criteria} |\n")
                 f.write("\n")
             
             # Vendor/Product section for CommonSecurityLog and ASim* tables
@@ -3305,28 +4237,28 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                                     if vendor or product:
                                         vendor_products.append((vendor, product, cid, title))
                 
-                if vendor_products:
-                    # Group by vendor/product, collect connectors
-                    vp_to_connectors: Dict[tuple, List[tuple]] = defaultdict(list)
-                    for vendor, product, cid, title in vendor_products:
-                        vp_to_connectors[(vendor, product)].append((cid, title))
-                    
-                    f.write(f"## Vendors and Products ({len(vp_to_connectors)})\n\n")
-                    if table == 'CommonSecurityLog':
-                        f.write("The following DeviceVendor/DeviceProduct values are used by connectors ingesting this table:\n\n")
-                    else:
-                        f.write("The following EventVendor/EventProduct values are used by connectors ingesting this table:\n\n")
-                    
-                    f.write("| Vendor | Product | Connectors |\n")
-                    f.write("|:-------|:--------|:-----------|\n")
-                    for (vendor, product), connectors_list in sorted(vp_to_connectors.items()):
-                        vendor_display = vendor if vendor else '*'
-                        product_display = product if product else '*'
-                        connector_links = ', '.join([f"[{title}](../connectors/{sanitize_filename(cid)}.md)" for cid, title in sorted(set(connectors_list))])
-                        f.write(f"| {vendor_display} | {product_display} | {connector_links} |\n")
-                    f.write("\n")
+                # Note: Vendors and Products section removed - this information is now shown
+                # in the Selection Criteria Summary section with the filter field values
+                pass
             
             f.write("---\n\n")
+            
+            # Collect all selection criteria for this table (for summary section)
+            # Format: {criteria_string: {'connectors': count, 'content': count, 'asim_parsers': count, 'other_parsers': count}}
+            criteria_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'connectors': 0, 'content': 0, 'asim_parsers': 0, 'other_parsers': 0})
+            
+            # Collect connector selection criteria for stats
+            if info['connectors'] and connectors_reference:
+                for cid, title in info['connectors']:
+                    if cid in connectors_reference:
+                        conn_filter_fields = connectors_reference[cid].get('filter_fields', '')
+                        if conn_filter_fields:
+                            criteria_by_table = parse_filter_fields(conn_filter_fields)
+                            if table in criteria_by_table and criteria_by_table[table]:
+                                raw_criteria = ' and '.join(criteria_by_table[table])
+                                # Normalize operators for consistent counting
+                                normalized_criteria = normalize_selection_criteria(raw_criteria)
+                                criteria_stats[normalized_criteria]['connectors'] += 1
             
             # Content Items section (analytics rules, hunting queries, etc. that use this table)
             table_content_items = content_tables_by_table.get(table, [])
@@ -3356,28 +4288,191 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                     type_name = content_type_names.get(content_type, content_type.replace('_', ' ').title())
                     f.write(f"### {type_name} ({len(items)})\n\n")
                     
-                    # Group by solution for better organization
+                    # Group by solution for better organization, and by content_source for no-solution items
                     items_by_solution: Dict[str, List[Dict[str, str]]] = defaultdict(list)
-                    for item in items:
-                        solution = item.get('solution_name', 'Unknown')
-                        items_by_solution[solution].append(item)
+                    standalone_items: List[Dict[str, str]] = []
+                    github_only_items: List[Dict[str, str]] = []
                     
+                    for item in items:
+                        solution = item.get('solution_name', '')
+                        content_id = item.get('content_id', '')
+                        content_name = item.get('content_name', '')
+                        item_solution = item.get('solution_name', '')
+                        content_key = get_content_key(content_id, content_name, item_solution)
+                        content_source = content_source_lookup.get(content_key, 'Solution')
+                        
+                        if solution and content_source == 'Solution':
+                            items_by_solution[solution].append(item)
+                        elif solution and content_source == 'Standalone':
+                            standalone_items.append(item)
+                        elif content_source == 'GitHub Only' or not solution:
+                            github_only_items.append(item)
+                        else:
+                            items_by_solution[solution].append(item)
+                        
+                        # Collect criteria for stats
+                        criteria = get_item_selection_criteria(item, table, content_filter_fields_lookup)
+                        if criteria:
+                            # Normalize operators for consistent counting
+                            normalized_criteria = normalize_selection_criteria(criteria)
+                            criteria_stats[normalized_criteria]['content'] += 1
+                    
+                    # Write Solution-based items using smart helper
                     for solution_name, sol_items in sorted(items_by_solution.items()):
-                        # Create solution link
                         solution_filename = sanitize_filename(solution_name) + ".md"
-                        f.write(f"**In solution [{solution_name}](../solutions/{solution_filename}):**\n")
-                        for item in sorted(sol_items, key=lambda x: x.get('content_name', '')):
-                            # Link to content item page
-                            content_link = get_content_item_link(item, "../content/", show_not_in_json=True)
-                            f.write(f"- {content_link}\n")
-                        f.write("\n")
+                        header = f"**In solution [{solution_name}](../solutions/{solution_filename}):**"
+                        write_content_items_section(f, sol_items, header, table, content_filter_fields_lookup, "../content/")
+                    
+                    # Write Standalone items
+                    if standalone_items:
+                        write_content_items_section(f, standalone_items, "**Standalone Content:**", table, content_filter_fields_lookup, "../content/")
+                    
+                    # Write GitHub Only items
+                    if github_only_items:
+                        # Set solution_name for proper link generation
+                        for item in github_only_items:
+                            if not item.get('solution_name'):
+                                item['solution_name'] = 'GitHub Only'
+                        write_content_items_section(f, github_only_items, "**GitHub Only:**", table, content_filter_fields_lookup, "../content/")
                 
                 # Add footnote if any content items have status flags
                 has_unlisted = any(item.get('not_in_solution_json', 'false') == 'true' for item in table_content_items)
                 if has_unlisted:
                     f.write("> ⚠️ Items marked with ⚠️ are not listed in their Solution JSON file. They were discovered by scanning solution folders.\n\n")
             
-            # Additional reference information
+            # Parsers section - show both ASIM and non-ASIM parsers that use this table
+            # (Moved before Resource Types per user request)
+            table_asim_parsers = asim_parsers_by_table.get(table, [])
+            table_non_asim_parsers = parsers_by_table.get(table, [])
+            total_parsers = len(table_asim_parsers) + len(table_non_asim_parsers)
+            
+            if total_parsers > 0:
+                f.write(f"## Parsers Using This Table ({total_parsers})\n\n")
+                
+                # ASIM Parsers section
+                if table_asim_parsers:
+                    # Check if all ASIM parsers have the same selection criteria
+                    asim_criteria_list = []
+                    for parser in table_asim_parsers:
+                        parser_filter_fields = parser.get('filter_fields', '')
+                        if parser_filter_fields:
+                            criteria_by_table = parse_filter_fields(parser_filter_fields)
+                            if table in criteria_by_table and criteria_by_table[table]:
+                                raw_criteria = ' and '.join(criteria_by_table[table])
+                                asim_criteria_list.append(raw_criteria)
+                                # Normalize operators for consistent counting
+                                normalized_criteria = normalize_selection_criteria(raw_criteria)
+                                criteria_stats[normalized_criteria]['asim_parsers'] += 1
+                            else:
+                                asim_criteria_list.append('')
+                        else:
+                            asim_criteria_list.append('')
+                    
+                    # Check if all criteria are the same (and non-empty)
+                    unique_asim_criteria = set(c for c in asim_criteria_list if c)
+                    all_same_asim_criteria = len(unique_asim_criteria) == 1 and len([c for c in asim_criteria_list if c]) == len(table_asim_parsers)
+                    
+                    if all_same_asim_criteria:
+                        common_criteria = format_selection_criteria(list(unique_asim_criteria)[0])
+                        f.write(f"### ASIM Parsers ({len(table_asim_parsers)}) — Selection Criteria: {common_criteria}\n\n")
+                        f.write("| Parser | Schema | Product |\n")
+                        f.write("|:-------|:-------|:--------|\n")
+                    else:
+                        f.write(f"### ASIM Parsers ({len(table_asim_parsers)})\n\n")
+                        f.write("| Parser | Schema | Product | Selection Criteria |\n")
+                        f.write("|:-------|:-------|:--------|:-------------------|\n")
+                    
+                    for parser in sorted(table_asim_parsers, key=lambda p: (p.get('schema', ''), p.get('parser_name', ''))):
+                        parser_name = parser.get('parser_name', '')
+                        schema = parser.get('schema', '')
+                        product = parser.get('product_name', '')
+                        parser_filename = sanitize_anchor(parser_name)
+                        
+                        if all_same_asim_criteria:
+                            f.write(f"| [{parser_name}](../asim/{parser_filename}.md) | {schema} | {product} |\n")
+                        else:
+                            # Get selection criteria for this table from parser's filter_fields
+                            selection_criteria = ""
+                            parser_filter_fields = parser.get('filter_fields', '')
+                            if parser_filter_fields:
+                                criteria_by_table = parse_filter_fields(parser_filter_fields)
+                                if table in criteria_by_table:
+                                    criteria_list = criteria_by_table[table]
+                                    if criteria_list:
+                                        raw_criteria = ' and '.join(criteria_list)
+                                        selection_criteria = format_selection_criteria(raw_criteria)
+                            f.write(f"| [{parser_name}](../asim/{parser_filename}.md) | {schema} | {product} | {selection_criteria} |\n")
+                    f.write("\n")
+                
+                # Non-ASIM Parsers section
+                if table_non_asim_parsers:
+                    # Check if all non-ASIM parsers have the same selection criteria
+                    other_criteria_list = []
+                    for parser in table_non_asim_parsers:
+                        parser_filter_fields = parser.get('filter_fields', '')
+                        if parser_filter_fields:
+                            criteria_by_table = parse_filter_fields(parser_filter_fields)
+                            if table in criteria_by_table and criteria_by_table[table]:
+                                raw_criteria = ' and '.join(criteria_by_table[table])
+                                other_criteria_list.append(raw_criteria)
+                                # Normalize operators for consistent counting
+                                normalized_criteria = normalize_selection_criteria(raw_criteria)
+                                criteria_stats[normalized_criteria]['other_parsers'] += 1
+                            else:
+                                other_criteria_list.append('')
+                        else:
+                            other_criteria_list.append('')
+                    
+                    # Check if all criteria are the same (and non-empty)
+                    unique_other_criteria = set(c for c in other_criteria_list if c)
+                    all_same_other_criteria = len(unique_other_criteria) == 1 and len([c for c in other_criteria_list if c]) == len(table_non_asim_parsers)
+                    
+                    if all_same_other_criteria:
+                        common_criteria = format_selection_criteria(list(unique_other_criteria)[0])
+                        f.write(f"### Other Parsers ({len(table_non_asim_parsers)}) — Selection Criteria: {common_criteria}\n\n")
+                        f.write("| Parser | Solution |\n")
+                        f.write("|:-------|:---------|\n")
+                    else:
+                        f.write(f"### Other Parsers ({len(table_non_asim_parsers)})\n\n")
+                        f.write("| Parser | Solution | Selection Criteria |\n")
+                        f.write("|:-------|:---------|:-------------------|\n")
+                    
+                    for parser in sorted(table_non_asim_parsers, key=lambda p: p.get('parser_name', '')):
+                        parser_name = parser.get('parser_name', '')
+                        solution_name = parser.get('solution_name', '')
+                        discovered = parser.get('discovered', 'false') == 'true'
+                        parser_filename = sanitize_anchor(parser_name)
+                        
+                        # Format solution link with discovered flag (⚠️) if applicable
+                        if solution_name:
+                            solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
+                            if discovered:
+                                solution_link += " ⚠️"
+                        else:
+                            solution_link = "*(Legacy)*"
+                        
+                        if all_same_other_criteria:
+                            f.write(f"| [{parser_name}](../parsers/{parser_filename}.md) | {solution_link} |\n")
+                        else:
+                            # Get selection criteria for this table from parser's filter_fields
+                            selection_criteria = ""
+                            parser_filter_fields = parser.get('filter_fields', '')
+                            if parser_filter_fields:
+                                criteria_by_table = parse_filter_fields(parser_filter_fields)
+                                if table in criteria_by_table:
+                                    criteria_list = criteria_by_table[table]
+                                    if criteria_list:
+                                        raw_criteria = ' and '.join(criteria_list)
+                                        selection_criteria = format_selection_criteria(raw_criteria)
+                            f.write(f"| [{parser_name}](../parsers/{parser_filename}.md) | {solution_link} | {selection_criteria} |\n")
+                    f.write("\n")
+                    
+                    # Add footnote for discovered parsers
+                    has_discovered = any(p.get('discovered', 'false') == 'true' for p in table_non_asim_parsers)
+                    if has_discovered:
+                        f.write("> ⚠️ Parsers marked with ⚠️ are not listed in their Solution JSON file.\n\n")
+            
+            # Additional reference information (moved after Parsers section)
             resource_types = table_ref.get('resource_types', '')
             if resource_types and resource_types != '-':
                 f.write("## Resource Types\n\n")
@@ -3388,57 +4483,149 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                         f.write(f"- `{rt}`\n")
                 f.write("\n")
             
-            # Parsers section - show both ASIM and non-ASIM parsers that use this table
-            table_asim_parsers = asim_parsers_by_table.get(table, [])
-            table_non_asim_parsers = parsers_by_table.get(table, [])
-            total_parsers = len(table_asim_parsers) + len(table_non_asim_parsers)
-            
-            if total_parsers > 0:
-                f.write(f"## Parsers Using This Table ({total_parsers})\n\n")
+            # Selection Criteria Summary section
+            if criteria_stats:
+                # Calculate totals for the header
+                total_criteria = len(criteria_stats)
+                total_connectors = sum(c['connectors'] for c in criteria_stats.values())
+                total_content = sum(c['content'] for c in criteria_stats.values())
+                total_asim = sum(c['asim_parsers'] for c in criteria_stats.values())
+                total_parsers = sum(c['other_parsers'] for c in criteria_stats.values())
+                total_all = total_connectors + total_content + total_asim + total_parsers
                 
-                # ASIM Parsers section
-                if table_asim_parsers:
-                    f.write(f"### ASIM Parsers ({len(table_asim_parsers)})\n\n")
-                    f.write("| Parser | Schema | Product |\n")
-                    f.write("|:-------|:-------|:--------|\n")
-                    for parser in sorted(table_asim_parsers, key=lambda p: (p.get('schema', ''), p.get('parser_name', ''))):
-                        parser_name = parser.get('parser_name', '')
-                        schema = parser.get('schema', '')
-                        product = parser.get('product', '')
-                        parser_filename = sanitize_anchor(parser_name)
-                        f.write(f"| [{parser_name}](../asim/{parser_filename}.md) | {schema} | {product} |\n")
-                    f.write("\n")
+                f.write(f"## Selection Criteria Summary ({total_criteria} criteria, {total_all} total references)\n\n")
+                f.write(f"References by type: {total_connectors} connectors, {total_content} content items, {total_asim} ASIM parsers, {total_parsers} other parsers.\n\n")
+                f.write("| Selection Criteria | Connectors | Content Items | ASIM Parsers | Other Parsers | Total |\n")
+                f.write("|:-------------------|:----------:|:-------------:|:------------:|:-------------:|:-----:|\n")
                 
-                # Non-ASIM Parsers section
-                if table_non_asim_parsers:
-                    f.write(f"### Other Parsers ({len(table_non_asim_parsers)})\n\n")
-                    f.write("| Parser | Solution | Location |\n")
-                    f.write("|:-------|:---------|:---------|\n")
-                    for parser in sorted(table_non_asim_parsers, key=lambda p: p.get('parser_name', '')):
-                        parser_name = parser.get('parser_name', '')
-                        solution_name = parser.get('solution_name', '')
-                        location = parser.get('location', '')
-                        discovered = parser.get('discovered', 'false') == 'true'
-                        parser_filename = sanitize_anchor(parser_name)
-                        
-                        # Format solution link
-                        if solution_name:
-                            solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)"
-                        else:
-                            solution_link = "*(Legacy)*"
-                        
-                        # Format location with discovered flag
-                        location_display = location.capitalize()
-                        if discovered:
-                            location_display += " ⚠️"
-                        
-                        f.write(f"| [{parser_name}](../parsers/{parser_filename}.md) | {solution_link} | {location_display} |\n")
-                    f.write("\n")
+                # Sort by total count descending
+                for criteria, counts in sorted(criteria_stats.items(), 
+                                               key=lambda x: sum(x[1].values()), reverse=True):
+                    formatted = format_selection_criteria(criteria)
+                    row_total = sum(counts.values())
+                    conn_count = counts['connectors'] if counts['connectors'] > 0 else '-'
+                    content_count = counts['content'] if counts['content'] > 0 else '-'
+                    asim_count = counts['asim_parsers'] if counts['asim_parsers'] > 0 else '-'
+                    other_count = counts['other_parsers'] if counts['other_parsers'] > 0 else '-'
+                    f.write(f"| {formatted} | {conn_count} | {content_count} | {asim_count} | {other_count} | **{row_total}** |\n")
+                
+                # Totals row
+                f.write(f"| **Total** | **{total_connectors}** | **{total_content}** | **{total_asim}** | **{total_parsers}** | **{total_all}** |\n")
+                f.write("\n")
+                
+                # Build field-specific stats by parsing each criteria into field-value pairs
+                # Structure: {field_name: {(op, value): {'connectors': n, 'content': n, 'asim_parsers': n, 'other_parsers': n}}}
+                field_stats: Dict[str, Dict[Tuple[str, str], Dict[str, int]]] = defaultdict(
+                    lambda: defaultdict(lambda: {'connectors': 0, 'content': 0, 'asim_parsers': 0, 'other_parsers': 0})
+                )
+                
+                for criteria, counts in criteria_stats.items():
+                    field_values = parse_criteria_into_field_values(criteria)
+                    for field_name, op_value_list in field_values.items():
+                        for op, value in op_value_list:
+                            field_stats[field_name][(op, value)]['connectors'] += counts['connectors']
+                            field_stats[field_name][(op, value)]['content'] += counts['content']
+                            field_stats[field_name][(op, value)]['asim_parsers'] += counts['asim_parsers']
+                            field_stats[field_name][(op, value)]['other_parsers'] += counts['other_parsers']
+                
+                # Define paired fields that should be displayed together
+                paired_fields = [
+                    ('DeviceProduct', 'DeviceVendor'),
+                    ('EventProduct', 'EventVendor'),
+                    ('Facility', 'ProcessName'),
+                ]
+                
+                # Track which fields have been written as pairs
+                paired_field_names = set()
+                for f1, f2 in paired_fields:
+                    paired_field_names.add(f1)
+                    paired_field_names.add(f2)
+                
+                # Write paired field tables
+                for field1, field2 in paired_fields:
+                    stats1 = field_stats.get(field1, {})
+                    stats2 = field_stats.get(field2, {})
                     
-                    # Add footnote for discovered parsers
-                    has_discovered = any(p.get('discovered', 'false') == 'true' for p in table_non_asim_parsers)
-                    if has_discovered:
-                        f.write("> ⚠️ Parsers marked with ⚠️ are not listed in their Solution JSON file.\n\n")
+                    if not stats1 and not stats2:
+                        continue
+                    
+                    f.write(f"### {field1} / {field2}\n\n")
+                    f.write(f"| {field1} | {field2} | Connectors | Content Items | ASIM Parsers | Other Parsers | Total |\n")
+                    f.write("|:---------|:---------|:----------:|:-------------:|:------------:|:-------------:|:-----:|\n")
+                    
+                    # Collect all unique op-value combinations for both fields
+                    # We need to show each combination that appears together in criteria
+                    # Build a combined view from the original criteria
+                    combined_stats: Dict[Tuple[Tuple[str, str], Tuple[str, str]], Dict[str, int]] = defaultdict(
+                        lambda: {'connectors': 0, 'content': 0, 'asim_parsers': 0, 'other_parsers': 0}
+                    )
+                    
+                    for criteria, counts in criteria_stats.items():
+                        field_values = parse_criteria_into_field_values(criteria)
+                        f1_values = field_values.get(field1, [('', '')])
+                        f2_values = field_values.get(field2, [('', '')])
+                        
+                        # If either field is present, add to combined stats
+                        if field1 in field_values or field2 in field_values:
+                            # If one field is missing, use empty placeholder
+                            if not f1_values:
+                                f1_values = [('', '')]
+                            if not f2_values:
+                                f2_values = [('', '')]
+                            
+                            # Create combinations
+                            for f1_op, f1_val in f1_values:
+                                for f2_op, f2_val in f2_values:
+                                    key = ((f1_op, f1_val), (f2_op, f2_val))
+                                    combined_stats[key]['connectors'] += counts['connectors']
+                                    combined_stats[key]['content'] += counts['content']
+                                    combined_stats[key]['asim_parsers'] += counts['asim_parsers']
+                                    combined_stats[key]['other_parsers'] += counts['other_parsers']
+                    
+                    # Sort by total count descending
+                    for (f1_key, f2_key), counts in sorted(combined_stats.items(),
+                                                           key=lambda x: sum(x[1].values()), reverse=True):
+                        f1_op, f1_val = f1_key
+                        f2_op, f2_val = f2_key
+                        
+                        # Format display values
+                        f1_display = format_field_value_display(f1_op, f1_val) if f1_val else ''
+                        f2_display = format_field_value_display(f2_op, f2_val) if f2_val else ''
+                        
+                        row_total = sum(counts.values())
+                        conn_count = counts['connectors'] if counts['connectors'] > 0 else '-'
+                        content_count = counts['content'] if counts['content'] > 0 else '-'
+                        asim_count = counts['asim_parsers'] if counts['asim_parsers'] > 0 else '-'
+                        other_count = counts['other_parsers'] if counts['other_parsers'] > 0 else '-'
+                        f.write(f"| {f1_display} | {f2_display} | {conn_count} | {content_count} | {asim_count} | {other_count} | **{row_total}** |\n")
+                    
+                    f.write("\n")
+                
+                # Write individual field tables for non-paired fields
+                for field_name in sorted(field_stats.keys()):
+                    if field_name in paired_field_names:
+                        continue
+                    
+                    stats = field_stats[field_name]
+                    if not stats:
+                        continue
+                    
+                    f.write(f"### {field_name}\n\n")
+                    f.write("| Value | Connectors | Content Items | ASIM Parsers | Other Parsers | Total |\n")
+                    f.write("|:------|:----------:|:-------------:|:------------:|:-------------:|:-----:|\n")
+                    
+                    # Sort by total count descending
+                    for (op, value), counts in sorted(stats.items(),
+                                                      key=lambda x: sum(x[1].values()), reverse=True):
+                        display = format_field_value_display(op, value)
+                        row_total = sum(counts.values())
+                        conn_count = counts['connectors'] if counts['connectors'] > 0 else '-'
+                        content_count = counts['content'] if counts['content'] > 0 else '-'
+                        asim_count = counts['asim_parsers'] if counts['asim_parsers'] > 0 else '-'
+                        other_count = counts['other_parsers'] if counts['other_parsers'] > 0 else '-'
+                        f.write(f"| {display} | {conn_count} | {content_count} | {asim_count} | {other_count} | **{row_total}** |\n")
+                    
+                    f.write("\n")
             
             # Retention information
             retention_default = table_ref.get('retention_default', '')
@@ -3563,15 +4750,8 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             # Collection Method
             collection_method = first_entry.get('collection_method', '')
             if collection_method:
-                f.write(f"| **Collection Method** | {collection_method} |\n")
-            
-            # Event Vendor/Product (for CEF/Syslog and ASIM connectors)
-            event_vendor = first_entry.get('event_vendor', '')
-            event_product = first_entry.get('event_product', '')
-            if event_vendor:
-                f.write(f"| **Event Vendor** | {event_vendor.replace(';', ', ')} |\n")
-            if event_product:
-                f.write(f"| **Event Product** | {event_product.replace(';', ', ')} |\n")
+                collection_method_link = get_collection_method_link(collection_method, "../")
+                f.write(f"| **Collection Method** | {collection_method_link} |\n")
             
             # Connector files
             connector_files = first_entry.get('connector_files', '')
@@ -3583,64 +4763,28 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             
             f.write("\n")
             
-            # Additional Information section (from overrides) - placed early for visibility
-            additional_info = get_doc_override('connector', connector_id, 'additional_information')
-            if additional_info:
-                f.write("## Additional Information\n\n")
-                f.write(f"{format_additional_info(additional_info)}\n\n")
-            
             # Description
             description = first_entry.get('connector_description', '')
             if description:
                 description = description.replace('<br>', '\n\n')
                 f.write(f"{description}\n\n")
             
-            # Tables Ingested Section - Enhanced with transformation, ingestion API info, and vendor/product
+            # Additional Information section (from overrides) - placed after description
+            additional_info = get_doc_override('connector', connector_id, 'additional_information')
+            if additional_info:
+                f.write("## Additional Information\n\n")
+                f.write(f"{format_additional_info(additional_info)}\n\n")
+            
+            # Tables Ingested Section - using standardized tables table with Selection Criteria
             tables = sorted([t for t in data['tables'] if t])
             if tables:
-                # Parse the per-table vendor/product JSON
-                vp_by_table_str = first_entry.get('event_vendor_product_by_table', '')
-                vp_by_table = {}
-                if vp_by_table_str:
-                    try:
-                        vp_by_table = json.loads(vp_by_table_str)
-                    except json.JSONDecodeError:
-                        pass
-                
-                # Check if we have any vendor/product data for these tables
-                has_vp_data = any(table in vp_by_table for table in tables)
+                filter_fields = first_entry.get('filter_fields', '')
                 
                 f.write("## Tables Ingested\n\n")
                 f.write("This connector ingests data into the following tables:\n\n")
                 
-                if has_vp_data:
-                    f.write("| Table | Event Vendor | Event Product | Transformations | Ingestion API |\n")
-                    f.write("|-------|:-------------|:--------------|:---------------:|:-------------:|\n")
-                else:
-                    f.write("| Table | Supports Transformations | Ingestion API Supported |\n")
-                    f.write("|-------|:------------------------:|:-----------------------:|\n")
-                
-                for table in tables:
-                    table_ref = tables_reference.get(table, {})
-                    supports_transforms = table_ref.get('supports_transformations', '')
-                    ingestion_api = table_ref.get('ingestion_api_supported', '')
-                    
-                    # Format as checkmarks/dashes
-                    transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
-                    ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
-                    
-                    table_link = format_table_link(table, "../tables/")
-                    
-                    if has_vp_data:
-                        # Get vendor/product for this table
-                        table_vp = vp_by_table.get(table, {})
-                        vendors = ', '.join(table_vp.get('vendor', [])) if table_vp.get('vendor') else '—'
-                        products = ', '.join(table_vp.get('product', [])) if table_vp.get('product') else '—'
-                        f.write(f"| {table_link} | {vendors} | {products} | {transforms_cell} | {ingestion_cell} |\n")
-                    else:
-                        f.write(f"| {table_link} | {transforms_cell} | {ingestion_cell} |\n")
-                
-                f.write("\n")
+                write_tables_table(f, tables, tables_reference, "../tables/", filter_fields,
+                                  include_transforms=True, include_ingestion_api=True)
                 
                 # Add note about ingestion API support
                 has_ingestion_api_tables = any(
@@ -3832,8 +4976,12 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             f.write(f"| **Last Updated** | {last_publish} |\n")
         
         solution_folder = metadata.get('solution_folder', '')
+        solution_github_url = metadata.get('solution_github_url', '')
         if solution_folder:
-            f.write(f"| **Solution Folder** | [{solution_folder}]({solution_folder}) |\n")
+            if solution_github_url:
+                f.write(f"| **Solution Folder** | [{solution_folder}]({solution_github_url}) |\n")
+            else:
+                f.write(f"| **Solution Folder** | {solution_folder} |\n")
         
         # Show dependencies if any
         dependencies = metadata.get('solution_dependencies', '')
@@ -4273,7 +5421,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
 # ASIM Parser Documentation Functions
 # =============================================================================
 
-def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_union: Dict[str, List[str]] = None, parser_product_map: Dict[str, str] = None) -> None:
+def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_union: Dict[str, List[str]] = None, 
+                              parser_product_map: Dict[str, str] = None, tables_reference: Dict[str, Dict[str, str]] = None,
+                              connectors_reference: Dict[str, Dict[str, str]] = None) -> None:
     """Generate a single ASIM parser documentation page.
     
     Args:
@@ -4281,11 +5431,17 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         output_dir: Output directory for documentation
         sub_to_union: Optional mapping from sub-parser names to their parent union parsers
         parser_product_map: Optional mapping from parser equivalent_builtin to product_name
+        tables_reference: Optional dictionary of table metadata for transformations/ingestion API info
+        connectors_reference: Optional dictionary of connector metadata (includes solution_name)
     """
     if sub_to_union is None:
         sub_to_union = {}
     if parser_product_map is None:
         parser_product_map = {}
+    if tables_reference is None:
+        tables_reference = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     parser_name = parser.get('parser_name', 'Unknown')
     safe_name = sanitize_filename(parser_name)
     parsers_dir = output_dir / "asim"
@@ -4335,7 +5491,12 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
         
         version = parser.get('parser_version', '')
         if version:
-            f.write(f"| **Parser Version** | {version} |\n")
+            # Add version with changelog link
+            changelog_url = get_asim_changelog_url(parser)
+            if changelog_url:
+                f.write(f"| **Parser Version** | {version} ([version history]({changelog_url})) |\n")
+            else:
+                f.write(f"| **Parser Version** | {version} |\n")
         
         last_updated = parser.get('parser_last_updated', '')
         if last_updated:
@@ -4382,20 +5543,17 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
                     f.write(f"| {product} | [{sub}]({sub_filename}.md) |\n")
             f.write("\n")
         
-        # Tables
+        # Tables - using standardized tables table with Selection Criteria
         tables = parser.get('tables', '')
         if tables:
+            tables_list = [t.strip() for t in tables.split(';') if t.strip()]
+            filter_fields = parser.get('filter_fields', '')
+            
             f.write("## Source Tables\n\n")
             f.write("This parser reads from the following tables:\n\n")
-            f.write("| Table |\n")
-            f.write("|:------|\n")
-            for table in sorted(tables.split(';')):
-                table = table.strip()
-                if table:
-                    # Use format_table_link but strip backticks for table column formatting
-                    table_link = format_table_link(table, "../tables/").replace('`', '')
-                    f.write(f"| {table_link} |\n")
-            f.write("\n")
+            
+            write_tables_table(f, tables_list, tables_reference, "../tables/", filter_fields,
+                              include_transforms=True, include_ingestion_api=True)
         
         # Parser Parameters
         params = parser.get('parser_params', '')
@@ -4415,6 +5573,56 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
                     else:
                         f.write(f"| `{name}` | {rest} | |\n")
             f.write("\n")
+        
+        # Associated Connectors (for source parsers with connector associations)
+        associated_connectors = parser.get('associated_connectors', '')
+        associated_solutions = parser.get('associated_solutions', '')
+        if associated_connectors:
+            f.write("## Associated Connectors\n\n")
+            f.write("The following connectors provide data for this parser:\n\n")
+            f.write("| Connector | Solution |\n")
+            f.write("|:----------|:---------|\n")
+            
+            # Parse connector and solution lists
+            connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+            solution_list = [s.strip() for s in associated_solutions.split(',') if s.strip()] if associated_solutions else []
+            
+            # Create a lookup from connector to solutions for better formatting
+            for connector in connector_list:
+                # Each connector links to its connector page
+                connector_link = f"[{connector}](../connectors/{sanitize_filename(connector)}.md)"
+                # Look up solution_name from connectors_reference
+                solution_name = ''
+                if connector in connectors_reference:
+                    solution_name = connectors_reference[connector].get('solution_name', '')
+                if solution_name:
+                    solution_link = format_solution_link_with_legacy(solution_name, connector, connectors_reference, "../solutions/")
+                    f.write(f"| {connector_link} | {solution_link} |\n")
+                else:
+                    f.write(f"| {connector_link} | |\n")
+            
+            f.write("\n")
+            
+            # If there are solutions, list them separately with legacy markers
+            if solution_list:
+                f.write(f"**Solutions:** ")
+                solution_links = []
+                for s in solution_list:
+                    # Find connectors for this solution - check if any are deprecated
+                    solution_connectors = [c for c in connector_list
+                                           if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                    # Use the first deprecated connector, or first connector if none deprecated
+                    connector_for_legacy = ''
+                    for c in solution_connectors:
+                        if is_connector_deprecated(c, connectors_reference):
+                            connector_for_legacy = c
+                            break
+                    if not connector_for_legacy and solution_connectors:
+                        connector_for_legacy = solution_connectors[0]
+                    link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                    solution_links.append(link)
+                f.write(", ".join(solution_links))
+                f.write("\n\n")
         
         # References
         refs = parser.get('references', '')
@@ -4507,23 +5715,9 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
         write_browse_section(f, 'parser-index', "../")
         f.write("---\n\n")
         
-        # Statistics - Parser Counts
-        f.write("## Statistics\n\n")
-        f.write("### Parser Counts\n\n")
-        f.write("| Category | Count |\n")
-        f.write("|:---------|------:|\n")
-        f.write(f"| Legacy Parsers | {len(legacy_parsers)} |\n")
-        f.write(f"| Solution Parsers (in Solution JSON) | {len(listed_solution_parsers)} |\n")
-        f.write(f"| Discovered Parsers⚠️ | {len(discovered_parsers)} |\n")
-        f.write(f"| **Total Parsers** | **{len(parsers)}** |\n")
-        f.write("\n")
-        
-        # Statistics - Solutions with Parsers
-        f.write("### Solutions with Parsers\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|:-------|------:|\n")
-        f.write(f"| Solutions with Parsers | {len(solutions_with_parsers)} |\n")
-        f.write("\n")
+        # Summary count
+        f.write(f"**{len(parsers)} parsers** ({len(legacy_parsers)} legacy, {len(listed_solution_parsers)} solution, {len(discovered_parsers)} discovered). ")
+        f.write(f"See [📊 Statistics](../statistics.md) for detailed breakdowns.\n\n")
         
         # Footnotes
         f.write("*Legacy parsers are located in the top-level `/Parsers` folder. ")
@@ -4538,13 +5732,16 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
         f.write(" | ".join(f"[{letter}](#{letter.lower() if letter != '#' else 'symbols'})" for letter in letters))
         f.write("\n\n")
         
+        # Source legend
+        f.write("> **Source:** 📦 Solution | 📂 Legacy\n\n")
+        
         # Generate sections by letter with table format
         for letter in letters:
             anchor = letter.lower() if letter != '#' else 'symbols'
             display_letter = letter if letter != '#' else '# (Symbols)'
             f.write(f"## {display_letter}\n\n")
-            f.write("| Parser | Solution | Tables |\n")
-            f.write("|:-------|:---------|:-------|\n")
+            f.write("| Parser | Source | Tables |\n")
+            f.write("|:-------|:-------|:-------|\n")
             
             for parser in sorted(by_letter[letter], key=lambda p: p.get('parser_name', '').lower()):
                 name = parser.get('parser_name', '')
@@ -4558,14 +5755,14 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
                 discovered_marker = " ⚠️" if is_discovered else ""
                 parser_link = f"[{name}]({filename}.md){discovered_marker}"
                 
-                # Solution link or location
+                # Source column with icon and solution link
                 if location == 'legacy':
-                    solution_display = "*Legacy*"
+                    source_display = "📂 *Legacy*"
                 elif solution_name:
                     solution_filename = sanitize_filename(solution_name)
-                    solution_display = f"[{solution_name}](../solutions/{solution_filename}.md)"
+                    source_display = f"📦 [{solution_name}](../solutions/{solution_filename}.md)"
                 else:
-                    solution_display = "—"
+                    source_display = "—"
                 
                 # Format tables (limit display)
                 tables_list = [t.strip() for t in tables.split(',') if t.strip()][:2]
@@ -4575,7 +5772,7 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
                 if not tables_display:
                     tables_display = "—"
                 
-                f.write(f"| {parser_link} | {solution_display} | {tables_display} |\n")
+                f.write(f"| {parser_link} | {source_display} | {tables_display} |\n")
             
             f.write("\n")
         
@@ -4586,13 +5783,17 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
     return len(parsers), txt_duplicates_removed
 
 
-def generate_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, solutions_reference: Dict[str, Dict[str, str]] = None) -> int:
+def generate_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, solutions_reference: Dict[str, Dict[str, str]] = None,
+                          tables_reference: Dict[str, Dict[str, str]] = None) -> int:
     """Generate individual parser documentation pages."""
     if not parsers:
         return 0
     
     if solutions_reference is None:
         solutions_reference = {}
+    
+    if tables_reference is None:
+        tables_reference = {}
     
     parsers_dir = output_dir / "parsers"
     parsers_dir.mkdir(parents=True, exist_ok=True)
@@ -4675,17 +5876,17 @@ def generate_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, solut
             
             f.write("\n")
             
-            # Tables section
+            # Tables section - using standardized tables table with Selection Criteria
             tables = parser.get('tables', '')
             if tables:
+                tables_list = [t.strip() for t in tables.split(',') if t.strip()]
+                filter_fields = parser.get('filter_fields', '')
+                
                 f.write("## Source Tables\n\n")
                 f.write("This parser reads from the following tables:\n\n")
                 
-                tables_list = [t.strip() for t in tables.split(',') if t.strip()]
-                for table in sorted(tables_list):
-                    table_filename = sanitize_anchor(table)
-                    f.write(f"- [{table}](../tables/{table_filename}.md)\n")
-                f.write("\n")
+                write_tables_table(f, tables_list, tables_reference, "../tables/", filter_fields,
+                                  include_transforms=True, include_ingestion_api=True)
             
             # Navigation footer
             f.write("---\n\n")
@@ -4696,10 +5897,20 @@ def generate_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, solut
     return pages_created
 
 
-def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
-    """Generate ASIM parsers index page grouped by schema."""
+def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path,
+                        connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
+    """Generate ASIM parsers index page grouped by schema.
+    
+    Args:
+        parsers: List of ASIM parser dictionaries
+        output_dir: Output directory path
+        connectors_reference: Dictionary of connector_id -> connector info (for legacy detection)
+    """
     if not parsers:
         return 0
+    
+    if connectors_reference is None:
+        connectors_reference = {}
     
     asim_dir = output_dir / "asim"
     asim_dir.mkdir(parents=True, exist_ok=True)
@@ -4733,15 +5944,10 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
         write_browse_section(f, 'asim-index', "../")
         f.write("---\n\n")
         
-        # Summary stats
-        f.write("## Summary\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|:-------|------:|\n")
-        f.write(f"| **Schemas** | {len(by_schema)} |\n")
-        f.write(f"| **Source Parser Pairs*** | {source_pair_count} |\n")
-        f.write(f"| **Union Parser Pairs*** | {union_pair_count} |\n")
-        f.write(f"| **Empty Parsers** | {empty_count} |\n")
-        f.write("\n")
+        # Summary count
+        f.write(f"**{len(by_schema)} schemas** with {source_pair_count} source parser pairs and {union_pair_count} union parser pairs. ")
+        f.write(f"See [📊 Statistics](../statistics.md) for detailed breakdowns.\n\n")
+        
         f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
         
         # Quick links by schema with detailed counts
@@ -4781,19 +5987,17 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
             if union_parsers:
                 f.write("### Union Parsers\n\n")
                 f.write("These are the main entry points that combine all source parsers:\n\n")
-                f.write("| Parser | Built-in Name | Version | Description |\n")
-                f.write("|:-------|:--------------|:--------|:------------|\n")
+                f.write("| Parser | Built-in Name | Version |\n")
+                f.write("|:-------|:--------------|:--------|\n")
                 for p in sorted(union_parsers, key=lambda x: x.get('parser_name', '')):
                     name = p.get('parser_name', '')
                     safe_name = sanitize_filename(name)
                     builtin = p.get('equivalent_builtin', '')
                     version = p.get('parser_version', '')
-                    desc = p.get('description', '')
-                    # Truncate description for table
-                    if len(desc) > 80:
-                        desc = desc[:77] + "..."
-                    desc = desc.replace('\n', ' ').replace('|', '\\|')
-                    f.write(f"| [{name}]({safe_name}.md) | `{builtin}` | {version} | {desc} |\n")
+                    # Link version to changelog
+                    changelog_url = get_asim_changelog_url(p)
+                    version_display = f"[{version}]({changelog_url})" if changelog_url and version else version
+                    f.write(f"| [{name}]({safe_name}.md) | `{builtin}` | {version_display} |\n")
                 f.write("\n")
             
             # Products list before source parsers
@@ -4816,24 +6020,65 @@ def generate_asim_index(parsers: List[Dict[str, str]], output_dir: Path) -> int:
             # Source parsers
             if source_parsers:
                 f.write("### Source Parsers\n\n")
-                f.write("| Parser | Product | Tables | Version |\n")
-                f.write("|:-------|:--------|:-------|:--------|\n")
+                f.write("| Parser | Product | Solution | Version |\n")
+                f.write("|:-------|:--------|:---------|:--------|\n")
                 for p in sorted(source_parsers, key=lambda x: x.get('parser_name', '')):
                     name = p.get('parser_name', '')
                     safe_name = sanitize_filename(name)
-                    # Derive vim parser name from ASim name
+                    
+                    # Extract display name: remove ASim/vim prefix and schema name
+                    # e.g., ASimProcessCreateMicrosoftSecurityEvents -> MicrosoftSecurityEvents
+                    display_name = name
                     if name.startswith('ASim'):
-                        vim_name = 'vim' + name[4:]
-                        vim_safe_name = sanitize_filename(vim_name)
-                        parser_cell = f"ASim: [{name}]({safe_name}.md)<br>vim: [{vim_name}]({vim_safe_name}.md)"
-                    else:
-                        parser_cell = f"[{name}]({safe_name}.md)"
+                        # Remove 'ASim' prefix
+                        display_name = name[4:]
+                        # Remove schema name (first part in CamelCase)
+                        # Schema is the first word before the product name
+                        # We'll use the schema field to determine what to strip
+                        parser_schema = p.get('schema', '')
+                        if parser_schema and display_name.startswith(parser_schema):
+                            display_name = display_name[len(parser_schema):]
+                    elif name.startswith('vim'):
+                        display_name = name[3:]
+                        parser_schema = p.get('schema', '')
+                        if parser_schema and display_name.startswith(parser_schema):
+                            display_name = display_name[len(parser_schema):]
+                    
+                    # Link to the parser page
+                    parser_cell = f"[{display_name}]({safe_name}.md)"
+                    
                     product = p.get('product_name', '')
-                    tables = p.get('tables', '')
-                    # Count tables
-                    table_count = len([t for t in tables.split(';') if t.strip()]) if tables else 0
+                    
+                    # Get solutions from associated_solutions - show all, separated by <br>
+                    # Mark solutions with "(legacy connector)" if the connector relating them is deprecated
+                    solutions = p.get('associated_solutions', '')
+                    associated_connectors = p.get('associated_connectors', '')
+                    solution_display = ''
+                    if solutions:
+                        solution_list = [s.strip() for s in solutions.split(',') if s.strip()]
+                        connector_list = [c.strip() for c in associated_connectors.split(',') if c.strip()]
+                        solution_links = []
+                        for s in solution_list:
+                            # Find connectors for this solution - check if any are deprecated
+                            solution_connectors = [c for c in connector_list
+                                                   if connectors_reference.get(c, {}).get('solution_name', '') == s]
+                            # Use the first deprecated connector, or first connector if none deprecated
+                            connector_for_legacy = ''
+                            for c in solution_connectors:
+                                if is_connector_deprecated(c, connectors_reference):
+                                    connector_for_legacy = c
+                                    break
+                            if not connector_for_legacy and solution_connectors:
+                                connector_for_legacy = solution_connectors[0]
+                            link = format_solution_link_with_legacy(s, connector_for_legacy, connectors_reference, "../solutions/")
+                            solution_links.append(link)
+                        solution_display = '<br>'.join(solution_links)
+                    
                     version = p.get('parser_version', '')
-                    f.write(f"| {parser_cell} | {product} | {table_count} | {version} |\n")
+                    # Link version to changelog
+                    changelog_url = get_asim_changelog_url(p)
+                    version_display = f"[{version}]({changelog_url})" if changelog_url and version else version
+                    f.write(f"| {parser_cell} | {product} | {solution_display} | {version_display} |\n")
                 f.write("\n")
             
             # Empty parsers (collapsed)
@@ -4908,14 +6153,9 @@ def generate_asim_products_index(parsers: List[Dict[str, str]], output_dir: Path
         write_browse_section(f, 'asim-products', "../")
         f.write("---\n\n")
         
-        # Summary stats
-        f.write("## Summary\n\n")
-        f.write("| Metric | Count |\n")
-        f.write("|:-------|------:|\n")
+        # Summary count
         total_parsers = sum(len(p) for p in by_product.values())
         total_parser_pairs = total_parsers // 2
-        f.write(f"| **Products** | {len(by_product):,} |\n")
-        f.write(f"| **Source Parser Pairs*** | {total_parser_pairs:,} |\n")
         
         # Count unique schemas and tables
         all_schemas = set()
@@ -4923,10 +6163,9 @@ def generate_asim_products_index(parsers: List[Dict[str, str]], output_dir: Path
         for stats in product_stats.values():
             all_schemas.update(stats['schemas'])
             all_tables.update(stats['tables'])
-        f.write(f"| **Schemas Covered** | {len(all_schemas)} |\n")
-        f.write(f"| **Tables Used** | {len(all_tables):,} |\n")
-        f.write("\n")
-        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        
+        f.write(f"**{len(by_product):,} products** with {total_parser_pairs:,} source parser pairs covering {len(all_schemas)} schemas. ")
+        f.write(f"See [📊 Statistics](../statistics.md) for detailed breakdowns.\n\n")
         
         # Quick product list with counts
         f.write("## Products Overview\n\n")
@@ -5004,10 +6243,24 @@ def generate_asim_products_index(parsers: List[Dict[str, str]], output_dir: Path
     return len(by_product)
 
 
-def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path) -> int:
-    """Generate individual ASIM parser documentation pages."""
+def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path, 
+                               tables_reference: Dict[str, Dict[str, str]] = None,
+                               connectors_reference: Dict[str, Dict[str, str]] = None) -> int:
+    """Generate individual ASIM parser documentation pages.
+    
+    Args:
+        parsers: List of ASIM parser dictionaries from CSV
+        output_dir: Output directory for documentation
+        tables_reference: Optional dictionary of table metadata for transformations/ingestion API info
+        connectors_reference: Optional dictionary of connector metadata (includes solution_name)
+    """
     if not parsers:
         return 0
+    
+    if tables_reference is None:
+        tables_reference = {}
+    if connectors_reference is None:
+        connectors_reference = {}
     
     # Build reverse mapping: sub-parser equivalent_builtin -> list of union parser names
     sub_to_union: Dict[str, List[str]] = defaultdict(list)
@@ -5031,9 +6284,572 @@ def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path) 
                         sub_to_union[sub].append(union_name)
     
     for parser in parsers:
-        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map)
+        generate_asim_parser_page(parser, output_dir, sub_to_union, parser_product_map, tables_reference, connectors_reference)
     
     return len(parsers)
+
+
+def generate_statistics_page(
+    output_dir: Path,
+    solutions: Dict[str, List[Dict[str, str]]],
+    connectors_map: Dict[str, Dict[str, any]],
+    tables_map: Dict[str, Dict[str, any]],
+    content_items_by_solution: Dict[str, List[Dict[str, str]]],
+    asim_parsers: List[Dict[str, str]],
+    non_asim_parsers: List[Dict[str, str]],
+    tables_reference: Dict[str, Dict[str, str]] = None,
+) -> None:
+    """
+    Generate a unified statistics page that consolidates statistics from all index pages.
+    """
+    from datetime import datetime
+    
+    if tables_reference is None:
+        tables_reference = {}
+    
+    stats_path = output_dir / "statistics.md"
+    
+    with stats_path.open("w", encoding="utf-8") as f:
+        f.write("# Microsoft Sentinel Documentation Statistics\n\n")
+        f.write("This page provides comprehensive statistics across all Microsoft Sentinel solutions, ")
+        f.write("connectors, tables, content items, and parsers.\n\n")
+        
+        # Navigation
+        write_browse_section(f, 'statistics', "")
+        f.write("---\n\n")
+        
+        # ===================== TERMINOLOGY DEFINITIONS =====================
+        f.write("## Terminology\n\n")
+        f.write("| Term | Description |\n")
+        f.write("|:-----|:------------|\n")
+        f.write("| **Published** | Available in Microsoft Sentinel Content Hub for installation |\n")
+        f.write(f"| **Unpublished** {UNPUBLISHED_ICON} | Present on GitHub but not available in Content Hub |\n")
+        f.write(f"| **Active** | Published and not deprecated |\n")
+        f.write(f"| **Deprecated** {DEPRECATED_ICON} | Marked as no longer maintained or replaced by newer solution |\n")
+        f.write(f"| **Discovered** {DISCOVERED_ICON} | Found in solution folders but not listed in Solution JSON definitions |\n")
+        f.write("| **In Solutions** | Listed in the Solution JSON definition file |\n")
+        f.write("| **📦 Solution** | Content that is part of a published Content Hub package |\n")
+        f.write("| **📄 Standalone** | GitHub content with metadata but not part of a Solution |\n")
+        f.write("| **🔗 GitHub Only** | GitHub content without formal metadata |\n")
+        f.write("| **Standalone Reference Tables** | Tables in Azure Monitor reference not used by any Sentinel solution |\n")
+        f.write("| **Support Tier** | Support level: Microsoft, Partner, or Community |\n")
+        f.write("\n")
+        
+        # ===================== SOLUTIONS STATISTICS =====================
+        f.write("## Solutions\n\n")
+        
+        # Build unpublished solutions set
+        unpublished_solutions: Set[str] = set()
+        for sol_name, connectors in solutions.items():
+            if connectors and connectors[0].get('is_published', 'true') == 'false':
+                unpublished_solutions.add(sol_name)
+        published_solutions_count = len(solutions) - len(unpublished_solutions)
+        
+        # Count solutions with connectors
+        solutions_with_connectors = 0
+        solutions_with_connectors_published = 0
+        for sol_name, connectors in solutions.items():
+            has_real_connector = any(
+                c.get('connector_id', '') and 
+                str(c.get('connector_id', '')).strip() and 
+                str(c.get('connector_id', '')).strip().lower() != 'nan' and
+                c.get('not_in_solution_json', 'false') != 'true'
+                for c in connectors
+            )
+            if has_real_connector:
+                solutions_with_connectors += 1
+                if sol_name not in unpublished_solutions:
+                    solutions_with_connectors_published += 1
+        solutions_with_connectors_unpublished = solutions_with_connectors - solutions_with_connectors_published
+        
+        # Count solutions with content
+        solutions_with_content = sum(1 for sol in solutions.keys() if sol in content_items_by_solution)
+        solutions_with_content_published = sum(1 for sol in solutions.keys() if sol in content_items_by_solution and sol not in unpublished_solutions)
+        solutions_with_content_unpublished = sum(1 for sol in solutions.keys() if sol in content_items_by_solution and sol in unpublished_solutions)
+        
+        # Count unique connectors and tables
+        all_connector_ids = set()
+        all_discovered_connector_ids = set()
+        all_tables = set()
+        for connectors in solutions.values():
+            for conn in connectors:
+                connector_id = conn.get('connector_id', '')
+                if connector_id:
+                    not_in_json = conn.get('not_in_solution_json', 'false')
+                    if not_in_json == 'true':
+                        all_discovered_connector_ids.add(connector_id)
+                    else:
+                        all_connector_ids.add(connector_id)
+                table = conn.get('Table', '')
+                if table:
+                    all_tables.add(table)
+        
+        # Count by support tier
+        support_tier_counts: Dict[str, int] = defaultdict(int)
+        with_connectors_by_tier: Dict[str, int] = defaultdict(int)
+        with_content_by_tier: Dict[str, int] = defaultdict(int)
+        
+        for sol_name, connectors in solutions.items():
+            tier = connectors[0].get('solution_support_tier', '') if connectors else ''
+            tier = tier if tier else 'Unknown'
+            support_tier_counts[tier] += 1
+            
+            has_real_connector = any(
+                c.get('connector_id', '') and 
+                str(c.get('connector_id', '')).strip() and 
+                str(c.get('connector_id', '')).strip().lower() != 'nan' and
+                c.get('not_in_solution_json', 'false') != 'true'
+                for c in connectors
+            )
+            if has_real_connector:
+                with_connectors_by_tier[tier] += 1
+            
+            if sol_name in content_items_by_solution:
+                with_content_by_tier[tier] += 1
+        
+        # Count by tier and published status
+        tier_published: Dict[str, int] = defaultdict(int)
+        tier_unpublished: Dict[str, int] = defaultdict(int)
+        for sol_name, connectors in solutions.items():
+            tier = connectors[0].get('solution_support_tier', '') if connectors else ''
+            tier = tier if tier else 'Unknown'
+            if sol_name in unpublished_solutions:
+                tier_unpublished[tier] += 1
+            else:
+                tier_published[tier] += 1
+        
+        # Solutions Availability Table
+        f.write("### Availability\n\n")
+        f.write(f"| Metric | Total | Published | Unpublished {UNPUBLISHED_ICON} |\n")
+        f.write("|:-------|------:|----------:|------------:|\n")
+        f.write(f"| Solutions | **{len(solutions)}** | {published_solutions_count} | {len(unpublished_solutions)} |\n")
+        f.write(f"| With Connectors | **{solutions_with_connectors}** | {solutions_with_connectors_published} | {solutions_with_connectors_unpublished} |\n")
+        f.write(f"| With Content | **{solutions_with_content}** | {solutions_with_content_published} | {solutions_with_content_unpublished} |\n")
+        f.write("\n")
+        
+        # Solutions Support Ownership Table
+        f.write("### Support Ownership\n\n")
+        f.write(f"| Support Tier | Total | Published | Unpublished {UNPUBLISHED_ICON} |\n")
+        f.write("|:-------------|------:|----------:|------------:|\n")
+        for tier in ['Microsoft', 'Partner', 'Community']:
+            total = support_tier_counts.get(tier, 0)
+            pub = tier_published.get(tier, 0)
+            unpub = tier_unpublished.get(tier, 0)
+            f.write(f"| {tier} | **{total}** | {pub} | {unpub} |\n")
+        if support_tier_counts.get('Unknown', 0) > 0:
+            f.write(f"| Unknown | **{support_tier_counts.get('Unknown', 0)}** | {tier_published.get('Unknown', 0)} | {tier_unpublished.get('Unknown', 0)} |\n")
+        f.write(f"| **Total** | **{len(solutions)}** | **{published_solutions_count}** | **{len(unpublished_solutions)}** |\n")
+        f.write("\n")
+        
+        # Solutions Other Metrics Table
+        f.write("### Other Metrics\n\n")
+        f.write("| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| Unique Connectors | {len(all_connector_ids)} |\n")
+        f.write(f"| Tables Used | {len(all_tables)} |\n")
+        f.write("\n")
+        
+        # ===================== CONNECTORS STATISTICS =====================
+        f.write("## Connectors\n\n")
+        
+        # Separate deprecated and active connectors
+        deprecated_connectors = {}
+        active_connectors = {}
+        for connector_id, info in connectors_map.items():
+            if info.get('is_deprecated', 'false') == 'true':
+                deprecated_connectors[connector_id] = info
+            else:
+                active_connectors[connector_id] = info
+        
+        # Track unpublished connectors
+        unpublished_connectors_set: Set[str] = {
+            cid for cid, info in connectors_map.items() 
+            if info.get('is_published', 'true') == 'false'
+        }
+        
+        # Track discovered connectors
+        discovered_connectors: Set[str] = {
+            cid for cid, info in connectors_map.items() 
+            if info.get('not_in_solution_json', 'false') == 'true'
+        }
+        
+        # Connectors that are active AND unpublished
+        unpub_active = set(cid for cid in unpublished_connectors_set if cid in active_connectors)
+        
+        # Total counts
+        total_deprecated = len(deprecated_connectors)
+        total_unpublished = len(unpub_active)
+        total_active = len(active_connectors) - len(unpub_active)
+        
+        # In-solution vs discovered counts
+        in_solution_count = len(connectors_map) - len(discovered_connectors)
+        active_in_solution = len(active_connectors) - len([cid for cid in discovered_connectors if cid in active_connectors])
+        deprecated_in_solution = len(deprecated_connectors) - len([cid for cid in discovered_connectors if cid in deprecated_connectors])
+        unpub_in_solution = len([cid for cid in unpub_active if cid not in discovered_connectors])
+        
+        discovered_active = len([cid for cid in discovered_connectors if cid in active_connectors])
+        discovered_deprecated = len([cid for cid in discovered_connectors if cid in deprecated_connectors])
+        discovered_unpub = len([cid for cid in discovered_connectors if cid in unpub_active])
+        
+        # Count by support tier
+        tier_counts: Dict[str, int] = defaultdict(int)
+        tier_in_solution: Dict[str, int] = defaultdict(int)
+        tier_discovered: Dict[str, int] = defaultdict(int)
+        for cid, info in connectors_map.items():
+            tier = info.get('support_tier', '') or 'Unknown'
+            tier_counts[tier] += 1
+            if cid in discovered_connectors:
+                tier_discovered[tier] += 1
+            else:
+                tier_in_solution[tier] += 1
+        
+        # Count by support tier and availability status
+        tier_active: Dict[str, int] = defaultdict(int)
+        tier_deprecated: Dict[str, int] = defaultdict(int)
+        tier_unpublished: Dict[str, int] = defaultdict(int)
+        for cid, info in connectors_map.items():
+            tier = info.get('support_tier', '') or 'Unknown'
+            if cid in deprecated_connectors:
+                tier_deprecated[tier] += 1
+            elif cid in unpub_active:
+                tier_unpublished[tier] += 1
+            else:
+                tier_active[tier] += 1
+        
+        # Connectors Availability Table
+        f.write("### Availability\n\n")
+        f.write(f"| Metric | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
+        f.write("|:-------|------:|-------:|-----------:|------------:|\n")
+        f.write(f"| In Solutions | **{in_solution_count}** | {active_in_solution - unpub_in_solution} | {deprecated_in_solution} | {unpub_in_solution} |\n")
+        if discovered_connectors:
+            f.write(f"| Discovered {DISCOVERED_ICON} | **{len(discovered_connectors)}** | {discovered_active - discovered_unpub} | {discovered_deprecated} | {discovered_unpub} |\n")
+            f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** |\n")
+        f.write("\n")
+        
+        # Connectors Support Ownership Table
+        f.write("### Support Ownership\n\n")
+        f.write(f"| Support Tier | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
+        f.write("|:-------------|------:|-------:|-----------:|------------:|\n")
+        for tier in ['Microsoft', 'Partner', 'Community']:
+            total = tier_counts.get(tier, 0)
+            active = tier_active.get(tier, 0)
+            depr = tier_deprecated.get(tier, 0)
+            unpub = tier_unpublished.get(tier, 0)
+            f.write(f"| {tier} | **{total}** | {active} | {depr} | {unpub} |\n")
+        if tier_counts.get('Unknown', 0) > 0:
+            f.write(f"| Unknown | **{tier_counts.get('Unknown', 0)}** | {tier_active.get('Unknown', 0)} | {tier_deprecated.get('Unknown', 0)} | {tier_unpublished.get('Unknown', 0)} |\n")
+        f.write(f"| **Total** | **{len(connectors_map)}** | **{total_active}** | **{total_deprecated}** | **{total_unpublished}** |\n")
+        f.write("\n")
+        
+        # Collection Methods table
+        collection_method_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'total': 0, 'active': 0, 'deprecated': 0, 'unpublished': 0})
+        for connector_id, info in connectors_map.items():
+            method = info.get('collection_method', '') or 'Unknown'
+            collection_method_stats[method]['total'] += 1
+            if connector_id in deprecated_connectors:
+                collection_method_stats[method]['deprecated'] += 1
+            elif connector_id in unpub_active:
+                collection_method_stats[method]['unpublished'] += 1
+            else:
+                collection_method_stats[method]['active'] += 1
+        
+        if collection_method_stats:
+            f.write("### Collection Methods\n\n")
+            f.write(f"| Collection Method | Total | Active | Deprecated {DEPRECATED_ICON} | Unpublished {UNPUBLISHED_ICON} |\n")
+            f.write("|:-----------------|------:|-------:|-----------:|------------:|\n")
+            
+            sorted_methods = sorted(collection_method_stats.items(), key=lambda x: x[1]['total'], reverse=True)
+            
+            for method, stats in sorted_methods:
+                method_link = get_collection_method_link(method, "")
+                f.write(f"| {method_link} | **{stats['total']}** | {stats['active']} | {stats['deprecated']} | {stats['unpublished']} |\n")
+            
+            total_all = sum(s['total'] for s in collection_method_stats.values())
+            total_active_cm = sum(s['active'] for s in collection_method_stats.values())
+            total_deprecated_cm = sum(s['deprecated'] for s in collection_method_stats.values())
+            total_unpub_cm = sum(s['unpublished'] for s in collection_method_stats.values())
+            f.write(f"| **Total** | **{total_all}** | **{total_active_cm}** | **{total_deprecated_cm}** | **{total_unpub_cm}** |\n")
+            f.write("\n")
+        
+        # Collection Methods by Support Tier table
+        # Build a 2D dict: method -> tier -> {active, deprecated, unpublished, total}
+        method_tier_stats: Dict[str, Dict[str, Dict[str, int]]] = defaultdict(
+            lambda: defaultdict(lambda: {'active': 0, 'deprecated': 0, 'unpublished': 0, 'total': 0})
+        )
+        
+        for connector_id, info in connectors_map.items():
+            method = info.get('collection_method', '') or 'Unknown'
+            tier = info.get('support_tier', '') or 'Unknown'
+            method_tier_stats[method][tier]['total'] += 1
+            if connector_id in deprecated_connectors:
+                method_tier_stats[method][tier]['deprecated'] += 1
+            elif connector_id in unpub_active:
+                method_tier_stats[method][tier]['unpublished'] += 1
+            else:
+                method_tier_stats[method][tier]['active'] += 1
+        
+        if method_tier_stats:
+            f.write("### Collection Methods by Support Tier\n\n")
+            f.write("Each cell shows: Active / Deprecated / Unpublished / **Total**\n\n")
+            
+            # Define tier order
+            tier_order = ['Microsoft', 'Partner', 'Community']
+            # Add Unknown if present
+            all_tiers = set()
+            for method_tiers in method_tier_stats.values():
+                all_tiers.update(method_tiers.keys())
+            if 'Unknown' in all_tiers:
+                tier_order.append('Unknown')
+            
+            # Header
+            f.write("| Collection Method |")
+            for tier in tier_order:
+                f.write(f" {tier} |")
+            f.write("\n")
+            
+            # Alignment row
+            f.write("|:-----------------|")
+            for _ in tier_order:
+                f.write(":---------:|")
+            f.write("\n")
+            
+            # Data rows - sort by total across all tiers
+            sorted_methods = sorted(
+                method_tier_stats.items(),
+                key=lambda x: sum(t['total'] for t in x[1].values()),
+                reverse=True
+            )
+            
+            # Calculate tier totals
+            tier_totals: Dict[str, Dict[str, int]] = defaultdict(lambda: {'active': 0, 'deprecated': 0, 'unpublished': 0, 'total': 0})
+            
+            for method, tiers in sorted_methods:
+                method_link = get_collection_method_link(method, "")
+                f.write(f"| {method_link} |")
+                for tier in tier_order:
+                    stats = tiers.get(tier, {'active': 0, 'deprecated': 0, 'unpublished': 0, 'total': 0})
+                    tier_totals[tier]['active'] += stats['active']
+                    tier_totals[tier]['deprecated'] += stats['deprecated']
+                    tier_totals[tier]['unpublished'] += stats['unpublished']
+                    tier_totals[tier]['total'] += stats['total']
+                    if stats['total'] > 0:
+                        f.write(f" {stats['active']} / {stats['deprecated']} / {stats['unpublished']} / **{stats['total']}** |")
+                    else:
+                        f.write(" - |")
+                f.write("\n")
+            
+            # Total row
+            f.write("| **Total** |")
+            for tier in tier_order:
+                stats = tier_totals[tier]
+                f.write(f" {stats['active']} / {stats['deprecated']} / {stats['unpublished']} / **{stats['total']}** |")
+            f.write("\n")
+            f.write("\n")
+        
+        # ===================== TABLES STATISTICS =====================
+        f.write("## Tables\n\n")
+        
+        tables_with_connectors = sum(1 for info in tables_map.values() if info.get('connectors'))
+        tables_with_content = sum(1 for info in tables_map.values() if info.get('content_types') and not info.get('connectors'))
+        reference_only_tables = sum(1 for t, info in tables_map.items() if t in tables_reference and not info.get('connectors') and not info.get('content_types') and not info.get('solutions'))
+        reference_tables = sum(1 for t in tables_map.keys() if t in tables_reference)
+        xdr_only_tables = sum(1 for t in tables_map.keys() 
+                             if t in tables_reference 
+                             and tables_reference.get(t, {}).get('source_azure_monitor', '').lower() == 'no'
+                             and tables_reference.get(t, {}).get('source_defender_xdr', '').lower() == 'yes')
+        
+        f.write("| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| **Total Tables Documented** | **{len(tables_map)}** |\n")
+        f.write(f"| Tables Ingested by Connectors | {tables_with_connectors} |\n")
+        f.write(f"| Tables Referenced by Content Only | {tables_with_content} |\n")
+        if reference_only_tables > 0:
+            f.write(f"| Standalone Reference Tables | {reference_only_tables} |\n")
+        if xdr_only_tables > 0:
+            f.write(f"| Defender XDR Only Tables | {xdr_only_tables} |\n")
+        if reference_tables > 0 and reference_tables < len(tables_map):
+            f.write(f"| Tables in Azure Monitor Reference | {reference_tables} |\n")
+        f.write("\n")
+        
+        # ===================== CONTENT STATISTICS =====================
+        f.write("## Content\n\n")
+        
+        # Collect all content items and group by type
+        content_by_type: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+        total_content = 0
+        for solution_name, items in content_items_by_solution.items():
+            for item in items:
+                content_type = item.get('content_type', 'unknown')
+                content_by_type[content_type].append(item)
+                total_content += 1
+        
+        # Track unpublished content and source counts
+        unpublished_count_by_type: Dict[str, int] = defaultdict(int)
+        published_count_by_type: Dict[str, int] = defaultdict(int)
+        source_counts: Dict[str, int] = defaultdict(int)
+        source_counts_by_type: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        
+        for solution_name, items in content_items_by_solution.items():
+            for item in items:
+                content_type = item.get('content_type', 'unknown')
+                content_source = item.get('content_source', 'Solution')
+                source_counts[content_source] += 1
+                source_counts_by_type[content_type][content_source] += 1
+                if content_source == 'Solution':
+                    if item.get('is_published', 'true') == 'false':
+                        unpublished_count_by_type[content_type] += 1
+                    else:
+                        published_count_by_type[content_type] += 1
+        
+        total_unpublished = sum(unpublished_count_by_type.values())
+        total_published = sum(published_count_by_type.values())
+        total_standalone = source_counts.get('Standalone', 0)
+        total_github_only = source_counts.get('GitHub Only', 0)
+        
+        f.write("### Content Items Summary\n\n")
+        f.write("| Metric | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
+        f.write("|:-------|------:|-------------:|---------------:|--------------:|---------------:|\n")
+        f.write(f"| **Content Items** | **{total_content:,}** | {total_published:,} | {total_unpublished:,} | {total_standalone:,} | {total_github_only:,} |\n")
+        f.write("\n")
+        
+        type_order = ['analytic_rule', 'hunting_query', 'playbook', 'workbook', 'parser', 'watchlist', 'summary_rule']
+        CONTENT_TYPE_PLURAL_NAMES = {
+            'analytic_rule': 'Analytic Rules',
+            'hunting_query': 'Hunting Queries',
+            'playbook': 'Playbooks',
+            'workbook': 'Workbooks',
+            'parser': 'Parsers',
+            'watchlist': 'Watchlists',
+            'summary_rule': 'Summary Rules',
+        }
+        
+        f.write("### Content Items by Type\n\n")
+        f.write("| Type | Total | 📦 Published | 📦 Unpublished | 📄 Standalone | 🔗 GitHub Only |\n")
+        f.write("|:-----|------:|-------------:|---------------:|--------------:|---------------:|\n")
+        
+        for content_type in type_order:
+            if content_type in content_by_type:
+                type_name = CONTENT_TYPE_PLURAL_NAMES.get(content_type, content_type.replace('_', ' ').title())
+                total = len(content_by_type[content_type])
+                pub_count = published_count_by_type.get(content_type, 0)
+                unpub_count = unpublished_count_by_type.get(content_type, 0)
+                standalone_count = source_counts_by_type[content_type].get('Standalone', 0)
+                github_only_count = source_counts_by_type[content_type].get('GitHub Only', 0)
+                note = "*" if content_type == 'parser' else ""
+                f.write(f"| {type_name}{note} | {total:,} | {pub_count:,} | {unpub_count:,} | {standalone_count:,} | {github_only_count:,} |\n")
+        
+        f.write("\n")
+        f.write("*\\* Parsers from solution content. See [Parsers](parsers/parsers-index.md) section for all parsers including legacy.*\n\n")
+        
+        # ===================== PARSERS STATISTICS =====================
+        f.write("## Parsers\n\n")
+        
+        legacy_parsers = [p for p in non_asim_parsers if p.get('location') == 'legacy']
+        listed_solution_parsers = [p for p in non_asim_parsers if p.get('location') == 'solution' and p.get('discovered', 'false') != 'true']
+        discovered_parsers = [p for p in non_asim_parsers if p.get('discovered', 'false') == 'true']
+        solutions_with_parsers = set(p.get('solution_name', '') for p in non_asim_parsers if p.get('solution_name'))
+        
+        f.write("| Category | Count |\n")
+        f.write("|:---------|------:|\n")
+        f.write(f"| Legacy Parsers | {len(legacy_parsers)} |\n")
+        f.write(f"| Solution Parsers (in Solution JSON) | {len(listed_solution_parsers)} |\n")
+        if discovered_parsers:
+            f.write(f"| Discovered Parsers {DISCOVERED_ICON} | {len(discovered_parsers)} |\n")
+        f.write(f"| **Total Parsers** | **{len(non_asim_parsers)}** |\n")
+        f.write(f"| Solutions with Parsers | {len(solutions_with_parsers)} |\n")
+        f.write("\n")
+        
+        # ===================== ASIM PARSERS STATISTICS =====================
+        f.write("## ASIM Parsers\n\n")
+        
+        # Group by schema
+        by_schema: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+        for parser in asim_parsers:
+            schema = parser.get('schema', 'Other')
+            by_schema[schema].append(parser)
+        
+        union_count = sum(1 for p in asim_parsers if p.get('parser_type') == 'union')
+        source_count = sum(1 for p in asim_parsers if p.get('parser_type') == 'source')
+        empty_count = sum(1 for p in asim_parsers if p.get('parser_type') == 'empty')
+        source_pair_count = source_count // 2
+        union_pair_count = union_count // 2
+        
+        f.write("| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| **Schemas** | {len(by_schema)} |\n")
+        f.write(f"| **Source Parser Pairs*** | {source_pair_count} |\n")
+        f.write(f"| **Union Parser Pairs*** | {union_pair_count} |\n")
+        f.write(f"| **Empty Parsers** | {empty_count} |\n")
+        f.write("\n")
+        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        
+        # ===================== ASIM PRODUCTS STATISTICS =====================
+        f.write("## ASIM Products\n\n")
+        
+        # Group by product
+        by_product: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+        for parser in asim_parsers:
+            if parser.get('parser_type') != 'source':
+                continue
+            product = parser.get('product_name', '').strip()
+            if product and product.lower() != 'source agnostic':
+                by_product[product].append(parser)
+        
+        total_parsers = sum(len(p) for p in by_product.values())
+        total_parser_pairs = total_parsers // 2
+        
+        all_schemas = set()
+        all_tables = set()
+        for product, product_parsers in by_product.items():
+            for p in product_parsers:
+                schema = p.get('schema', '')
+                if schema:
+                    all_schemas.add(schema)
+                parser_tables = p.get('tables', '')
+                if parser_tables:
+                    for t in parser_tables.split(';'):
+                        t = t.strip()
+                        if t:
+                            all_tables.add(t)
+        
+        f.write("| Metric | Count |\n")
+        f.write("|:-------|------:|\n")
+        f.write(f"| **Products** | {len(by_product):,} |\n")
+        f.write(f"| **Source Parser Pairs*** | {total_parser_pairs:,} |\n")
+        f.write(f"| **Schemas Covered** | {len(all_schemas)} |\n")
+        f.write(f"| **Tables Used** | {len(all_tables):,} |\n")
+        f.write("\n")
+        f.write("\\* *Each parser pair consists of an ASim filtering parser and a vim parameter-based parser.*\n\n")
+        
+        # ASIM Products per Schema Table
+        f.write("### Products per Schema\n\n")
+        
+        # Count products per schema
+        products_per_schema: Dict[str, Set[str]] = defaultdict(set)
+        for parser in asim_parsers:
+            if parser.get('parser_type') != 'source':
+                continue
+            product = parser.get('product_name', '').strip()
+            if product and product.lower() != 'source agnostic':
+                schema = parser.get('schema', 'Other')
+                products_per_schema[schema].add(product)
+        
+        f.write("| Schema | Products |\n")
+        f.write("|:-------|--------:|\n")
+        
+        # Sort schemas by product count descending
+        sorted_schemas = sorted(products_per_schema.items(), key=lambda x: len(x[1]), reverse=True)
+        for schema, products in sorted_schemas:
+            f.write(f"| {schema} | {len(products)} |\n")
+        
+        f.write(f"| **Total** | **{len(by_product)}** |\n")
+        f.write("\n")
+        
+        # Footer
+        f.write("---\n\n")
+        f.write(f"*Generated by Solutions Analyzer - {datetime.now().strftime('%B %Y')}*\n")
+    
+    print(f"Generated statistics page: {stats_path}")
 
 
 def generate_docs_readme(
@@ -5248,7 +7064,7 @@ def generate_docs_readme(
             if sol_name not in deprecated_solutions:
                 collection_method_stats[method]['active_solutions'].add(sol_name)
     
-    readme_path = output_dir / "readme.md"
+    readme_path = output_dir / "README.md"
     
     with readme_path.open("w", encoding="utf-8") as f:
         f.write("# Microsoft Sentinel Solutions Documentation\n\n")
@@ -5262,6 +7078,8 @@ def generate_docs_readme(
         f.write(f"| [Solutions](solutions-index.md) | {solutions_count} | {solutions_with_connectors} with connectors, {solutions_with_content} with content |\n")
         total_connectors_with_discovered = len(all_connector_ids) + len(all_discovered_connector_ids)
         f.write(f"| [Connectors](connectors-index.md) | {total_connectors_with_discovered} | Data ingestion methods |\n")
+        methods_count = len(collection_method_stats)
+        f.write(f"| [Methods](methods-index.md) | {methods_count} | Data collection methods |\n")
         f.write(f"| [Tables](tables-index.md) | {tables_count} | Log Analytics tables |\n")
         f.write(f"| [Content](content/content-index.md) | {content_count:,} | Analytics, hunting, playbooks, workbooks |\n")
         if parser_count > 0:
@@ -5271,6 +7089,7 @@ def generate_docs_readme(
             f.write(f"| [ASIM Parsers](asim/asim-index.md) | {asim_total} pairs | Normalized schema parsers |\n")
         if asim_products_count > 0:
             f.write(f"| [ASIM Products](asim/asim-products-index.md) | {asim_products_count} | Products with ASIM support |\n")
+        f.write(f"| [Statistics](statistics.md) | - | Comprehensive statistics and metrics |\n")
         f.write("\n")
         
         # Footnotes for icons if needed
@@ -5315,7 +7134,7 @@ def generate_docs_readme(
         f.write("```\n\n")
         
         f.write("---\n\n")
-        f.write(f"*Generated by Solutions Analyzer v7.0 - {datetime.now().strftime('%B %Y')}*\n")
+        f.write(f"*Generated by Solutions Analyzer v7.5 - {datetime.now().strftime('%B %Y')}*\n")
     
     print(f"Generated readme: {readme_path}")
 
@@ -5542,8 +7361,10 @@ def main() -> None:
                 if solution_name:
                     content_items_by_solution[solution_name].append(row)
                 elif content_source == 'GitHub Only':
-                    # Group GitHub Only items under a synthetic key
-                    content_items_by_solution['[GitHub Only]'].append(row)
+                    # Group GitHub Only items under 'GitHub Only' synthetic solution
+                    # Also set the solution_name in the row so links are generated correctly
+                    row['solution_name'] = 'GitHub Only'
+                    content_items_by_solution['GitHub Only'].append(row)
         total_content = sum(len(items) for items in content_items_by_solution.values())
         print(f"Loaded {total_content} content items from {len(content_items_by_solution)} solutions")
     else:
@@ -5568,6 +7389,8 @@ def main() -> None:
     # Uses get_content_key() to handle items without content_id (workbooks, playbooks)
     # Maps content_key -> list of (table_name, usage) tuples
     content_tables_mapping: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
+    # Map content_key -> table_name -> source_parser (for looking up parser filter_fields)
+    content_table_parser_mapping: Dict[str, Dict[str, str]] = defaultdict(dict)
     # Also build solution -> table -> {content_types, table_usage} mapping
     solution_table_content_types: Dict[str, Dict[str, Dict[str, Set[str]]]] = defaultdict(lambda: defaultdict(lambda: {'types': set(), 'usage': set()}))
     if args.content_tables_csv.exists():
@@ -5580,12 +7403,16 @@ def main() -> None:
                 table_name = row.get('table_name', '')
                 content_type = row.get('content_type', '')
                 table_usage = row.get('table_usage', 'read')
+                source_parser = row.get('source_parser', '')
                 content_key = get_content_key(content_id, content_name, solution_name)
                 if content_key and table_name:
                     # Check if table already in list (to avoid duplicates)
                     existing_tables = [t for t, u in content_tables_mapping[content_key]]
                     if table_name not in existing_tables:
                         content_tables_mapping[content_key].append((table_name, table_usage))
+                    # Track which parser this table came from (if any)
+                    if source_parser and table_name not in content_table_parser_mapping[content_key]:
+                        content_table_parser_mapping[content_key][table_name] = source_parser
                 # Track which content types use each table in each solution
                 if solution_name and table_name:
                     solution_table_content_types[solution_name][table_name]['types'].add(content_type)
@@ -5619,14 +7446,20 @@ def main() -> None:
     
     # Build parser lookup by name+solution for enriching content items
     parsers_by_name_solution: Dict[Tuple[str, str], Dict[str, str]] = {}
+    # Build parser_name -> filter_fields mapping (case-insensitive) for content item filter inheritance
+    parser_filter_fields: Dict[str, str] = {}
     for p in parsers:
         parser_name = p.get('parser_name', '')
         solution_name = p.get('solution_name', '')
+        filter_fields = p.get('filter_fields', '')
         if parser_name:
             parsers_by_name_solution[(parser_name, solution_name)] = p
             # Also index by just name for legacy parsers without solution_name
             if not solution_name:
                 parsers_by_name_solution[(parser_name, '')] = p
+            # Build filter_fields lookup (case-insensitive, first wins)
+            if filter_fields and parser_name.lower() not in parser_filter_fields:
+                parser_filter_fields[parser_name.lower()] = filter_fields
     
     # Enrich content items (type=parser) with data from parsers.csv
     enriched_count = 0
@@ -5680,6 +7513,7 @@ def main() -> None:
             row['event_vendor'] = connectors_reference[connector_id].get('event_vendor', '')
             row['event_product'] = connectors_reference[connector_id].get('event_product', '')
             row['event_vendor_product_by_table'] = connectors_reference[connector_id].get('event_vendor_product_by_table', '')
+            row['filter_fields'] = connectors_reference[connector_id].get('filter_fields', '')
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
     
@@ -5722,6 +7556,7 @@ def main() -> None:
     
     # Generate index pages - generate tables_index first to get accurate count
     generate_connectors_index(by_solution, args.output_dir)
+    generate_collection_methods_index(by_solution, args.output_dir)
     tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference, solution_table_content_types)
     
     # Count tables that are linked to solutions via connectors (vs all documented tables)
@@ -5761,10 +7596,58 @@ def main() -> None:
                 if t:
                     asim_parsers_by_table[t].append(parser)
     
-    generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table)
+    # Build content_filter_fields_lookup from content_items_by_solution
+    # Maps content_id -> content_filter_fields for use in table pages
+    # Also inherits filter_fields from source parsers when content items use parser tables
+    content_filter_fields_lookup: Dict[str, str] = {}
+    for solution_items in content_items_by_solution.values():
+        for item in solution_items:
+            content_id = item.get('content_id', '')
+            content_name = item.get('content_name', '')
+            solution_name = item.get('solution_name', '')
+            content_filter_fields = item.get('content_filter_fields', '')
+            
+            # Use get_content_key to match the key used in content_table_parser_mapping
+            content_key = get_content_key(content_id, content_name, solution_name)
+            
+            # Merge parser filter_fields for tables that came from parsers
+            # (same logic as in generate_content_item_pages)
+            table_parser_map = content_table_parser_mapping.get(content_key, {})
+            merged_filter_fields = content_filter_fields
+            for table_name, source_parser in table_parser_map.items():
+                if source_parser:
+                    parser_ff = parser_filter_fields.get(source_parser.lower(), '')
+                    if parser_ff:
+                        # Merge parser filter_fields with content's own filter_fields
+                        if merged_filter_fields:
+                            merged_filter_fields = merged_filter_fields + " | " + parser_ff
+                        else:
+                            merged_filter_fields = parser_ff
+            
+            # Store by both content_id and content_key to handle items without content_id (e.g., workbooks)
+            if merged_filter_fields:
+                if content_id:
+                    content_filter_fields_lookup[content_id] = merged_filter_fields
+                # Also store by content_key for items without content_id
+                content_filter_fields_lookup[content_key] = merged_filter_fields
+    
+    # Build content_source_lookup from content_items_by_solution
+    # Maps content_key -> content_source for differentiating Standalone vs GitHub Only
+    content_source_lookup: Dict[str, str] = {}
+    for solution_items in content_items_by_solution.values():
+        for item in solution_items:
+            content_id = item.get('content_id', '')
+            content_name = item.get('content_name', '')
+            solution_name = item.get('solution_name', '')
+            content_source = item.get('content_source', 'Solution')
+            content_key = get_content_key(content_id, content_name, solution_name)
+            if content_key:
+                content_source_lookup[content_key] = content_source
+    
+    generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table, content_filter_fields_lookup, content_source_lookup)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
-    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir)
+    content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference)
     
     # Generate ASIM parser documentation
     asim_source_pairs = 0
@@ -5779,9 +7662,9 @@ def main() -> None:
         asim_source_pairs = asim_source_count // 2
         asim_union_pairs = asim_union_count // 2
         
-        generate_asim_index(asim_parsers, args.output_dir)
+        generate_asim_index(asim_parsers, args.output_dir, connectors_reference)
         asim_products_count = generate_asim_products_index(asim_parsers, args.output_dir)
-        asim_parsers_count = generate_asim_parser_pages(asim_parsers, args.output_dir)
+        asim_parsers_count = generate_asim_parser_pages(asim_parsers, args.output_dir, tables_reference, connectors_reference)
         print(f"  Generated {asim_parsers_count} ASIM parser pages")
     else:
         asim_products_count = 0
@@ -5819,7 +7702,7 @@ def main() -> None:
         discovered_parser_count = sum(1 for p in parsers if p.get('discovered', 'false') == 'true')
         
         parser_count_result, _ = generate_parsers_index(parsers, args.output_dir, solutions_reference)
-        parser_pages_count = generate_parser_pages(parsers, args.output_dir, solutions_reference)
+        parser_pages_count = generate_parser_pages(parsers, args.output_dir, solutions_reference, tables_reference)
         listed_count = solution_parser_count - discovered_parser_count
         if txt_duplicates_removed > 0:
             print(f"  Filtered {txt_duplicates_removed} TXT duplicates (YAML versions exist)")
@@ -5835,6 +7718,36 @@ def main() -> None:
     
     # Count table pages created - now counts all tables with pages
     table_pages_count = len(tables_map)
+    
+    # Build connectors map for statistics page
+    connectors_map: Dict[str, Dict[str, any]] = {}
+    for solution_name, connectors in by_solution.items():
+        for conn in connectors:
+            connector_id = conn.get('connector_id', '')
+            if not connector_id or connector_id in connectors_map:
+                continue
+            connectors_map[connector_id] = {
+                'title': conn.get('connector_title', connector_id),
+                'publisher': conn.get('connector_publisher', 'N/A'),
+                'solution_name': solution_name,
+                'collection_method': conn.get('collection_method', ''),
+                'is_published': conn.get('is_published', 'true'),
+                'is_deprecated': conn.get('is_deprecated', 'false'),
+                'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
+                'support_tier': conn.get('solution_support_tier', ''),
+            }
+    
+    # Generate the unified statistics page
+    generate_statistics_page(
+        output_dir=args.output_dir,
+        solutions=by_solution,
+        connectors_map=connectors_map,
+        tables_map=tables_map,
+        content_items_by_solution=content_items_by_solution,
+        asim_parsers=asim_parsers,
+        non_asim_parsers=parsers,
+        tables_reference=tables_reference,
+    )
     
     # Generate the README.md for the docs folder
     generate_docs_readme(
