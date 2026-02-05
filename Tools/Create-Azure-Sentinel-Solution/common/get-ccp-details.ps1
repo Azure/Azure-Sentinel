@@ -16,6 +16,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
             $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
             $ccpBaseFolderPath = (Split-Path -Path $currentFileDCPath -Parent) -replace '\\', '/'
+            # Resolve to absolute path for proper comparison later
+            $ccpBaseFolderPath = (Resolve-Path -Path $ccpBaseFolderPath).Path -replace '\\', '/'
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
             #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
             

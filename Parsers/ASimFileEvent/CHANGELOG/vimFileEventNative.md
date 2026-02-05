@@ -2,7 +2,7 @@
 
 ## Version 0.1.1
 
-- (2023-11-21) updating Native table Parsers - [PR #9275](https://github.com/Azure/Azure-Sentinel/pull/9275)
+- (2023-11-21) Apply Filters for File Parsers - [PR #9275](https://github.com/Azure/Azure-Sentinel/pull/9275)
 
 ## Version 0.1
 
