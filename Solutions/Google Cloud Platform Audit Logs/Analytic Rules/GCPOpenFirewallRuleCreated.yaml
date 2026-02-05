@@ -1,0 +1,134 @@
+id: 8061c611-55f1-4ee5-a8f8-8f19f2c7aab2
+name: GCP Audit Logs - Open Firewall Rule Created or Modified
+description: |
+  'Detects when a Google Cloud Platform firewall rule is created or modified to allow traffic from any source (0.0.0.0/0 or 0.0.0.0).
+  Open firewall rules expose resources to the internet and can significantly increase the attack surface of cloud infrastructure.
+  This may indicate a misconfiguration, lack of security awareness, or malicious activity to create backdoor access.
+  Adversaries may create or modify firewall rules to enable persistent access or facilitate lateral movement.
+  This rule monitors firewall insert and patch operations where sourceRanges include unrestricted access patterns.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Persistence
+  - InitialAccess
+relevantTechniques:
+  - T1562.004
+  - T1133
+  - T1562.001
+tags:
+  - GCP
+  - Firewall
+  - Network Security
+  - Misconfiguration
+query: |
+  GCPAuditLogs
+  | where ServiceName == "compute.googleapis.com"
+  | where MethodName has_any ("firewalls.insert", "firewalls.patch")
+  | where GCPResourceType == "gce_firewall_rule"
+  | where Severity == "NOTICE"
+  | extend 
+      RequestJson = parse_json(Request),
+      RequestMetadataJson = parse_json(RequestMetadata),
+      AuthInfoJson = parse_json(AuthenticationInfo)
+  | extend 
+      SourceRanges = RequestJson.sourceRanges,
+      Alloweds = RequestJson.alloweds,
+      Direction = tostring(RequestJson.direction),
+      RuleName = tostring(RequestJson.name),
+      Network = tostring(RequestJson.network),
+      Priority = tostring(RequestJson.priority),
+      LogConfig = RequestJson.logConfig,
+      Disabled = tobool(RequestJson.disabled)
+  | mv-expand SourceRange = SourceRanges
+  | extend SourceRangeStr = tostring(SourceRange)
+  | where SourceRangeStr in ("0.0.0.0/0", "0.0.0.0")
+  | extend 
+      FirewallRuleName = extract(@"firewalls/([^/]+)$", 1, GCPResourceName),
+      CallerIpAddress = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      AuthEmail = tostring(AuthInfoJson.principalEmail)
+  | mv-expand Allowed = Alloweds
+  | extend 
+      AllowedProtocol = tostring(Allowed.IPProtocol),
+      AllowedPorts = tostring(Allowed.ports),
+      OperationType = case(
+          MethodName has "insert", "Created",
+          MethodName has "patch", "Modified",
+          "Unknown")
+  | summarize 
+      AllowedProtocols = make_set(AllowedProtocol, 30),
+      AllowedPortsList = make_set(AllowedPorts, 100),
+      SourceRangesList = make_set(SourceRangeStr, 100)
+      by TimeGenerated, PrincipalEmail, AuthEmail, ProjectId, FirewallRuleName, 
+         GCPResourceName, Direction, Priority, Network, CallerIpAddress, UserAgent, 
+         MethodName, ServiceName, Severity, OperationType, LogName, InsertId
+  | extend
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project TimeGenerated,
+            PrincipalEmail,
+            AuthEmail,
+            ProjectId,
+            FirewallRuleName,
+            ResourceName = GCPResourceName,
+            OperationType,
+            Direction,
+            SourceRangesList,
+            AllowedProtocols,
+            AllowedPortsList,
+            Priority,
+            Network,
+            CallerIpAddress,
+            UserAgent,
+            MethodName,
+            ServiceName,
+            Severity,
+            LogName,
+            InsertId,
+            AccountName,
+            AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectId
+      - identifier: InstanceName
+        columnName: ResourceName
+customDetails:
+  ProjectId: ProjectId
+  FirewallRuleName: FirewallRuleName
+  ResourceName: ResourceName
+  OperationType: OperationType
+  Direction: Direction
+  SourceRanges: SourceRangesList
+  AllowedProtocols: AllowedProtocols
+  AllowedPorts: AllowedPortsList
+  Network: Network
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP Open Firewall Rule {{OperationType}} - {{FirewallRuleName}} by {{PrincipalEmail}}"
+  alertDescriptionFormat: |-
+    User {{PrincipalEmail}} created/modified firewall rule {{FirewallRuleName}} in project {{ProjectId}} to allow traffic from unrestricted sources (0.0.0.0/0).
+    This configuration exposes resources to the internet and significantly increases attack surface. Investigate immediately to determine if this was authorized and assess potential security exposure. Consider restricting source ranges to specific trusted IP addresses or networks.
+version: 1.0.0
+kind: Scheduled

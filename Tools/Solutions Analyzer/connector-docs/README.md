@@ -1,109 +1,38 @@
-# Microsoft Sentinel Data Connector Reference
+# Microsoft Sentinel Solutions Documentation
 
-This directory contains comprehensive reference for Microsoft Sentinel data connectors, organized by solutions, connectors, and tables.
+> **📍 Documentation Moved**
+>
+> The generated documentation for Microsoft Sentinel Solutions, Connectors, and Tables has been moved to a separate repository to reduce the size of the Azure-Sentinel repo.
 
-## 📑 Documentation Structure
+## 🔗 Full Documentation
 
-### Index Pages
+**Repository:** [github.com/oshezaf/sentinelninja](https://github.com/oshezaf/sentinelninja/tree/main/Solutions%20Docs)
 
-- **[Solutions Index](solutions-index.md)** - Browse all solutions alphabetically, with overview statistics and quick access to solution details
-- **[Connectors Index](connectors-index.md)** - Browse all unique connectors alphabetically, with publisher information, descriptions, and associated tables
-- **[Tables Index](tables-index.md)** - Browse all unique tables alphabetically, with solution references and connector counts
+| Index | Description | Direct Link |
+|:------|:------------|:------------|
+| **Solutions** | Solutions with connector and content details | [View Solutions](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/solutions-index.md) |
+| **Connectors** | Connectors with collection methods and tables | [View Connectors](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/connectors-index.md) |
+| **Tables** | Tables with Azure Monitor schema | [View Tables](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/tables-index.md) |
+| **Content** | Content items (analytics, hunting, playbooks) | [View Content](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/content/content-index.md) |
+| **ASIM** | ASIM parsers by schema | [View ASIM Parsers](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-index.md) |
+| **ASIM Products** | ASIM parsers by product | [View ASIM Products](https://github.com/oshezaf/sentinelninja/blob/main/Solutions%20Docs/asim/asim-products-index.md) |
 
-### Solution Pages
+## Generate Locally
 
-Individual solution pages are organized in the [`solutions/`](solutions/) directory. Each solution page includes:
+You can generate the documentation locally using the scripts in this directory:
 
-- Solution metadata (title, publisher, description)
-- List of data connectors included in the solution
-- Detailed connector information (ID, title, description)
-- Setup instructions (AI-generated from UI definitions - verify in portal)
-- Required permissions and prerequisites
-- Tables associated with each connector
-- Table uniqueness indicators (whether a table is used by only one connector)
+```bash
+cd "Tools/Solutions Analyzer"
 
-### Connector Pages
+# Generate to a custom location
+python generate_connector_docs.py --output-dir "path/to/output"
 
-Individual connector pages are organized in the [`connectors/`](connectors/) directory. Each connector page includes:
-
-- Connector metadata (ID, publisher, tables ingested)
-- Full connector description
-- Required permissions and prerequisites
-- **Setup Instructions** - Step-by-step configuration guidance rendered from connector UI definitions using AI
-  - ⚠️ **Note**: Instructions are automatically rendered from the user interface definition files using AI and may not be fully accurate. Always verify configuration steps in the Microsoft Sentinel portal.
-- Solutions that include this connector
-- Links to connector definition files on GitHub
-
-## 📊 Quick Statistics
-
-For current statistics, see the [Solutions Index](solutions-index.md) which displays up-to-date counts of solutions (with and without connectors), connectors, and tables.
-
-## 🔍 How to Use This Documentation
-
-### Find Information by Solution
-Start at the [Solutions Index](solutions-index.md) to browse all available solutions alphabetically. Click on any solution name to view its detailed page with all connectors and tables.
-
-### Find Information by Connector
-Use the [Connectors Index](connectors-index.md) to find specific connectors. Each connector entry shows:
-- Publisher name
-- Full connector description
-- Associated solution
-- List of tables ingested by the connector
-
-### Find Information by Table
-Browse the [Tables Index](tables-index.md) to discover which solutions and connectors use a specific table. The index shows:
-- All solutions that include connectors writing to the table
-- Number of connectors using the table
-- Whether the table is unique to a single connector
-
-## 🔄 Navigation
-
-All index pages include a navigation bar at the top for easy switching between different views:
-
-```
-Browse by:
-- Solutions
-- Connectors  
-- Tables
+# Skip regenerating input CSVs (uses existing files)
+python generate_connector_docs.py --skip-input-generation --output-dir "path/to/output"
 ```
 
-Solution pages include a back link to return to the Solutions Index.
-
-## 🛠️ Generation
-
-This documentation is automatically generated from the Solutions Analyzer tool, which scans:
-- Microsoft Sentinel solution packages
-- Data connector definitions
-- Parser files and KQL queries
-
-The analyzer identifies table references in connector configurations and parser logic to create comprehensive mappings.
-
-### AI-Generated Instructions
-
-**Setup Instructions** in connector documentation are automatically extracted from connector UI definition files using AI:
-- Interprets UI-centric instruction types (DataConnectorsGrid, ContextPane, GCPGrid, AADDataTypes, etc.)
-- Converts JSON UI definitions to readable markdown format
-- Generates step-by-step configuration guidance
-- Describes form fields, dropdowns, and management interfaces
-- Marks portal-only features with visual indicators
-
-⚠️ **Important**: AI-generated instructions may not be fully accurate. Always verify all configuration steps in the Microsoft Sentinel portal before implementation.
-
-## 📝 Data Source
-
-The documentation is based on analysis of the `solutions_connectors_tables_mapping.csv` file, which contains:
-- Solution metadata
-- Connector configurations
-- Table mappings
-- Detection methods
-- Parser references
-
-## 🔗 Related Resources
-
-- [Solutions Analyzer Tool](../) - The Python tool that generates this documentation
-- [CSV Mapping Data](../solutions_connectors_tables_mapping.csv) - Raw data used to generate documentation
-- [Issues Report](../solutions_connectors_tables_issues_and_exceptions_report.csv) - Known issues and exceptions in the analysis
+See the [main README](../README.md) for full documentation on the analysis tools.
 
 ---
 
-*Generated by: Microsoft Sentinel Solutions Analyzer*
+*Generated by [Azure Sentinel Solutions Analyzer](../README.md) v7.0*
