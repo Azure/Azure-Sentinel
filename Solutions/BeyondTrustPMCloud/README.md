@@ -62,7 +62,9 @@ BeyondTrustPM_ClientEvents_CL
 To integrate with BeyondTrust PM Cloud make sure you have the following:
 
 - **Microsoft.Web/sites permissions:** Read and write permissions to Azure Functions to create a Function App is required. See the [Azure Functions documentation](https://learn.microsoft.com/azure/azure-functions/) for details.
-- **BeyondTrust PM Cloud API credentials:** OAuth Client ID and Client Secret with appropriate permissions. Contact BeyondTrust support to obtain API access credentials.
+- **BeyondTrust PM Cloud API credentials:** OAuth Client ID and Client Secret with appropriate permissions. Create an API Account in your BeyondTrust PM Cloud instance with OAuth API credentials (Client ID and Client Secret). The API account requires the following permissions: 
+   - **Audit** - Read Only
+   - **Reporting** - Read Only.
 - **Azure Log Analytics workspace** configured for Microsoft Sentinel
 
 ## Installation
