@@ -626,6 +626,14 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
 
+                    if ($null -ne $fileContent.condition) {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "condition" -Value $fileContent.condition                       
+                    }
+
+                    if ($null -ne $fileContent.copy) {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $fileContent.copy
+                    }
+
                     if ($global:commaSeparatedTextFieldName -ne "") {
                         $copyObject = [ordered]@{
                             name  = "copyObject"
