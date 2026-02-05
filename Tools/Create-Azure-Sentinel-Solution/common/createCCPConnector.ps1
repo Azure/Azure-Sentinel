@@ -512,7 +512,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 #if the $dataConnectorName already starts with [[concat - assume it contains all needed data, and return it as is
                 if ($dataConnectorName.StartsWith('[[concat', [StringComparison]::OrdinalIgnoreCase)) {
                     Write-Host "****************** Data connector name is already in concat format, skipping processing and returning as is: $dataConnectorName"
-                    #return $dataConnectorName
+                    return $dataConnectorName
                 }
 
                 foreach ($currentName in $splitNamesBySlash) {
