@@ -2,7 +2,7 @@
 
 ## Version 0.3.0
 
-- (2026-01-27) [ASIM] AuditEvent - AzureAdminActivity Parser changes (#13419) - [PR #13419](https://github.com/Azure/Azure-Sentinel/pull/13419)
+- (2026-01-27) [ASIM] AuditEvent - AzureAdminActivity Parser changes - [PR #13419](https://github.com/Azure/Azure-Sentinel/pull/13419)
 
 ## Version 0.2
 
@@ -10,5 +10,5 @@
 
 ## Version 0.1
 
-- (2022-12-27) Create vimAuditEventAzureAdminActivity.yaml - [PR #6968](https://github.com/Azure/Azure-Sentinel/pull/6968)
+- (2022-12-19) Asim/audit parsers - [PR #6928](https://github.com/Azure/Azure-Sentinel/pull/6928)
 

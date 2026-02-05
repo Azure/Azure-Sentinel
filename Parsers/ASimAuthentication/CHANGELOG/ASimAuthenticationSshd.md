@@ -7,11 +7,13 @@
 
 ## Version 0.3.0
 
-- (2026-01-20) [ASIM] Authentication - Sshd Parser fixes (#13460) - [PR #13460](https://github.com/Azure/Azure-Sentinel/pull/13460)
+- (2026-01-20) [ASIM] Authentication - Sshd Parser fixes - [PR #13460](https://github.com/Azure/Azure-Sentinel/pull/13460)
+- Populate `LogonMethod` column if the event is an accepted event
+- Add `Dvc`, `Src` columns
 
 ## Version 0.2.4
 
-- (2025-05-27) Changed Condition for Successful login - [PR #12215](https://github.com/Azure/Azure-Sentinel/pull/12215)
+- (2025-11-24) Changed Condition for Successful login - [PR #12215](https://github.com/Azure/Azure-Sentinel/pull/12215)
 
 ## Version 0.2.2
 
@@ -23,9 +25,9 @@
 
 ## Version 0.2.0
 
-- (2023-01-29) sshd update - [PR #7165](https://github.com/Azure/Azure-Sentinel/pull/7165)
+- (2023-01-29) asim sshd update - [PR #7165](https://github.com/Azure/Azure-Sentinel/pull/7165)
 
 ## Version 0.1.1
 
-- (2023-01-14) add ASimAuthentication Parsers for syslog sshd, su and sudo - [PR #7098](https://github.com/Azure/Azure-Sentinel/pull/7098)
+- (2023-01-21) add ASimAuthentication Parsers for syslog sshd, su and sudo - [PR #7098](https://github.com/Azure/Azure-Sentinel/pull/7098)
 
