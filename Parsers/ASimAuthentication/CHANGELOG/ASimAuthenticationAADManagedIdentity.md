@@ -1,5 +1,11 @@
 # Changelog for ASimAuthenticationAADManagedIdentity.yaml
 
+## Versopm 0.2.3
+
+- (2026-02-24) Authentication parsers update - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
+- Enumeration change from `Entra ID` to `AAD` for EventProduct
+- Enumeration change from `EntraID` to `AADID` for TargetUserIdType
+
 ## Version 0.2.2
 
 - (2024-03-26) Authentication parsers update - [PR #10129](https://github.com/Azure/Azure-Sentinel/pull/10129)
