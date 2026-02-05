@@ -8,6 +8,8 @@
 ## Version 0.3.0
 
 - (2026-01-20) [ASIM] Authentication - Sshd Parser fixes - [PR #13460](https://github.com/Azure/Azure-Sentinel/pull/13460)
+- Populate `LogonMethod` column if the event is an accepted event
+- Add `Dvc`, `Src` columns
 
 ## Version 0.2.4
 
