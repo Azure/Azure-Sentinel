@@ -1,0 +1,155 @@
+{
+    "name": "JamfProtectCustomDCR",
+    "apiVersion": "2021-09-01-preview",
+    "type": "Microsoft.Insights/dataCollectionRules",
+    "location": "[parameters('workspace-location')]",
+    "properties": {
+        "streamDeclarations": {
+            "Custom-jamfprotecttelemetryv2": {
+                "columns": [
+                    {
+                        "name": "action",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "action_type",
+                        "type": "int"
+                    },
+                    {
+                        "name": "deadline",
+                        "type": "int"
+                    },
+                    {
+                        "name": "event",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "event_type",
+                        "type": "int"
+                    },
+                    {
+                        "name": "glob_seq_num",
+                        "type": "int"
+                    },
+                    {
+                        "name": "host",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "mach_time",
+                        "type": "long"
+                    },
+                    {
+                        "name": "metadata",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "process",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "seq_num",
+                        "type": "int"
+                    },
+                    {
+                        "name": "thread",
+                        "type": "dynamic"
+                    },
+                    {
+                        "name": "time",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "uuid",
+                        "type": "string"
+                    },
+                    {
+                        "name": "version",
+                        "type": "int"
+                    }
+                ]
+            },
+            "Custom-jamfprotectunifiedlogs": {
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "caid",
+                        "type": "string"
+                    },
+                    {
+                        "name": "certid",
+                        "type": "string"
+                    },
+                    {
+                        "name": "input",
+                        "type": "dynamic"
+                    }
+                ]
+            },
+            "Custom-jamfprotectalerts": {
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                    },
+                    {
+                        "name": "caid",
+                        "type": "string"
+                    },
+                    {
+                        "name": "certid",
+                        "type": "string"
+                    },
+                    {
+                        "name": "input",
+                        "type": "dynamic"
+                    }
+                ]
+            }
+        },
+        "destinations": {
+            "logAnalytics": [
+                {
+                    "workspaceResourceId": "[variables('workspaceResourceId')]",
+                    "name": "clv2ws1"
+                }
+            ]
+        },
+        "dataFlows": [
+            {
+                "streams": [
+                    "Custom-jamfprotecttelemetryv2"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n//ASIM - Generic Fields\n| extend\n    EventVendor = metadata.vendor,\n    EventProduct = metadata.product,\n    EventSchemaVersion = metadata.schemaVersion,\n    EventProductVersion = host.protectVersion,\n    EventSeverity = \"Informational\",\n    //\n    // Jamf Protect - Device Hostnames\n    TargetHostname = host.hostname,\n    DvcHostname = host.hostname,\n    DvcSerial = host.serial,\n    DvcIpAddr = host.ips,\n    DvcId = host.provisioningUDID,\n    DvcOs = \"macOS\",\n    DvcOsVersion = host.os,\n    SrcDeviceType = \"Computer\"\n| project-rename\n    TimeGenerated = ['time'],\n    EventOriginalUid = uuid,\n    EventOriginalType = event_type,\n    EventCount = glob_seq_num\n| project-away\n    metadata,\n    host,\n    seq_num,\n    version,\n    deadline,\n    mach_time,\n    action_type\n\n",
+                "outputStream": "Custom-jamfprotecttelemetryv2_CL"
+            },
+            {
+                "streams": [
+                    "Custom-jamfprotectunifiedlogs"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n//ASIM - Generic Fields\n| extend\n    EventVendor = \"Jamf\",\n    EventProduct = \"Unified Log Stream\",\n    // EventSchemaVersion = metadata.schemaVersion,\n    EventProductVersion = input.host.protectVersion,\n    EventSeverity = case(input.match.severity == 0, \"Informational\", input.match.severity == 1, \"Low\", input.match.severity == 2, \"Medium\", input.match.severity == 3, \"High\", \"Informational\"),\n    EventOriginalType = input.eventType,\n    EventOriginalUid = input.match.uuid,\n    EventType = \"UnifiedLog\",\n    EventResult = case(input.match.actions has \"Prevented\", \"Prevented\", \"Allowed\"),\n    EventMessage = input.match.event.name,\n    EventResultMessage = input.match.event.composedMessage,\n    // EventReportUrl = strcat(\"https://\", context_identity_claims_hd_s, \".jamfcloud.com/Alerts/\", input.match.uuid),\n    //     //\n    //     // Jamf Protect - Device Hostnames\n    TargetHostname = input.host.hostname,\n    DvcHostname = input.host.hostname,\n    DvcSerial = input.host.serial,\n    DvcIpAddr = input.host.ips,\n    DvcId = input.host.provisioningUDID,\n    DvcOs = \"macOS\",\n    DvcOsVersion = input.host.os,\n    SrcDeviceType = \"Computer\",\n    // Jamf Protect - Event Details\n    //\n    // Jamf Protect Alerts - Process\n    //\n    ProcessEventType = \"Create\",\n    ProcessEventSubType = \"Exec\",\n    TargetProcessName = input.match.event.process,\n    TargetProcessId = input.match.event.processIdentifier,\n    TargetProcessGuid = input.match.event.uuid,\n    TargetProcessCommandLine = input.match.event.process.args,\n    TargetProcessCurrentDirectory = input.match.event.processImagePath\n| project-away\n    caid,\n    certid\n",
+                "outputStream": "Custom-jamfprotectunifiedlogs_CL"
+            },
+            {
+                "streams": [
+                    "Custom-jamfprotectalerts"
+                ],
+                "destinations": [
+                    "clv2ws1"
+                ],
+                "transformKql": "source\n//ASIM - Generic Fields \n| extend\n    EventVendor = \"Jamf\",\n    EventProduct = \"Alerts Stream\",\n    EventProductVersion = input.host.protectVersion,\n    EventSeverity = case(input.match.severity == 0, \"Informational\", input.match.severity == 1, \"Low\", input.match.severity == 2, \"Medium\", input.match.severity == 3, \"High\", \"Informational\"),\n    EventOriginalType = input.eventType,\n    EventOriginalUid = input.match.uuid,\n    EventType = case(input.eventType == \"GPClickEvent\", \"Click\", input.eventType == \"GPDownloadEvent\", \"Download\", input.eventType == \"GPFSEvent\", \"FileSystem\", input.eventType == \"GPProcessEvent\", \"Process\", input.eventType == \"GPKeylogRegisterEvent\", \"Keylog\", input.eventType == \"GPGatekeeperEvent\", \"Gatekeeper\", input.eventType == \"GPMRTEvent\", \"MRT\", input.eventType == \"GPPreventedExecutionEvent\", \"ProcessDenied\", input.eventType == \"GPThreatMatchExecEvent\", \"ProcessPrevented\", input.eventType == \"GPUnifiedLogEvent\", \"UnifiedLog\", input.eventType == \"GPUSBEvent\", \"USB\", input.eventType == \"auth-mount\", \"UsbBlock\", \"Unknown\"),\n    EventResult = case(input.match.actions has \"Prevented\", \"Prevented\", \"Allowed\"),\n    EventMessage = input.match.facts[0].name,\n    EventResultMessage = input.match.facts[0].human,\n    TargetHostname = input.host.hostname,\n    DvcHostname = input.host.hostname,\n    DvcSerial = input.host.serial,\n    DvcIpAddr = input.host.ips,\n    DvcId = input.host.provisioningUDID,\n    DvcOs = \"macOS\",\n    DvcOsVersion = input.host.os,\n    SrcDeviceType = \"Computer\",\n    ProcessEventType = case(input.match.event.type == 0, \"None\", input.match.event.type == 1, \"Create\", input.match.event.type == 2, \"Exit\", \"\"),\n    ProcessEventSubType = case(input.match.event.subType == 7, \"Exec\", input.match.event.subType == 1, \"Fork\", input.match.event.subType == 23, \"Execve\", input.match.event.subType == 43190, \"Posix Spawn\", \"\"),\n    ActingProcessName = input.related.processes[array_length(input.related.processes) - 1].path,\n    ActingProcessId = toint(input.related.processes[0].responsiblePID),\n    ActingProcessGuid = input.related.processes[array_length(input.related.processes) - 1].uuid,\n    ParentProcessName = iff(array_length(input.related.processes) > 1, tostring(input.related.processes[1].path), \"\"),\n    ParentProcessId = iff(array_length(input.related.processes) > 1, toint(input.related.processes[1].pid), int(null)),\n    ParentProcessGuid = iff(array_length(input.related.processes) > 1, tostring(input.related.processes[1].uuid), \"\"),\n    TargetProcessName = input.related.processes[0].name,\n    TargetProcessId = toint(input.related.processes[0].pid),\n    TargetProcessGuid = input.related.processes[0].uuid,\n    TargetProcessSHA1 = input.related.binaries[0].sha1hex,\n    TargetProcessSHA256 = input.related.binaries[0].sha256hex,\n    TargetProcessCommandLine = input.related.processes[0].args,\n    TargetProcessCurrentDirectory = input.related.processes[0].path,\n    TargetProcessStatusCode = input.related.processes[0].exitCode,\n    TargetFilePath = input.related.files[0].path,\n    TargetFileSHA1 = input.related.files[0].sha1hex,\n    TargetFileSHA256 = input.related.files[0].sha256hex,\n    TargetFileSize = input.related.files[0].size,\n    TargetFileSigningInfoMessage = input.related.files[0].signingInfo.statusMessage,\n    TargetFileSignerType = case(input.related.files[0].signingInfo.signerType == 0, \"Apple\", input.related.files[0].signingInfo.signerType == 1, \"App Store\", input.related.files[0].signingInfo.signerType == 2, \"Developer\", input.related.files[0].signingInfo.signerType == 3, \"Ad Hoc\", input.related.files[0].signingInfo.signerType == 4, \"Unsigned\", \"\"),\n    TargetFileSigningTeamID = input.related.files[0].signingInfo.teamid,\n    TargetFileIsDownload = tobool(input.related.files[0].isDownload),\n    TargetFileIsAppBundle = tobool(input.related.files[0].isAppBundle),\n    TargetFileIsDirectory = tobool(input.related.files[0].isDirectory),\n    TargetFileIsScreenshot = tobool(input.related.files[0].isScreenShot),\n    TargetFileExtendedAttributes = input.related.files[0].xattrs,\n    TargetBinaryFilePath = input.related.binaries[0].path,\n    TargetBinarySHA1 = input.related.binaries[0].sha1hex,\n    TargetBinarySHA256 = input.related.binaries[0].sha256hex,\n    TargetBinarySigningInfoMessage = input.related.binaries[0].signingInfo.statusMessage,\n    TargetbinarySignerType = case(input.related.binaries[0].signingInfo.signerType == 0, \"Apple\", input.related.binaries[0].signingInfo.signerType == 1, \"App Store\", input.related.binaries[0].signingInfo.signerType == 2, \"Developer\", input.related.binaries[0].signingInfo.signerType == 3, \"Ad Hoc\", input.related.binaries[0].signingInfo.signerType == 4, \"Unsigned\", \"\"),\n    TargetBinarySigningTeamID = input.related.binaries[0].signingInfo.teamid,\n    TargetBinarySigningAppID = input.related.binaries[0].signingInfo.appid\n| project-away caid, certid\n\n",
+                "outputStream": "Custom-jamfprotectalerts_CL"
+            }
+        ],
+        "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+    }
+}

@@ -34,8 +34,10 @@ query: |
     | where ObjectName contains "HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID"
     | where ObjectName has_any (guids)
     | where NewValue has "System32\\spool\\drivers\\color"
-    | extend RegistryKey = ObjectName, RegistryValueData = NewValue, DeviceName=Computer, InitiatingProcessFileName = Process, InitiatingProcessAccountName=SubjectAccount;
+    | extend RegistryKey = ObjectName, RegistryValueData = NewValue, DeviceName=Computer, InitiatingProcessFileName = Process, InitiatingProcessAccountName=SubjectUserName, InitiatingProcessAccountDomain = SubjectDomainName;
     union mde_data, event_data
+    | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+    | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
 entityMappings:
   - entityType: RegistryKey
     fieldMappings:
@@ -43,23 +45,29 @@ entityMappings:
         columnName: RegistryKey
   - entityType: Host
     fieldMappings:
-      - identifier: HostName
+      - identifier: FullName
         columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
         columnName: InitiatingProcessFileName
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
+      - identifier: Name
         columnName: InitiatingProcessAccountName
-version: 1.0.1
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountName
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

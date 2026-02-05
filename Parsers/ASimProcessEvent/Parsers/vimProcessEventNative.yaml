@@ -1,0 +1,137 @@
+Id: 192fbf56-be7b-4bee-a172-a44e6527a9e0
+Parser:
+  Title: Process Event ASIM filtering parser for Microsoft Sentinel native Process Event table
+  Version: "0.1.0"
+  LastUpdated: Nov 22 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: ProcessEvent
+  Version: "0.1.4"
+References:
+  - Title: ASIM Process Schema
+    Link: https://aka.ms/ASimProcessEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Process Event table (ASimProcessEventLogs) to the ASIM Process Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimProcessEventNative
+EquivalentBuiltInParser: _Im_ProcessEvent_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: actorusername_has
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])    
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime: datetime=datetime(null),
+    endtime: datetime=datetime(null),
+    commandline_has_any: dynamic=dynamic([]),
+    commandline_has_all: dynamic=dynamic([]),
+    commandline_has_any_ip_prefix: dynamic=dynamic([]),
+    actingprocess_has_any: dynamic=dynamic([]),
+    targetprocess_has_any: dynamic=dynamic([]),
+    parentprocess_has_any: dynamic=dynamic([]),
+    targetusername_has: string='*',
+    actorusername_has: string='*',
+    dvcipaddr_has_any_prefix: dynamic=dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    eventtype: string='*',
+    hashes_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    ASimProcessEventLogs 
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(dvcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DvcIpAddr, dvcipaddr_has_any_prefix))
+        and (array_length(commandline_has_all) == 0 or TargetProcessCommandLine has_all (commandline_has_all)) 
+        and (array_length(commandline_has_any) == 0 or TargetProcessCommandLine has_any (commandline_has_any)) 
+        and (array_length(commandline_has_any_ip_prefix) == 0 or has_any_ipv4_prefix(TargetProcessCommandLine, commandline_has_any_ip_prefix)) 
+        and (array_length(actingprocess_has_any) == 0 or ActingProcessName has_any (actingprocess_has_any)) 
+        and (array_length(targetprocess_has_any) == 0 or TargetProcessName has_any (targetprocess_has_any)) 
+        and (array_length(parentprocess_has_any) == 0 or ParentProcessName has_any (parentprocess_has_any))  
+        and (targetusername_has == '*' or TargetUsername has targetusername_has)
+        and (actorusername_has == '*' or ActorUsername has actorusername_has) 
+        and (array_length(dvchostname_has_any) == 0 or DvcHostname has_any (dvchostname_has_any))   
+        and (array_length(hashes_has_any) == 0 or TargetProcessSHA512 has_any (hashes_has_any) or TargetProcessSHA256 has_any (hashes_has_any) or TargetProcessSHA1 has_any (hashes_has_any) or TargetProcessMD5 has_any (hashes_has_any) or TargetProcessIMPHASH has_any (hashes_has_any))
+        and (eventtype == '*' or EventType == eventtype)
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "ProcessEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = TargetUsername,
+        Process = TargetProcessName,
+        CommandLine = TargetProcessCommandLine,
+        Hash = coalesce(TargetProcessSHA512, TargetProcessSHA256, TargetProcessMD5, TargetProcessSHA1, TargetProcessIMPHASH)
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      targetusername_has=targetusername_has,
+      actorusername_has=actorusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      hashes_has_any=hashes_has_any,
+      disabled=disabled
+  )

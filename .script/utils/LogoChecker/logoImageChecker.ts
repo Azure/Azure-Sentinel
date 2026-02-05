@@ -1,5 +1,5 @@
 import fs from "fs";
-import { LogoValidationError } from "../validationError";
+import { LogoValidationError } from "../validationError.js";
 function isLogoSVG(LogoImagesFileNames: string) {
     return  LogoImagesFileNames.toLowerCase().endsWith('.svg');
 }

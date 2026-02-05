@@ -31,24 +31,34 @@ query:  |
   | extend ParentProcessName = tostring(EventData.ParentProcessName)
     , Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
     , NewProcessId = tostring(EventData.NewProcessId)
-  | extend timestamp = TimeGenerated, Computer, Account, File = tostring(split(NewProcessName, '\\', -1)[-1]), AlertDetail = 'Chia crypto IOC detected'
+  | extend Computer, Account, File = tostring(split(NewProcessName, '\\', -1)[-1]), AlertDetail = 'Chia crypto IOC detected'
   | extend FilePath = replace_string(NewProcessName, File, '')
-  | project TimeGenerated, timestamp, File, AlertDetail, FilePath,Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
-  | extend AccountCustomEntity = Account, HostCustomEntity = Computer, FileCustomEntity = File, FilePathCustomEntity = FilePath
+  | project TimeGenerated, File, AlertDetail, FilePath,Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
+  | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: File
     fieldMappings:
       - identifier: Name
-        columnName: FileCustomEntity
+        columnName: File
       - identifier: Directory
-        columnName: FilePathCustomEntity
-version: 1.0.3
+        columnName: FilePath
+version: 1.0.4
 kind: Scheduled

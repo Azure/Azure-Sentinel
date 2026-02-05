@@ -1,0 +1,86 @@
+id: 8f3a9b2d-5c6e-4a1f-9d8c-3e7b4f9a6c2d
+name: GCP Audit Logs - List Activities Disabling Data Access Logging for GCP Services
+description: |
+  List all activities where data access logging (ADMIN_READ, DATA_READ, or DATA_WRITE) is disabled for GCP services through IAM policy modifications.
+description-detailed: |
+  This hunting query lists all activities where audit log configurations are modified to disable data access logging for GCP services.
+  Data access logs (ADMIN_READ, DATA_READ, DATA_WRITE) record API calls that read or modify user-provided data and administrative operations,
+  which are critical for security monitoring, forensic investigations, and compliance requirements. Disabling these logs can hide malicious
+  activity such as unauthorized data access, data exfiltration, privilege escalation, or configuration changes. Review these changes to verify
+  they are authorized and assess the security impact of reduced logging visibility.
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.008
+tags:
+  - Cloud Security
+  - Defense Evasion
+query: |
+  GCPAuditLogs
+  | where ServiceName == "cloudresourcemanager.googleapis.com"
+  | where MethodName == "SetIamPolicy"
+  | where GCPResourceType == "project" and Severity == "NOTICE"
+  | extend 
+      RequestMetadataJson = parse_json(RequestMetadata),
+      ServiceDataJson = parse_json(ServiceData),
+      AuthInfoJson = parse_json(AuthenticationInfo)
+  | extend PolicyDelta = ServiceDataJson.policyDelta.auditConfigDeltas
+  | where isnotempty(PolicyDelta)
+  | mv-expand ConfigDelta = PolicyDelta
+  | extend 
+      Action = tostring(ConfigDelta.action),
+      LogType = tostring(ConfigDelta.logType),
+      ServiceAffected = tostring(ConfigDelta.service)
+  | where Action == "REMOVE"
+  | where LogType in ("ADMIN_READ", "DATA_READ", "DATA_WRITE")
+  | extend 
+      CallerIP = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent)
+  | summarize 
+      DisabledLogTypes = make_set(LogType, 10),
+      DisabledServices = make_set(ServiceAffected, 50)
+      by TimeGenerated, PrincipalEmail, CallerIP, UserAgent, ProjectId, 
+          GCPResourceName, MethodName, Severity, LogName, InsertId
+  | extend 
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project 
+      TimeGenerated,
+      DisabledServices,
+      DisabledLogTypes,
+      PrincipalEmail,
+      CallerIP,
+      UserAgent,
+      ProjectId,
+      ResourceName = GCPResourceName,
+      MethodName,
+      Severity,
+      LogName,
+      InsertId,
+      AccountName,
+      AccountUPNSuffix
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIP
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectId
+      - identifier: InstanceName
+        columnName: ResourceName
+version: 1.0.0

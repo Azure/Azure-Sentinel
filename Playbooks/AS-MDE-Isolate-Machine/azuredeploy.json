@@ -1,0 +1,337 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-MDE-Isolate-Machine", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will match Microsoft Defender for Endpoint machines with the host entities on the incident and then isolate them.",
+        "postDeployment": "1. Microsoft Contributor Role must be added to the Logic App. 2. Access to Azure Key Vault Secrets must be granted.",
+        "prerequisites": "1.An App Registraton with the Machine.Isolate must be created. 2. A Microsoft Azure key vault containing the app registration client secret must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-MDE-Isolate-Machine",
+        "lastUpdateTime": "2024-02-08T14:29:33Z",
+        "entities": ["Host"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Microsoft Defender", "Isolate Machine"], 
+        "support": {
+            "tier": "developer"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-MDE-Isolate-Machine",
+            "type": "string"
+        },
+        "ClientId": {
+            "type": "string",
+            "metadata" : {
+                "description" : "The client id of the app registration"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the app registration client secret"
+            }
+        },
+        "KeyVaultSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the value of the app registration client secret"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{variables('Affected Hosts')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "For_each_-_Host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        },
+                        "For_each_-_Host": {
+                            "actions": {
+                                "Condition_-_Check_for_MDE_Device_ID": {
+                                    "actions": {
+                                        "Append_to_string_variable_-_Machine_Isolated": {
+                                            "inputs": {
+                                                "name": "Affected Hosts",
+                                                "value": "Successfully isolated @{items('For_each_-_Host')?['HostName']} in MDE\n"
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_Isolate_Machine": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "HTTP_-_Isolate_Machine": {
+                                            "inputs": {
+                                                "body": {
+                                                    "Comment": "Isolated by playbook run from Incident: @{triggerBody()?['object']?['properties']?['incidentNumber']}",
+                                                    "IsolationType": "Full"
+                                                },
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('Parse_JSON_-_Token')?['access_token']}"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://api.securitycenter.microsoft.com/api/machines/@{items('For_each_-_Host')?['additionalData']?['MdatpDeviceId']}/isolate"
+                                            },
+                                            "runAfter": {},
+                                            "type": "Http"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_-_Unable_to_Isolate_Machine": {
+                                                "inputs": {
+                                                    "name": "Affected Hosts",
+                                                    "value": "No MDE Device ID was found for @{items('For_each_-_Host')?['HostName']}\n"
+                                                },
+                                                "runAfter": {},
+                                                "type": "AppendToStringVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_-_Host')?['additionalData']?['MdatpDeviceId']",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "runAfter": {
+                                "Initialize_variable_-_Affected_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Client_Secret": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "HTTP_-_Authenticate": {
+                            "inputs": {
+                                "body": "[concat('grant_type=client_credentials&client_id=', parameters('ClientID'),'&client_secret=@{body(''Get_Client_Secret'')?[''value'']}&scope=https://api.securitycenter.microsoft.com/.default')]",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded",
+                                    "Host": "login.microsoftonline.com"
+                                },
+                                "method": "POST",
+                                "uri": "[concat('https://login.microsoftonline.com/', subscription().tenantId, '/oauth2/v2.0/token')]"
+                            },
+                            "runAfter": {
+                                "Get_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Initialize_variable_-_Affected_Hosts": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Affected Hosts",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_JSON_-_Token": {
+                            "inputs": {
+                                "content": "@body('HTTP_-_Authenticate')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_-_Authenticate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

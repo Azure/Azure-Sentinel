@@ -1,0 +1,76 @@
+id: 0881b209-62c9-4b15-9f9a-e0c1d1b1eb7b
+kind: Scheduled
+name: Dataverse - Export activity from terminated or notified employee
+description: This query identifies Dataverse export activity triggered by terminated,
+  or employees about to leave the organization. This analytics rule uses the TerminatedEmployees
+  watchlist template.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+  - T1048
+query: |
+  // Set a time period before employee terminatation date to search for export events
+  let termination_watch_period = 7d;
+  let query_frequency = 1h;
+  let exportEvents = dynamic(['ExportToExcel', 'ExportPdfDocument', 'ExportWordDocument', 'ExecutePowerBISql']);
+  MSBizAppsTerminatedEmployees
+  | where (UserState =~ "Terminated") or (UserState =~ "Notified" and TerminationDate <= startofday(now()) + termination_watch_period)
+  | join kind=inner (DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message in (exportEvents))
+      on $left.UserPrincipalName == $right.UserId
+  | summarize
+      FirstEvent = min(TimeGenerated),
+      LastEvent = max(TimeGenerated),
+      Event = make_set(Message, 4)
+      by UserId, InstanceUrl, ClientIp, UserState
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      LastEvent,
+      UserId,
+      ClientIp,
+      UserState,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Export events detected from a terminated employee
+    in {{InstanceUrl}} '
+  alertDescriptionFormat: Export events where employee state found matching {{UserState}}
+    found in {{InstanceUrl}}.
+version: 3.2.0

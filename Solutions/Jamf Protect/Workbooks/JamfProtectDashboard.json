@@ -15,12 +15,13 @@
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "value": [],
             "typeSettings": {
-              "additionalResourceOptions": [],
               "includeAll": false
             },
-            "label": "☁️ Subscription"
+            "label": "☁️ Subscription",
+            "value": [
+              "/subscriptions/cc519aa2-4ddf-4e59-a0c2-a785d967e829"
+            ]
           },
           {
             "id": "f408f1cf-dbcb-4f57-9409-272374bd3cd4",
@@ -32,13 +33,10 @@
             "crossComponentResources": [
               "{Subscription}"
             ],
-            "typeSettings": {
-              "additionalResourceOptions": []
-            },
             "queryType": 1,
             "resourceType": "microsoft.resourcegraph/resources",
             "label": "🗂️ Workspace",
-            "value": ""
+            "value": "/subscriptions/cc519aa2-4ddf-4e59-a0c2-a785d967e829/resourceGroups/JamfProtect/providers/Microsoft.OperationalInsights/workspaces/3-2-4-27"
           },
           {
             "id": "397d983f-ea80-4aa5-8c65-547d40cb312b",
@@ -103,7 +101,6 @@
             "type": 10,
             "isRequired": true,
             "typeSettings": {
-              "additionalResourceOptions": [],
               "showDefault": false
             },
             "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n {\"value\": \"No\", \"label\": \"No\", \"selected\":true }\r\n]"
@@ -161,11 +158,10 @@
                   "description": "Please choose the type",
                   "isGlobal": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "jsonData": "[\n    { \"value\":\"filehash\", \"label\":\"File Hash\" },\n    { \"value\":\"CVE\", \"label\":\"CVE\" },\n    { \"value\":\"mitre\", \"label\":\"Framework: MITRE\" },\n    { \"value\":\"endpointalerts\", \"label\":\"Latest alerts for a single endpoint\" }\n]",
-                  "value": null
+                  "value": "endpointalerts"
                 }
               ],
               "style": "pills",
@@ -189,7 +185,7 @@
                   "name": "_hostnamealert",
                   "label": "Hostname",
                   "type": 2,
-                  "query": "JamfProtect\n| where isnotempty(DvcHostname)\n   | project-keep DvcHostname\n| project-rename Hostname = DvcHostname\n| summarize by Hostname",
+                  "query": "jamfprotectalerts_CL\n| where isnotempty(DvcHostname)\n   | project-keep DvcHostname\n| project-rename Hostname = DvcHostname\n| summarize by tostring(Hostname)",
                   "crossComponentResources": [
                     "{Workspace}"
                   ],
@@ -203,7 +199,7 @@
                   "timeContextFromParameter": "_timetoken",
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
-                  "value": null
+                  "value": "admin’s Virtual Machine"
                 }
               ],
               "style": "pills",
@@ -287,7 +283,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"ProcessPrevented\" or EventType == \"ProcessCreated\"\n| where TargetProcessSHA1 has \"{_filehash:value}\" or TargetBinarySHA256 has \"{_filehash:value}\"\n| project-keep\n    TimeGenerated,\n    EventStartTime,\n    EventMatch,\n    EventSeverity,\n    EventMatchType,\n    TargetProcessCommandLine,\n    DvcHostname,\n    EventReportUrl\n| project-reorder\n    TimeGenerated,\n    EventStartTime,\n    EventMatch,\n    EventSeverity,\n    EventMatchType,\n    TargetProcessCommandLine,\n    DvcHostname,\n    EventReportUrl\n| sort by TimeGenerated",
+              "query": "JamfProtectAlerts\n| where TargetProcessSHA1 has \"{_filehash:value}\" or TargetBinarySHA256 has \"{_filehash:value}\"\n| project-reorder\n    TimeGenerated\n| sort by TimeGenerated",
               "size": 4,
               "title": "Matches on FileHash",
               "noDataMessage": "No matches found based on the hash value",
@@ -329,7 +325,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where Match_tags contains \"{_CVE:value}\"\n| project-keep\n    TimeGenerated,\n    EventStartTime,\n    EventMatch,\n    Match_tags,\n    EventSeverity,\n    EventMatchType,\n    TargetProcessCommandLine,\n    DvcHostname,\n    EventReportUrl\n| project-reorder\n    TimeGenerated,\n    EventStartTime,\n    EventMatch,\n    Match_tags,\n    EventSeverity,\n    EventMatchType,\n    TargetProcessCommandLine,\n    DvcHostname,\n    EventReportUrl\n| sort by TimeGenerated",
+              "query": "jamfprotectalerts_CL\n| where input.match.tags contains \"{_CVE:value}\"\n| project-reorder\n    TimeGenerated\n| sort by TimeGenerated",
               "size": 1,
               "title": "Matches on CVE",
               "noDataMessage": "No matches found based on the _CVE:value CVE number",
@@ -371,7 +367,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where Match_tags contains \"MITREattack\"\n| extend\n    Tactics = case(Match_tags has \"Execution\", \"Execution\", Match_tags has \"Visibility\", \"Visibility\", Match_tags has \"Persistence\", \"Persistence\", Match_tags has \"LateralMovement\", \"Lateral Movement\", Match_tags has \"CredentialAccess\", \"Credential Acccess\", Match_tags has \"DefenseEvasion\", \"Defense Evasion\", Match_tags has \"PrivilegeEscalation\", \"Privilege Escalation\", Match_tags has \"Impact\", \"Impact\", Match_tags has \"CommandAndControl\", \"Command and Control\", Match_tags has \"Discovery\", \"Discovery\", Match_tags has \"InitialAccess\", \"Initial Access\", \"\"),\n      Techniques = extract(@\"[A-Za-z]\\d{4}\", 0, tostring(Match_tags))\n| project-keep\n    TimeGenerated,\n    EventStartTime,\n    EventType,\n    EventMessage,\n    EventDescription,\n    Tactics,\n    Techniques,\n    Match_tags,\n    EventSeverity,\n    DvcHostname,\n    EventReportUrl\n| project-reorder\n    TimeGenerated,\n    EventStartTime,\n    EventType,\n    EventMessage,\n    EventDescription,\n    Tactics,\n    Techniques,\n    Match_tags,\n    EventSeverity,\n    DvcHostname,\n    EventReportUrl\n| sort by TimeGenerated",
+              "query": "jamfprotectalerts_CL\n| where input.match.tags contains \"MITREattack\"\n| extend\n    Tactics = case(input.match.tags has \"Execution\", \"Execution\", input.match.tags has \"Visibility\", \"Visibility\", input.match.tags has \"Persistence\", \"Persistence\", input.match.tags has \"LateralMovement\", \"Lateral Movement\", input.match.tags has \"CredentialAccess\", \"Credential Acccess\", input.match.tags has \"DefenseEvasion\", \"Defense Evasion\", input.match.tags has \"PrivilegeEscalation\", \"Privilege Escalation\", input.match.tags has \"Impact\", \"Impact\", input.match.tags has \"CommandAndControl\", \"Command and Control\", input.match.tags has \"Discovery\", \"Discovery\", input.match.tags has \"InitialAccess\", \"Initial Access\", \"\"),\n      Techniques = extract(@\"[A-Za-z]\\d{4}\", 0, tostring(input.match.tags))\n| project-reorder\n    TimeGenerated\n| sort by TimeGenerated",
               "size": 1,
               "title": "Alerts mapped to MITRE",
               "noDataMessage": "No alerts found that are mapped to the MITRE framework",
@@ -425,7 +421,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where DvcHostname contains \"{_hostnamealert:value}\"\n| where EventProduct == \"Jamf Protect - Alerts\" and isnotempty(EventType)\n| project-keep\n    TimeGenerated,\n    EventStartTime,\n    EventType,\n    EventMessage,\n    EventDescription,\n    Match_tags,\n    EventSeverity,\n    DvcHostname,\n    EventReportUrl\n| project-reorder\n    TimeGenerated,\n    EventStartTime,\n    EventType,\n    EventMessage,\n    EventDescription,\n    Match_tags,\n    EventSeverity,\n    DvcHostname,\n    EventReportUrl\n| sort by TimeGenerated\n| limit 10",
+              "query": "JamfProtectAlerts\n| where DvcHostname contains \"{_hostnamealert:value}\"\n| project-reorder\n    TimeGenerated\n| sort by TimeGenerated\n| limit 10",
               "size": 1,
               "title": "Recent 10 alerts in the past {_timetoken:value} for {_hostnamealert:value}",
               "noDataMessage": "No alerts found",
@@ -494,7 +490,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n| where isnotempty(EventType)\n| where EventSeverity != \"Informational\"\n| sort by EventStartTime\n| limit 10",
+        "query": "JamfProtectAlerts\n| where EventSeverity != \"Informational\"\n| sort by TimeGenerated\n| limit 10",
         "size": 0,
         "title": "Recent 10 alerts in the past {_timetoken:value}",
         "noDataMessage": "No alerts found",
@@ -544,7 +540,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "datatable (Count: long, severity: string) [\n    0, \"Informational\",\n    0, \"Low\",\n    0, \"Medium\",\n    0, \"High\"\n]\n| union\n    (\n    JamfProtect\n    | where EventProduct == \"Jamf Protect - Alerts\" \n        and isnotempty(EventType)\n        and EventSeverity != \"True\"\n    | summarize Count = count() by EventSeverity\n    )\n| where isnotempty(EventSeverity)\n| summarize Count=sum(Count) by EventSeverity",
+        "query": "datatable (Count: long, severity: string) [\n    0, \"Informational\",\n    0, \"Low\",\n    0, \"Medium\",\n    0, \"High\"\n]\n| union\n    (\n    JamfProtectAlerts\n    | summarize Count = count() by EventSeverity\n    )\n| where isnotempty(EventSeverity)\n| summarize Count=sum(Count) by EventSeverity",
         "size": 3,
         "title": "All Alerts {_timetoken:value}",
         "timeContextFromParameter": "_timetoken",
@@ -587,14 +583,12 @@
                 },
                 {
                   "operator": "Default",
-                  "thresholdValue": null,
                   "representation": "green",
                   "text": "{0}{1}"
                 }
               ],
               "compositeBarSettings": {
-                "labelText": "",
-                "columnSettings": []
+                "labelText": ""
               }
             }
           },
@@ -623,7 +617,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n    and isnotempty(EventType)\n| where EventSeverity != \"True\"\n| summarize count() by EventSeverity, bin(TimeGenerated,{_timetoken:grain})\n| render areachart ",
+        "query": "JamfProtectAlerts\n| where isnotempty(EventSeverity)\n| summarize count() by EventSeverity, bin(TimeGenerated,{_timetoken:grain})\n| render areachart ",
         "size": 0,
         "title": "Events Detected (Count By Severity) {_timetoken:value}",
         "timeContextFromParameter": "_timetoken",
@@ -661,7 +655,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventType == \"UnifiedLog\"\n| summarize count() by tostring(EventDescription), bin(TimeGenerated,{_timetoken:grain})\n| render areachart ",
+        "query": "JamfProtectUnifiedLogs\n| summarize count() by tostring(EventMessage), bin(TimeGenerated,{_timetoken:grain})\n| render areachart ",
         "size": 0,
         "title": "Unified Logging Events {_timetoken:value}",
         "timeContextFromParameter": "_timetoken",
@@ -681,7 +675,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\" \n    and isnotempty(EventType)\n    and isnotempty(DvcHostname)\n| summarize Event = count() by DvcHostname\n| sort by Event desc",
+        "query": "JamfProtectAlerts\n| where isnotempty(DvcHostname)\n| summarize Event = count() by tostring(DvcHostname)\n| sort by Event desc",
         "size": 3,
         "title": "Most Active Endpoints (Total, last {_timetoken:value})",
         "timeContextFromParameter": "_timetoken",
@@ -741,7 +735,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n    and isnotempty(EventType)\n| summarize Events = count() by EventProduct, bin(TimeGenerated,{_timetoken:grain})\n| render columnchart   ",
+        "query": "JamfProtectAlerts\n| summarize Events = count() by EventProduct, bin(TimeGenerated,{_timetoken:grain})\n| render columnchart   ",
         "size": 0,
         "title": "Events detected (Total by date, {_timetoken:value})",
         "timeContextFromParameter": "_timetoken",
@@ -769,7 +763,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n| where isnotempty(EventType)\n| summarize Events = count() by EventType, bin(EventStartTime,{_timetoken:grain})\n| render areachart with(kind=stacked)\n",
+        "query": "JamfProtectAlerts\n| summarize Events = count() by EventType, bin(TimeGenerated,{_timetoken:grain})\n| render areachart with(kind=stacked)\n",
         "size": 0,
         "title": "Events Detected (Count by Type, {_timetoken:value})",
         "timeContextFromParameter": "_timetoken",
@@ -801,148 +795,10 @@
       }
     },
     {
-      "type": 12,
-      "content": {
-        "version": "NotebookGroup/1.0",
-        "groupType": "editable",
-        "title": "Event Types",
-        "items": [
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n| where isnotempty(EventType)\n| summarize Events = count() by EventType\n| render piechart",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "Event Types {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "33",
-            "name": "Query - Events by Type",
-            "styleSettings": {
-              "maxWidth": "100"
-            }
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"FileSystem\"\n| summarize count() by tostring(EventMessage)\n| render piechart ",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "File System Event Types {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "33",
-            "name": "Query - File System Events"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"Process\"\n| summarize count() by tostring(EventMessage)\n| render piechart \n",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "Process Event Types {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "33",
-            "name": "Query - Process Event Types"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"USB\"\nor EventType == \"UsbBlock\" and EventMessage == \"USBWrite\"\n| summarize count() by tostring(EventMessage)\n| render piechart ",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "USB Event Types {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "33",
-            "name": "Query - USB Event Types"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"Gatekeeper\"\n| summarize count() by tostring(EventMessage)\n| render piechart ",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "Gatekeeper Event Types {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ],
-              "chartSettings": {
-                "seriesLabelSettings": [
-                  {
-                    "seriesName": "GatekeeperBlockedSigned",
-                    "label": "Signed"
-                  },
-                  {
-                    "seriesName": "GatekeeperBlockedRevoked",
-                    "label": "Revoked"
-                  },
-                  {
-                    "seriesName": "GatekeeperBlockedUnsignedOrUnknown",
-                    "label": "UnsignedOrUnknown"
-                  }
-                ]
-              }
-            },
-            "customWidth": "33",
-            "name": "Query - GateKeeper Events"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"ProcessPrevented\"\n| summarize Threat = count() by EventMatch\n| render piechart ",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "Threat Prevention Types {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "33",
-            "name": "Query - Threat Prevention Types"
-          }
-        ]
-      },
-      "name": "Group - Event Types"
-    },
-    {
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n| where isnotempty(EventType)\n| summarize count() by tostring(EventType), tostring(EventMessage)\n| project-rename Count = count_\n| sort by Count desc\n| limit 10\n",
+        "query": "JamfProtectAlerts\n| where isnotempty(EventType)\n| summarize count() by tostring(EventType), tostring(EventMessage)\n| project-rename Count = count_\n| sort by Count desc\n| limit 10\n",
         "size": 3,
         "showAnalytics": true,
         "title": "Top 10 Event Types {_timetoken:value}",
@@ -960,87 +816,6 @@
       }
     },
     {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "JamfProtect\n| where EventType == \"ProcessDenied\"\n| where isnotempty(DvcHostname)\n| summarize Count= count() by TargetProcessName, EventMatch, TargetBinarySigningAppID, TargetBinarySigningTeamID\n| sort by Count asc nulls first\n| limit 25",
-        "size": 0,
-        "showAnalytics": true,
-        "title": "Process Blocked by Custom Prevent List {_timetoken:value}",
-        "timeContextFromParameter": "_timetoken",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "crossComponentResources": [
-          "{Workspace}"
-        ]
-      },
-      "customWidth": "50",
-      "name": "Query - Process Blocked by Custom Prevent List"
-    },
-    {
-      "type": 12,
-      "content": {
-        "version": "NotebookGroup/1.0",
-        "groupType": "editable",
-        "title": "macOS Built-In Security Tools",
-        "expandable": true,
-        "expanded": true,
-        "items": [
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"Gatekeeper\"\n| summarize count() by tostring(EventMessage), TargetFilePath\n| project-rename BlockType = EventMessage, Count = count_\n| sort by Count desc\n| limit 10",
-              "size": 3,
-              "showAnalytics": true,
-              "title": "Top Gatekeeper Blocked Items {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ],
-              "gridSettings": {
-                "sortBy": [
-                  {
-                    "itemKey": "Count",
-                    "sortOrder": 2
-                  }
-                ]
-              },
-              "sortBy": [
-                {
-                  "itemKey": "Count",
-                  "sortOrder": 2
-                }
-              ]
-            },
-            "customWidth": "50",
-            "name": "Query - Top Blocked GateKeepers events"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Unified Log\"\n| where input_match_event_subsystem_s == \"com.apple.XProtectFramework.PluginAPI\"\n| where tostring(parse_json(input_match_event_composedMessage_s).status_message) <> \"[]\"\n| extend status_message_ = tostring(parse_json(input_match_event_composedMessage_s).status_message)\n| extend execution_duration_ = tostring(parse_json(input_match_event_composedMessage_s).execution_duration)\n| project \n    EventStartTime, \n    DvcHostname, \n    Status=status_message_, \n    Module=input_match_event_process_s, \n    Execution_Duration=execution_duration_\n| sort by EventStartTime desc\n| limit 25",
-              "size": 0,
-              "showAnalytics": true,
-              "title": "XProtect Remediator Scans {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "50",
-            "name": "Query - XProtect Remediator Activity"
-          }
-        ]
-      },
-      "name": "macOS Built-In Security Tools Group"
-    },
-    {
       "type": 12,
       "content": {
         "version": "NotebookGroup/1.0",
@@ -1053,7 +828,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"UsbBlock\"\n| where EventMessage == \"EnforcedRemovableDevicePolicy\"\n| extend EventMessage = replace_string(tostring(EventMessage), \"EnforcedRemovableDevicePolicy\", \"Blocked\")\n| summarize count() by tostring(EventMessage)\n\n",
+              "query": "JamfProtectAlerts\n| where EventType == \"UsbBlock\"\n| where EventMessage == \"EnforcedRemovableDevicePolicy\"\n| extend EventMessage = replace_string(tostring(EventMessage), \"EnforcedRemovableDevicePolicy\", \"Blocked\")\n| summarize count() by tostring(EventMessage)\n\n",
               "size": 2,
               "title": "Device Controls Blocked {_timetoken:value}",
               "timeContextFromParameter": "_timetoken",
@@ -1075,7 +850,6 @@
                       },
                       {
                         "operator": "Default",
-                        "thresholdValue": null,
                         "representation": "Notifications",
                         "text": "Devices Blocked"
                       }
@@ -1102,7 +876,6 @@
               },
               "graphSettings": {
                 "type": 0,
-                "topContent": {},
                 "centerContent": {
                   "columnMatch": "count_",
                   "formatter": 1,
@@ -1142,7 +915,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where EventType == \"UsbBlock\"\n| where EventMessage == \"EnforcedRemovableDevicePolicy\"\n| extend device_ = strcat(input_match_event_device_vendorName_s, \" \",input_match_event_device_productName_s)\n| summarize count() by DvcHostname, device_\n| project-rename Hostname = DvcHostname, Device = device_, Count = count_\n| sort by Count desc\n\n",
+              "query": "JamfProtectAlerts\n| where EventType == \"UsbBlock\"\n| where EventMessage == \"EnforcedRemovableDevicePolicy\"\n| extend device_ = strcat(input.match.event.device.vendorName, \" \",input.match.event.device.productName)\n| summarize count() by tostring(DvcHostname), device_\n| project-rename Hostname = DvcHostname, Device = device_, Count = count_\n| sort by Count desc\n\n",
               "size": 0,
               "title": "Device Controls Endpoint {_timetoken:value}",
               "timeContextFromParameter": "_timetoken",
@@ -1178,7 +951,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where identity_signer_id_s == \"com.apple.sudo\"\n    and ParentProcessName == \"/usr/bin/sudo\"\n    and ActorUsername == \"root\"\n    and ActorUserId != \"-1\"\n| extend Compiled_Arguments = replace_string(TargetProcessCommandLine, \",\", \" \")\n| project-keep\n    TimeGenerated,\n    EventStartTime,\n    DvcHostname,\n    ActorUserId,\n    Compiled_Arguments\n| project-rename Hostname = DvcHostname, Elevated_User = ActorUserId\n| limit 50\n| sort by EventStartTime",
+              "query": "JamfProtectTelemetry\n| where eventTypeHuman == \"exec\"\n| limit 50\n| sort by TimeGenerated",
               "size": 0,
               "title": "Succesful sudo events {_timetoken:value}",
               "noDataMessage": "No events occured",
@@ -1197,20 +970,9 @@
                       "customColumnWidthSetting": "69.5714ch"
                     }
                   }
-                ],
-                "sortBy": [
-                  {
-                    "itemKey": "EventStartTime",
-                    "sortOrder": 2
-                  }
                 ]
               },
-              "sortBy": [
-                {
-                  "itemKey": "EventStartTime",
-                  "sortOrder": 2
-                }
-              ]
+              "sortBy": []
             },
             "name": "Query - Successful sudo events"
           },
@@ -1218,7 +980,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "JamfProtect\n//| where SrcIpAddr != \"0.0.0.0\" and EventType != \"AUE_SESSION_START\" and EventType != \"PLAINTEXT_LOG_COLLECTION_EVENT\" and EventType != \"BIOS_FIRMWARE_VERSIONS\" and EventType != \"SYSTEM_PERFORMANCE_METRICS\" and EventType != \"RATE_LIMITING_APPLIED\"\n| where SrcIpAddr != \"0.0.0.0\" and EventType == \"ProcessCreated\"\n    or SrcIpAddr != \"0.0.0.0\" and EventType == \"Logoff\"\n    or SrcIpAddr != \"0.0.0.0\" and EventType == \"SshInitiated\"\n| where isnotempty(DvcHostname)\n| where isnotempty(EventType)\n| where EventProduct != \"Jamf Protect - Alerts\"\n//| extend binary=parse_json(path_s)[0]\n| extend Compiled_Arguments = replace_string(TargetProcessCommandLine, \",\", \" \")\n| project-keep\n    TimeGenerated,\n    EventStartTime,\n    EventType,\n    return_description_s,\n    TargetProcessName,\n    DvcHostname,\n    SrcIpAddr,\n    ActorUsername,\n    ActorUserId,\n    Compiled_Arguments\n| project-rename\n    EventName = EventType,\n    Description = return_description_s,\n    Hostname = DvcHostname,\n    Process_Name = TargetProcessName,\n    IP_Adress = SrcIpAddr,\n    Elevated_User = ActorUserId\n| limit 15\n| sort by EventStartTime",
+              "query": "JamfProtectTelemetry\n| where eventTypeHuman contains \"screensharing\"\n| limit 15\n| sort by TimeGenerated",
               "size": 0,
               "title": "Remotely Controlled Commands (Outbound) {_timetoken:value}",
               "noDataMessage": "No events occured",
@@ -1227,61 +989,9 @@
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
                 "{Workspace}"
-              ],
-              "sortBy": []
+              ]
             },
             "name": "Query - Remotely Controlled Commands"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where isnotempty(DvcHostname)\n| where isnotempty(TargetProcessName)\n| project-keep TimeGenerated, ParentProcessName, TargetProcessName\n| summarize Rare_Process_Count = count() by TargetProcessName, ParentProcessName\n| sort by Rare_Process_Count asc nulls first\n| limit 200",
-              "size": 0,
-              "title": "Rare Process Executions (All Executions) {_timetoken:value}",
-              "noDataMessage": "No events occured",
-              "timeContextFromParameter": "_timetoken",
-              "showExportToExcel": true,
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ],
-              "gridSettings": {
-                "sortBy": [
-                  {
-                    "itemKey": "Rare_Process_Count",
-                    "sortOrder": 1
-                  }
-                ]
-              },
-              "sortBy": [
-                {
-                  "itemKey": "Rare_Process_Count",
-                  "sortOrder": 1
-                }
-              ]
-            },
-            "customWidth": "100",
-            "name": "Query - Rare Process Executions"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "JamfProtect\n| where isnotempty(DvcHostname)\n    and isnotempty(ParentProcessName)\n| project\n    DvcHostname,\n    TargetProcessName,\n    ParentProcessName,\n    ParentProcessGuid,\n    exec_chain_thread_uuid_g\n| summarize\n    thread_uuid = make_set(exec_chain_thread_uuid_g, 128),\n    Hostnames = make_set(DvcHostname, 128),\n    process = make_set(TargetProcessName, 128)\n    by ParentProcessName\n| project \n    Hostnames,\n    process,\n    parent_process=ParentProcessName,\n    thread_uuid",
-              "size": 0,
-              "title": "Parent/child process with thread uuid {_timetoken:value}",
-              "timeContextFromParameter": "_timetoken",
-              "showExportToExcel": true,
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "crossComponentResources": [
-                "{Workspace}"
-              ]
-            },
-            "customWidth": "100",
-            "name": "Query - Parent and Child Process UUID"
           },
           {
             "type": 12,
@@ -1292,49 +1002,6 @@
               "expandable": true,
               "expanded": true,
               "items": [
-                {
-                  "type": 3,
-                  "content": {
-                    "version": "KqlItem/1.0",
-                    "query": "JamfProtect\n| where EventType == \"SystemPerformanceMetrics\"\n| extend metrics = parse_json(metrics_tasks_s)\n| project-keep DvcHostname, metrics, TimeGenerated\n| project-reorder DvcHostname, metrics\n| mv-expand metrics\n| extend energy_impact = metrics.energy_impact\n| extend process_name = metrics.name\n| project-rename\n    Hostname = DvcHostname\n| extend avg = toreal(energy_impact)\n| summarize Average = avg(avg) by tostring(process_name), bin(TimeGenerated,{_timetoken:grain})\n| render timechart\n\n\n\n",
-                    "size": 0,
-                    "aggregation": 3,
-                    "title": "Overall System Energy Impact on all endpoints {_timetoken:value}",
-                    "timeContextFromParameter": "_timetoken",
-                    "queryType": 0,
-                    "resourceType": "microsoft.operationalinsights/workspaces",
-                    "crossComponentResources": [
-                      "{Workspace}"
-                    ],
-                    "sortBy": [],
-                    "tileSettings": {
-                      "showBorder": false
-                    },
-                    "graphSettings": {
-                      "type": 0,
-                      "topContent": {},
-                      "nodeIdField": "Hostname",
-                      "sourceIdField": "Hostname",
-                      "targetIdField": "Hostname",
-                      "graphOrientation": 3,
-                      "showOrientationToggles": false,
-                      "nodeSize": null,
-                      "staticNodeSize": 100,
-                      "colorSettings": null,
-                      "hivesMargin": 5
-                    },
-                    "chartSettings": {
-                      "group": "process_name",
-                      "createOtherGroup": 15,
-                      "showLegend": true
-                    },
-                    "mapSettings": {
-                      "locInfo": "LatLong"
-                    }
-                  },
-                  "customWidth": "100",
-                  "name": "Query - System Performance Metrics - Energy Impact"
-                },
                 {
                   "type": 12,
                   "content": {
@@ -1363,9 +1030,6 @@
                         "type": 9,
                         "content": {
                           "version": "KqlParameterItem/1.0",
-                          "crossComponentResources": [
-                            "{Workspace}"
-                          ],
                           "parameters": [
                             {
                               "id": "f747e125-851e-45f7-b500-5d22049da6a6",
@@ -1374,7 +1038,7 @@
                               "label": "Hostname",
                               "type": 2,
                               "isRequired": true,
-                              "query": "JamfProtect\n| where isnotempty(DvcHostname)\n    and EventType == \"LogFileCollected\"\n| project-keep DvcHostname\n| project-rename Hostname = DvcHostname\n| summarize by Hostname",
+                              "query": "JamfProtectTelemetry\n| where isnotempty(DvcHostname)\n    and eventTypeHuman == \"log_collection\"\n| project-keep DvcHostname\n| project-rename Hostname = DvcHostname\n| summarize by tostring(Hostname)",
                               "crossComponentResources": [
                                 "{Workspace}"
                               ],
@@ -1397,18 +1061,17 @@
                               "label": "Available Log File",
                               "type": 2,
                               "isRequired": true,
-                              "query": "JamfProtect\n| where EventType == \"LogFileCollected\"\n    and DvcHostname == \"{_hostnamelogparser:value}\"\n| project-keep TargetFilePath\n| project-keep TargetFilePath\n| extend TargetFilePath = replace_string(TargetFilePath, \"[\", \"\")\n| extend TargetFilePath = replace_string(TargetFilePath, \"]\", \"\")\n| extend TargetFilePath = replace_string(TargetFilePath, '\"', \"\")\n| summarize by TargetFilePath",
+                              "query": "JamfProtectTelemetry\n| where eventTypeHuman == \"log_collection\"\n    and DvcHostname == \"{_hostnamelogparser:value}\"\n| project-keep TargetFilePath\n| project-keep TargetFilePath\n| extend TargetFilePath = replace_string(TargetFilePath, \"[\", \"\")\n| extend TargetFilePath = replace_string(TargetFilePath, \"]\", \"\")\n| extend TargetFilePath = replace_string(TargetFilePath, '\"', \"\")\n| summarize by TargetFilePath",
                               "typeSettings": {
                                 "additionalResourceOptions": [],
                                 "showDefault": false
                               },
                               "timeContext": {
-                                "durationMs": 7776000000
+                                "durationMs": 0
                               },
                               "timeContextFromParameter": "_timetoken",
                               "queryType": 0,
-                              "resourceType": "microsoft.operationalinsights/workspaces",
-                              "value": "/var/log/jamf.log"
+                              "resourceType": "microsoft.operationalinsights/workspaces"
                             }
                           ],
                           "style": "pills",
@@ -1457,121 +1120,6 @@
                   },
                   "customWidth": "100",
                   "name": "Group - Log Parser",
-                  "styleSettings": {
-                    "margin": "200",
-                    "padding": "200",
-                    "showBorder": true
-                  }
-                },
-                {
-                  "type": 12,
-                  "content": {
-                    "version": "NotebookGroup/1.0",
-                    "groupType": "editable",
-                    "title": "Endpoint System Performance {_timetoken:value}",
-                    "expandable": true,
-                    "expanded": true,
-                    "items": [
-                      {
-                        "type": 1,
-                        "content": {
-                          "json": "Please select a hostname in order to show the system performance metrics.",
-                          "style": "info"
-                        },
-                        "conditionalVisibility": {
-                          "parameterName": "_hostnamelogparser",
-                          "comparison": "isEqualTo"
-                        },
-                        "name": "Text - Jamf Log Parser Note",
-                        "styleSettings": {
-                          "showBorder": true
-                        }
-                      },
-                      {
-                        "type": 9,
-                        "content": {
-                          "version": "KqlParameterItem/1.0",
-                          "crossComponentResources": [
-                            "{Workspace}"
-                          ],
-                          "parameters": [
-                            {
-                              "id": "f747e125-851e-45f7-b500-5d22049da6a6",
-                              "version": "KqlParameterItem/1.0",
-                              "name": "_hostname",
-                              "label": "Hostname",
-                              "type": 2,
-                              "query": "JamfProtect\n| where isnotempty(DvcHostname)\n    and EventType == \"SystemPerformanceMetrics\"\n| project-keep DvcHostname\n| project-rename Hostname = DvcHostname\n| summarize by Hostname",
-                              "crossComponentResources": [
-                                "{Workspace}"
-                              ],
-                              "typeSettings": {
-                                "additionalResourceOptions": [],
-                                "showDefault": false
-                              },
-                              "timeContext": {
-                                "durationMs": 0
-                              },
-                              "timeContextFromParameter": "_timetoken",
-                              "queryType": 0,
-                              "resourceType": "microsoft.operationalinsights/workspaces",
-                              "value": "LMAC-ZW0GTLVDL"
-                            }
-                          ],
-                          "style": "pills",
-                          "queryType": 0,
-                          "resourceType": "microsoft.operationalinsights/workspaces"
-                        },
-                        "customWidth": "40",
-                        "name": "Picker - Hostname"
-                      },
-                      {
-                        "type": 3,
-                        "content": {
-                          "version": "KqlItem/1.0",
-                          "query": "JamfProtect\n| where EventType == \"SystemPerformanceMetrics\"\n    and DvcHostname == \"{_hostname:value}\"\n| extend metrics = parse_json(metrics_tasks_s)\n| project-keep DvcHostname, metrics, TimeGenerated\n| project-reorder DvcHostname, metrics\n| mv-expand metrics\n| extend energy_impact = metrics.energy_impact\n| extend process_name = metrics.name\n| project-rename\n    Hostname = DvcHostname\n| extend avg = toreal(energy_impact)\n| summarize Average = avg(avg) by tostring(process_name), bin(TimeGenerated,{_timetoken:grain})\n| render timechart",
-                          "size": 0,
-                          "aggregation": 3,
-                          "title": "Energy Impact on {_hostname:value}",
-                          "noDataMessage": "No metrics found based on the hostname",
-                          "timeContextFromParameter": "_timetoken",
-                          "showExportToExcel": true,
-                          "queryType": 0,
-                          "resourceType": "microsoft.operationalinsights/workspaces",
-                          "crossComponentResources": [
-                            "{Workspace}"
-                          ],
-                          "gridSettings": {
-                            "formatters": [
-                              {
-                                "columnMatch": "TimeGenerated",
-                                "formatter": 5
-                              },
-                              {
-                                "columnMatch": "JamfLogs",
-                                "formatter": 1,
-                                "formatOptions": {
-                                  "customColumnWidthSetting": "100ch"
-                                }
-                              }
-                            ]
-                          },
-                          "chartSettings": {
-                            "group": "process_name",
-                            "createOtherGroup": 15,
-                            "showLegend": true
-                          }
-                        },
-                        "conditionalVisibility": {
-                          "parameterName": "_hostname",
-                          "comparison": "isNotEqualTo"
-                        },
-                        "name": "Query - Endpoint System Performance - Energy Impact"
-                      }
-                    ]
-                  },
-                  "customWidth": "100",
-                  "name": "Group - Endpoint System Performance",
                   "styleSettings": {
                     "margin": "200",
                     "padding": "200",
@@ -1645,14 +1193,12 @@
                       },
                       {
                         "operator": "Default",
-                        "thresholdValue": null,
                         "representation": "gray",
                         "text": "Threats blocked by NTP"
                       }
                     ],
                     "compositeBarSettings": {
-                      "labelText": "",
-                      "columnSettings": []
+                      "labelText": ""
                     }
                   }
                 },

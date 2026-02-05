@@ -2,7 +2,7 @@ id:  1ce5e766-26ab-4616-b7c8-3b33ae321e80
 name: Failed host logons but success logon to AzureAD
 description: |
   'Identifies a list of IP addresses with a minimum number(default of 5) of failed logon attempts to remote hosts.
-  Uses that list to identify any successful logons to Azure Active Directory from these IPs within the same timeframe.'
+  Uses that list to identify any successful logons to Microsoft Entra ID from these IPs within the same timeframe.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -71,7 +71,8 @@ query: |
   | where ResultType in ("0", "50125", "50140")
   | where IPAddress in (win_fails) or IPAddress in (nix_fails) or IPAddress in (wef_fails)
   | extend Reason=  "Multiple failed host logins from IP address with successful Azure AD login"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, Type = Type
+  | extend timestamp = TimeGenerated, Type = Type
+  | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -80,18 +81,22 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.1.3
+        columnName: IPAddress
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

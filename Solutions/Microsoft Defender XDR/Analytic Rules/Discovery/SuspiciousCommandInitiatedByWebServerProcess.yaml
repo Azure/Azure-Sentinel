@@ -1,0 +1,65 @@
+id: fa2f7d8a-6726-465a-aa72-6f6e3d4c99d7
+name: Detect Suspicious Commands Initiated by Webserver Processes
+description: |
+  This query was originally published in the threat analytics report, Operation Soft Cell.
+  Operation Soft Cell is a series of campaigns targeting users' call logs at telecommunications providers throughout the world. These attacks date from as early as 2012.
+  Operation Soft Cell operators sometimes use legitimate web server processes to launch commands, especially for network discovery and user/owner discovery. The following query detects activity of this kind.
+  Reference - https://www.cybereason.com/blog/operation-soft-cell-a-worldwide-campaign-against-telecommunications-providers
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - DefenseEvasion
+  - Discovery
+relevantTechniques:
+  - T1059
+  - T1574
+  - T1087
+  - T1082
+tags:
+  - Operation Soft Cell
+  - Webserver Process
+  - Discovery
+query: |
+  // Suspicious commands launched by web server processes
+  DeviceProcessEvents 
+  | where (((InitiatingProcessParentFileName in("w3wp.exe", "beasvc.exe",
+      "httpd.exe") or InitiatingProcessParentFileName startswith "tomcat")
+      or InitiatingProcessFileName in("w3wp.exe", "beasvc.exe", "httpd.exe") or
+      InitiatingProcessFileName startswith "tomcat"))
+      and FileName in~('cmd.exe', 'powershell.exe')
+  | where ProcessCommandLine contains '%temp%'
+      or ProcessCommandLine has 'wget'
+      or ProcessCommandLine has 'whoami'
+      or ProcessCommandLine has 'certutil'
+      or ProcessCommandLine has 'systeminfo'
+      or ProcessCommandLine has 'ping'
+      or ProcessCommandLine has 'ipconfig'
+      or ProcessCommandLine has 'timeout'
+  | summarize
+      take_any(FileName),
+      make_set(ProcessCommandLine, 100000),
+      take_any(InitiatingProcessFileName),
+      take_any(InitiatingProcessParentFileName)
+      by DeviceId, DeviceName
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0
+kind: Scheduled

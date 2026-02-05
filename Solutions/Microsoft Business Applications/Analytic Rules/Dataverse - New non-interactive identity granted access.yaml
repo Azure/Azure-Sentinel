@@ -1,0 +1,87 @@
+id: 682e230c-e5da-4085-8666-701d1f1be7de
+kind: Scheduled
+name: Dataverse - New non-interactive identity granted access
+description: Identifies API level access grants, either via the delegated permissions
+  of a Microsoft Entra application or direct assignment within Dataverse as an application
+  user.
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - LateralMovement
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T0859
+  - T1078
+query: |
+  let dataverse_app_id = "00000007-0000-0000-c000-000000000000";
+  let query_frequency = 1h;
+  let azure_ad_changes = AuditLogs
+      | where TimeGenerated >= ago(query_frequency)
+      | where OperationName =~ 'Update application'
+      | where TargetResources has dataverse_app_id
+      | extend TargetAppName = tostring(TargetResources[0].displayName)
+      | extend TargetAppId = tostring(TargetResources[0].id)
+      | extend UserId = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+      | extend ClientIp = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+      | extend NewData = tostring(parse_json(tostring(parse_json(TargetResources)[0].modifiedProperties))[0].newValue)
+      | where NewData has dataverse_app_id;
+  let dataverse_changes = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where (Message == "Create" and EntityName == "systemuser" and parse_json(Fields)[0].Name == "applicationid")
+      | extend TargetAppId = tostring(Fields[0].Value);
+  union azure_ad_changes, dataverse_changes
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      TargetAppName,
+      TargetAppId,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetAppId
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - new non-interactive access granted
+  alertDescriptionFormat: '{{UserId}} granted access to an Azure AD app {{{TargetAppName}}.
+    Check to validate this access was authorized.'
+version: 3.2.0

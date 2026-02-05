@@ -11,3 +11,14 @@ class BitSightException(Exception):
     def __init__(self, message=None) -> None:
         """Initialize custom BitSightException with custom message."""
         super().__init__(message)
+
+class BitSightTimeOutException(Exception):
+    """BitSightTimeOutException class will inherit Exception class.
+
+    Args:
+        Exception (string): will print exception message.
+    """
+
+    def __init__(self, message=None) -> None:
+        """Initialize custom BitSight exception with custom message."""
+        super().__init__(message)

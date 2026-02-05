@@ -1,0 +1,161 @@
+Parser:
+  Title: File Event ASIM Parser for SentinelOne
+  Version: '0.1.0'
+  LastUpdated: Sep 20, 2023
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: FileEvent
+  Version: '0.2.1'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: SentinelOne Documentation
+- Link: https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview
+Description: |
+  This ASIM parser supports normalizing SentinelOne logs to the ASIM File Event normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
+ParserName: ASimFileEventSentinelOne
+EquivalentBuiltInParser: _ASim_FileEvent_SentinelOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let GetWindowsFilenamePart = (path: string) { tostring(split(path, @'\')[-1]) };
+  let GetLinuxFilenamePart = (path: string) { tostring(split(path, @'/')[-1]) };
+  let EventTypeLookup = datatable (alertInfo_eventType_s: string, EventType: string)
+      [
+      "FILECREATION", "FileCreated",
+      "FILEMODIFICATION", "FileModified",
+      "FILEDELETION", "FileDeleted",
+      "FILERENAME", "FileRenamed"
+  ];
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+      [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+      [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+      [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
+  let parser = (disabled: bool=false) {
+      let allFileData = SentinelOne_CL
+          | where not(disabled)
+              and event_name_s == "Alerts."
+              and alertInfo_eventType_s in ('FILECREATION', 'FILEMODIFICATION', 'FILEDELETION', 'FILERENAME');
+      let windowsFileData = allFileData
+          | where agentDetectionInfo_osFamily_s == "windows"
+          | extend
+              TargetFilePathType = "Windows Local",
+              TargetFileName = GetWindowsFilenamePart(targetProcessInfo_tgtFilePath_s),
+              SrcFileName = GetWindowsFilenamePart(targetProcessInfo_tgtFileOldPath_s);
+      let otherFileData = allFileData
+          | where agentDetectionInfo_osFamily_s != "windows"
+          | extend
+              TargetFilePathType = "Unix",
+              TargetFileName = GetLinuxFilenamePart(targetProcessInfo_tgtFilePath_s),
+              SrcFileName = GetLinuxFilenamePart(targetProcessInfo_tgtFileOldPath_s);
+      let parseddata = union windowsFileData, otherFileData
+          | lookup EventTypeLookup on alertInfo_eventType_s;
+      let undefineddata = parseddata
+          | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+          | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = parseddata
+          | where ruleInfo_treatAsThreat_s == "Suspicious"
+          | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maaliciousdata = parseddata
+          | where ruleInfo_treatAsThreat_s == "Malicious"
+          | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maaliciousdata
+      | extend
+          ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious),
+          EventSeverity = iff(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s),
+          EventVendor = "SentinelOne",
+          EventProduct = "SentinelOne",
+          EventResult = "Success",
+          EventSchema = "FileEvent",
+          EventSchemaVersion = "0.2.1",
+          EventCount = toint(1),
+          DvcAction = "Allowed",
+          ActorUsername = sourceProcessInfo_user_s
+      | project-rename
+          EventStartTime = sourceProcessInfo_pidStarttime_t,
+          EventOriginalSeverity = ruleInfo_severity_s,
+          EventUid = _ItemId,
+          ActingProcessCommandLine = sourceProcessInfo_commandline_s,
+          ActingProcessGuid = sourceProcessInfo_uniqueId_g,
+          ActingProcessId = sourceProcessInfo_pid_s,
+          ActingProcessName = sourceProcessInfo_name_s,
+          DvcId = agentDetectionInfo_uuid_g,
+          DvcOs = agentDetectionInfo_osName_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
+          EventOriginalType = alertInfo_eventType_s,
+          EventOriginalUid = alertInfo_dvEventId_s,
+          RuleName = ruleInfo_name_s,
+          TargetFileCreationTime = targetProcessInfo_tgtFileCreatedAt_t,
+          SrcFilePath = targetProcessInfo_tgtFileOldPath_s,
+          TargetFilePath = targetProcessInfo_tgtFilePath_s,
+          TargetFileSHA1 = targetProcessInfo_tgtFileHashSha1_s,
+          TargetFileSHA256 = targetProcessInfo_tgtFileHashSha256_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
+      | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
+      | extend
+          Dvc = coalesce(DvcHostname, DvcId, EventProduct),
+          EventEndTime = EventStartTime,
+          Rule = RuleName,
+          FileName = TargetFileName,
+          FilePath = TargetFilePath,
+          Process = ActingProcessName,
+          User = ActorUsername,
+          Hash = coalesce(TargetFileSHA256, TargetFileSHA1)
+      | extend
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          HashType = case(
+                isnotempty(Hash) and isnotempty(TargetFileSHA256),
+                "TargetFileSHA256",
+                isnotempty(Hash) and isnotempty(TargetFileSHA1),
+                "TargetFileSHA1",
+                ""
+            ) 
+      | project-away 
+          *_d,
+          *_s,
+          *_g,
+          *_t,
+          *_b,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId,
+          ThreatConfidence_*
+  };
+  parser(disabled = disabled)

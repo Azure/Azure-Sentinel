@@ -1,12 +1,12 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import { isValidSchema } from "./utils/jsonSchemaChecker";
-import { isValidId } from "./utils/dataConnectorCheckers/idChecker";
-import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker";
-import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker";
-import * as logger from "./utils/logger";
-import { ConnectorCategory } from "./utils/dataConnector";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import { isValidSchema } from "./utils/jsonSchemaChecker.js";
+import { isValidId } from "./utils/dataConnectorCheckers/idChecker.js";
+import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker.js";
+import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker.js";
+import * as logger from "./utils/logger.js";
+import { ConnectorCategory } from "./utils/dataConnector.js";
 
 export async function IsValidDataConnectorSchema(filePath: string): Promise<ExitCode> {
 
@@ -16,6 +16,12 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
     if(isPotentialConnectorJson(jsonFile))
     {
+        //WHEN DATATYPES ARRAY OBJECT IS NOT PRESENT OR EMPTY, SKIP VALIDATION
+      if (!jsonFile.dataTypes && jsonFile.dataTypes.length === 0) {
+        console.warn(`Skipping Files under Templates folder : ${filePath} - No dataTypes found`);
+        return ExitCode.SUCCESS;
+      }
+
       if(!jsonFile.dataTypes[0].name.includes("Event"))
       {
         let connectorCategory = getConnectorCategory(jsonFile.dataTypes, jsonFile.instructionSteps);
@@ -26,7 +32,11 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
         /* Disabling temporarily till we get confirmation from PM*/
         // isValidFileName(filePath
-        isValidPermissions(jsonFile.permissions, connectorCategory);
+        /* Skip validation for Solution Microsoft Exchange Security - Exchange On-Premises Solution */
+        if (!filePath.includes('Microsoft Exchange Security - Exchange On-Premises')) 
+        {
+          isValidPermissions(jsonFile.permissions, connectorCategory);
+        }
       }
       else{
         console.warn(`Skipping File as it is of type Events : ${filePath}`)
@@ -43,7 +53,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   }
 
 function isPotentialConnectorJson(jsonFile: any) {
-  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined")
+  if(typeof jsonFile.id != "undefined" && typeof jsonFile.connectivityCriterias != "undefined" && jsonFile.dataTypes.length > 0)
   {
     return true;
   }
@@ -60,17 +70,33 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("SecurityAlert(ASC)"))
+  {
+    return ConnectorCategory.SecurityAlertASC;
+  }
   else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
   {
     return ConnectorCategory.ThreatIntelligenceIndicator;
+  }
+  else if (dataTypes[0].name.includes("PowerBIActivity"))
+  {
+    return ConnectorCategory.PowerBIActivity;
   }
   else if (dataTypes[0].name.includes("MicrosoftPurviewInformationProtection"))
   {
     return ConnectorCategory.MicrosoftPurviewInformationProtection;
   }
+  else if (dataTypes[0].name.includes("AzureActivity"))
+  {
+    return ConnectorCategory.AzureActivity;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
+  }
+  else if (dataTypes[0].name.includes("SecurityAlert(OATP)"))
+  {
+    return ConnectorCategory.SecurityAlertOATP;
   }
   else if (dataTypes[0].name.includes("AzureDevOpsAuditing"))
   {
@@ -103,6 +129,42 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   else if (dataTypes[0].name.includes("BloodHoundEnterprise"))
   {
     return ConnectorCategory.BloodHoundEnterprise;
+  }
+  else if (dataTypes[0].name.includes("AwsS3"))
+  {
+    return ConnectorCategory.AwsS3;
+  }
+  else if (dataTypes[0].name.includes("AWS"))
+  {
+    return ConnectorCategory.AWS;
+  }
+  else if (dataTypes[0].name.includes("Corelight"))
+  {
+    return ConnectorCategory.Corelight;
+  }
+  else if (dataTypes[0].name.includes("SigninLogs"))
+  {
+    return ConnectorCategory.AzureActiveDirectory;
+  }
+  else if (dataTypes[0].name.includes("corelight_bacnet"))
+  {
+    return ConnectorCategory.CorelightConnectorExporter;
+  }
+  else if (dataTypes[0].name.includes("SecurityIncident"))
+  {
+    return ConnectorCategory.CybleThreatIntel;
+  }
+  else if (dataTypes[0].name.includes("IndicatorsOfCompromise"))
+  {
+    return ConnectorCategory.CrowdStrikeFalconIOC;
+  }
+  else if (dataTypes[0].name.includes("WizIssues"))
+  {
+    return ConnectorCategory.Wiz;
+  }
+  else if (dataTypes[0].name.includes("vectra_isession"))
+  {
+    return ConnectorCategory.VectraStreamAma;
   }
   return "";
 } 

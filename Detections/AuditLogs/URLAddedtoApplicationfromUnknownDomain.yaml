@@ -4,14 +4,14 @@ description: |
   'Detects a URL being added to an application where the domain is not one that is associated with the tenant.
     The query uses domains seen in sign in logs to determine if the domain is associated with the tenant.
     Applications associated with URLs not controlled by the organization can pose a security risk.
-    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#application-configuration-changes'
+    Ref: https://learn.microsoft.com/en-gb/entra/architecture/security-operations-applications#application-configuration-changes'
 severity: High
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AuditLogs
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: 2h
+queryPeriod: 2h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -45,12 +45,13 @@ query: |
     | extend AddedUrls = set_difference(NewUrls, OldUrls)
     | where array_length(AddedUrls) > 0
     | extend UserAgent = iif(tostring(AdditionalDetails[0].key) == "User-Agent", tostring(AdditionalDetails[0].value), "")
-    | extend AddingUser = iif(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) , tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), "")
-    | extend AddingApp = iif(isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)) , tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName), "")
-    | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingApp)
-    | project-away AddingApp, AddingUser
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))
     | extend AppDisplayName = tostring(TargetResources.displayName)
-    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
     | where isnotempty(AddedUrls)
     | mv-expand AddedUrls
     | extend AddedUrls = trim(@'"', tostring(AddedUrls))
@@ -58,7 +59,8 @@ query: |
     | where isnotempty(Domain)
     | extend Domain = strcat(split(Domain, ".")[-2], ".", split(Domain, ".")[-1])
     | where Domain !in (domains)
-    | project-reorder TimeGenerated, AppDisplayName, AddedUrls, AddedBy, UserAgent, ipAddress
+    | project-reorder TimeGenerated, AppDisplayName, AddedUrls, InitiatedBy, UserAgent, InitiatingIPAddress
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: URL
     fieldMappings:
@@ -66,19 +68,33 @@ entityMappings:
         columnName: AddedUrls
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
       - identifier: FullName
-        columnName: AddedBy
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ipAddress
-version: 1.0.2
+        columnName: InitiatingIPAddress
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

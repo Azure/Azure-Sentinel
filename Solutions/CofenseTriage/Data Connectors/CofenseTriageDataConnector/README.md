@@ -169,7 +169,7 @@ Use the following step-by-step instructions to deploy the Cofense Threat Indicat
         2. Select Subscription: Choose the subscription to use.
         3. Select Create new Function App in Azure (Don't choose the Advanced option)
         4. Enter a globally unique name for the function app: Type a name that is valid in a URL path. The name you type is validated to make sure that it's unique in Azure Functions. (e.g. CofenseXXXXX).
-        5. Select a runtime: Choose Python 3.8 or above.
+        5. Select a runtime: Choose Python 3.11
         6. Select a location for new resources. For better performance and lower costs choose the same region where Microsoft Sentinel is located.
   6. Deployment will begin. A notification is displayed after your function app is created and the deployment package is applied.
   7. Go to Azure Portal for the Function App configuration.

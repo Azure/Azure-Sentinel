@@ -1,0 +1,688 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Mimecast-Data-Connector-Trigger-Sync",
+        "description": "Playbook to sync timer trigger of all Mimecast data connectors.",
+        "prerequisites": [
+            "Users must have a below Microsoft credentials:",
+            "1.Tenant ID",
+            "2.Client ID",
+            "3.Client Secret",
+            "4.Resource Group Name",
+            "5.Subscription ID"
+        ],
+        "postDeployment": [ "Run the playbook to sync timer trigger of all Mimecast data connectors." ],
+        "entities": [],
+        "tags": [
+            "Mimecast",
+            "Sync",
+            "Timer",
+            "Trigger"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Mimecast"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Mimecast-Data-Connector-Trigger-Sync",
+            "type": "string"
+        },
+        "Client ID": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter the Azure Client ID"
+            }
+        },
+        "Client Secret": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "Enter the Azure Client Secret"
+            }
+        },
+        "Resource Group": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter the Azure Resource Group Name in which your Mimecast data connectors are available"
+            }
+        },
+        "Subscription ID": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "Enter the Azure Subscription ID in which your Mimecast data connectors are available, make sure that the subscription id is as per the Azure portal at all places"
+            }
+        },
+        "Tenant ID": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "Enter the Azure Tenant ID"
+            }
+        }
+    },
+    "variables": {
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "Client ID": {
+                            "defaultValue": "[trim(parameters('Client ID'))]",
+                            "type": "String"
+                        },
+                        "Client Secret": {
+                            "defaultValue": "[trim(parameters('Client Secret'))]",
+                            "type": "SecureString"
+                        },
+                        "Resource Group": {
+                            "defaultValue": "[trim(parameters('Resource Group'))]",
+                            "type": "String"
+                        },
+                        "Subscription ID": {
+                            "defaultValue": "[trim(parameters('Subscription ID'))]",
+                            "type": "SecureString"
+                        },
+                        "Tenant ID": {
+                            "defaultValue": "[trim(parameters('Tenant ID'))]",
+                            "type": "SecureString"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each_app": {
+                            "foreach": "@body('Get_all_Mimecast_Function_apps')",
+                            "actions": {
+                                "Sync_timer_trigger_request": {
+                                    "runAfter": {
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_Auth_token')?['access_token']} "
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://@{variables('Manage')}.azure.com/subscriptions/@{variables('Subscription Id')}/resourceGroups/@{variables('Resource Group Name')}/providers/Microsoft.Web/sites/@{items('For_each_app')?['name']}/syncfunctiontriggers?api-version=2022-03-01"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_all_Mimecast_Function_apps": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Auth_token": {
+                            "runAfter": {
+                                "Initialize_Management_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "client_id=@{variables('Client Id')}\u0026\nclient_secret=@{variables('Client Secret')}\u0026\ngrant_type=client_credentials\u0026\nscope=https://@{variables('Manage')}.azure.com/.default",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "uri": "https://login.@{variables('MicrosoftOnline')}.com/@{variables('Tenant Id')}/oauth2/v2.0/token"
+                            }
+                        },
+                        "Get_all_Mimecast_Function_apps": {
+                            "runAfter": {
+                                "Get_all_running_function_app": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Get_all_running_function_app')",
+                                "where": "@or(startsWith(item()?['name'], 'Mimecast'))"
+                            }
+                        },
+                        "Get_all_running_function_app": {
+                            "runAfter": {
+                                "Parse_function_app_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_function_app_list')?['value']",
+                                "where": "@equals(item()?['properties']?['state'], 'Running')"
+                            }
+                        },
+                        "Get_function_app_list": {
+                            "runAfter": {
+                                "Parse_Auth_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_Auth_token')?['access_token']} "
+                                },
+                                "method": "GET",
+                                "uri": "https://@{variables('Manage')}.azure.com/subscriptions/@{variables('Subscription Id')}/resourceGroups/@{variables('Resource Group Name')}/providers/Microsoft.Web/sites?api-version=2022-03-01"
+                            }
+                        },
+                        "Initialize_Client_Id": {
+                            "runAfter": {
+                                "Initialize_Tenant_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Client Id",
+                                        "type": "string",
+                                        "value": "@parameters('Client ID')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Client_Secret": {
+                            "runAfter": {
+                                "Initialize_Client_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Client Secret",
+                                        "type": "string",
+                                        "value": "@parameters('Client Secret')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Management_variable": {
+                            "runAfter": {
+                                "Initialize_Microsoftonline_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Manage",
+                                        "type": "string",
+                                        "value": "management"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Microsoftonline_variable": {
+                            "runAfter": {
+                                "Subscription_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MicrosoftOnline",
+                                        "type": "string",
+                                        "value": "microsoftonline"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Resource_Group": {
+                            "runAfter": {
+                                "Initialize_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Resource Group Name",
+                                        "type": "string",
+                                        "value": "@parameters('Resource Group')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Tenant_Id": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Tenant Id",
+                                        "type": "string",
+                                        "value": "@parameters('Tenant ID')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Auth_token": {
+                            "runAfter": {
+                                "Get_Auth_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Auth_token')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_function_app_list": {
+                            "runAfter": {
+                                "Get_function_app_list": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_function_app_list')",
+                                "schema": {
+                                    "properties": {
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "identity": {
+                                                        "properties": {
+                                                            "principalId": {
+                                                                "type": "string"
+                                                            },
+                                                            "tenantId": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "kind": {
+                                                        "type": "string"
+                                                    },
+                                                    "location": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "properties": {
+                                                        "properties": {
+                                                            "adminEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "afdEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "availabilityState": {
+                                                                "type": "string"
+                                                            },
+                                                            "clientAffinityEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "clientCertEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "clientCertMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "containerSize": {
+                                                                "type": "integer"
+                                                            },
+                                                            "contentAvailabilityState": {
+                                                                "type": "string"
+                                                            },
+                                                            "csrs": {
+                                                                "type": "array"
+                                                            },
+                                                            "customDomainVerificationId": {
+                                                                "type": "string"
+                                                            },
+                                                            "dailyMemoryTimeQuota": {
+                                                                "type": "integer"
+                                                            },
+                                                            "defaultHostName": {
+                                                                "type": "string"
+                                                            },
+                                                            "defaultHostNameScope": {
+                                                                "type": "string"
+                                                            },
+                                                            "deploymentId": {
+                                                                "type": "string"
+                                                            },
+                                                            "dnsConfiguration": {
+                                                                "type": "object"
+                                                            },
+                                                            "eligibleLogCategories": {
+                                                                "type": "string"
+                                                            },
+                                                            "enabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "enabledHostNames": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "endToEndEncryptionEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "ftpUsername": {
+                                                                "type": "string"
+                                                            },
+                                                            "ftpsHostName": {
+                                                                "type": "string"
+                                                            },
+                                                            "functionsRuntimeAdminIsolationEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "homeStamp": {
+                                                                "type": "string"
+                                                            },
+                                                            "hostNameSslStates": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "hostType": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ipBasedSslState": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sslState": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "sslState",
+                                                                        "ipBasedSslResult",
+                                                                        "virtualIP",
+                                                                        "virtualIPv6",
+                                                                        "thumbprint",
+                                                                        "certificateResourceId",
+                                                                        "toUpdate",
+                                                                        "toUpdateIpBasedSsl",
+                                                                        "ipBasedSslState",
+                                                                        "hostType"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "hostNames": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "hostNamesDisabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "httpsOnly": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "hyperV": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "inboundIpAddress": {
+                                                                "type": "string"
+                                                            },
+                                                            "ipMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "isXenon": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "keyVaultReferenceIdentity": {
+                                                                "type": "string"
+                                                            },
+                                                            "kind": {
+                                                                "type": "string"
+                                                            },
+                                                            "lastModifiedTimeUtc": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "outboundIpAddresses": {
+                                                                "type": "string"
+                                                            },
+                                                            "possibleInboundIpAddresses": {
+                                                                "type": "string"
+                                                            },
+                                                            "possibleOutboundIpAddresses": {
+                                                                "type": "string"
+                                                            },
+                                                            "redundancyMode": {
+                                                                "type": "string"
+                                                            },
+                                                            "repositorySiteName": {
+                                                                "type": "string"
+                                                            },
+                                                            "reserved": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "resourceGroup": {
+                                                                "type": "string"
+                                                            },
+                                                            "runtimeAvailabilityState": {
+                                                                "type": "string"
+                                                            },
+                                                            "scmSiteAlsoStopped": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "secretsCollection": {
+                                                                "type": "array"
+                                                            },
+                                                            "selfLink": {
+                                                                "type": "string"
+                                                            },
+                                                            "serverFarmId": {
+                                                                "type": "string"
+                                                            },
+                                                            "siteConfig": {
+                                                                "properties": {
+                                                                    "acrUseManagedIdentityCreds": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "alwaysOn": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "functionAppScaleLimit": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "http20Enabled": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "linuxFxVersion": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "minimumElasticInstanceCount": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "numberOfWorkers": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "siteDisabledReason": {
+                                                                "type": "integer"
+                                                            },
+                                                            "siteProperties": {
+                                                                "properties": {
+                                                                    "properties": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "value": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "name",
+                                                                                "value"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "sku": {
+                                                                "type": "string"
+                                                            },
+                                                            "state": {
+                                                                "type": "string"
+                                                            },
+                                                            "storageAccountRequired": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "storageRecoveryDefaultState": {
+                                                                "type": "string"
+                                                            },
+                                                            "usageState": {
+                                                                "type": "string"
+                                                            },
+                                                            "vnetBackupRestoreEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "vnetContentShareEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "vnetImagePullEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "vnetRouteAllEnabled": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "webSpace": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "tags": {
+                                                        "properties": {
+                                                            "Jira": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "name",
+                                                    "type",
+                                                    "kind",
+                                                    "location",
+                                                    "properties"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Subscription_Id": {
+                            "runAfter": {
+                                "Initialize_Resource_Group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Subscription Id",
+                                        "type": "string",
+                                        "value": "@parameters('Subscription ID')"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Mimecast-Data-Connector-Trigger-Sync",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+            ]
+        }
+    ]
+}

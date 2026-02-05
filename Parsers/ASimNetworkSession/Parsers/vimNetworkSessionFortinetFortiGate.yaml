@@ -1,12 +1,12 @@
 Parser:
   Title: Network Session ASIM filtering parser for Fortinet FortiGate
-  Version: '0.4'
-  LastUpdated: Dec 11, 2022
+  Version: '0.6.0'
+  LastUpdated: Nov 11, 2025
 Product:
   Name: Fortinet FortiGate
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.3'
+  Version: '0.2.6'
 References:
   - Title: ASIM Network Session Schema
     Link: https://aka.ms/ASimNetworkSessionDoc
@@ -71,9 +71,9 @@ ParserQuery: |
       "2", "Informational", // Information
       "3", "Informational", // Notification
       "4", "Low", // Warning
-      "5", "Low", // Error
-      "6", "Critical", // High
-      "7", "Alert", // Medium
+      "5", "Medium", // Error
+      "6", "High", // Critical
+      "7", "High", // Alert
       "8", "High" // Emergency
     ];
     let Parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
@@ -86,10 +86,15 @@ ParserQuery: |
       | where DeviceAction != "dns" and Activity !has "dns" 
       | where (array_length(hostname_has_any)==0)
       | where  (isnull(dstportnumber) or DestinationPort==dstportnumber)
+      | parse-kv AdditionalExtensions as (
+              FTNTFGTutmaction:string,
+              utmaction:string
+          ) with (pair_delimiter=';', kv_delimiter='=')
+      | extend _UtmAction = coalesce(FTNTFGTutmaction, utmaction)
       | extend temp_ResultMatch = case (
           eventresult=="*", true,
-          (eventresult == "Success") and (DeviceAction in ("accept", "close") or Activity has_any ("accept", "close")), true,
-          (eventresult == "Failure") and (DeviceAction !in ("accept", "close") and not(Activity has_any ("accept", "close"))), true,
+          (eventresult == "Success") and (_UtmAction == "allow" or DeviceAction in ("accept", "close") or Activity has_any ("accept", "close")), true,
+          (eventresult == "Failure") and (_UtmAction != "allow" and DeviceAction !in ("accept", "close") and not(Activity has_any ("accept", "close"))), true,
           false
       )
       | where temp_ResultMatch
@@ -107,7 +112,7 @@ ParserQuery: |
       | extend DeviceAction = coalesce(DeviceAction, temp_DeviceAction)  
       | lookup EventLookup on DeviceAction 
       | where (array_length(dvcaction)==0 or DvcAction has_any (dvcaction))
-      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, ASimMatchingIpAddr, DvcAction
+      | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, ASimMatchingIpAddr, DvcAction, _UtmAction
       | project-rename DstBytes = ReceivedBytes
         , DstInterfaceName = DeviceOutboundInterface
         , DstIpAddr = DestinationIP
@@ -126,35 +131,60 @@ ParserQuery: |
       | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
       | project-rename DvcOriginalAction = DeviceAction
       | parse-kv AdditionalExtensions as (
-              FortinetFortiGatestart:datetime,
-              FortinetFortiGatesrcintfrole:string,
-              FortinetFortiGatedstintfrole:string,
-              FortinetFortiGateexternalID:string,
-              FortinetFortiGatepolicyid:int,
-              FortinetFortiGatedstcountry:string,
-              FortinetFortiGatesrccountry:string,
-              FortinetFortiGatecrscore:string,
-              FortinetFortiGateduration:int,
-              FortinetFortiGatesentpkt:long,
-              FortinetFortiGatercvdpkt:long
+              // FTNTFGT format for FortiGate logs
+              FTNTFGTstart:datetime,
+              FTNTFGTsrcintfrole:string,
+              FTNTFGTdstintfrole:string,
+              FTNTFGTexternalID:string,
+              FTNTFGTpolicyid:int,
+              FTNTFGTdstcountry:string,
+              FTNTFGTsrccountry:string,
+              FTNTFGTcrscore:string,
+              FTNTFGTduration:int,
+              FTNTFGTsentpkt:long,
+              FTNTFGTrcvdpkt:long,
+              FTNTFGTutmaction:string,
+              // Simple format for FortiAnalyzer logs
+              start:datetime,
+              srcintfrole:string,
+              dstintfrole:string,
+              externalID:string,
+              policyid:int,
+              dstcountry:string,
+              srccountry:string,
+              crscore:string,
+              duration:int,
+              sentpkt:long,
+              rcvdpkt:long,
+              utmaction:string
           ) with (pair_delimiter=';', kv_delimiter='=')
-      | project-rename
-          EventStartTime          = FortinetFortiGatestart,
-          SrcZone                 = FortinetFortiGatesrcintfrole,
-          DstZone                 = FortinetFortiGatedstintfrole,
-          NetworkSessionId        = FortinetFortiGateexternalID,
-          NetworkRuleNumber       = FortinetFortiGatepolicyid,
-          NetworkDuration         = FortinetFortiGateduration,
-          DstGeoCountry           = FortinetFortiGatedstcountry,
-          SrcGeoCountry           = FortinetFortiGatesrccountry,
-          ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
-          SrcPackets              = FortinetFortiGatesentpkt,
-          DstPackets              = FortinetFortiGatercvdpkt
+      | extend
+          EventStartTime          = coalesce(FTNTFGTstart, start),
+          SrcZone                 = coalesce(FTNTFGTsrcintfrole, srcintfrole),
+          DstZone                 = coalesce(FTNTFGTdstintfrole, dstintfrole),
+          NetworkSessionId        = coalesce(FTNTFGTexternalID, externalID),
+          NetworkRuleNumber       = coalesce(FTNTFGTpolicyid, policyid),
+          NetworkDuration         = coalesce(FTNTFGTduration, duration),
+          DstGeoCountry           = coalesce(FTNTFGTdstcountry, dstcountry),
+          SrcGeoCountry           = coalesce(FTNTFGTsrccountry, srccountry),
+          ThreatOriginalRiskLevel = coalesce(FTNTFGTcrscore, crscore),
+          SrcPackets              = coalesce(FTNTFGTsentpkt, sentpkt),
+          DstPackets              = coalesce(FTNTFGTrcvdpkt, rcvdpkt)
+      | extend 
+          EventResult = case(
+              _UtmAction == "allow", "Success",
+              EventResult
+          ),
+          EventResultDetails = case(
+              _UtmAction == "allow" and EventResult == "Success", "",
+              EventResultDetails
+          )
       | extend EventCount = int(1)
         , EventSchema = "NetworkSession"
         , EventSchemaVersion = "0.2.3"
         , EventType = "NetworkSession"
         , EventVendor = "Fortinet"
+        , EventProduct = "Fortigate"
         , DvcIdType = "Other"
         , NetworkBytes = DstBytes + SrcBytes
         , EventEndTime = TimeGenerated
@@ -171,6 +201,8 @@ ParserQuery: |
             IpAddr = SrcIpAddr,
             Duration = NetworkDuration,
             Rule = tostring(NetworkRuleNumber)
-      | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
+      | project-away FTNTFGT*, start, srcintfrole, dstintfrole, externalID, policyid,
+            dstcountry, srccountry, crscore, duration, sentpkt, rcvdpkt, utmaction,
+            Protocol, AdditionalExtensions, NetworkProtocolNumber, _UtmAction
     };
     Parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)

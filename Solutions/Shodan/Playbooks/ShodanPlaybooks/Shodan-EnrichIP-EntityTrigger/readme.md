@@ -48,7 +48,7 @@ Once deployment is complete, authorize each connection.
 7. Select Subscription - where Playbook has been created
 8. Select Resource group - where Playbook has been created
 9. Select Role - Microsoft Sentinel Responder
-10. Click Save (It takes 3-5 minutes to show the added role.)
+10. Click Save
 
 #  References
  - [Shodan API Quick Reference](https://developer.shodan.io/api)

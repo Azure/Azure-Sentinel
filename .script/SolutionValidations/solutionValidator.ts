@@ -1,11 +1,11 @@
-import { runCheckOverChangedFiles } from "./../utils/changedFilesValidator";
-import * as logger from "./../utils/logger";
-import { ExitCode } from "./../utils/exitCode";
-import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals";
-import { IsValidSupportObject } from "./validSupportObject";
-import { IsValidBrandingContent } from "./validMSBranding";
-import { IsValidSolutionID } from "./validSolutionID";
-import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError";
+import { runCheckOverChangedFiles } from "./../utils/changedFilesValidator.js";
+import * as logger from "./../utils/logger.js";
+import { ExitCode } from "./../utils/exitCode.js";
+import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals.js";
+import { IsValidSupportObject } from "./validSupportObject.js";
+import { IsValidBrandingContent } from "./validMSBranding.js";
+import { IsValidSolutionID } from "./validSolutionID.js";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError.js";
 
 
 

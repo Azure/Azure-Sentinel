@@ -30,7 +30,7 @@ This solution is designed to augment staffing through automation, machine learni
 7️⃣ [Review Microsoft Service Trust Portal Documentation/Audit/Resources](https://servicetrust.microsoft.com/)<br>
 
 ### Recommended Enrichments
-✳️[Azure Active Directory](https://azure.microsoft.com/services/active-directory/)<br>
+✳️[Microsoft Entra ID](https://azure.microsoft.com/services/active-directory/)<br>
 ✳️[Microsoft Defender for Office 365](https://www.microsoft.com/microsoft-365/security/office-365-defender)<br>
 ✳️[Azure Firewall Premium](https://azure.microsoft.com/services/azure-firewall)<br>
 ✳️[Microsoft Defender for Endpoint](https://www.microsoft.com/microsoft-365/security/endpoint-defender)<br>

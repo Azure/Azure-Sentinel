@@ -1,0 +1,343 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Torq - support@torq.io",
+    "comments": "Solution template for Torq"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@torq.io",
+    "_email": "[variables('email')]",
+    "_solutionName": "Torq",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "torqtechnologiesltd2020.torq_sentinel_solution",
+    "_solutionId": "[variables('solutionId')]",
+    "Torq-Sentinel-Incident-Trigger": "Torq-Sentinel-Incident-Trigger",
+    "_Torq-Sentinel-Incident-Trigger": "[variables('Torq-Sentinel-Incident-Trigger')]",
+    "TemplateEmptyArray": "[json('[]')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Torq-Sentinel-Incident-Trigger",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Sentinel_Incident_Sync_to_Torq Playbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "Sentinel_Incident_Sync_to_Torq",
+              "type": "String"
+            },
+            "Torq_Webhook_Enpoint_URL": {
+              "defaultValue": "https://hooks.torq.io/v1/webhooks/125a9209-9ed6-4216-b5cd-10567f2164f5",
+              "type": "String"
+            },
+            "Torq_Webhook_Auth_Header_Name": {
+              "defaultValue": "X-Torq-Auth",
+              "type": "String"
+            },
+            "Torq_Webhook_Auth_Header_Secret": {
+              "defaultValue": "secr3tP@ssw0rd",
+              "type": "String"
+            }
+          },
+          "variables": {
+            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
+            "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+            "_connection-1": "[[variables('connection-1')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('AzureSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('AzureSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-1')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2017-07-01",
+              "name": "[[parameters('PlaybookName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+              ],
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "Torq_Webhook_Enpoint_URL": {
+                      "defaultValue": "[[parameters('Torq_Webhook_Enpoint_URL')]",
+                      "type": "String"
+                    },
+                    "Torq_Webhook_Auth_Header_Name": {
+                      "defaultValue": "[[parameters('Torq_Webhook_Auth_Header_Name')]",
+                      "type": "String"
+                    },
+                    "Torq_Webhook_Auth_Header_Secret": {
+                      "defaultValue": "[[parameters('Torq_Webhook_Auth_Header_Secret')]",
+                      "type": "String"
+                    },
+                    "$connections": {
+                      "type": "Object"
+                    }
+                  },
+                  "staticResults": {
+                    "HTTP0": {
+                      "status": "Succeeded",
+                      "outputs": {
+                        "statusCode": "OK"
+                      }
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "path": "/incident-creation"
+                      },
+                      "conditions": "[variables('TemplateEmptyArray')]",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "runs": 10,
+                          "maximumWaitingRuns": 50
+                        }
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Send_Notification_to_Torq": {
+                      "limit": {
+                        "timeout": "PT30S"
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "@parameters('Torq_Webhook_Enpoint_URL')",
+                        "method": "POST",
+                        "headers": {
+                          "@{parameters('Torq_Webhook_Auth_Header_Name')}": "@{parameters('Torq_Webhook_Auth_Header_Secret')}"
+                        },
+                        "body": "@triggerBody()"
+                      },
+                      "operationOptions": "DisableAsyncPattern"
+                    },
+                    "Terminate_Success": {
+                      "runAfter": {
+                        "Send_Notification_to_Torq": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Terminate",
+                      "inputs": {
+                        "runStatus": "Succeeded"
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                        "connectionName": "[[variables('AzureSentinelConnectionName')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": {
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Torq",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Torq",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Torq Support Team",
+                  "email": "support@torq.io",
+                  "tier": "Partner",
+                  "link": "https://support.torq.io"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Notify Sentinel Incident Creation and Update to Torq Webhook",
+            "description": "Sends an HTTPS request to a webhook trigger in Torq everytime a new Incident is created or updated in Microsoft Sentinel",
+            "documentation": "https://kb.torq.io/en/articles/9024676-configure-microsoft-sentinel-and-torq-to-trigger-torq-workflows-on-incident-creation-and-update",
+            "prerequisites": [
+              "Prior to the deployment of this playbook, create a new Microsoft Sentinel Trigger integration in Torq",
+              "Take note of the endpoint URL, the authentication header name, and the authentication header secret configured in the Microsoft Sentinel Trigger integration"
+            ],
+            "postDeployment": [
+              "After deployment browse to your Microsoft Sentinel workspace > Configuration > Automation, Click Create and select Automation rule to create a new automation rule meant to send a notification to Torq when a new Sentinel Incident is created.",
+              "Give the automation rule a meaningful name",
+              "From the Trigger drop-down menu, select When incident is created or updated",
+              "From the Actions drop-down menu, select Run playbook",
+              "From the playbook selection drop-down, select the playbook Sentinel_Incident_Sync_to_Torq and click the Apply button"
+            ],
+            "lastUpdateTime": "2024-11-19T00:00:00Z",
+            "releaseNotes": [
+              {
+                "version": "1.0",
+                "title": "Torq Sentinel Incident Trigger",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "Playbook",
+        "displayName": "Sentinel_Incident_Sync_to_Torq",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Torq",
+        "publisherDisplayName": "Torq Support Team",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Torq/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p><a href=\"https://www.recordedfuture.com/\">Torq</a> is the AI-Driven Hyperautomation Platform that helps security teams automate more faster</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Torq.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Torq",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Torq",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Torq Support Team",
+          "email": "support@torq.io",
+          "tier": "Partner",
+          "link": "https://support.torq.io"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Torq-Sentinel-Incident-Trigger')]",
+              "version": "[variables('playbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-12-24",
+        "providers": [
+          "Torq"
+        ],
+        "categories": {
+          "domains": [
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

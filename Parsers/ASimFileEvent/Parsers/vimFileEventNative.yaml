@@ -1,50 +1,111 @@
 Id: aaa811e7-673b-50a0-ba97-27ddee2d40b5
 Parser:
-  Title: File Event ASIM parser for Microsoft Sentinel native File Event table
-  Version: '0.1'
-  LastUpdated: Jan 5 2023
+  Title: File Event ASIM filtering parser for Microsoft Sentinel native File Event table
+  Version: "0.1.1"
+  LastUpdated: Nov 21 2023
 Product:
   Name: Native
 Normalization:
   Schema: FileEvent
-  Version: '0.2.1'
+  Version: "0.2.1"
 References:
-- Title: ASIM Network Session Schema
-  Link: https://aka.ms/ASimNetworkSessionDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  - Title: ASIM File Event Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing the native Microsoft Sentinel Network Session table (ASimNetworkSessionLogs) to the ASIM NetworkSession normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+  This ASIM parser supports normalizing the native File Event table (ASimFileEventLogs) to the ASIM File Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
 ParserName: vimFileEventNative
 EquivalentBuiltInParser: _Im_FileEvent_Native
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let parser=(disabled:bool=false) 
-  {
-    ASimFileEventLogs  | where not(disabled)
-      | project-rename
-          EventUid = _ItemId
-      | extend          
-          EventSchema = "FileEvent",
-          DvcScopeId = iff(isempty(DvcSubscriptionId), _SubscriptionId, DvcSubscriptionId)
-      //  -- Aliases
-      | extend
-          EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
-          EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
-          Dvc = iff (isempty(Dvc), coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId), Dvc),
-          Src = SrcIpAddr,
-          IpAddr = SrcIpAddr,
-          Rule = coalesce(RuleName, tostring(RuleNumber)),
-          User = ActorUsername,
-          FileName = TargetFileName,
-          FilePath = TargetFilePath,
-          Process = ActingProcessName,
-          Url = TargetUrl,
-          Application = TargetAppName
-      | project-away
-          TenantId, SourceSystem, DvcSubscriptionId, _SubscriptionId, _ResourceId
-    };
-  parser (disabled=disabled)
+  let parser=(
+    starttime: datetime=datetime(null),
+    endtime: datetime=datetime(null),
+    eventtype_in: dynamic=dynamic([]),
+    srcipaddr_has_any_prefix: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    targetfilepath_has_any: dynamic=dynamic([]),
+    srcfilepath_has_any: dynamic=dynamic([]),
+    hashes_has_any: dynamic=dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    ASimFileEventLogs
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | where ((array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))) and
+        ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))) and 
+        ((array_length(actorusername_has_any) == 0) or (ActorUsername has_any (actorusername_has_any))) and
+        ((array_length(targetfilepath_has_any) == 0) or (TargetFilePath has_any (targetfilepath_has_any))) and 
+        ((array_length(srcfilepath_has_any) == 0) or (SrcFilePath has_any (srcfilepath_has_any))) and
+        ((array_length(hashes_has_any) == 0) or (TargetFileMD5 in (hashes_has_any)) or (TargetFileSHA1 in (hashes_has_any)) or (TargetFileSHA256 in (hashes_has_any)) or (TargetFileSHA512 in (hashes_has_any))) and 
+        (array_length(dvchostname_has_any) == 0 or DvcHostname has_any (dvchostname_has_any))
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "FileEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Src = SrcIpAddr,
+        IpAddr = SrcIpAddr,
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = ActorUsername,
+        FileName = TargetFileName,
+        FilePath = TargetFilePath,
+        Process = ActingProcessName,
+        Url = TargetUrl,
+        Application = TargetAppName
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      targetfilepath_has_any=targetfilepath_has_any,
+      srcfilepath_has_any=srcfilepath_has_any,
+      hashes_has_any=hashes_has_any,
+      dvchostname_has_any=dvchostname_has_any,
+      disabled=disabled
+    )

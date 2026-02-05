@@ -1,0 +1,87 @@
+id: 1b2e6172-85c5-417a-90c3-7cc80cb787f5
+kind: Scheduled
+name: Power Platform - DLP policy updated or removed
+description: Identifies changes to DLP policy, specifically policies which are updated
+  or removed.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+      - PowerPlatformAdminActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1480
+query: |
+  let create_policy_ignore_time_window = 10m;
+  let query_frequency = 1h;
+  let dlp_policy_events = PowerPlatformAdminActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where EventOriginalType == "GovernanceApiPolicyOperation"
+      | where PropertyCollection has_any ("DeleteDlpPolicy", "UpdateDlpPolicy", "CreateDlpPolicy")
+      | mv-expand PropertyCollection
+      | extend
+          Name = tostring(PropertyCollection.Name),
+          Value = tostring(PropertyCollection.Value)
+      | summarize Properties = make_bag(bag_pack(Name, Value))
+          by
+          TimeGenerated,
+          EventOriginalUid
+      | extend
+          PolicyName = tostring(Properties['powerplatform.analytics.resource.display_name']),
+          EventType = tostring(Properties['powerplatform.analytics.resource.tenant.governance.api_policy.operation_name']),
+          ActorName = tostring(Properties['enduser.principal_name']),
+          PolicyId = tostring(Properties['powerplatform.analytics.resource.id']),
+          AdditionalInfo = Properties['powerplatform.analytics.resource.tenant.governance.api_policy.additional_resources'];
+  let delete_events = dlp_policy_events
+      | where EventType == "DeleteDlpPolicy";
+  let update_events = dlp_policy_events
+      | where EventType == "UpdateDlpPolicy";
+  let create_events = dlp_policy_events
+      | where EventType == "CreateDlpPolicy"
+      | extend ignore_time = TimeGenerated + create_policy_ignore_time_window;
+  union
+      delete_events,
+      (update_events
+      | join kind=leftouter (
+          create_events
+          | project-away TimeGenerated
+          )
+          on PolicyId
+      | where isempty(ignore_time) or TimeGenerated > ignore_time
+      | project-away ignore_time)
+  | where TimeGenerated >= ago(query_frequency)
+  | extend
+      AccountName = tostring(split(ActorName, "@")[0]),
+      UPNSuffix = tostring(split(ActorName, "@")[1])
+  | project
+      TimeGenerated,
+      ActorName,
+      EventType,
+      PolicyName,
+      PolicyId,
+      AccountName,
+      UPNSuffix,
+      AdditionalInfo
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+alertDetailsOverride:
+  alertDisplayNameFormat: PowerPlatform - DLP policy {{EventType}} event detected.
+  alertDescriptionFormat: A DLP policy {{PolicyName}} was as modfiied or deleted.
+    Event type {{EventType}}
+customDetails:
+  Policy: PolicyId
+  PolicyName: PolicyName
+version: 3.2.0

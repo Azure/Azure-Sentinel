@@ -1,0 +1,39 @@
+id: 69eb9fb7-fe0d-4c34-8c81-3a828fc12abd
+name: regsvr32-rundll32-abnormal-image-loads
+description: |
+  This query is using the locations where malicious DLL images are often loaded from by regsvr32.dll and rundll32.exe.
+  Blog:
+  https://threathunt.blog/dll-image-loads-from-suspicious-locations-by-regsvr32-exe-rundll32-exe/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceImageLoadEvents
+  - DeviceFileEvents
+tactics:
+- Defense evasion
+relevantTechniques:
+  - T1218.010
+  - T1218.011
+query: |
+  let GenerateDLLloads = materialize (
+  DeviceImageLoadEvents
+  | where Timestamp > ago(7d)
+  | where InitiatingProcessFileName =~ "regsvr32.exe" or InitiatingProcessFileName =~ "rundll32.exe"
+  | where FolderPath startswith @"C:\users" or
+   FolderPath matches regex @".:\\ProgramData.[^\\\s]+.dll" or
+   FolderPath matches regex @".:\\Windows.[^\\\s]+.dll"
+  | extend folder = extract(@".*\\", 0, FolderPath)
+  | project LoadedDllSHA1 = SHA1, LoadedDllName = FileName, DllLoadTimestamp = Timestamp, DeviceId, DeviceName, folder, DllLoadProcessCommandLine = InitiatingProcessCommandLine, DllLoadProcessCreationTime = InitiatingProcessCreationTime, DllLoadProcessFileName = InitiatingProcessFileName, DllLoadProcessProcessId = InitiatingProcessId, DllLoadProcessSHA1 = InitiatingProcessSHA1, DllLoadProcessParentCreationTime = InitiatingProcessParentCreationTime, DllLoadProcessParentFileName = InitiatingProcessParentFileName, DllLoadProcessParentId=InitiatingProcessParentId
+  );
+  GenerateDLLloads
+  | summarize count() by LoadedDllSHA1 
+  | where count_ < 5 
+  | join kind=inner GenerateDLLloads on LoadedDllSHA1 
+  | join ( 
+  DeviceFileEvents 
+  | where Timestamp > ago(7d)
+  | where ActionType == 'FileCreated' or ActionType == 'FileRenamed'
+  | extend folder = extract(@".*\\", 0, FolderPath)
+  | project LoadedDllSHA1 = SHA1, LoadedDllName = FileName, folder, DllCreationTimestamp = Timestamp, DeviceId, DeviceName, DllCreationProcessCommandLine = InitiatingProcessCommandLine, DllCreationProcessCreationTime = InitiatingProcessCreationTime, DllCreationProcessFileName = InitiatingProcessFileName, DllCreationProcessId = InitiatingProcessId, DllCreationProcessSHA1 = InitiatingProcessSHA1, DllCreationProcessParentCreationTime = InitiatingProcessParentCreationTime, DllCreationProcessParentFileName = InitiatingProcessParentFileName, DllCreationProcessParentId = InitiatingProcessParentId
+  ) on LoadedDllName, LoadedDllSHA1, folder, DeviceName
+  | project LoadedDllSHA1, LoadedDllName, DllLoadTimestamp, DllCreationTimestamp, DllLoadProcessCommandLine, DllLoadProcessFileName, DllLoadProcessParentFileName, DllCreationProcessCommandLine, DllCreationProcessFileName, DllCreationProcessParentFileName, DeviceName, DllLoadProcessSHA1, DllCreationProcessSHA1, folder, DllLoadProcessCreationTime, DllLoadProcessProcessId, DllLoadProcessParentCreationTime, DllLoadProcessParentId, DllCreationProcessCreationTime, DllCreationProcessId, DllCreationProcessParentCreationTime, DllCreationProcessParentId, DeviceId

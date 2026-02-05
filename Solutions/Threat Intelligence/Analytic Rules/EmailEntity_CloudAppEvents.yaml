@@ -1,0 +1,50 @@
+id: 47b9bb10-d216-4359-8cef-08ca2c67e5be
+name: Preview - TI map Email entity to Cloud App Events
+description: |
+  'Identifies compromises and attacks and detect malicious activities in one's email entity from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let dt_lookBack = 10d;
+  let ioc_lookBack = 30d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(EmailSenderAddress)
+    | join kind=innerunique (CloudAppEvents
+  | extend User_Id = tostring(RawEventData.UserId)
+  | where isnotempty(User_Id)
+  | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Application)
+  | extend CloudAppEvents_TimeGenerated = TimeGenerated 
+  | where User_Id matches regex emailregex) on $left.EmailSenderAddress == $right.User_Id
+  | where CloudAppEvents_TimeGenerated < ExpirationDateTime
+  | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId, User_Id
+  | extend Name = tostring(split(User_Id, '@', 0)[0]), UPNSuffix = tostring(split(User_Id, '@', 1)[0])
+  | extend timestamp = CloudAppEvents_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: DisplayName
+        columnName: Name
+      - identifier: FullName
+        columnName: User_Id
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.3
+kind: Scheduled

@@ -1,0 +1,455 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Claroty",
+    "comments": "Solution template for Claroty xDome"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Claroty xDome",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "claroty1709722359369.microsoft-sentinel-solution-xdome",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "ClarotyxDome",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ClarotyxDome",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Claroty xDome data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Claroty xDome",
+                  "publisher": "Claroty",
+                  "logo": "ClarotyLogo.svg",
+                  "descriptionMarkdown": "[Claroty](https://claroty.com/) xDome delivers comprehensive security and alert management capabilities for healthcare and industrial network environments. It is designed to map multiple source types, identify the collected data, and integrate it into Microsoft Sentinel data models. This results in the ability to monitor all potential threats in your healthcare and industrial environments in one location, leading to more effective security monitoring and a stronger security posture.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ClarotyxDomeLogs",
+                      "baseQuery": "CommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\")"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Fetch logs from Claroty xDome",
+                      "query": "\nCommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\") | sort by TimeGenerated"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "\nCommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\")\n\n| summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "CommonSecurityLog (ClarotyxDome)",
+                      "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\")\n\n | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+                      "innerSteps": [
+                        {
+                          "title": "1.1 Select or create a Linux machine",
+                          "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                        },
+                        {
+                          "title": "1.2 Install the CEF collector on the Linux machine",
+                          "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python --version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "WorkspaceId",
+                                  "PrimaryKey"
+                                ],
+                                "label": "Run the following command to install and apply the CEF collector:",
+                                "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "1. Linux Syslog agent configuration"
+                    },
+                    {
+                      "description": "Configure the Claroty xDome - Microsoft Sentinel integration to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.",
+                      "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+                    },
+                    {
+                      "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python --version\n\n>2. You must have elevated permissions (sudo) on your machine",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Run the following command to validate your connectivity:",
+                            "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "3. Validate connection"
+                    },
+                    {
+                      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+                      "title": "4. Secure your machine "
+                    }
+                  ],
+                  "metadata": {
+                    "id": "d37af052-f3e4-4bd5-9f5d-f12469037cc8",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "solution",
+                      "name": "Claroty"
+                    },
+                    "author": {
+                      "name": "Claroty"
+                    },
+                    "support": {
+                      "name": "xDome Customer Support",
+                      "link": "https://claroty.com/support-policy",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Claroty xDome",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Claroty"
+                },
+                "support": {
+                  "name": "xDome Customer Support",
+                  "link": "https://claroty.com/support-policy",
+                  "tier": "Partner"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "Claroty xDome",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Claroty xDome",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Claroty"
+        },
+        "support": {
+          "name": "xDome Customer Support",
+          "link": "https://claroty.com/support-policy",
+          "tier": "Partner"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Claroty xDome",
+          "publisher": "Claroty",
+          "descriptionMarkdown": "[Claroty](https://claroty.com/) xDome delivers comprehensive security and alert management capabilities for healthcare and industrial network environments. It is designed to map multiple source types, identify the collected data, and integrate it into Microsoft Sentinel data models. This results in the ability to monitor all potential threats in your healthcare and industrial environments in one location, leading to more effective security monitoring and a stronger security posture.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ClarotyxDomeLogs",
+              "baseQuery": "CommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\")"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "CommonSecurityLog (ClarotyxDome)",
+              "lastDataReceivedQuery": "\nCommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\")\n\n | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "\nCommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\")\n\n| summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Fetch logs from Claroty xDome",
+              "query": "\nCommonSecurityLog\n| where DeviceVendor in (\"Medigate\", \"Claroty\") | sort by TimeGenerated"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+              "innerSteps": [
+                {
+                  "title": "1.1 Select or create a Linux machine",
+                  "description": "Select or create a Linux machine that Microsoft Sentinel will use as the proxy between your security solution and Microsoft Sentinel this machine can be on your on-prem environment, Azure or other clouds."
+                },
+                {
+                  "title": "1.2 Install the CEF collector on the Linux machine",
+                  "description": "Install the Microsoft Monitoring Agent on your Linux machine and configure the machine to listen on the necessary port and forward messages to your Microsoft Sentinel workspace. The CEF collector collects CEF messages on port 514 TCP.\n\n> 1. Make sure that you have Python on your machine using the following command: python --version.\n\n> 2. You must have elevated permissions (sudo) on your machine.",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "WorkspaceId",
+                          "PrimaryKey"
+                        ],
+                        "label": "Run the following command to install and apply the CEF collector:",
+                        "value": "sudo wget -O cef_installer.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_installer.py&&sudo python cef_installer.py {0} {1}"
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "1. Linux Syslog agent configuration"
+            },
+            {
+              "description": "Configure the Claroty xDome - Microsoft Sentinel integration to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.",
+              "title": "2. Forward Common Event Format (CEF) logs to Syslog agent"
+            },
+            {
+              "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\n>It may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n> 1. Make sure that you have Python on your machine using the following command: python --version\n\n>2. You must have elevated permissions (sudo) on your machine",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Run the following command to validate your connectivity:",
+                    "value": "sudo wget -O cef_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/CEF/cef_troubleshoot.py&&sudo python cef_troubleshoot.py  {0}"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "3. Validate connection"
+            },
+            {
+              "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)",
+              "title": "4. Secure your machine "
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Claroty xDome",
+        "publisherDisplayName": "xDome Customer Support",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Claroty%20xDome/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p><a href=\"https://claroty.com/\">Claroty</a> xDome delivers comprehensive security and alert management capabilities for healthcare and industrial network environments. It is designed to map multiple source types, identify the collected data, and integrate it into Microsoft Sentinel data models. This results in the ability to monitor all potential threats in your healthcare and industrial environments in one location, leading to more effective security monitoring and a stronger security posture.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/ClarotyLogo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Claroty xDome",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Claroty"
+        },
+        "support": {
+          "name": "xDome Customer Support",
+          "tier": "Partner",
+          "link": "https://claroty.com/support-policy"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-02-01",
+        "providers": [
+          "Claroty"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence",
+            "Security - Vulnerability Management"
+          ],
+          "verticals": [
+            "Healthcare",
+            "Manufacturing"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -162,17 +162,21 @@ Function Parse-and-Send($qualysResponse){
 	$results = "NA"
 	#iterate over the HOST LIST AND DETECTION LIST to have gerenralised detections
 	$qualysResponse.HOST_LIST_VM_DETECTION_OUTPUT.RESPONSE.HOST_LIST.HOST | ForEach-Object {
-        $hostObject = New-Object -TypeName PSObject
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "HostId" -Value $_.ID
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "IpAddress" -Value $_.IP
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "TrackingMethod" -Value $_.TRACKING_METHOD
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "OperatingSystem" -Value $_.OS."#cdata-section"
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "DnsName" -Value $_.DNS."#cdata-section"
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "NetBios" -Value $_.NETBIOS."#cdata-section"
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "QGHostId" -Value $_.QG_HOSTID."#cdata-section"
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastScanDateTime" -Value $_.LAST_SCAN_DATETIME
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastVMScannedDateTime" -Value $_.LAST_VM_SCANNED_DATE
-        Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastVMAuthScannedDateTime" -Value $_.LAST_VM_AUTH_SCANNED_DATE
+		$hostObject = New-Object -TypeName PSObject
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "HostId" -Value $_.ID
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "IpAddress" -Value $_.IP
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "TrackingMethod" -Value $_.TRACKING_METHOD
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "OperatingSystem" -Value $_.OS."#cdata-section"
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "DnsName" -Value $_.DNS."#cdata-section"
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "NetBios" -Value $_.NETBIOS."#cdata-section"
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "QGHostId" -Value $_.QG_HOSTID."#cdata-section"
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastScanDateTime" -Value $_.LAST_SCAN_DATETIME
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastVMScannedDateTime" -Value $_.LAST_VM_SCANNED_DATE
+		Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "LastVMAuthScannedDateTime" -Value $_.LAST_VM_AUTH_SCANNED_DATE
+		# Check if TAGS exist in the XML response
+		if ($_.TAGS.TAG){
+			Add-Member -InputObject $hostObject -MemberType NoteProperty -Name "HostTags" -Value ($_.TAGS.TAG | ForEach-Object { $_.NAME.'#cdata-section' })
+		}
 		Write-Output "Adding data for Host id = $($_.ID)"
 
 		foreach($detection in $_.DETECTION_LIST.DETECTION){

@@ -50,6 +50,8 @@ def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
         )
 
      req_body = req.get_json()
+     if "x-github-event" in req.headers:
+        req_body["event"] = req.headers["x-github-event"]
      body = json.dumps(customizeJson(json.dumps(req_body)))
      logging.info("Info:Converted input json to dict and further to json")
      logging.info(body)     

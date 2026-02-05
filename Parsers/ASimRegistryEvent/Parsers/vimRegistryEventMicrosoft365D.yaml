@@ -1,108 +1,158 @@
 Parser:
   Title: Registry Event ASIM parser for Microsoft 365 Defender for Endpoint
-  Version: '0.1.1'
-  LastUpdated: July 29, 2021
+  Version: "0.1.2"
+  LastUpdated: Oct 10, 2023
 Product:
   Name: Microsoft 365 Defender for Endpoint
 Normalization:
   Schema: RegistryEvent
-  Version: '0.1.0'
+  Version: "0.1.0"
 References:
-- Title: ASIM Registry Schema
-  Link: https://aka.ms/ASimRegistryEventDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  - Title: ASIM Registry Schema
+    Link: https://aka.ms/ASimRegistryEventDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing Microsoft 365 Defender for endpoint logs, produced by the Microsoft Sentinel Microsoft 365 Defender connector, to the ASIM Registry Event normalized schema.
 ParserName: vimRegistryEventMicrosoft365D
+EquivalentBuiltInParser: _Im_RegistryEvent_Microsoft365D
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registrykey_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registryvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registrydata_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-              let RegistryType = datatable (TypeCode:string,TypeName:string)
-                [
-                  "None", "Reg_None",
-                  "String",	"Reg_Sz",
-                  "ExpandString",	"Reg_Expand_Sz",
-                  "Binary",	"Reg_Binary",
-                  "Dword",	"Reg_DWord",
-                  "MultiString",	"Reg_Multi_Sz",
-                  "QWord",	"Reg_QWord"
-                ];
-
-              let RegistryEvents_M365D=()
-              {
-                DeviceRegistryEvents
-                | extend
-                  // Event
-                  EventOriginalUid = tostring(ReportId), 
-                  EventCount = int(1), 
-                  EventProduct = 'M365 Defender for Endpoint', 
-                  EventVendor = 'Microsoft', 
-                  EventSchemaVersion = '0.1.0', 
-                  EventStartTime = TimeGenerated, 
-                  EventEndTime = TimeGenerated, 
-                  EventType = ActionType,
-
-                  // Registry
-                  RegistryKey = iff (ActionType in ("RegistryKeyDeleted", "RegistryValueDeleted"), PreviousRegistryKey, RegistryKey),
-                  RegistryValue = iff (ActionType == "RegistryValueDeleted", PreviousRegistryValueName, RegistryValueName),
-                  // RegistryValueType -- original name is fine 
-                  // RegistryValueData -- original name is fine 
-                  RegistryKeyModified = iff (ActionType == "RegistryKeyRenamed", PreviousRegistryKey, ""),
-                  RegistryValueModified = iff (ActionType == "RegistryValueSet", PreviousRegistryValueName, ""),
-                  // RegistryValueTypeModified -- Not provided by Defender
-                  RegistryValueDataModified = PreviousRegistryValueData
-                | lookup RegistryType on $left.RegistryValueType == $right.TypeCode | extend RegistryValueType = TypeName
-                | project-away TypeName, PreviousRegistryKey, PreviousRegistryValueName, PreviousRegistryValueData
-
-                  // Device
-                | extend
-                  DvcHostname = DeviceName, 
-                  DvcId = DeviceId, 
-                  Dvc = DeviceName 
-
-                  // Users
-                | extend
-                  ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)), 
-                  ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'), 
-                  ActorUserIdType = 'SID'
-                | project-away InitiatingProcessAccountDomain, InitiatingProcessAccountName
- 
-                | project-rename
-                  ActorUserId = InitiatingProcessAccountSid, 
-
-                  ActorUserAadId = InitiatingProcessAccountObjectId, 
-                  ActorUserUpn = InitiatingProcessAccountUpn
-
-                  // Processes
-                | extend
-                  ActingProcessId = tostring(InitiatingProcessId), 
-                  ParentProcessId = tostring(InitiatingProcessParentId) 
-                | project-away InitiatingProcessId, InitiatingProcessParentId
-
-                | project-rename
-                  ParentProcessName = InitiatingProcessParentFileName, 
-
-                  ParentProcessCreationTime = InitiatingProcessParentCreationTime, 
-
-                  ActingProcessName = InitiatingProcessFolderPath, 
-                  ActingProcessFileName = InitiatingProcessFileName,
-                  ActingProcessCommandLine = InitiatingProcessCommandLine, 
-
-                  ActingProcessMD5 = InitiatingProcessMD5, 
-                  ActingProcessSHA1 = InitiatingProcessSHA1, //OK
-                  ActingProcessSHA256 = InitiatingProcessSHA256, 
-                  ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel, 
-                  ActingProcessTokenElevation = InitiatingProcessTokenElevation, 
-                  ActingProcessCreationTime = InitiatingProcessCreationTime 
-
-                  // -- aliases
-                | extend 
-                  Username = ActorUsername,
-                  UserId = ActorUserId,
-                  UserIdType = ActorUserIdType,
-                  User = ActorUsername,
-                  CommandLine = ActingProcessCommandLine,
-                  Process = ActingProcessName
-
-
-               };
-               RegistryEvents_M365D
+  let RegistryType = datatable (TypeCode: string, TypeName: string)
+    [
+    "None", "Reg_None",
+    "String", "Reg_Sz",
+    "ExpandString", "Reg_Expand_Sz",
+    "Binary", "Reg_Binary",
+    "Dword", "Reg_DWord",
+    "MultiString", "Reg_Multi_Sz",
+    "QWord", "Reg_QWord"
+  ];
+  let parser = (
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      eventtype_in: dynamic=dynamic([]),
+      actorusername_has_any: dynamic=dynamic([]),
+      registrykey_has_any: dynamic =dynamic([]),
+      registryvalue_has_any: dynamic =dynamic([]),
+      registrydata_has_any: dynamic =dynamic([]),
+      dvchostname_has_any: dynamic=dynamic([]),
+      disabled: bool=false
+      ) {
+      DeviceRegistryEvents
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      | where (array_length(eventtype_in) == 0 or ActionType in~ (eventtype_in)) and
+          (array_length(actorusername_has_any) == 0 or (InitiatingProcessAccountName has_any (actorusername_has_any)) or (InitiatingProcessAccountDomain has_any (actorusername_has_any)) or (strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName) has_any (actorusername_has_any))) and
+          ((array_length(registrykey_has_any)) == 0 or (RegistryKey has_any (registrykey_has_any)) or (PreviousRegistryKey has_any (registrykey_has_any))) and 
+          ((array_length(registryvalue_has_any)) == 0 or (RegistryValueName has_any (registryvalue_has_any)) or (PreviousRegistryValueName has_any (registryvalue_has_any))) and 
+          (array_length(registrydata_has_any) == 0 or RegistryValueData has_any (registrydata_has_any)) and
+          (array_length(dvchostname_has_any) == 0 or DeviceName has_any (dvchostname_has_any))
+      | extend
+          // Event
+          EventOriginalUid = tostring(ReportId), 
+          EventCount = int(1), 
+          EventProduct = 'M365 Defender for Endpoint', 
+          EventVendor = 'Microsoft', 
+          EventSchemaVersion = '0.1.0', 
+          EventStartTime = TimeGenerated, 
+          EventEndTime = TimeGenerated, 
+          EventType = ActionType,
+          // Registry
+          RegistryKey = iff (ActionType in ("RegistryKeyDeleted", "RegistryValueDeleted"), PreviousRegistryKey, RegistryKey),
+          RegistryValue = iff (ActionType == "RegistryValueDeleted", PreviousRegistryValueName, RegistryValueName),
+          // RegistryValueType -- original name is fine 
+          // RegistryValueData -- original name is fine 
+          RegistryKeyModified = iff (ActionType == "RegistryKeyRenamed", PreviousRegistryKey, ""),
+          RegistryValueModified = iff (ActionType == "RegistryValueSet", PreviousRegistryValueName, ""),
+          // RegistryValueTypeModified -- Not provided by Defender
+          RegistryValueDataModified = PreviousRegistryValueData
+      | where ((array_length(registrykey_has_any)) == 0 or (RegistryKey has_any (registrykey_has_any))) and
+          ((array_length(registryvalue_has_any)) == 0 or (RegistryValue has_any (registryvalue_has_any)))
+      | lookup RegistryType on $left.RegistryValueType == $right.TypeCode
+      | extend RegistryValueType = TypeName
+      | project-away
+          TypeName,
+          PreviousRegistryKey,
+          PreviousRegistryValueName,
+          PreviousRegistryValueData
+      // Device
+      | extend
+          DvcHostname = DeviceName, 
+          DvcId = DeviceId, 
+          Dvc = DeviceName 
+      // Users
+      | extend
+          ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)), 
+          ActorUsernameType = iff(InitiatingProcessAccountDomain == '', 'Simple', 'Windows'), 
+          ActorUserIdType = 'SID'
+      //| project-away InitiatingProcessAccountDomain, InitiatingProcessAccountName
+      | project-rename
+          ActorUserId = InitiatingProcessAccountSid, 
+          ActorUserAadId = InitiatingProcessAccountObjectId, 
+          ActorUserUpn = InitiatingProcessAccountUpn
+      // Processes
+      | extend
+          ActingProcessId = tostring(InitiatingProcessId), 
+          ParentProcessId = tostring(InitiatingProcessParentId) 
+      | project-away InitiatingProcessId, InitiatingProcessParentId
+      | project-rename
+          ParentProcessName = InitiatingProcessParentFileName, 
+          ParentProcessCreationTime = InitiatingProcessParentCreationTime, 
+          ActingProcessName = InitiatingProcessFolderPath, 
+          ActingProcessFileName = InitiatingProcessFileName,
+          ActingProcessCommandLine = InitiatingProcessCommandLine, 
+          ActingProcessMD5 = InitiatingProcessMD5, 
+          ActingProcessSHA1 = InitiatingProcessSHA1, //OK
+          ActingProcessSHA256 = InitiatingProcessSHA256, 
+          ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel, 
+          ActingProcessTokenElevation = InitiatingProcessTokenElevation, 
+          ActingProcessCreationTime = InitiatingProcessCreationTime 
+      // -- aliases
+      | extend 
+          Username = ActorUsername,
+          UserId = ActorUserId,
+          UserIdType = ActorUserIdType,
+          User = ActorUsername,
+          CommandLine = ActingProcessCommandLine,
+          Process = ActingProcessName
+  };
+  parser (
+      starttime                = starttime,
+      endtime                  = endtime,
+      eventtype_in             = eventtype_in,
+      actorusername_has_any    = actorusername_has_any,
+      registrykey_has_any = registrykey_has_any,
+      registryvalue_has_any = registryvalue_has_any,
+      registrydata_has_any = registrydata_has_any,
+      dvchostname_has_any= dvchostname_has_any,
+      disabled                 = disabled
+  )

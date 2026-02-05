@@ -17,7 +17,7 @@ This playbook will create a new Microsoft Incident when a new email arrives in t
 2. If notification about successful or unsuccessful incident creation is not needed, please delete the "Condition" step<br>
 ![FormsTemplate](./images/DeleteConditionDark.jpg)<br>
 3. Authorize Office 365 Outlook connector and Conversion Service connector (HTML to text)
-4. Utilize the email template to get correct data - https://github.com/Azure/Azure-Sentinel/blob/master/Playbooks/CreateIncident-SharedMailbox/NewMicrosoftSentinelIncidentCreationTemplate.oft
+4. Utilize the email template to get correct data - https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/CreateIncident-SharedMailbox/NewMicrosoftSentinelIncidentCreationTemplate.oft
 
 # Note for email template changes
 1. The email subject must contain "incident" in the name. If this needs to be changed, please update the trigger:<br>

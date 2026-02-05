@@ -27,28 +27,55 @@ query: |
     | mv-expand TargetResources
     | mv-expand TargetResources.modifiedProperties
     | where TargetResources_modifiedProperties.displayName =~ "TargetId.UserType"
-    | extend UpdatingServicePrincipal = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
-    | extend UpdatingUserPrincipal = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend UpdatingUser = iif(isnotempty(UpdatingServicePrincipal), UpdatingServicePrincipal, UpdatingUserPrincipal)
+    | extend UpdatingAppName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+    | extend UpdatingServicePrincipalId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
+    | extend UpdatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend UpdatingUserAadUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)
+    | extend UpdatingUserIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+    | extend UpdatingUser = iif(isnotempty(UpdatingServicePrincipalId), UpdatingServicePrincipalId, UpdatingUserPrincipalName)
     | extend UpdatedUserPrincipalName = tostring(TargetResources.userPrincipalName)
     | project-reorder TimeGenerated, UpdatedUserPrincipalName, UpdatingUser
     | where parse_json(tostring(TargetResources_modifiedProperties.newValue)) =~ "\"Member\"" and parse_json(tostring(TargetResources_modifiedProperties.oldValue)) =~ "\"Guest\""
+    | extend InitiatingAccountName = tostring(split(UpdatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(UpdatingUserPrincipalName, "@")[1])
+    | extend TargetAccountName = tostring(split(UpdatedUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(UpdatedUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: UpdatingAppName
+      - identifier: AadUserId
+        columnName: UpdatingServicePrincipalId
+  - entityType: Account
+    fieldMappings:
       - identifier: FullName
-        columnName: UpdatingUser
+        columnName: UpdatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: UpdatingUserAadUserId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: UpdatedUserPrincipalName
-version: 1.0.1
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: UpdatingUserIPAddress
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

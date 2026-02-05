@@ -1,22 +1,39 @@
 id: db566028-abef-4941-b659-0a560a4dd7ac
 Function:
   Title: Parser for SquidProxy
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.0.1'
+  LastUpdated: '2025-05-16'
 Category: Microsoft Sentinel Parser
 FunctionName: SquidProxy
 FunctionAlias: SquidProxy
 FunctionQuery: |
     SquidProxy_CL
-    | parse RawData with * " " EpochTimeExtended " " Duration " " SrcIpAddr " " ResultStatusCode " " Bytes " " HttpRequestMethod " " Url " " Username " " PeerStatusHost " " ContentType
-    | parse EpochTimeExtended with * "+" EpochTime
+    | parse kind=regex RawData with  EpochTimeExtended " " Duration " " SrcIpAddr " " ResultStatusCode " " Bytes " " HttpRequestMethod " " Url " " Username " " PeerStatusHost " " ContentType
     | parse ResultStatusCode with ResultCode "/" StatusCode
     | parse PeerStatusHost with PeerHost "/" StatusHost
-    | extend EventEpochTime = tolong(replace(@"\.","",EpochTime))
-    | extend EventTime = datetime(1970-01-01) + tolong(EventEpochTime/1000) * 1sec
+    | parse EpochTimeExtended with Day "/" MonthText "/" Year ":" Time " " TimezoneOffset
+    | extend Month = case(MonthText == "Jan", "01",
+                        MonthText == "Feb", "02",
+                        MonthText == "Mar", "03",
+                        MonthText == "Apr", "04",
+                        MonthText == "May", "05",
+                        MonthText == "Jun", "06",
+                        MonthText == "Jul", "07",
+                        MonthText == "Aug", "08",
+                        MonthText == "Sep", "09",
+                        MonthText == "Oct", "10",
+                        MonthText == "Nov", "11",
+                        MonthText == "Dec", "12",
+                        "")
+    | extend TimezoneFormatted = strcat(substring(TimezoneOffset, 0, 3), ":", substring(TimezoneOffset, 3, 2))
+    | extend EventEpochTime = strcat(Year, "-", Month, "-", Day, "T", Time, TimezoneFormatted)
+    | extend EventTime = coalesce(
+    unixtime_milliseconds_todatetime(toreal(EpochTimeExtended) * 1000),
+    todatetime(EventEpochTime)
+    )
     | extend CacheRawLog = extract_all(@"^([0-9\/]+\s[0-9\:]+)\s(\S+)\s([\S\s]+)", dynamic([1,2,3]), RawData)
     | mv-expand CacheRawLog
     | extend CacheEventTime = todatetime(replace("/","-",tostring(CacheRawLog[0]))),
              Description = tostring(CacheRawLog[2])
     | extend EventTime = iif(isempty(EventTime), CacheEventTime, EventTime)
-    | project-away RawData, EpochTime, EventEpochTime, CacheRawLog, CacheEventTime
+    | project-away RawData,  EventEpochTime, CacheRawLog, CacheEventTime, Day, Month, MonthText, Year, Time, TimezoneOffset, TimezoneFormatted

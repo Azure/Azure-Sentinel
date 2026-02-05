@@ -4,12 +4,12 @@
  1. Fetches the devices information from CarbonBlack
  2. Quarantine the device
  3. Enrich the incident with device information by fetching from CarbonBlack<br>
-    ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/Incident_Comment.png)
+    ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/Incident_Comment.png)
 
 
-![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight1.png)
+    ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight1.png)
 
-![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight2.png)
+    ![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/images/designerOverviewLight2.png)
 
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
@@ -35,7 +35,7 @@ Once deployment is complete, you will need to authorize each connection.
 1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device 
 2. Configure the automation rules to trigger this playbook
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-QuarantineDevice%2Fazuredeploy.json)
 
 ## Playbook steps explained
 

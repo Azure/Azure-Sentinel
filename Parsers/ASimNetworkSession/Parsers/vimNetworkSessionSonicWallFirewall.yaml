@@ -1,0 +1,435 @@
+Parser:
+  Title: Network Session ASIM filtering parser for SonicWall firewalls
+  Version: '0.1.0'
+  LastUpdated: Feb 28, 2024
+Product:
+  Name: SonicWall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: SonicWall SonicOS/X 7.0.1 Log Events Reference Guide [PDF]
+    Link: https://www.sonicwall.com/techdocs/pdf/SonicOS-X_7.0.1_LogEvents_ReferenceGuide.pdf
+Description: |
+  This ASIM parser supports filtering and normalizing SonicWall SonicOS ArcSight-formatted syslog data ingested by the Microsoft Sentinel to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionSonicWallFirewall
+EquivalentBuiltInParser: _Im_NetworkSession_SonicWallFirewall
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Actions=datatable(fw_action:string,DvcAction:string)
+  [ "reset client","Reset Source"
+  , "reset server","Reset Destination"
+  , "reset both", "Reset" 
+  , "allow","Allow"
+  , "\"forward\"","Allow"
+  , "\"mgmt\"","Other"
+  , "\"NA\"","Other"
+  , "deny","Deny"
+  , "\"drop\"", "Drop"
+  , "drop ICMP", "Drop ICMP"];
+  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
+  let Parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), dstportnumber:int=int(null), hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]), eventresult:string='*', disabled:bool=false){
+  CommonSecurityLog
+  | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+  | where not(disabled)
+  | where DeviceVendor == "SonicWall"
+  | where DeviceEventClassID !in (14, 97, 1382, 440, 441, 442, 646, 647, 734, 735)
+  | where ( isnotempty(SourceIP) and isnotempty(DestinationIP) )
+  | where (isnull(dstportnumber) or DestinationPort == dstportnumber) and (array_length(hostname_has_any) == 0)
+  | parse-kv AdditionalExtensions as (['gcat']:string, ['app']:string, ['arg']:string, ['dstV6']:string, ['srcV6']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string, ['af_action']:string, ['af_polid']:string, ['af_policy']:string, ['af_type']:string, ['af_service']:string, ['af_object']:string, ['contentObject']:string, ['fileid']:string, ['uuid']:string) with (pair_delimiter=";", kv_delimiter="=")
+  | extend
+      SourceIP = coalesce(SourceIP, srcV6)
+    , DestinationIP = coalesce(DestinationIP, dstV6)
+  | where gcat in (3, 5, 6, 10) // Include only these event categories.
+  | extend
+      temp_SrcMatch=has_any_ipv4_prefix(SourceIP, src_or_any)
+    , temp_DstMatch=has_any_ipv4_prefix(DestinationIP, dst_or_any)
+  // Filter by source/dest. https://learn.microsoft.com/en-us/azure/sentinel/normalization-schema-network
+  | extend ASimMatchingIpAddr=case(
+                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 , "-",
+                                temp_SrcMatch and temp_DstMatch, "Both",
+                                temp_SrcMatch, "SrcIpAddr",
+                                temp_DstMatch, "DstIpAddr",
+                                "No match"
+                            )
+  | where ASimMatchingIpAddr != "No match" 
+  | project-away temp_*
+  | extend ASimMatchingHostname = case(
+                                    array_length(hostname_has_any) == 0 , "-",
+                                    DestinationHostName has_any (hostname_has_any), "DestinationHostname",
+                                    "No match"
+                                    )
+  | extend fw_action = column_ifexists("fw_action", "") // Firewall Action, such as drop, forward, mgmt, NA
+  | lookup Actions on fw_action
+    | where (array_length(dvcaction) == 0 or DvcAction has_any(dvcaction))
+  // Sets the mandatory EventResult based on the DvcAction.
+  | extend EventResult = case(DvcAction == "Allow", "Success",
+                            DvcAction == "Management", "NA",
+                            DvcAction == "NA", "NA",
+                            DvcAction == "Other", "NA",
+                            "Failure"
+                            )
+  | where (eventresult == "*" or eventresult == "" or (eventresult has_any("Success", "Failure", "NA") and EventResult has eventresult))
+  | extend sosLogMsgSeverity = case(LogSeverity == 10, "Emergency (0)",
+                                              LogSeverity == 9, "Alert (1)",
+                                              LogSeverity == 8, "Critical (2)",
+                                              LogSeverity == 7, "Error (3)",
+                                              LogSeverity == 6, "Warning (4)",
+                                              LogSeverity == 5, "Notice (5)",
+                                              LogSeverity == 4, "Info (6)/Debug (7)",
+                                              LogSeverity == 3, "Not Mapped (3)",
+                                              LogSeverity == 2, "Not Mapped (2)",
+                                              LogSeverity == 1, "Not Mapped (1)",
+                                              "Not Mapped"
+                                              )
+  | extend EventSeverity = case(tolong(LogSeverity) <= 4, "Informational"
+                                , tolong(LogSeverity) <= 6, "Low"
+                                , tolong(LogSeverity) <= 8, "Medium"
+                                , tolong(LogSeverity) > 8, "High"
+                                , ""
+                                )
+  | extend NetworkProtocolVersion = case(DestinationIP has ".", "IPv4"
+                                        , DestinationIP has ":", "IPv6"
+                                        , ""
+                                        )
+    , NetworkProtocol = toupper(iff(Protocol contains "-" and Protocol !contains "/", toupper(trim_start(@".*-", Protocol)), toupper(trim_end(@"/.*", Protocol))))
+    , NetworkApplicationProtocol = tostring(toupper(trim_start(@".*/", Protocol)))
+    , EventOriginalType = DeviceEventClassID
+  | project-rename
+    DstMacAddr = DestinationMACAddress
+    , SrcMacAddr = SourceMACAddress
+    , DstIpAddr = DestinationIP
+    , SrcIpAddr = SourceIP
+    , DstPortNumber = DestinationPort
+    , SrcPortNumber = SourcePort
+    , EventMessage = Activity
+    , sosEventMessageDetail = Message
+    , EventProductVersion = DeviceVersion
+    , sosSerialNumber = Computer
+    , DvcOutboundInterface = DeviceOutboundInterface
+    , DvcInboundInterface = DeviceInboundInterface
+    , sosApplicationID = ApplicationProtocol // Application ID number (when Flow Reporting is enabled).
+    , sosCFSFullString = Reason // CFS Category ID and Name
+    , NetworkRuleName = DeviceCustomString1 // Rule ID. Identify a policy or rule associated with an event.
+    , sosSourceVPNPolicyName = DeviceCustomString2 // Displays the source VPN policy name associated with the event.
+    , sosDestinationVPNPolicyName = DeviceCustomString3 // Displays the destination VPN policy name associated with the event.
+    , sosLogMsgNote = DeviceCustomString6 // "Note" field. Additional information that is application-dependent.
+    , SrcNatIpAddr = DeviceCustomString1Label // NAT'ed source IP4/IPv6 address.
+    , DstNatIpAddr = DeviceCustomString2Label // NAT'ed destination IPv4/IPv6 address.
+    , sosSourceZone = DeviceCustomString3Label // Source Zone on Gen7. Src Zone Type on Gen6.
+    , sosDestinationZone = DeviceCustomString4Label // Destination Zone on Gen7. Dest Zone Type (Trusted/Untrusted, etc.) on Gen6.
+    , sosUserSessionType = DeviceCustomString5Label // String indicating the user session type, determined by the auth mechanism.
+    , sosUserSessionDuration = DeviceCustomString6Label // User session duration in seconds.
+    , NetworkIcmpType = FieldDeviceCustomNumber1 // ICMP Type
+    , NetworkIcmpCode = FieldDeviceCustomNumber2 // ICMP Code
+    , SrcUsername = SourceUserName
+    , ThreatOriginalConfidence = ThreatConfidence
+  | extend sosLogMsgCategory = case(gcat == 1, "System (1)",
+                                                gcat == 2, "Log (2)",
+                                                gcat == 3, "Security Services (3)",
+                                                gcat == 4, "Users (4)",
+                                                gcat == 5, "Firewall Settings (5)",
+                                                gcat == 6, "Network (6)",
+                                                gcat == 7, "VPN (7)",
+                                                gcat == 8, "High Availability (8)",
+                                                gcat == 9, "3G/4G, Modem, and Module (9)",
+                                                gcat == 10, "Firewall (10)",
+                                                gcat == 11, "Wireless (11)",
+                                                gcat == 12, "VoIP (12)",
+                                                gcat == 13, "SSL VPN (13)",
+                                                gcat == 14, "Anti-Spam (14)",
+                                                gcat == 15, "WAN Acceleration (15)",
+                                                gcat == 16, "Object (16)",
+                                                gcat == 17, "SD-WAN (17)",
+                                                gcat == 18, "Multi-Instance (18)",
+                                                gcat == 19, "Unified Policy Engine (19)",
+                                                "Log Category Not Mapped"
+                                                )
+  | extend sosLegacyMessageCategory = case(DeviceEventCategory == 0, "None (0)",
+                                              DeviceEventCategory == 1, "System Maintenance (1)",
+                                              DeviceEventCategory == 2, "System Errors (2)",
+                                              DeviceEventCategory == 4, "Blocked Web Sites (4)",
+                                              DeviceEventCategory == 8, "Blocked Java Etc. (8)",
+                                              DeviceEventCategory == 16, "User Activity (16)",
+                                              DeviceEventCategory == 32, "Attacks (32)",
+                                              DeviceEventCategory == 64, "Dropped TCP (64)",
+                                              DeviceEventCategory == 128, "Dropped UDP (128)",
+                                              DeviceEventCategory == 256, "Dropped ICMP (256)",
+                                              DeviceEventCategory == 512, "Network Debug (512)",
+                                              DeviceEventCategory == 1024, "Connection Closed (1024)",
+                                              DeviceEventCategory == 2048, "Dropped LAN TCP (2048)",
+                                              DeviceEventCategory == 4096, "Dropped LAN UDP (4096)",
+                                              DeviceEventCategory == 8192, "Dropped LAN ICMP (8192)",
+                                              DeviceEventCategory == 32768, "Modem Debug (32768)",
+                                              DeviceEventCategory == 65536, "VPN Tunnel Status (65536)",
+                                              DeviceEventCategory == 131072, "IEEE 802.11 Management (131072)",
+                                              DeviceEventCategory == 262144, "Connection Opened (262144)",
+                                              DeviceEventCategory == 524288, "System Environment (524288)",
+                                              DeviceEventCategory == 1048576, "Expanded - VoIP Activity (1048576)",
+                                              DeviceEventCategory == 2097152, "Expanded - WLAN IDS Activity (2097152)",
+                                              DeviceEventCategory == 4194304, "Expanded - SonicPoint Activity (4194304)",
+                                              DeviceEventCategory == 8388608, "Expanded - Unified Policy Engine (8388608)",
+                                              "Legacy Category Not Mapped"
+                                              )
+  | extend sosIPSPriority = case(ipspri == 1, "High (1)",
+                                              ipspri == 2, "Medium (2)",
+                                              ipspri == 3, "Low (3)",
+                                              ""
+                                              )
+  | extend sosAntiSpywarePriority = case(spypri == 1, "High (1)",
+                                              spypri == 2, "Medium (2)",
+                                              spypri == 3, "Low (3)",
+                                              ""
+                                              )
+  | extend
+      EventVendor = "SonicWall"
+    , EventProduct = "Firewall"
+    , DvcOs = "SonicOS"
+    , DvcOsVersion = EventProductVersion
+    , DvcIdType = "Other"
+    , Dvc = sosSerialNumber
+    , DvcDescription = DeviceProduct
+    , NetworkIcmpType = tostring(NetworkIcmpType)
+    , NetworkIcmpCode = toint(NetworkIcmpCode)
+    , Rule = NetworkRuleName
+    , NetworkBytes = tolong(coalesce(toint(ReceivedBytes), 0) + coalesce(toint(SentBytes), 0))
+    , sosIPSFullString = ipscat
+    , ipscat = extract(@'^"?([a-zA-Z-\/]+)', 1, ipscat) // IPS Category/Signature
+    , sosIPSSignatureName = extract(@'[ ](.*)\S', 1, ipscat) // IPS Signature name
+    , FileSize = tolong(coalesce(FileSize, long(null)))
+    , sosAppControlFileName = extract(@'.*Filename: (.*)\"', 1, sosEventMessageDetail) // App Control Filename Logging
+    , sosCaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, sosEventMessageDetail)
+    , sosGAVSignatureName = extract(@'Gateway Anti-Virus Alert: (.*) blocked\.', 1, sosEventMessageDetail)
+    , sosASWSignatureName = extract(@'Anti-Spyware Detection Alert: (.*)\. ', 1, sosEventMessageDetail)
+    , sosCountry = extract(@'Country Name:(.*)\"$', 1, sosEventMessageDetail)
+    , SrcZone = sosSourceZone
+    , DstZone = sosDestinationZone
+    , EventOriginalSeverity = LogSeverity
+    , Dst = DstIpAddr
+    , Src = SrcIpAddr
+    , IpAddr = SrcIpAddr
+    , sosCFSCategoryID = extract(@'(\d+)\s', 1, coalesce(sosCFSFullString, "")) // Application Name from App Control
+    , sosCFSCategoryName = extract(@'.*-("(.*))', 1, coalesce(sosCFSFullString, "")) // Application Name from App Control
+    , sosCFSPolicyName = extract(@'Policy: (.*), Info:', 1, coalesce(sosLogMsgNote, ""))
+    , EventStartTime = coalesce(todatetime(StartTime), TimeGenerated)
+    , EventEndTime = coalesce(todatetime(EndTime), TimeGenerated)
+    , EventType = "NetworkSession"
+    , EventSchemaVersion = "0.2.6"
+    , EventSchema = "NetworkSession"
+    , EventCount = toint(1)
+    , EventUid = _ItemId
+    , EventResultDetails = "NA"
+    , ThreatConfidence = coalesce(toint(ThreatOriginalConfidence), int(null))
+  | extend
+        SrcUsername = coalesce(susr, SrcUsername)
+      , FileName = coalesce(FileName, sosAppControlFileName)
+      , NetworkDirection = case(SrcZone == "" and DstZone == "", "NA"
+                                , SrcZone == "WAN" and (DstZone == "WAN" and DstIpAddr !has ".255"), "Inbound"
+                                , SrcZone == "WAN" and DstZone == "WAN", "External"
+                                , SrcZone == "WAN" and DstZone != "WAN", "Inbound"
+                                , SrcZone == "VPN" and DstZone == "WAN", "Outbound"
+                                , SrcZone == "VPN" and DstZone != "WAN", "Inbound"
+                                , DstZone == "MULTICAST", "NA"
+                                , DstZone == "WAN", "Outbound"
+                                , "Local"
+                                )
+  | extend
+      SrcUsernameType = case(SrcUsername has "=", "DN",
+                                    SrcUsername has "\\", "Windows",
+                                    SrcUsername has "@", "UPN",
+                                    SrcUsername == "Unknown (external IP)", "",
+                                    SrcUsername == "Unknown (SSO bypassed)", "",
+                                    isnotempty(SrcUsername), "Simple",
+                                    ""
+                                    )
+      , ThreatField = case(isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Outbound", "SrcIpAddr"
+                          , isnotempty(ThreatOriginalConfidence) and NetworkDirection == "Inbound", "DstIpAddr"
+                          , ""
+                          )
+  | extend
+      ThreatIpAddr = case(ThreatField == "SrcIpAddr", SrcIpAddr
+                          , ThreatField == "DstIpAddr", DstIpAddr
+                          , ""
+                          )
+  | extend
+    SrcGeoCountry = iff(NetworkDirection == "Inbound", sosCountry, "")
+    , DstGeoCountry = iff(NetworkDirection == "Outbound", sosCountry, "")
+    , SrcAppName = iff(NetworkDirection in ("Inbound", "Local", "NA"), coalesce(appcat, appName), "")
+    , DstAppName = iff(NetworkDirection in ("Outbound", "Local", "NA"), coalesce(appcat, appName), "")
+    , SrcAppId = iff(NetworkDirection in ("Inbound", "Local", "NA"), sid, "")
+    , DstAppId = iff(NetworkDirection in ("Outbound", "Local", "NA"), sid, "")
+  | extend
+    SrcAppType = case(isempty(SrcAppName), ""
+                      , SrcAppName contains "\'General " or SrcAppName contains "\'Service ", "Service", "Other")
+    , DstAppType = case(isempty(DstAppName), ""
+                      , DstAppName contains "\'General " or DstAppName contains "\'Service ", "Service", "Other")
+  | project-rename
+      sosReceivedPackets = DeviceCustomNumber1Label // DeviceCustomNumberXLabel (cnXLabel=)
+    , sosSentPackets = DeviceCustomNumber2Label // DeviceCustomNumberXLabel (cnXLabel=)
+  | extend
+      DstPackets = case(NetworkDirection == "Outbound", tolong(sosReceivedPackets)
+                    , NetworkDirection == "Inbound", tolong(sosSentPackets)
+                    , tolong(long(null))
+                    )
+    , SrcPackets = case(NetworkDirection == "Outbound", tolong(sosSentPackets)
+                    , NetworkDirection == "Inbound", tolong(sosReceivedPackets)
+                    , tolong(long(null))
+                    )
+  | project-rename
+      sosConnectionDuration = DeviceCustomNumber3Label // Applies to "Connection Closed"
+    , sosUser = susr // Logged-in username associated with the log event.
+    , sosAppRulePolicyId = af_polid // App Rule Policy ID.
+    , sosAppRulePolicyName = af_policy // App Rule Policy Name.
+    , sosAppRuleService = af_service // App Rule Service Name.
+    , sosAppRuleType = af_type // App Rule Policy Type.
+    , sosAppRuleObject = af_object // App Rule Object Name.
+    , sosAppRuleObjectContent = contentObject // App Rule Object Content.
+    , sosAppRuleAction = af_action
+    , sosSourceIPv6Address = srcV6
+    , sosDestinationIPv6Address = dstV6
+    , sosAppFullString = appcat // The full "<CATEGORY> <APPNAME> -- <SIGNAME>" string.
+    , sosAppIDNumber = app // Numeric Application ID. Not the same as "ApplicationProtocol".
+    , sosAppID = appid // Application ID from App Control
+    , sosAppCategoryID = catid // Application Category ID
+    , sosAppSignatureID = sid // Application Signature ID
+    , sosIPSCategoryName = ipscat // IPS Category Name
+    , sosAntiSpywareCategory = spycat // Anti-Spyware Category
+    , sosURLPathName = arg // URL. Represents the URL path name.
+    , sosFileIdentifier = fileid // File hash or URL
+    , sosDPIInspectedFlow = dpi // Indicates a flow was inspected by DPI. Applies only to Connection Closed messages.
+    , DstNatPortNumber = dnpt
+    , SrcNatPortNumber = snpt
+    , sosBladeID = bid // Blade ID
+    , sosUUID = uuid
+    , sosFileName = FileName
+    , DvcOriginalAction = fw_action
+  | extend
+    ThreatName = coalesce(sosASWSignatureName, sosGAVSignatureName, sosIPSSignatureName, "")
+    , ThreatId = coalesce(sosAppSignatureID, "")
+    , ThreatCategory = coalesce(sosIPSCategoryName, sosAntiSpywareCategory, "")
+    , DstNatPortNumber = toint(DstNatPortNumber)
+    , SrcNatPortNumber = toint(SrcNatPortNumber)
+  | extend AdditionalFields = bag_pack(
+    "AppRulePolicyId", sosAppRulePolicyId
+    , "AppRulePolicyName", sosAppRulePolicyName
+    , "AppRuleService", sosAppRuleService
+    , "AppRuleType", sosAppRuleType
+    , "AppRuleObject", sosAppRuleObject
+    , "AppRuleObjectContent", sosAppRuleObjectContent
+    , "AppRuleAction", sosAppRuleAction
+    , "AppID", sosAppID
+    , "AppCategoryID", sosAppCategoryID
+    , "IPSCategoryName", sosIPSCategoryName
+    , "AntiSpywareCategory", sosAntiSpywareCategory
+    , "FileIdentifier", sosFileIdentifier
+    , "DPIInspectedFlow", sosDPIInspectedFlow
+    , "BladeID", sosBladeID
+    , "UUID", sosUUID
+    , "FileName", sosFileName
+    , "FileSize", FileSize
+    , "CaptureATPVerdict", sosCaptureATPVerdict
+    , "CFSCategoryID", sosCFSCategoryID
+    , "CFSCategoryName", sosCFSCategoryName
+    , "CFSPolicyName", sosCFSPolicyName
+    , "AppControlFileName", sosAppControlFileName
+    , "IPSFullString", sosIPSFullString
+    , "IPSSignatureName", sosIPSSignatureName
+    , "LegacyMessageCategory", sosLegacyMessageCategory
+    , "LogMsgCategory", sosLogMsgCategory
+    , "LogMsgNote", sosLogMsgNote
+    , "LogMsgSeverity", sosLogMsgSeverity
+    , "SourceVPNPolicyName", sosSourceVPNPolicyName
+    , "DestinationVPNPolicyName", sosDestinationVPNPolicyName
+    , "EventMessageDetail", sosEventMessageDetail
+    , "UserSessionType", sosUserSessionType
+    )
+  | project-away
+      DeviceEventCategory
+    , gcat
+    , RequestMethod
+    , ipspri
+    , spypri
+    , sos*
+    , RequestURL
+    , Protocol
+    , appName
+    , AdditionalExtensions
+    , Flex*
+    , Indicator*
+    , Malicious*
+    , Field*
+    , DeviceCustom*
+    , Old*
+    , File*
+    , Source*
+    , Destination*
+    , Device*
+    , SimplifiedDeviceAction
+    , ExternalID
+    , ExtID
+    , TenantId
+    , ProcessName
+    , ProcessID
+    , ExtID
+    , OriginalLogSeverity
+    , LogSeverity
+    , EventOutcome
+    , StartTime
+    , EndTime
+    , ReceiptTime
+    , Remote*
+    , ThreatDescription
+    , ThreatSeverity
+    , RequestContext
+    , RequestCookies
+    , CommunicationDirection
+    , ReportReferenceLink
+    , ReceivedBytes
+    , SentBytes
+    , _ResourceId
+    , _ItemId
+  | project-reorder
+      TimeGenerated
+    , EventVendor
+    , EventProduct
+    , DvcDescription
+    , Dvc
+    , DvcOs
+    , DvcOsVersion
+  };
+  Parser(starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent 
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent 
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceFileEvents
@@ -41,13 +44,12 @@ query: |
   | where ObjectName endswith ".jsp" 
   | summarize by ParentProcessName, Account, Computer, ObjectName, ProcessName, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId)
    on timekey, Computer, SubjectLogonId
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
   ),
   (DeviceFileEvents 
   | where InitiatingProcessFileName has_any ("java.exe", "javaw.exe")  
   | where InitiatingProcessCommandLine has "SysAidServer"  
   | where FileName endswith ".jsp" 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  | extend Account = strcat(InitiatingProcessAccountDomain, @'\', InitiatingProcessAccountName), Computer = DeviceName
   ),
   (imFileEvent
   | where TimeGenerated > ago(timeframe)
@@ -55,25 +57,36 @@ query: |
   | where ActingProcessName has_any ("java.exe", "javaw.exe") 
   | where ActingProcessCommandLine has "SysAidServer"  
   | where FilePath endswith ".jsp" 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname
+  | extend Account = ActorUsername, Computer = DvcHostname
   )
   )
+  | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.0.1
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:
         kind: Scheduled
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

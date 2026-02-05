@@ -1,0 +1,293 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-StartSecurityComplianceAnalyzer",
+    "description": "This Microsoft Sentinel playbook initiates and monitors Veeam Security and Compliance Analyzer sessions via HTTP trigger.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Hybrid Connection and Key Vault secrets configured for the VBR Server."
+    ],
+    "entities": [],
+    "tags": [ "Automation", "Veeam", "BestPractice", "Analyzer", "HTTP" ],
+    "lastUpdateTime": "2025-08-25T00:00:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.0",
+    "postDeployment": [
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Veeam-StartSecurityComplianceAnalyzer",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    }
+  },
+  "variables": {
+    "functionAppId": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-StartSecurityComplianceAnalyzer",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "functionAppName": {
+              "defaultValue": "[parameters('functionAppName')]",
+              "type": "String"
+            },
+            "VbrHostName": {
+              "defaultValue": "DefaultVbrHostName",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "When_a_HTTP_request_is_received": {
+              "type": "Request",
+              "kind": "Http"
+            }
+          },
+          "actions": {
+            "StartSecurityComplianceAnalyzer": {
+              "type": "Function",
+              "inputs": {
+                "queries": {
+                  "vbrHostName": "@parameters('VbrHostName')"
+                },
+                "function": {
+                  "id": "[concat(variables('functionAppId'), '/functions/StartSecurityComplianceAnalyzerAsync')]"
+                }
+              },
+              "runAfter": {}
+            },
+            "Parse_sessionId": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('StartSecurityComplianceAnalyzer')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionType": {
+                      "type": "integer"
+                    },
+                    "state": {
+                      "type": "integer"
+                    },
+                    "platformName": {},
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "jobId": {
+                      "type": "string"
+                    },
+                    "creationTime": {
+                      "type": "string"
+                    },
+                    "endTime": {},
+                    "progressPercent": {
+                      "type": "integer"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "isCanceled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "resourceId": {},
+                    "resourceReference": {},
+                    "parentSessionId": {},
+                    "usn": {
+                      "type": "integer"
+                    },
+                    "platformId": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "StartSecurityComplianceAnalyzer": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Compose": {
+              "type": "Compose",
+              "inputs": "@body('Parse_sessionId')?['id']",
+              "runAfter": {
+                "Parse_sessionId": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Until_state_is_not_stopped": {
+              "type": "Until",
+              "expression": "@equals(body('Parse_session')?['state'],1)",
+              "limit": {
+                "timeout": "PT30M"
+              },
+              "actions": {
+                "GetSession": {
+                  "type": "Function",
+                  "inputs": {
+                    "queries": {
+                      "vbrHostName": "@parameters('VbrHostName')",
+                      "sessionId": "@body('Parse_sessionId')?['id']"
+                    },
+                    "function": {
+                      "id": "[concat(variables('functionAppId'), '/functions/GetSessionAsync')]"
+                    }
+                  }
+                },
+                "Parse_session": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@outputs('GetSession')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "sessionType": {
+                          "type": "integer"
+                        },
+                        "state": {
+                          "type": "integer"
+                        },
+                        "platformName": {},
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "jobId": {
+                          "type": "string"
+                        },
+                        "creationTime": {
+                          "type": "string"
+                        },
+                        "endTime": {},
+                        "progressPercent": {
+                          "type": "integer"
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "result": {
+                              "type": "integer"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "isCanceled": {
+                              "type": "boolean"
+                            }
+                          }
+                        },
+                        "resourceId": {},
+                        "resourceReference": {},
+                        "parentSessionId": {},
+                        "usn": {
+                          "type": "integer"
+                        },
+                        "platformId": {}
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "GetSession": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Delay": {
+                  "type": "Wait",
+                  "inputs": {
+                    "interval": {
+                      "count": 1,
+                      "unit": "Minute"
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_session": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              },
+              "runAfter": {
+                "Compose": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "GetSecurityComplianceAnalyzerResultsAsync": {
+              "type": "Function",
+              "inputs": {
+                "queries": {
+                  "vbrHostName": "@parameters('VbrHostName')"
+                },
+                "function": {
+                  "id": "[concat(variables('functionAppId'), '/functions/GetSecurityComplianceAnalyzerResultsAsync')]"
+                }
+              },
+              "runAfter": {
+                "Until_state_is_not_stopped": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Compose_output": {
+              "type": "Compose",
+              "inputs": "@body('Parse_session')",
+              "runAfter": {
+                "GetSecurityComplianceAnalyzerResultsAsync": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 ARM template for ASIM RegistryEvent schema parser for Security Events.
 
-This ASIM parser supports normalizing Microsoft Windows events (event numbers 4657 and 4663), to the ASIM Registry Event normalized schema.
+This ASIM parser supports normalizing Microsoft Windows events (event numbers 4657 and 4663), logs ingested in 'WindowsEvent' table to the ASIM Registry Event normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM RegistryEvent normalization schema reference](https://aka.ms/ASimRegistryEventDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimRegistryEvent/CHANGELOG/vimRegistryEventMicrosoftWindowsEvent.md)
 
 <br>
 

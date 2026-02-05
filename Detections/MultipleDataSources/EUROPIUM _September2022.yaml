@@ -69,20 +69,20 @@ query:  |
   | project TimeGenerated, SourceIP, DestinationIP, Message, SourceUserID, RequestURL, DNSName, Type
   | extend MessageIP = extract(IPRegex, 0, Message), RequestIP = extract(IPRegex, 0, RequestURL)
   | extend IPMatch = case(SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", MessageIP in (IPList), "Message",  "NoMatch")
-  | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "NoMatch"), AccountCustomEntity = SourceUserID
+  | extend timestamp = TimeGenerated, IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, IPMatch == "Message", MessageIP, "NoMatch")
   ),
   (DnsEvents
   | where IPAddresses in (IPList)  
   | project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type
   | extend DestinationIPAddress = IPAddresses, DNSName = Name, Computer 
-  | extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated, IPEntity = DestinationIPAddress, HostEntity = Computer
   ),
   (VMConnection
   | where SourceIp in (IPList) or DestinationIp in (IPList)
   | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
   | project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type
   | extend IPMatch = case( SourceIp in (IPList), "SourceIP", DestinationIp in (IPList), "DestinationIP", "None") 
-  | extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "NoMatch"), File = ProcessName, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated, IPEntity = case(IPMatch == "SourceIP", SourceIp, IPMatch == "DestinationIP", DestinationIp, "NoMatch"), File = ProcessName, HostEntity = Computer
   ),
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
@@ -93,39 +93,52 @@ query:  |
   | where SourceIP in (IPList) or DestinationIP in (IPList)
   | project TimeGenerated, SourceIP, DestinationIP, Image, UserName, Computer, Type
   | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
-  | extend timestamp = TimeGenerated, File = tostring(split(Image, '\\', -1)[-1]), IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), HostCustomEntity = Computer, AccountCustomEntity = UserName
+  | extend timestamp = TimeGenerated, File = tostring(split(Image, '\\', -1)[-1]), IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), 
+  HostEntity = Computer, AccountName = tostring(split(UserName, @'\')[1]), AccountDomain = tostring(split(UserName, @'\')[0])
+  | extend InitiatingProcessAccount = UserName
   ), 
   (OfficeActivity
   | where ClientIP in (IPList) 
   | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId
+  | extend timestamp = TimeGenerated, IPEntity = ClientIP, AccountName = tostring(split(UserId, "@")[0]), AccountDomain = tostring(split(UserId, "@")[1])
+  | extend InitiatingProcessAccount = UserId
   ),
   (DeviceNetworkEvents
   | where RemoteIP in (IPList) or InitiatingProcessSHA256 in (sha256Hashes)
-  | project TimeGenerated, ActionType, DeviceId, Computer = DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type
-  | extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP,  HostCustomEntity = Computer, AccountCustomEntity = InitiatingProcessAccountName
+  | project TimeGenerated, ActionType, DeviceId, Computer = DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, 
+  InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type
+  | extend timestamp = TimeGenerated, IPEntity = RemoteIP, HostEntity = Computer, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (WindowsFirewall
   | where SourceIP in (IPList) or DestinationIP in (IPList) 
   | project TimeGenerated, Computer, CommunicationDirection, SourceIP, DestinationIP, SourcePort, DestinationPort, Type
   | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
+  | extend timestamp = TimeGenerated, HostEntity = Computer, IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None")
   ), 
   (imFileEvent
   | where TargetFileSHA256 has_any (sha256Hashes)
   | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
-  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress,  HostCustomEntity = Computer, AccountCustomEntity = Account, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(FileHash)
+  | extend timestamp = TimeGenerated, IPEntity = IPAddress,  HostEntity = Computer, Algorithm = "SHA256", FileHash = tostring(FileHash)
+  | extend AccountName = tostring(split(Account, @'\')[1]), AccountDomain = tostring(split(Account, @'\')[0])
+  | extend InitiatingProcessAccount = Account
   ),
   (DeviceFileEvents
   | where SHA256 has_any (sha256Hashes)
-  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, 
+  InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain, 
+  Algorithm = "SHA256", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (DeviceImageLoadEvents
   | where SHA256 has_any (sha256Hashes)
-  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName,  AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, 
+  InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain, 
+  Algorithm = "SHA256", FileHash = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (Event
   | where Source =~ "Microsoft-Windows-Sysmon"
@@ -139,35 +152,46 @@ query:  |
   | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes)  
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = tostring(Hashes[1])
+  | extend timestamp = TimeGenerated, HostEntity = Computer, AccountName = tostring(split(UserName, @'\')[1]), AccountUPNSuffix = tostring(split(UserName, @'\')[0]), FileHash = tostring(Hashes[1])
+  | extend InitiatingProcessAccount = UserName
   )
   )
+  | extend HostName = tostring(split(HostEntity, ".")[0]), DomainIndex = toint(indexof(HostEntity, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(HostEntity, DomainIndex + 1), HostEntity)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: InitiatingProcessAccount
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: HostEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: IPEntity
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: AlgorithmCustomEntity
+        columnName: Algorithm
       - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.0.2
+        columnName: FileHash
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

@@ -114,14 +114,14 @@ class AzureSentinelConnectorCLv2Async:
         _compress = zlib.compressobj(wbits=zlib_mode)
         compress_data = _compress.compress(bytes(body, encoding="utf-8"))
         compress_data += _compress.flush()
-        logging.info("Data getting into LA after compression SizeInKB: {}".format(len(compress_data)/1024))
+        logging.debug("Data getting into LA after compression SizeInKB: {}".format(len(compress_data)/1024))
         return compress_data
 
     # This method returns true if queue size is less than max allowed queue size
     # queue : List of dictionary
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
-        #logging.info("Data size {}".format(data_bytes_len))
+        logging.debug("Data size {}".format(data_bytes_len))
         return data_bytes_len < self.queue_size_bytes
 
     # This method splits big list into two equal halves
@@ -130,7 +130,7 @@ class AzureSentinelConnectorCLv2Async:
         if self._check_size(queue):
             return [queue]
         else:
-            #logging.info("Split is required")
+            logging.debug("Split is required")
             middle = int(len(queue) / 2)
             queues_list = [queue[:middle], queue[middle:]]
             return self._split_big_request(queues_list[0]) + self._split_big_request(queues_list[1])

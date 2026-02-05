@@ -4,4 +4,4 @@
 |       |                     | Added new query rate limit in Data Connectors to prevent API flooding |
 |       |                     | Bug fix for wrong table referenced in query in workbook |
 | 2.0.1       | 08-05-2023                     | Bug fix for APIVersion in Data Connector |
-| 2.0.0       | 14-02-2023                     | Initial solution release |
+| 2.0.0       | 14-02-2023                     | Initial Solution Release |

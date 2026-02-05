@@ -1,0 +1,40 @@
+id: 6cdef739-18f6-4b3a-8fdc-93e9a4302dbf
+name: Suspicious command line tokens in LolBins or LolScripts
+description: |
+  This query identifies Microsoft-signed Binaries and Scripts that are not system initiated. This technique is commonly used in phishing attacks.
+description-detailed: |
+  This query identifies Microsoft-signed Binaries and Scripts that are not system initiated. 
+  The query looks for command line activities matching defined IOCs and is useful for identifying suspicious command line tokens in LolBins or LolScripts, commonly used in phishing attacks.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1218
+query: |
+  let Bin = externaldata(Binary: string) [@"https://raw.githubusercontent.com/sonnyakhere/LOLBAS_to_CSV/main/lolbas.csv"] with (format="csv", ignoreFirstRecord=True);
+  let ioc = dynamic(["http", "ftp"]);
+  SecurityEvent
+  | where EventID == 4688
+  | where TimeGenerated between ( ago(1d) .. now() )
+  // Looking to exclude system initiated activity
+  | where SubjectUserName !endswith "$"
+  | where SubjectUserName != "SYSTEM"
+  | where ParentProcessName has_any (Bin)
+  // Looking to only include details of those that have command line activities matching 1 or more of the defined IOCs
+  | where CommandLine has_any (ioc)
+  | project TimeGenerated, SubjectMachineName, SubjectUserName, ParentProcessName, Process, CommandLine
+  | sort by TimeGenerated asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectUserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectMachineName
+version: 1.0.0

@@ -1,6 +1,6 @@
   # Carbon Black Logic Apps connector and playbook templates
 
-![](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlackConnector/CarbonBlack.PNG)
+![](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlackConnector/CarbonBlack.PNG)
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -18,18 +18,18 @@ The Carbon Black Cloud is a cloud-native endpoint protection platform (EPP) that
 
 ## Deploy Custom Connector + 3 Playbook templates
 This package includes:
-* [Logic Apps custom connector for Carbon Black](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlackConnector/readme.md)
+* [Logic Apps custom connector for Carbon Black](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlackConnector/readme.md)
 
-  ![custom connector](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlackConnector/CarbonBlackListOfActions.png)
+  ![custom connector](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlackConnector/CarbonBlackListOfActions.png)
 * Three playbook templates leverage CarbonBlack custom connector:
-  * [Response from Teams](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/readme.md) - allow SOC to take action on suspicious devices arrived in incidents (apply a pre-defined policy or quarantine) and change incident configuration directly from Teams channel. Post information about the incident as a comment to the incident.
-  * [Quarantine device](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-QuarantineDevice/readme.md) - move the device arrived in the incident to quarantine (if not already quarantined). Post information about the incident as a comment to the incident.
-  * [Enrichment](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CarbonBlack/Playbooks/CarbonBlack-DeviceEnrichment/readme.md) - collect information about the devices and post them as incident comment.
+  * [Response from Teams](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/readme.md) - allow SOC to take action on suspicious devices arrived in incidents (apply a pre-defined policy or quarantine) and change incident configuration directly from Teams channel. Post information about the incident as a comment to the incident.
+  * [Quarantine device](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-QuarantineDevice/readme.md) - move the device arrived in the incident to quarantine (if not already quarantined). Post information about the incident as a comment to the incident.
+  * [Enrichment](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-DeviceEnrichment/readme.md) - collect information about the devices and post them as incident comment.
 
 You can choose to deploy the whole package: connector + all three playbook templates, or each one separately from it's specific folder.
 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2Fazuredeploy.json)
 
 # CarbonBlack connector documentation 
 

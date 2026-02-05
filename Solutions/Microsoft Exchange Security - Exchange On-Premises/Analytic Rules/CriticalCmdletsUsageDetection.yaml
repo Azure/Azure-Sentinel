@@ -1,12 +1,12 @@
 id: 5170c3c4-b8c9-485c-910d-a21d965ee181
 name: VIP Mailbox manipulation
 description: |
-  'Alert if an high important Cmdlet is executed on a VIP Mailbox as those Cmdlets can be used for data exfiltration or mailbox access.'
+  'Alert if a cmdlet that can be translated to data exfiltration or mailbox access is executed on a VIP Mailbox.'
 requiredDataConnectors:
   - connectorId: ESI-ExchangeAdminAuditLogEvents
     dataTypes:
       - Event
-severity: Low
+severity: Medium
 queryFrequency: 30m
 queryPeriod: 1h
 triggerOperator: gt
@@ -21,11 +21,11 @@ relevantTechniques:
   - T1098
   - T1114
 query: |
+  let VIPRestriction = "on";
   ExchangeAdminAuditLogs
-  | where ingestion_time() > ago(30m)
-  | where IsSensitive == true
-  | where UserOriented =~ 'Yes'
-  | where IsVIP == true
+  | where IsVIP or VIPRestriction =~ "off"
+  | where UserOriented =~ 'Yes' and IsSensitive and ((IsRestrictedCmdLet and IsSenstiveCmdletParameters) or IsRestrictedCmdLet == false)
+  | extend Level = iif (Status == "Failure", "Medium", "High")
 entityMappings:
 - entityType: Mailbox
   fieldMappings:
@@ -47,5 +47,9 @@ entityMappings:
   fieldMappings:
     - identifier: Name
       columnName: Caller
-version: 1.0.0
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{CmdletName}} executed on {{TargetObject}}"
+  alertDescriptionFormat: "Alert from Microsoft Exchange Security as {{CmdletName}} with parameters {{CmdletParameters}} was executed on {{TargetObject}}"
+  alertSeverityColumnName: Level 
+version: 1.2.0
 kind: Scheduled

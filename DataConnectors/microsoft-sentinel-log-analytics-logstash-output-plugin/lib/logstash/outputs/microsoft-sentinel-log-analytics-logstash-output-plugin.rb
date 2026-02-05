@@ -68,6 +68,11 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # Path where to place the sample file created
   config :sample_file_path, :validate => :string
 
+  # Used to specify the name of the Azure cloud that is being used. By default, the value is set to "AzureCloud", which
+  # is the public Azure cloud. However, you can specify a different Azure cloud if you are
+  # using a different environment, such as Azure Government or Azure China.
+  config :azure_cloud, :validate => :string
+
   public
   def register
     @logstash_configuration= build_logstash_configuration()
@@ -103,6 +108,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     logstash_configuration.proxy_aad = @proxy_aad || @proxy || ENV['http_proxy']
     logstash_configuration.proxy_endpoint = @proxy_endpoint || @proxy || ENV['http_proxy']
     logstash_configuration.retransmission_time = @retransmission_time
+    logstash_configuration.azure_cloud = @azure_cloud || "AzureCloud"
     
     return logstash_configuration
   end # def build_logstash_configuration

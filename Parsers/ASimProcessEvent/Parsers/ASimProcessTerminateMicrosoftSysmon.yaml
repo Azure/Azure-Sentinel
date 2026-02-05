@@ -1,65 +1,65 @@
 Parser:
   Title: Process Terminate Event ASIM parser for Microsoft Windows Security Events
-  Version: '0.2.1'
-  LastUpdated: Feb 23, 2022
+  Version: '0.3.1'
+  LastUpdated: Jun 3, 2024
 Product:
   Name: Microsoft Windows Events Sysmon
 Normalization:
   Schema: ProcessEvent
-  Version: '0.1.0'
+  Version: '0.1.4'
 References:
 - Title: ASIM Process Schema
   Link: https://aka.ms/ASimProcessEventDoc
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Sysmon process terminate events (event 5) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
-ParserName: ASimProcessTerminateMicrosoftSysmon
+  This ASIM parser supports normalizing Microsoft Windows Sysmon process terminate events (event 5) collected using the Event or WEF (WindowsEvent table) connectors logs ingested in 'Event' table to the ASIM Process Event normalized schema. 
+ParserName: ASimProcessEventTerminateMicrosoftSysmon
 EquivalentBuiltInParser: _ASim_ProcessEvent_TerminateMicrosoftSysmon
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: | 
-    let parser = (disabled:bool = false) {
-        // this is the parser for sysmon from Event table
-        let parser_Event = (disabled:bool=false) {
-            Event 
-            | where not(disabled)
-            | where Source == "Microsoft-Windows-Sysmon" and EventID == 5
-            | parse-kv EventData as (
-                ProcessId:string,
-                ProcessGuid:string,
-                Image:string,
-                User:string
-              ) 
-              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-            | project-rename
-                ActorUsername = User,
-                DvcHostname = Computer,
-                TargetProcessName = Image,
-                TargetProcessGuid = ProcessGuid,
-                TargetProcessId = ProcessId
-            | extend 
-                EventProduct = "Sysmon"
-            | project-away EventData, ParameterXml, RenderedDescription, MG, ManagementGroupName, Message, AzureDeploymentID, SourceSystem, EventCategory, EventLevelName, EventLevel, EventLog, Role, TenantId, UserName
-        };
-        let parser_WindowsEvent=(disabled:bool=false){
-            WindowsEvent
-            | where not(disabled)
-            | where Provider == "Microsoft-Windows-Sysmon" and EventID == 5
-            | extend
-                EventProduct = "Security Events",
-                ActorUsername = tostring(EventData.User),
-                TargetProcessName = tostring(EventData.Image),
-                TargetProcessId = tostring(EventData.ProcessId),
-                TargetProcessGuid = tostring(EventData.ProcessGuid)
-            | project-rename
-                DvcHostname = Computer,
-                EventOriginalUid = EventOriginId
-            | project-away Channel, Data, EventData, EventLevelName, EventLevel, ManagementGroupName, Provider, RawEventData, SourceSystem, Task, TenantId
-        };
-        union isfuzzy=true parser_Event(disabled=disabled) // , parser_WindowsEvent(disabled=disabled)
+    let parser = (disabled: bool = false) {
+    // this is the parser for sysmon from Event table
+    let parser_Event =
+        Event 
+        | where not(disabled)
+        | where Source == "Microsoft-Windows-Sysmon" and EventID == 5
+        | parse-kv EventData as (
+            ProcessId: string,
+            ProcessGuid: string,
+            Image: string,
+            User: string
+            ) 
+            with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+        | project-rename
+            ActorUsername = User,
+            DvcHostname = Computer,
+            TargetProcessName = Image,
+            TargetProcessGuid = ProcessGuid,
+            TargetProcessId = ProcessId
+        | extend 
+            EventProduct = "Sysmon"
+        | project-away
+            EventData,
+            ParameterXml,
+            RenderedDescription,
+            MG,
+            ManagementGroupName,
+            Message,
+            AzureDeploymentID,
+            SourceSystem,
+            EventCategory,
+            EventLevelName,
+            EventLevel,
+            EventLog,
+            Role,
+            TenantId,
+            UserName,
+            Source,
+            _ResourceId
         | extend  
             EventType = "ProcessTerminated",
             EventStartTime = todatetime(TimeGenerated),
@@ -71,11 +71,13 @@ ParserQuery: |
             EventOriginalType=tostring(EventID),
             EventResult = 'Success',
             DvcOs = "Windows",
-            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            ActorUsernameType = iff(isnotempty(ActorUsername), 'Windows', ''),
             // -- Aliases 
             User = ActorUsername,
             Process = TargetProcessName,
             Dvc = DvcHostname
         | project-away EventID
+    ;
+    parser_Event
     };
-    parser (disabled = disabled) 
+    parser (disabled = disabled)

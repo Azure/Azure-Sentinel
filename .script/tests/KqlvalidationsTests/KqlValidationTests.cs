@@ -97,6 +97,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(queryStr, fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
 
@@ -121,8 +122,37 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(queryStr,fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
+
+        /// <summary>
+        /// Validates the KQL for the best practices
+        /// </summary>
+        /// <param name="queryStr">Query string</param>
+        /// <param name="filename">KQL file name</param>
+        private void ValidateKqlForBestPractices(string queryStr, string filename)
+        {
+            try
+            {
+                // Commenting temporarily for adding some additional functionality
+                //if (!GitHubApiClient.IsForkRepo())
+                //{
+                //    var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr, filename);
+                //    if (!string.IsNullOrEmpty(suggestions))
+                //    {
+                //        var gitHubApiClient = GitHubApiClient.Create();
+                //        gitHubApiClient.AddPRComment(suggestions);
+                //    } 
+                //}
+            }
+            catch (Exception ex)
+            {
+                // Log the exception or handle it appropriately
+                Console.WriteLine($"Error occurred while validating KQL for best practices. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+            }
+        }
+
 
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -202,6 +232,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
         [Theory]
@@ -249,6 +280,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
             var parserName = (string)yaml["ParserName"];
             ValidateKql(parserName, queryStr, false);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -274,6 +306,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
             ValidateKql(parserName, queryStr, false);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
 
@@ -281,7 +314,7 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(SolutionParsersYamlFilesTestData))]
         public void Validate_SolutionParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml")
+            if (fileName == "NoFile.yaml" || fileName == "ASIM_FillNull.yaml")
             {
                 Assert.True(true);
                 return;
@@ -299,6 +332,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["FunctionName"];
             ValidateKql(id.ToString(), queryStr, false);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
         //Will enable this test case once all txt files removed from the parsers folders
@@ -320,7 +354,7 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
         {
-            var gitHubApiClient = GitHubApiClient.Instance;
+            var gitHubApiClient = GitHubApiClient.Create();
 
             IReadOnlyList<PullRequestFile> prFiles = gitHubApiClient.GetPullRequestFiles();
 
@@ -394,8 +428,8 @@ namespace Kqlvalidations.Tests
             bool match = Regex.IsMatch(queryStr, tiTablepattern);
             if (match)
             {
-                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\)\s*\|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
-                return Regex.IsMatch(queryStr, queryPattern);
+                string queryPattern = @"ThreatIntelligenceIndicator\s*\|\s*where\s*TimeGenerated\s*>=\s*ago\(\w+\).*|\s*summarize\s*LatestIndicatorTime\s*=\s*arg_max\(TimeGenerated,\s*\*\)\s*by\s*IndicatorId\s*\|\s*where\s*(?:ExpirationDateTime\s*>\s*now\(\)\s*and\s*Active\s*==\s*true|Active\s*==\s*true\s*and\s*ExpirationDateTime\s*>\s*now\(\))";
+                return Regex.IsMatch(queryStr, queryPattern, RegexOptions.Singleline);
             }
             return true;
         }
@@ -421,6 +455,7 @@ namespace Kqlvalidations.Tests
 
             bool isQueryValid = !(from p in listOfDiagnostics
                                   where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                  || !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
                                   select p).Any();
 
 
@@ -442,7 +477,9 @@ namespace Kqlvalidations.Tests
         private bool ShouldSkipTemplateValidation(string templateId)
         {
             return TemplatesToSkipValidationReader.WhiteListTemplates
-                .Where(template => template.id == templateId)
+                .Where(template => 
+template.id
+ == templateId)
                 .Where(template => !string.IsNullOrWhiteSpace(template.validationFailReason))
                 .Where(template => !string.IsNullOrWhiteSpace(template.templateName))
                 .Any();

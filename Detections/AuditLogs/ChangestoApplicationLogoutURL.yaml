@@ -24,22 +24,34 @@ query: |
   AuditLogs
     | where Category =~ "ApplicationManagement"
     | where OperationName has_any ("Update Application", "Update Service principal")
-    | extend appName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
-    | extend UPN = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend UpdatedBy = iif(isnotempty(appName), appName, UPN)
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend TargetAppName = tostring(TargetResources[0].displayName)
     | extend mod_props = TargetResources[0].modifiedProperties
-    | extend AppName = tostring(TargetResources[0].displayName)
     | mv-expand mod_props
     | extend Action = tostring(mod_props.displayName)
     | where Action contains "Url"
+    | extend UpdatedBy = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
     | extend OldURL = tostring(mod_props.oldValue)
     | extend NewURL = tostring(mod_props.newValue)
-    | project-reorder TimeGenerated, OperationName, Action, AppName, OldURL, NewURL, UpdatedBy
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingAadUserId, InitiatingUserPrincipalName, InitiatingIPAddress, UpdatedBy
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: UpdatedBy
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: URL
     fieldMappings:
       - identifier: Url
@@ -48,13 +60,17 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: NewURL
-version: 1.0.1
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

@@ -7,8 +7,8 @@ This logic app helps to summarize Network session data into custom tables. This 
 
 ### Deployment instructions 
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/deploySummarizationPublic)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/deploySummarizationGov)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-NetworkSessionEssentials-SummarizeData)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-NetworkSessionEssentials-SummarizeData-gov)
 
 2. Fill in the required parameter:
     * Playbook Name: Enter the playbook name here (Ex: SummarizeData)

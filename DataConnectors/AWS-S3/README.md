@@ -4,7 +4,7 @@
 
 AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Watch, Cloud Trail (management and data events). 
 
-This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retreive the logs.
+This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retrieve the logs.
 
 More information on the connector and configuration instructions can be found on the Azure Sentinel data connector page in the Azure portal.
 
@@ -25,12 +25,14 @@ At a high level, these scripts do the following:
 You must have PowerShell and the AWS CLI installed before using these scripts.
 
 - PowerShell [Installation instructions](https://docs.microsoft.com/powershell/scripting/install/installing-powershell?view=powershell-7.1)
+  - Please ensure you're not using Windows Powershell (is version 5 - will not work), use a version of powershell >= 7  
 - AWS CLI [Installation instructions](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
   - Run from PowerShell `aws configure`. For more details please see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
+  - Please install the latest version as older versions (e.g 2.0.9) have failed to work with these scripts
 
 ## Using the scripts
-
-Download the scripts in this folder and subfolders or download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer. 
+For Microsoft Azure, please download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer.
+For Microsoft Azure Government, please download and extract the `ConfigAwsS3DataConnectorGOVScripts.zip` file to your computer.
 Make sure that you have PowerShell and the AWS CLI installed.
 
 > IMPORTANT 
@@ -52,9 +54,16 @@ When the script(s) complete, you must complete the Azure Sentinel data connector
 
 By default, a log is created in the directory where the script is executed.
 
+## Attack Disruption advance option Setup
+
+The `awsScriptBash.zip` file contains a bash script for setting up AWS attack disruption capabilities. This script can be used in AWS CloudShell as an alternative to manual configuration for enhanced security response permissions.
+
 ## Advanced usage
 
 The `ConfigAwsConnector.ps1` script has two parameters:
 - `-LogPath` specifies a custom path to create the script activity log file.
 - `-AwsLogType` specifies the AWS log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty". If this parameter is specified, the user will not be prompted for this information.
 
+## Script Bundle Automation
+
+The configuration scripts are automatically bundled into zip files (`ConfigAwsS3DataConnectorScripts.zip` and `ConfigAwsS3DataConnectorScriptsGov.zip`) whenever changes are made to the source files. This automation ensures that the distributed bundles are always up-to-date with the latest script versions. For more information about the bundling process, see [BUNDLE_AUTOMATION.md](BUNDLE_AUTOMATION.md).

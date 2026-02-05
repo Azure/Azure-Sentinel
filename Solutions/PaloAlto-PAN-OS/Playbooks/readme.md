@@ -38,13 +38,13 @@ You can choose to deploy the whole package connector + all three playbook templa
 <a name="authentication">
 
 ## Authentication
-This connector supports [API Key authentication](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation).
+This connector supports [API Key authentication](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key).
 
 <a name="prerequisites">
 
 ### Prerequisites for using and deploying Custom Connector
 1. PAN-OS service end point should be known. (e.g. https://{paloaltodomain})
-2. Generate an API key. [Refer this link on how to generate the API Key](https://paloaltolactest.trafficmanager.net/restapi-doc/#tag/key-generation)
+2. Generate an API key. [Refer this link on how to generate the API Key](https://docs.paloaltonetworks.com/pan-os/9-1/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key)
 3. Address group should be created for PAN-OS for blocking/unblocking address objects and this address group should be used while creating playbooks.
 
 

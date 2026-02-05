@@ -5,7 +5,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let day_names =dynamic([\"Sunday\",\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\",\"Saturday\"]);\nlet averageData = view() {  CommonSecurityLog \n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| where TimeGenerated > datetime(2000-01-01)\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize Count=count() by Year=getyear(TimeGenerated), Month=monthofyear(TimeGenerated), Day=dayofmonth(TimeGenerated)\n| summarize Average_Count=toint(avg(Count)) by Day=dayofweek(make_datetime(Year,Month,Day)), SortData=\"Average Daily Change\"\n| order by Day asc};\nlet weeklyData = view() {  CommonSecurityLog \n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| where TimeGenerated > startofweek(now())\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize Count=count() by Year=getyear(TimeGenerated), Month=monthofyear(TimeGenerated), Day=dayofmonth(TimeGenerated)\n| summarize Average_Count=toint(avg(Count)) by Day=dayofweek(make_datetime(Year,Month,Day)), SortData=\"Daily Change\"\n| order by Day asc };\nunion withsource=TableName averageData,weeklyData\n| order by Day asc, SortData asc\n| project Average_Count,Day,TableName,SortData,Days=tostring(day_names[indexof('00010203040506', format_timespan(Day,'dd'))/2])\n| render barchart with (kind=unstacked)\n\n",
+        "query": "let day_names =dynamic([\"Sunday\",\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\",\"Saturday\"]);\nlet averageData = view() {  CommonSecurityLog \n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| where TimeGenerated > datetime(2000-01-01)\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize Count=count() by Year=getyear(TimeGenerated), Month=monthofyear(TimeGenerated), Day=dayofmonth(TimeGenerated)\n| summarize Average_Count=toint(avg(Count)) by Day=dayofweek(make_datetime(Year,Month,Day)), SortData=\"Average Daily Change\"\n| order by Day asc};\nlet weeklyData = view() {  CommonSecurityLog \n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| where TimeGenerated > startofweek(now())\n| where isnotnull(OriginatingUsers) and OriginatingUsers != \"\"\n| summarize Count=count() by Year=getyear(TimeGenerated), Month=monthofyear(TimeGenerated), Day=dayofmonth(TimeGenerated)\n| summarize Average_Count=toint(avg(Count)) by Day=dayofweek(make_datetime(Year,Month,Day)), SortData=\"Daily Change\"\n| order by Day asc };\nunion withsource=TableName averageData,weeklyData\n| order by Day asc, SortData asc\n| project Average_Count,Day,TableName,SortData,Days=tostring(day_names[indexof('00010203040506', format_timespan(Day,'dd'))/2])\n| render barchart with (kind=unstacked)\n\n",
         "size": 0,
         "title": "Weekly Active Directory Change Count",
         "queryType": 0,
@@ -49,7 +49,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-Operation-Log' and EventID == 20000\n| sort by TimeGenerated desc \n| parse RenderedDescription with \"Operation: \" Operation \"Access Granted:\" AccessGranted \"Result: \" Result \"Details: \" * \"Trustee Name: \" TrusteeName \" Correlation ID: \" * \" Source: \" HostIP \"WebSite Target\" *\n| extend host = tostring(HostIP)\n| extend HostIP = trim_end(\":\",HostIP)\n| project TimeGenerated, UserName, HostIP\n| order by TimeGenerated desc\n| top 10 by TimeGenerated",
+        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-Operation-Log' and EventID == 20000\n| sort by TimeGenerated desc \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend details = column_ifexists('details', '')\n| parse details with * \"Trustee Name: \" TrusteeName \" Correlation ID: \" * \" Source: \" HostIP \":\" * \" Target\" *\n| extend host = tostring(HostIP)\n| project TimeGenerated, TrusteeName, HostIP\n| order by TimeGenerated desc\n| top 10 by TimeGenerated",
         "size": 1,
         "title": "Successful Logons",
         "queryType": 0,
@@ -59,14 +59,6 @@
             {
               "columnId": "TimeGenerated",
               "label": "Time Generated"
-            },
-            {
-              "columnId": "UserName",
-              "label": "Identity"
-            },
-            {
-              "columnId": "HostIP",
-              "label": "Host IP"
             }
           ]
         }
@@ -81,7 +73,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-Operation-Log' and ( EventID == 20000 or EventID == 20002 )\n| sort by TimeGenerated desc \n| parse RenderedDescription with \"Operation: \" Operation \"Access Granted:\" AccessGranted \"Result: \" Result \"Details: \" * \"Trustee Name: \" TrusteeName \" Correlation ID: \" * \" Source: \" HostIP \"WebSite Target\" *\n| extend host = tostring(HostIP)\n| extend HostIP = trim_end(\":\",HostIP)\n| where isnotempty(AccessGranted)\n| summarize Count=count() by AccessGranted\n\n\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-Operation-Log' and ( EventID == 20000 or EventID == 20002 )\n| sort by TimeGenerated desc \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend details = column_ifexists('details', ''), accessGrated = column_ifexists('accessGrated', '')\n| parse details with * \"Trustee Name: \" TrusteeName \" Correlation ID: \" * \" Source: \" HostIP \":\" * \" Target\" *\n| extend host = tostring(HostIP)\n| where isnotempty(accessGrated)\n| summarize Count=count() by accessGrated\n",
         "size": 1,
         "title": "DSP Logins",
         "queryType": 0,
@@ -114,7 +106,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\r\n| where Source == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Key1=tostring(['@Name']), Value=['#text']\r\n| evaluate pivot(Key1, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\r\n| order by TimeGenerated desc\r\n| project ruleName, fullOperation\r\n",
+        "query": "(SecurityEvent\r\n| where EventSourceName == 'Semperis-DSP-Notifications' \r\n| extend p1Xml = parse_xml(EventData).EventData.Data\r\n| mv-expand bagexpansion=array p1Xml\r\n| evaluate bag_unpack(p1Xml)\r\n| extend Name=column_ifexists(tostring('@Name'), ''), columnValue=column_ifexists('#text', '')\r\n| evaluate pivot(Name, any(columnValue), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\r\n| extend RuleName=tostring(column_ifexists('ruleName', '')), Severity=tostring(column_ifexists('severity', '')), DataSource=tostring(column_ifexists('dataSource', '')), ObjectDN=tostring(column_ifexists('objectDN', '')), TimeCreated=tostring(column_ifexists('timeCreated', '')), Operation=tostring(column_ifexists('fullOperation', '')), Attribute=tostring(column_ifexists('attributeName', '')), Value=tostring(column_ifexists('attributeValue', '')), ChangedBy=tostring(column_ifexists('changedBy', '')), Source=tostring(column_ifexists('Computer', '')))\r\n| union\r\n(CommonSecurityLog \r\n| extend Activity=column_ifexists('Activity', ''), DeviceProduct=column_ifexists('DeviceProduct', '')\r\n| where DeviceProduct == 'Core Directory'\r\n| where Activity == 'rule-alert'\r\n| extend p1Array = split(AdditionalExtensions,\"|\")\r\n| mv-expand bagexpansion=array p1Array\r\n| evaluate bag_unpack(p1Array)\r\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\r\n| extend Value=replace_string(Value, \";\", \" \")\r\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\r\n| extend RuleName=column_ifexists('ruleName', ''), Severity=column_ifexists('severity', ''), DataSource=column_ifexists('dataSources', ''), ObjectDN=column_ifexists('subjectId', ''), TimeCreated=column_ifexists('alertCreated', ''), Operation=column_ifexists('operation', ''), Attribute=column_ifexists('attribute', ''), Value=column_ifexists('value', ''), ChangedBy=column_ifexists('changedBy', ''), Source=column_ifexists('alertSource', '')\r\n| extend Severity = case(toint(Severity) == 1 or toint(Severity) == 2, \"Informational\", toint(Severity)==3 or toint(Severity)==4, \"Low\", toint(Severity)==5 or toint(Severity)==6, \"Medium\", toint(Severity)==7 or toint(Severity)==8, \"High\", toint(Severity)==9 or toint(Severity)==10, \"Critical\", \"\"))\r\n| order by TimeGenerated desc\r\n| project RuleName, Severity, Operation, Attribute, Value, ChangedBy, Source\r\n",
         "size": 0,
         "title": "Notifications",
         "queryType": 0,
@@ -124,12 +116,12 @@
           "rowLimit": 10000,
           "labelSettings": [
             {
-              "columnId": "ruleName",
+              "columnId": "RuleName",
               "label": "Rule Name"
             },
             {
-              "columnId": "fullOperation",
-              "label": "Operation"
+              "columnId": "ChangedBy",
+              "label": "Changed By"
             }
           ]
         }
@@ -144,13 +136,19 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-Operation-Log' and EventID == 20012\n| sort by TimeGenerated desc\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| parse details with \"Occured at (UTC): \" OccurredAt \"Session ID: \" SessionID \"Trustee Name: \" TrusteeName \"Correlation ID: \" CorrelationID \"Source: \" Source \"WebSite Target: \" WebSiteTarget \"Product: \" Product \"Component: \" Component \"AD Information: \" ADInformation \"Object GUID: \" ObjectGUID \"Attribute: \" Attribute \"Distinguished Name: \" DistinguishedName \"Additional Information: \"AdditionalInformation \"Operation Detail: \" OperationDetail \"operationName: \" operationName \"trustee: \" trustee \"personas: \" personas \"Status: \" status \"Granted: \" Granted \"Result: \" Result\n| extend _AccessGranted = iif(operationName contains \"CreateRbacIdentity\", \"Added\", \"Removed\")\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", trustee, tostring(substring(trustee,1,strlen(trustee))))\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", _Identity, replace_string(_Identity,\"'\",\"\"))\n| extend add_personas = replace_string(replace_string(replace_string(personas,\"{ Name = \",\"\"),\" }\",\"\"),\";\",\",\")\n| extend remove_personas = replace_string(personas,\";\",\",\")\n| extend grid_personas = iif(operationName contains \"CreateRbacIdentity\", add_personas, remove_personas)\n| extend date_to_sort = format_datetime(TimeGenerated,\"yyyy-mm-dd   HH:mm:ss\")\n| order by date_to_sort desc\n| project TrusteeName, _Identity, _AccessGranted, grid_personas, TimeGenerated\n\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-Operation-Log' and EventID == 20012\n| sort by TimeGenerated desc\n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend details=column_ifexists(tostring('details'), '')\n| parse details with \"Occured at (UTC): \" OccurredAt \"Session ID: \" SessionID \"Trustee Name: \" TrusteeName \"Correlation ID: \" CorrelationID \"Source: \" Source \"WebSite Target: \" WebSiteTarget \"Product: \" Product \"Component: \" Component \"AD Information: \" ADInformation \"Object GUID: \" ObjectGUID \"Attribute: \" Attribute \"Distinguished Name: \" DistinguishedName \"Additional Information: \"AdditionalInformation \"Operation Detail: \" OperationDetail \"operationName: \" operationName \"trustee: \" trustee \"personas: \" personas \"Status: \" status \"Granted: \" Granted \"Result: \" Result\n| where isnotempty(operationName)\n| extend _AccessGranted = iif(operationName contains \"CreateRbacIdentity\", \"Added\", \"Removed\")\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", trustee, tostring(substring(trustee,1,strlen(trustee))))\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", _Identity, replace_string(_Identity,\"'\",\"\"))\n| extend add_personas = replace_string(replace_string(replace_string(personas,\"{ Name = \",\"\"),\" }\",\"\"),\";\",\",\")\n| extend remove_personas = replace_string(personas,\";\",\",\")\n| extend grid_personas = iif(operationName contains \"CreateRbacIdentity\", add_personas, remove_personas)\n| extend date_to_sort = format_datetime(TimeGenerated,\"yyyy-mm-dd   HH:mm:ss\")\n| order by date_to_sort desc\n| project TrusteeName, _Identity, _AccessGranted, grid_personas, TimeGenerated\n\n\n",
         "size": 1,
         "title": "Role Based Access Control Changes",
         "queryType": 0,
         "resourceType": "microsoft.operationalinsights/workspaces",
         "visualization": "table",
         "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "TrusteeName",
+              "sortOrder": 2
+            }
+          ],
           "labelSettings": [
             {
               "columnId": "TrusteeName",
@@ -165,16 +163,17 @@
               "label": "Access Granted"
             },
             {
-              "columnId": "grid_personas",
-              "label": "Persona Details"
-            },
-            {
               "columnId": "TimeGenerated",
               "label": "Timestamp"
             }
           ]
         },
-        "sortBy": []
+        "sortBy": [
+          {
+            "itemKey": "TrusteeName",
+            "sortOrder": 2
+          }
+        ]
       },
       "customWidth": "50",
       "name": "query - 2",
@@ -264,7 +263,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "CommonSecurityLog\n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| parse DistinguishedName with * \"CN\\\\=\" cnName \",\" *\n| parse DistinguishedName with * \"DC\\\\=\" dcName \",\" *\n| where ClassName != \"dnsNode\"\n| summarize ChangedCount=count() by cnName\n| project cnName, ChangedCount, \"Details\"\n| order by ChangedCount desc\n| top 5 by ChangedCount\n",
+        "query": "CommonSecurityLog\n| extend p1Array = split(AdditionalExtensions,\";\")\n| mv-expand bagexpansion=array p1Array\n| evaluate bag_unpack(p1Array)\n| extend Name=tostring(split(p1Array,\"=\")[0]),Value=substring(p1Array,indexof(p1Array,\"=\")+1)\n| evaluate pivot(Name, any(Value), TimeGenerated, TenantId, DeviceVendor, DeviceProduct, DeviceVersion, DeviceEventClassID, Activity, LogSeverity, OriginalLogSeverity, DeviceAction)\n| extend DistinguishedName = column_ifexists('DistinguishedName', '')\n| where isnotempty(DistinguishedName)\n| parse DistinguishedName with * \"CN=\" cnName \",\" *\n| parse DistinguishedName with * \"DC=\" dcName \",\" *\n| where ClassName != \"dnsNode\"\n| summarize ChangedCount=count() by cnName\n| project cnName, ChangedCount, \"Details\"\n| order by ChangedCount desc\n| top 5 by ChangedCount\n",
         "size": 3,
         "title": "Top 5 Objects Changed",
         "queryType": 0,
@@ -313,7 +312,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| summarize Count=count() by tostring(fullOperation)\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == 'Semperis-DSP-Notifications' \n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Key1=tostring(column_ifexists('@Name', '')), Value=column_ifexists('#text', '')\n| evaluate pivot(Key1, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend fullOperation=column_ifexists('fullOperation', '')\n| summarize Count=count() by tostring(fullOperation)\n\n",
         "size": 1,
         "title": "AD Change Types",
         "queryType": 0,
@@ -413,7 +412,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-DSP-Security' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == \"Semperis-DSP-Security\"\n| where EventID in (\"9211\", \"9212\", \"9208\")\n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityIndicatorName=column_ifexists(tostring('securityIndicatorName'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
         "size": 1,
         "title": "Top 5 Failed Security Indicators",
         "queryType": 0,
@@ -439,33 +438,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-DSP-Security' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| order by tostring(securityIndicatorName)\n| summarize Count=count() by tostring(securityIndicatorName)\n| top 5 by Count\n\n",
-        "size": 1,
-        "title": "Top 5 Failed Security Indicators",
-        "queryType": 0,
-        "resourceType": "microsoft.operationalinsights/workspaces",
-        "visualization": "piechart",
-        "gridSettings": {
-          "rowLimit": 10000
-        },
-        "chartSettings": {
-          "yAxis": [
-            "Count"
-          ],
-          "showLegend": true
-        }
-      },
-      "customWidth": "50",
-      "name": "query - 2",
-      "styleSettings": {
-        "showBorder": true
-      }
-    },
-    {
-      "type": 3,
-      "content": {
-        "version": "KqlItem/1.0",
-        "query": "Event\n| where Source == 'Semperis-DSP-Security' \n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Name, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, EventCategory, UserName, Type, _ResourceId)\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| summarize Count=count() by tostring(securityFrameworkTags)\n\n",
+        "query": "SecurityEvent\n| where EventSourceName == \"Semperis-DSP-Security\"\n| where EventID in (\"9211\", \"9212\", \"9208\")\n| extend p1Xml = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists(tostring('@Name'), ''), Value=column_ifexists('#text', '')\n| evaluate pivot(Name, any(Value), TimeGenerated, EventSourceName, Channel, Computer, Level, EventLevelName, EventID, Task, Type, _ResourceId)\n| extend result=column_ifexists(tostring('result'), ''), numberOfResults=column_ifexists(tostring('numberOfResults'), ''), securityFrameworkTags=column_ifexists(tostring('securityFrameworkTags'), '')\n| extend isProblem = iif(result == \"Failed\", true, false)\n| where isnotnull(numberOfResults) and isProblem == true\n| summarize Count=count() by tostring(securityFrameworkTags)\n\n",
         "size": 0,
         "title": "Amount of Generated Events per Category",
         "timeContext": {
@@ -487,7 +460,6 @@
       "name": "query - 2"
     }
   ],
-  "fallbackResourceIds": [],
   "styleSettings": {
     "paddingStyle": "wide",
     "spacingStyle": "wide"

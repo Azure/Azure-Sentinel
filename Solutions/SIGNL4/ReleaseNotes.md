@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
+|-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.0       | 02-06-2025                     | This version introduces several updates to the SIGNL4 solution for Microsoft Sentinel, focusing on improving metadata, updating templates, and enhancing descriptions for better clarity and functionality.  |  

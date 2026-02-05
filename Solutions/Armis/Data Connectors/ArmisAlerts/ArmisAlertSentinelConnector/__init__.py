@@ -51,10 +51,10 @@ class ArmisAlert:
 
         """
         if self._secret_key is not None and self._link is not None:
-            parameter = {"secret_key": self._secret_key}
+            body = {"secret_key": self._secret_key}
             try:
                 response = requests.post(
-                    (self._link + armis_link_suffix), params=parameter
+                    (self._link + armis_link_suffix), data=body
                 )
                 if response.status_code == 200:
                     logging.info("Armis Alert Connector: Getting access token.")

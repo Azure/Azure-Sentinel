@@ -1,6 +1,6 @@
-# AAD ASIM Authentication Normalization Parser
+# Microsoft Entra ID ASIM Authentication Normalization Parser
 
-ARM template for ASIM Authentication schema parser for AAD.
+ARM template for ASIM Authentication schema parser for Microsoft Entra ID.
 
 This ASIM parser supports filtering and normalizing Azure Active Directory Service Principal sign in logs, stored in the AADServicePrincipalSignInLogs table, to the ASIM Authentication schema.
 
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Authentication normalization schema reference](https://aka.ms/ASimAuthenticationDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimAuthentication/CHANGELOG/vimAuthenticationAADServicePrincipalSignInLogs.md)
 
 <br>
 

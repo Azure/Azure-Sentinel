@@ -1,0 +1,30 @@
+id: 6fd69768-fdf1-4cfd-805f-b243be3f0c6d
+name: Remote Desktop Network Traffic(ASIM Network Session schema)
+description: |
+  'This hunting query looks for unusual remote desktop activity by monitoring TCP/3389 traffic. While RDP is common, focus on atypical connections to identify potential threats.'
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors: []
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021
+  - T1021.001
+query: |
+  // Filter events from the last day that were not failures
+  _Im_NetworkSession(starttime=ago(1d))
+  // Filter events where the source IP is private, the destination IP is not private, and the source and destination IPs are not the same
+  | where  EventResult == "Failure" and ipv4_is_private(SrcIpAddr) and not(ipv4_is_private(DstIpAddr)) and SrcIpAddr != DstIpAddr
+  // Filter events where the destination port number is 3389 (commonly used for Microsoft Remote Desktop (RDP))
+  | where tostring(DstPortNumber) has_any ("3389")
+  // Summarize the data by source IP, destination IP, destination port number, network protocol, and event result
+  // For each group, calculate the start time, end time, event count, and a set of up to 10 event vendors
+  | summarize Starttime= min(TimeGenerated),EndTime= max(TimeGenerated),Eventscount=sum(EventCount), EventVendors=make_set(EventVendor,10) by SrcIpAddr,DstIpAddr,DstPortNumber,NetworkProtocol,EventResult
+  | extend IP_0_Address = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0

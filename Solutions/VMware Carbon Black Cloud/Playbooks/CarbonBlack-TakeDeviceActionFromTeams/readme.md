@@ -5,10 +5,10 @@
  2. Sends an adaptive card to the SOC Teams channel, let the analyst decide on action:
     Quarantine the device or Update the policy based on SOC action
 
-    ![card example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/images/adaptiveCard.png)
+    ![card example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/images/adaptiveCard.png)
 
  3. Add a comment to the incident with the information collected from the carbon black, summary of the actions taken and close the incident
-     ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/images/Incident_Comment.png)
+     ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-TakeDeviceActionFromTeams/images/Incident_Comment.png)
 
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
@@ -24,7 +24,7 @@
     * Teams ChannelId: Enter the Teams ChannelId
       [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json)
 
 
 ### Post-Deployment instructions 

@@ -1,7 +1,7 @@
 id: f819c592-c5f9-4d5c-a79f-1e6819863533
-name: Azure AD Health Monitoring Agent Registry Keys Access
+name: Microsoft Entra ID Health Monitoring Agent Registry Keys Access
 description: |
-  'This detection uses Windows security events to detect suspicious access attempts to the registry key of Azure AD Health monitoring agent.
+  'This detection uses Windows security events to detect suspicious access attempts to the registry key of Microsoft Entra ID Health monitoring agent.
   This detection requires an access control entry (ACE) on the system access control list (SACL) of the following securable object HKLM\SOFTWARE\Microsoft\Microsoft Online\Reporting\MonitoringAgent.
   You can find more information in here https://github.com/OTRF/Set-AuditRule/blob/master/rules/registry/aad_connect_health_monitoring_agent.yml
   '
@@ -105,23 +105,34 @@ query: |
   )
   // You can filter out potential machine accounts
   //| where AccountType != 'Machine'
-  | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend Name = tostring(split(Account, "\\")[1]), NTDomain = tostring(split(Account, "\\")[0])
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.2
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.1.6
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Roberto Rodriguez
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

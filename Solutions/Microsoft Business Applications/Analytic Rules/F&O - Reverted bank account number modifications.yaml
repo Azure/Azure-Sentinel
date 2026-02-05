@@ -1,0 +1,67 @@
+id: 44b1021c-d517-4b7a-9ba6-a91eab94e632
+kind: Scheduled
+name: F&O - Reverted bank account number modifications
+description: Identifies changes to bank account numbers in Finance & Operations, whereby
+  a bank account number is modified but then subsequently reverted a short time later.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+      - FinanceOperationsActivity_CL
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1565
+  - T1496
+  - T0828
+  - T0831
+query: |
+  let detection_window = 24h;
+  let query_frequency = 15m;
+  let bank_changes = FinanceOperationsActivity_CL
+      | where LogType == "Update" and TableName == "BankAccountTable"
+      | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)
+      | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))
+      | extend
+          CurrentAccountNum = tostring(AccountNum.NewData),
+          OldAccountNum = tostring(AccountNum.OldData)
+      | where CurrentAccountNum != OldAccountNum;
+  bank_changes
+  | join kind=inner (bank_changes
+      | where TimeGenerated >= ago(query_frequency)
+      | project-rename UpdatedTime = LogCreatedDateTime, UpdatedAccount = CurrentAccountNum)
+      on $left.OldAccountNum == $right.UpdatedAccount
+  | where UpdatedTime between (LogCreatedDateTime .. (LogCreatedDateTime + detection_window))
+  | extend FinOpsAppId = 32780
+  | project
+      TimeGenerated,
+      LogCreatedDateTime,
+      LogType,
+      TableName,
+      Username,
+      AccountId,
+      CurrentAccountNum,
+      OldAccountNum,
+      FinOpsAppId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Username
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: FinOpsAppId
+alertDetailsOverride:
+  alertDisplayNameFormat: F&O - Suspicious bank account number changes
+  alertDescriptionFormat: A suspicous bank account change was made in F&O, the bank
+    account number was updated and then changed back to the orginal number a short
+    time later. {{AccountId}} was changed by {{Username}}
+version: 3.2.0

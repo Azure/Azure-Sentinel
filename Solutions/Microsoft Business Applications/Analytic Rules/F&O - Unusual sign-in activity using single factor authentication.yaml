@@ -1,0 +1,79 @@
+id: 919e939f-95e2-4978-846e-13a721c89ea1
+kind: Scheduled
+name: F&O - Unusual sign-in activity using single factor authentication
+description: Identifies sucessful sign-in events to Finance & Operations and Lifecycle
+  Services using single factor/password authentication. Sign-in events from tenants
+  not using MFA, coming from a Microsoft Entra trusted network location, or from geolocations
+  seen previously in the last 14 days are excluded.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1552
+  - T1078
+query: |
+  // Dynamics Lifecycle services: 913c6de4-2a4a-4a61-a9ce-945d2b2ce2e0
+  // Microsoft Dynamics ERP: 00000015-0000-0000-c000-000000000000
+  let appid_list = dynamic(["913c6de4-2a4a-4a61-a9ce-945d2b2ce2e0", "00000015-0000-0000-c000-000000000000"]);
+  let query_frequency = 1h;
+  let query_lookback = 14d;
+  let historical_sign_in_activity = SigninLogs
+      | where TimeGenerated between (ago(query_lookback) .. ago(query_frequency));
+  let historical_sign_in_locations = historical_sign_in_activity
+      | summarize by Location;
+  let multifactor_sign_in_count = toscalar(historical_sign_in_activity
+      | where AppId in (appid_list) and ResultType == 0
+      | where AuthenticationRequirement == "multiFactorAuthentication"
+      | summarize count());
+  SigninLogs
+  | where TimeGenerated >= ago(query_frequency)
+  | where AppId in (appid_list) and ResultType == 0
+  | where multifactor_sign_in_count > 0
+  | where Location !in (historical_sign_in_locations)
+  | where NetworkLocationDetails !has "trustedNamedLocation"
+  | summarize by UserPrincipalName, AppDisplayName, IPAddress, Location
+  | extend
+      CloudAppId = 32780,
+      AccountName = tostring(split(UserPrincipalName, "@")[0]),
+      UPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | project
+      UserPrincipalName,
+      AppDisplayName,
+      IPAddress,
+      Location,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+alertDetailsOverride:
+  alertDisplayNameFormat: Dynamics 365 F&O - Unusual sign-in without multi-factor
+    authentication
+  alertDescriptionFormat: Successful sign in by {{UserPrincipalName}} to {{AppDisplayName}}
+    from location {{Location}} which has not been seen before in the last 14 days.
+version: 3.2.0

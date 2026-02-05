@@ -11,7 +11,7 @@ requiredDataConnectors:
       - AuditLogs
   - connectorId: BehaviorAnalytics
     dataTypes:
-      - BehaviorAnalytics
+      - IdentityInfo
 queryFrequency: 1d
 queryPeriod: 2d
 triggerOperator: gt
@@ -26,31 +26,54 @@ query: |
   let admin_users = (IdentityInfo
     | where TimeGenerated > ago(2d)
     | summarize arg_max(TimeGenerated, *) by AccountUPN
-    | where AssignedRoles contains "admin"
+    | where AssignedRoles contains "admin" or GroupMembership has "Admin"
     | summarize by tolower(AccountUPN));
     AuditLogs
     | where Category =~ "RoleManagement"
     | where OperationName has "Add eligible member"
-    | extend userPrincipalName = tostring(TargetResources[0].userPrincipalName)
-    | where tolower(userPrincipalName) in (admin_users)
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | where tolower(TargetUserPrincipalName) in (admin_users)
+    | extend TargetAadUserId = tostring(TargetResources[0].id)
     | extend Group = tostring(TargetResources[0].displayName)
-    | extend AddedTo = iif(isnotempty(userPrincipalName), userPrincipalName, Group)
+    | extend RoleAddedTo = iif(isnotempty(TargetUserPrincipalName), TargetUserPrincipalName, Group)
     | extend mod_props = TargetResources[0].modifiedProperties
-    | extend appName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
-    | extend UPN = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend AddedBy = iif(isnotempty(appName), appName, UPN)
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend RoleAddedBy = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
     | mv-expand mod_props
     | where mod_props.displayName == "Role.DisplayName"
+    | extend UserAgent = tostring(AdditionalDetails[0].value)
     | extend RoleAdded = tostring(parse_json(tostring(mod_props.newValue)))
-    | project-reorder TimeGenerated, OperationName, AddedTo, RoleAdded, AddedBy
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, OperationName, TargetUserPrincipalName, RoleAddedTo, RoleAdded, RoleAddedBy, InitiatingUserPrincipalName, InitiatingAppName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: userPrincipalName
+        columnName: TargetUserPrincipalName
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetAadUserId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AddedBy
-version: 1.0.1
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+version: 1.0.7
 kind: Scheduled

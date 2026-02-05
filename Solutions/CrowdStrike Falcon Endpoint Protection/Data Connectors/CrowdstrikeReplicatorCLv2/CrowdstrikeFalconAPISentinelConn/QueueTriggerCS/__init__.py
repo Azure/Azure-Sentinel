@@ -13,10 +13,11 @@ import requests
 import time
 from datetime import datetime
 
+QUEUE_URL = os.environ['QUEUE_URL']
+
 AWS_KEY = os.environ['AWS_KEY']
 AWS_SECRET = os.environ['AWS_SECRET']
 AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
-AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
 AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
 AZURE_CLIENT_ID = os.environ['AZURE_CLIENT_ID']
@@ -28,6 +29,7 @@ RAW_DATA_DCR_ID = os.environ.get('RAW_DATA_DCR_ID',  'NA')
 NORMALIZED_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser","Additional": "Custom-CrowdstrikeAdditional"}'
 CUSTOM_SCHEMA_NAMES = '{"Dns": "Custom-CrowdstrikeDns","File": "Custom-CrowdstrikeFile","Process": "Custom-CrowdstrikeProcess","Network": "Custom-CrowdstrikeNetwork","Auth": "Custom-CrowdstrikeAuth","Registry": "Custom-CrowdstrikeRegistry","Audit": "Custom-CrowdstrikeAudit","User": "Custom-CrowdstrikeUser"}'
 REQUIRE_RAW_STRING = os.environ.get('USER_SELECTION_REQUIRE_RAW',  'false')
+REQUIRE_SECONDARY_STRING = os.environ.get('USER_SELECTION_REQUIRE_SECONDARY', 'false')
 SECONDARY_DATA_SCHEMA = "Custom-CrowdStrikeSecondary"
 EVENT_TO_TABLE_MAPPING_LINK = os.environ.get('EVENT_TO_TABLE_MAPPING_LINK',  'https://aka.ms/CrowdStrikeEventsToTableMapping')
 REQUIRED_FIELDS_SCHEMA_LINK = os.environ.get('REQUIRED_FIELDS_SCHEMA_LINK',  'https://aka.ms/CrowdStrikeRequiredFieldsSchema')
@@ -50,8 +52,7 @@ def _create_s3_client():
                                     )
 
 async def main(msg: func.QueueMessage) -> None:
-    logging.info('Starting script')
-    logging.info("Required Raw String - {}".format(REQUIRE_RAW))
+    logging.info("Starting script. Parameter Selection- REQUIRE_RAW_STRING: {} REQUIRE_SECONDARY_STRING: {} AZURE_TENANT_ID: {} AZURE_CLIENT_ID: {} AZURE_CLIENT_SECRET: ItsASecret AWS_KEY: {} AWS_REGION_NAME: {} AWS_SECRET: IWontReveal NORMALIZED_DCE_ENDPOINT: {} RAW_DATA_DCE_ENDPOINT: {} NORMALIZED_DCR_ID: {} RAW_DATA_DCR_ID: {} ".format(REQUIRE_RAW_STRING, REQUIRE_SECONDARY_STRING, AZURE_TENANT_ID, AZURE_CLIENT_ID, AWS_KEY, AWS_REGION_NAME, NORMALIZED_DCE_ENDPOINT, RAW_DATA_DCE_ENDPOINT, NORMALIZED_DCR_ID, RAW_DATA_DCR_ID))
     link = ""
     bucket = ""
     messageId = ""
@@ -64,7 +65,7 @@ async def main(msg: func.QueueMessage) -> None:
         bucket = req_body.get('bucket')
         messageId = req_body.get('messageId')
 
-    logging.info("Processing {} file from {} bucket of {} messageId".format(link,bucket,messageId))
+    logging.info("Information received from Azure Storage queue. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
     
     eventsSchemaMapping = FileHelper(
                             EVENT_TO_TABLE_MAPPING_LINK,
@@ -83,15 +84,19 @@ async def main(msg: func.QueueMessage) -> None:
     async with _create_s3_client() as client:
         async with aiohttp.ClientSession() as session:
             if link:
-                logging.info("Processing file {}".format(link))
                 try:
                     if "fdrv2/" in link:
-                        logging.info('Processing a secondary data bucket.')
+                        logging.info("Started processing a secondary data fdrv2 bucket. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
                         await process_file_secondary_CLv2(bucket, link, client, session)
+                        logging.info("Finished processing a secondary data fdrv2 bucket. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
+                        
                     else:
+                        logging.info("Started processing data bucket. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
                         await process_file_primary_CLv2(bucket, link, client, session, eventsSchemaMappingDict, requiredFieldsMappingDict) 
+                        logging.info("Finished processing data bucket. S3file: {} S3Bucket: {} SQSMessageId: {}".format(link,bucket,messageId))
+                        
                 except Exception as e:
-                    logging.error('Error while processing bucket {}. Error: {}'.format(link, str(e)))
+                    logging.error('Error while processing S3file: {} S3Bucket: {} SQSMessageId: {}. Error: {}'.format(link, bucket, messageId, str(e)))
                     raise e
 
 # This method customizes the data before ingestion. Both normalized and raw data is returned from this method.
@@ -101,7 +106,12 @@ async def main(msg: func.QueueMessage) -> None:
 # requireRaw : bool
 def customize_event(line, eventsSchemaMappingDict, requiredFieldsMappingDict, requireRaw):
     
-    element = json.loads(line)
+    try:
+        element = json.loads(line)  # Attempt to parse the line as JSON
+    except json.JSONDecodeError as e:
+        # Log the error and skip this line
+        logging.error(f"JSON decoding error for line: {line}. Error: {str(e)}")
+        return None, None
     if "event_simpleName" in element and element["event_simpleName"] in eventsSchemaMappingDict:
         schema = eventsSchemaMappingDict[element["event_simpleName"]]
     else:
@@ -165,7 +175,7 @@ def customize_event(line, eventsSchemaMappingDict, requiredFieldsMappingDict, re
 # eventsSchemaMappingDict : Dictionary
 # requiredFieldsMappingDict : Dictionary
 async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSchemaMappingDict, requiredFieldsMappingDict):
-        logging.info("Start processing bucket {}".format(s3_path))
+        logging.debug("Inside method - process_file_primary_CLv2. Started processing S3file: {} S3Bucket: {}".format(s3_path, bucket))
         normalizedSentinelHelperCollection = SentinelHelperCollection(session, 
                                                                       eventsSchemaMappingDict,
                                                                       NORMALIZED_DCE_ENDPOINT,
@@ -181,28 +191,29 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
                                                                     )
 
         try:
-            logging.info("Making request to AWS for downloading file started time: {}  ".format(datetime.now()))
+            logging.info("Making request to AWS for downloading file startTime: {} S3file: {} S3Bucket: {}".format(datetime.now(), s3_path, bucket))
             response = await client.get_object(Bucket=bucket, Key=s3_path)
             response_body_size = sys.getsizeof(response["Body"])
-            logging.info("downloaded S3 file: {} of size: {} from AWS S3 successfully time: {}  ".format(s3_path, response_body_size,datetime.now()))
+            logging.info("Download from AWS completed. S3file: {} S3Bucket: {} size: {} from AWS S3 successfully time: {}  ".format(s3_path, bucket, response_body_size,datetime.now()))
             s = ''
             async for decompressed_chunk in AsyncGZIPDecompressedStream(response["Body"]):
-                #logging.info("Inside AsyncGZIPDecompressedStream time: {}  ".format(datetime.now()))
+                logging.debug("Inside AsyncGZIPDecompressedStream time: {}  ".format(datetime.now()))
                 s += decompressed_chunk.decode(errors='ignore')
                 lines = re.split(r'{0}'.format(LINE_SEPARATOR), s)
-                #logging.info("Inside AsyncGZIPDecompressedStream File: {} downloaded and length: {}  ".format(s3_path,len(lines)))
+                logging.debug("Inside AsyncGZIPDecompressedStream File: {} downloaded and length: {}  ".format(s3_path,len(lines)))
                 for n, line in enumerate(lines):
                     if n < len(lines) - 1:
                         if line:
                             try:
                                 normalizedEvent, customizedEvent = customize_event(line, eventsSchemaMappingDict, requiredFieldsMappingDict, REQUIRE_RAW)
-                            except ValueError as e:
-                                logging.error('Error while loading json Event at s value {}. Error: {}'.format(line, str(e)))
-                                raise e
+                                if normalizedEvent is None:  # Skip this line if it's invalid
+                                    continue
                             except Exception as e:
-                                logging.error(e)
-                            await normalizedSentinelHelperCollection.sendData(normalizedEvent)
-                            if REQUIRE_RAW:
+                                logging.error(f"Error while processing line: {line}. Error: {str(e)}")
+                                continue
+                            if normalizedEvent:
+                                await normalizedSentinelHelperCollection.sendData(normalizedEvent)
+                            if REQUIRE_RAW and customizedEvent:
                                 await customizedSentinelHelperCollection.sendData(customizedEvent)
                 s = line
             if s:
@@ -227,9 +238,9 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
             else:
                 custom_total_events_success, custom_total_events_failure = 0,0
 
-            logging.info("Finish processing file {} with {} normalized events and {} custom events.".format(s3_path,normalized_total_events_success,custom_total_events_success))
+            logging.info("Finish processing S3file: {} S3Bucket: {} SuccessNormalizedEventsCount: {} and SuccessRawDataEventsCount: {}".format(s3_path,bucket,normalized_total_events_success,custom_total_events_success))
             if normalized_total_events_failure or custom_total_events_failure:
-                logging.info("Failure in {}: {} normalized events failed and {} custom events failed.".format(s3_path,normalized_total_events_failure,custom_total_events_failure))
+                logging.info("Failure in processing S3file: {} S3Bucket: {}  FailedNormalizedEventsCount: {} FailedRawDataEventsCount:{} ".format(s3_path, bucket, normalized_total_events_failure,custom_total_events_failure))
 
         except Exception as e:
             logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
@@ -240,7 +251,7 @@ async def process_file_primary_CLv2(bucket, s3_path, client, session, eventsSche
 # client : s3_session client
 # session : aiohttp session
 async def process_file_secondary_CLv2(bucket, s3_path, client, session):
-        logging.info("Start processing bucket {}".format(s3_path))
+        logging.debug("Inside method - process_file_secondary_CLv2. Started processing S3file: {} S3Bucket: {}".format(s3_path, bucket))
         AzureSentinelConnector = AzureSentinelConnectorCLv2Async(session, NORMALIZED_DCE_ENDPOINT, NORMALIZED_DCR_ID, SECONDARY_DATA_SCHEMA,
                                                          AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
 
@@ -279,12 +290,13 @@ async def process_file_secondary_CLv2(bucket, s3_path, client, session):
             total_events_success = AzureSentinelConnector.get_success_count()
             total_events_failure = AzureSentinelConnector.get_failure_count()
             
-            logging.info("Finish processing file {} with {} secondary events.".format(s3_path,total_events_success))
+            logging.info("Finish processing Secondary data S3file: {} S3Bucket: {} SuccessEventsCount: {} ".format(s3_path,bucket,total_events_success))
             if total_events_failure:
-                logging.info("Failure in {} : {} secondary events failed".format(s3_path,total_events_failure))
+                logging.info("Failure in processing Secondary data S3file: {} S3Bucket: {} FailureEventsCount: {} ".format(s3_path,bucket,total_events_failure))
+           
 
         except Exception as e:
-            logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
+            logging.warn("Failed processing file S3File: {} S3Bucket: {} -  Error: {}".format(s3_path,bucket,e))
             raise e
 
 class FileHelper:

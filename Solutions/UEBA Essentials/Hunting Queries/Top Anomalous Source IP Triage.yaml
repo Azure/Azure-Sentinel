@@ -1,0 +1,36 @@
+id: e1f2a3b4-c5d6-7890-1234-abcdef567890
+name: Top Anomalous Source IP Triage
+description: |
+  'Identifies the top source IP addresses with multiple distinct anomaly templates over the past 30 days (excluding single noisy hits), then surfaces their most recent (last 24h) high-fidelity anomalous activities for focused investigation, including scores, tactics, techniques, and behavioral insights.'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - Anomalies
+tactics:
+relevantTechniques:
+query: |
+  let TopIPs =
+    Anomalies
+    | where TimeGenerated > ago(30d)
+    | where isnotempty(SourceIpAddress)
+    | summarize TotalAnomalies = count(), DistinctTemplates = dcount(AnomalyTemplateName) by SourceIpAddress
+    | where TotalAnomalies > 1 and DistinctTemplates > 1
+    | top 5 by TotalAnomalies desc
+    | project SourceIpAddress;
+  Anomalies
+  | where TimeGenerated > ago(24h)
+  | where SourceIpAddress in (TopIPs)
+  | project TimeGenerated, SourceIpAddress, AnomalyTemplateName, Score, Description,
+            UserPrincipalName, UserName, StartTime, EndTime,
+            Tactics, Techniques, ActivityInsights, DeviceInsights, UserInsights, AnomalyReasons
+  | order by SourceIpAddress asc, Score desc, TimeGenerated desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIpAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+version: 1.0.0

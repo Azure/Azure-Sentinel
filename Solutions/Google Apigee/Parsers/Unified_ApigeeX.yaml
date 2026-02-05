@@ -1,0 +1,82 @@
+id: 6eae941d-8cdb-45c7-9896-aab2a6082dfb
+Function:
+  Title: Parser for both ApiGeeX connectors
+  Version: '1.0.0'
+  LastUpdated: '2024-12-19'
+Category: Microsoft Sentinel Parser
+FunctionName: Unified_ApigeeX
+FunctionAlias: Unified_ApigeeX
+FunctionQuery: |
+    let t1= ApigeeX_CL
+        | extend EventVendor = 'Google',
+                 EventProduct = 'ApigeeX'
+        | project-rename
+            RequestName = payload_request_name_s,
+            RequestAPIProxyType = payload_request_environment_apiProxyType_s,
+            DeploymentType = payload_request_environment_deploymentType_s,
+            Description = payload_request_environment_description_s,
+            DisplayName = payload_request_environment_displayname_s,
+            EnvironmentName = payload_request_environment_name_s,
+            ResponseType = payload_response_type_s,
+            ResponseName = payload_response_name_s,
+            ResponseDisplayName = payload_response_displayName_s,
+            ResponseAPIProxyType = payload_response_apiProxyType_s,
+            StatusCode = payload_status_code_d,
+            StatusMessage = payload_status_message_s,   
+            RequestReportTime = payload_request_reportTime_s,
+            RequestAttributesTime = payload_requestMetadata_requestAttributes_time_t,
+            InsertID = insert_id_s,    
+            ResourceType = resource_type_s,
+            EventSeverity=severity_s,
+            TimeStamp = timestamp_t,
+            Type = payload__type_s,
+            LogName = log_name_s,
+            MethodName = payload_methodName_s,
+            ProjectID = resource_labels_project_id_s,
+            Service = resource_labels_service_s,
+            Method = resource_labels_method_s,
+            PrincipalEmail = payload_authenticationInfo_principalEmail_s,
+            SrcIpAddr=payload_requestMetadata_callerIp_s,
+            HttpUserAgentOriginal=payload_requestMetadata_callerSuppliedUserAgent_s,
+            RequestAttributes = payload_requestMetadata_requestAttributes_time_s,
+            ServiceName = payload_serviceName_s,
+            AuthorizationInfo = payload_authorizationInfo_s,
+            ResourceName = payload_resourceName_s,
+            InstanceUID = payload_request_instanceUid_g,
+            RequestType = payload_request_type_s,
+            EventEndTime=timestamp_t;
+    let t2 = ApigeeXV2_CL
+        | extend
+            EventVendor = 'Google',
+            EventProduct = 'ApigeeX',        
+            RequestName = tostring(parse_json(tostring(protoPayload.request)).instance),
+            EnvironmentName =  tostring(split(tostring(parse_json(tostring(protoPayload.request)).instance), '/')[3]),
+            RequestAttributesTime = tostring(parse_json(tostring(parse_json(tostring(protoPayload.requestMetadata)).requestAttributes)).['time']),
+            InsertID = insertId,
+            ResourceType = tostring(resource.type),
+            Type = tostring(protoPayload.["@type"]),
+            MethodName = tostring(protoPayload.methodName),
+            ProjectID =  tostring(parse_json(tostring(resource.labels)).project_id),
+            Service = tostring(parse_json(tostring(resource.labels)).service),
+            Method =  tostring(parse_json(tostring(resource.labels)).method),
+            PrincipalEmail = tostring(parse_json(tostring(protoPayload.authenticationInfo)).principalEmail),
+            PrincipalSubject = tostring(parse_json(tostring(protoPayload.authenticationInfo)).principalSubject),
+            SrcIpAddr = tostring(parse_json(tostring(protoPayload.requestMetadata)).callerIp),
+            HttpUserAgentOriginal = tostring(parse_json(tostring(protoPayload.requestMetadata)).callerSuppliedUserAgent), 
+            RequestAttributes =tostring(parse_json(tostring(protoPayload.requestMetadata)).requestAttributes),
+            ServiceName = tostring(parse_json(tostring(protoPayload.serviceName))),
+            AuthorizationInfo = tostring(parse_json(tostring(protoPayload.authorizationInfo))),
+            ResourceName = tostring(parse_json(tostring(protoPayload.resourceName))),
+            InstanceUID =  tostring(parse_json(tostring(protoPayload.request)).instanceUid),
+            RequestType = tostring(parse_json(tostring(protoPayload.request)).["@type"]),
+            EventEndTime = timestamp,
+            ResourceLocation = tostring(parse_json(tostring(protoPayload.resourceLocation))), 
+            DestinationAttributes = tostring(parse_json(tostring(protoPayload.requestMetadata)).destinationAttributes),
+            Resources = protoPayload.resources
+        | project-away protoPayload, resource
+        | project-rename
+            EventSeverity = severity,
+            LogName = logName,
+            TimeStamp = timestamp;
+    t1
+    | union t2

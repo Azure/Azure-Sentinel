@@ -1,0 +1,639 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+      "title": "Infoblox-TIDE-Lookup-Via-Incident",
+      "description": "The playbook takes entity type and value from incident available in Workbook and ingests TIDE Lookup data for that entity into Log table.",
+      "prerequisites": [
+        "1. Make sure that Infoblox-TIDE-Lookup playbook is deployed before deploying Infoblox-TIDE-Lookup-Via-Incident playbook."
+      ],
+      "postDeployment": [
+        "1. In Microsoft sentinel, analytical rules should be configured to trigger an incident which has Entities Mapping."
+      ],
+      "entities": ["Host", "IP", "Hash", "URL"],
+      "tags": ["Infoblox", "TIDE", "Lookup", "Incident"],
+      "lastUpdateTime": "2024-07-19T16:15:48.355Z",
+      "support": {
+        "tier": "Community",
+        "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+      },
+      "author": {
+        "name": "Infoblox"
+      }
+    },
+    "parameters": {
+      "PlaybookName": {
+        "defaultValue": "Infoblox-TIDE-Lookup-Via-Incident",
+        "minLength": 1,
+        "type": "string",
+        "metadata": {
+          "description": "Please keep the 'Playbook Name' parameter unchanged. Otherwise, you will need to manually adjust the 'Playbook Name' in the 'Infoblox Lookup Workbook' in edit mode"
+        }
+      }
+    },
+    "variables": {
+      "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+      {
+        "properties": {
+          "provisioningState": "Succeeded",
+          "state": "Enabled",
+          "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+              }
+            },
+            "triggers": {
+              "Microsoft_Sentinel_incident": {
+                "type": "ApiConnectionWebhook",
+                "inputs": {
+                  "body": {
+                    "callback_url": "@{listCallbackUrl()}"
+                  },
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                    }
+                  },
+                  "path": "/incident-creation"
+                }
+              }
+            },
+            "actions": {
+              "Condition_To_Check_TIDE_Lookup_Failure_For_All_Entities": {
+                "actions": {
+                  "Terminate_If_Failure_For_All_Entities": {
+                    "runAfter": {},
+                    "type": "Terminate",
+                    "inputs": {
+                      "runError": {
+                        "message": "@{variables('error_message')}"
+                      },
+                      "runStatus": "Failed"
+                    }
+                  }
+                },
+                "runAfter": {
+                  "For_Each_Hash": ["Succeeded", "TimedOut", "Failed"]
+                },
+                "expression": {
+                  "and": [
+                    {
+                      "equals": [
+                        "@variables('failure_count')",
+                        "@length(triggerBody()?['object']?['properties']?['relatedEntities'])"
+                      ]
+                    }
+                  ]
+                },
+                "type": "If"
+              },
+              "For_Each_Hash": {
+                "foreach": "@body('Get_FileHashes_From_Entities')?['Filehashes']",
+                "actions": {
+                  "Condition_To_Verify_TIDE_Playbook_Called_Successfully_For_Hash": {
+                    "actions": {},
+                    "runAfter": {
+                      "Infoblox_TIDE_Lookup_For_Hash": [
+                        "Succeeded",
+                        "TimedOut",
+                        "Failed"
+                      ]
+                    },
+                    "else": {
+                      "actions": {
+                        "Add_Error_Message_For_Hash": {
+                          "runAfter": {
+                            "Increment_Failure_Count_For_Hash": ["Succeeded"]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "error_message",
+                            "value": "@body('Infoblox_TIDE_Lookup_For_Hash')?['message']"
+                          }
+                        },
+                        "Increment_Failure_Count_For_Hash": {
+                          "runAfter": {},
+                          "type": "IncrementVariable",
+                          "inputs": {
+                            "name": "failure_count",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "equals": [
+                            "@body('Infoblox_TIDE_Lookup_For_Hash')?['status']",
+                            "success"
+                          ]
+                        }
+                      ]
+                    },
+                    "type": "If"
+                  },
+                  "Infoblox_TIDE_Lookup_For_Hash": {
+                    "runAfter": {
+                      "Set_Target_Type_As_Hash": ["Succeeded"]
+                    },
+                    "type": "Workflow",
+                    "inputs": {
+                      "body": {
+                        "target": "@{variables('target')}",
+                        "type": "@{variables('target_type')}"
+                      },
+                      "host": {
+                        "triggerName": "manual",
+                        "workflow": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/','Infoblox-TIDE-Lookup')]"
+                        }
+                      }
+                    }
+                  },
+                  "Set_Target_Hash": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target",
+                      "value": "@items('For_Each_Hash')?['Value']"
+                    }
+                  },
+                  "Set_Target_Type_As_Hash": {
+                    "runAfter": {
+                      "Set_Target_Hash": ["Succeeded"]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target_type",
+                      "value": "hash"
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Get_FileHashes_From_Entities": ["Succeeded"]
+                },
+                "type": "Foreach",
+                "runtimeConfiguration": {
+                  "concurrency": {
+                    "repetitions": 1
+                  }
+                }
+              },
+              "For_Each_Host": {
+                "foreach": "@body('Get_Hosts_From_Entities')?['Hosts']",
+                "actions": {
+                  "Condition_To_Verify_TIDE_Lookup_Playbook_Called_Successfully_For_Host": {
+                    "actions": {},
+                    "runAfter": {
+                      "Infoblox_TIDE_Lookup_For_Host": [
+                        "Succeeded",
+                        "TimedOut",
+                        "Failed"
+                      ]
+                    },
+                    "else": {
+                      "actions": {
+                        "Add_Error_Message_For_Host": {
+                          "runAfter": {
+                            "Increment_Failure_Count_For_Host": ["Succeeded"]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "error_message",
+                            "value": "@body('Infoblox_TIDE_Lookup_For_Host')?['message']"
+                          }
+                        },
+                        "Increment_Failure_Count_For_Host": {
+                          "runAfter": {},
+                          "type": "IncrementVariable",
+                          "inputs": {
+                            "name": "failure_count",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "equals": [
+                            "@body('Infoblox_TIDE_Lookup_For_Host')?['status']",
+                            "success"
+                          ]
+                        }
+                      ]
+                    },
+                    "type": "If"
+                  },
+                  "Infoblox_TIDE_Lookup_For_Host": {
+                    "runAfter": {
+                      "Set_Target_Type_As_Host": ["Succeeded"]
+                    },
+                    "type": "Workflow",
+                    "inputs": {
+                      "body": {
+                        "target": "@{variables('target')}",
+                        "type": "@{variables('target_type')}"
+                      },
+                      "host": {
+                        "triggerName": "manual",
+                        "workflow": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/','Infoblox-TIDE-Lookup')]"
+                        }
+                      }
+                    }
+                  },
+                  "Set_Target_Host": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target",
+                      "value": "@items('For_Each_Host')?['NetBiosName']"
+                    }
+                  },
+                  "Set_Target_Type_As_Host": {
+                    "runAfter": {
+                      "Set_Target_Host": ["Succeeded"]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target_type",
+                      "value": "host"
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Get_Hosts_From_Entities": ["Succeeded"]
+                },
+                "type": "Foreach",
+                "runtimeConfiguration": {
+                  "concurrency": {
+                    "repetitions": 1
+                  }
+                }
+              },
+              "For_Each_IP": {
+                "foreach": "@body('Get_IPs_From_Entities')?['IPs']",
+                "actions": {
+                  "Condition_To_Verify_TIDE_Lookup_Playbook_Called_Successfully_For_IP": {
+                    "actions": {},
+                    "runAfter": {
+                      "Infoblox_TIDE_Lookup_For_IP": [
+                        "Succeeded",
+                        "TimedOut",
+                        "Failed"
+                      ]
+                    },
+                    "else": {
+                      "actions": {
+                        "Add_Error_Message_For_IP": {
+                          "runAfter": {
+                            "Increment_Failure_Count_For_IP": ["Succeeded"]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "error_message",
+                            "value": "@body('Infoblox_TIDE_Lookup_For_IP')?['message']"
+                          }
+                        },
+                        "Increment_Failure_Count_For_IP": {
+                          "runAfter": {},
+                          "type": "IncrementVariable",
+                          "inputs": {
+                            "name": "failure_count",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "equals": [
+                            "@body('Infoblox_TIDE_Lookup_For_IP')?['status']",
+                            "success"
+                          ]
+                        }
+                      ]
+                    },
+                    "type": "If"
+                  },
+                  "Infoblox_TIDE_Lookup_For_IP": {
+                    "runAfter": {
+                      "Set_Target_Type_As_IP": ["Succeeded"]
+                    },
+                    "type": "Workflow",
+                    "inputs": {
+                      "body": {
+                        "target": "@{variables('target')}",
+                        "type": "@{variables('target_type')}"
+                      },
+                      "host": {
+                        "triggerName": "manual",
+                        "workflow": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/','Infoblox-TIDE-Lookup')]"
+                        }
+                      }
+                    }
+                  },
+                  "Set_Target_IP": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target",
+                      "value": "@items('For_Each_IP')?['Address']"
+                    }
+                  },
+                  "Set_Target_Type_As_IP": {
+                    "runAfter": {
+                      "Set_Target_IP": ["Succeeded"]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target_type",
+                      "value": "ip"
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Get_IPs_From_Entities": ["Succeeded"]
+                },
+                "type": "Foreach",
+                "runtimeConfiguration": {
+                  "concurrency": {
+                    "repetitions": 1
+                  }
+                }
+              },
+              "For_Each_URL": {
+                "foreach": "@body('Get_URLs_From_Entities')?['URLs']",
+                "actions": {
+                  "Condition_To_Verify_TIDE_Lookup_Playbook_Called_Successfully_For_urls": {
+                    "actions": {},
+                    "runAfter": {
+                      "Infoblox_TIDE_Lookup_For_URL": [
+                        "Succeeded",
+                        "TimedOut",
+                        "Failed"
+                      ]
+                    },
+                    "else": {
+                      "actions": {
+                        "Add_Error_Message_For_URL": {
+                          "runAfter": {
+                            "Increment_Failure_Count_For_URL": ["Succeeded"]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "error_message",
+                            "value": "@body('Infoblox_TIDE_Lookup_For_URL')?['message']"
+                          }
+                        },
+                        "Increment_Failure_Count_For_URL": {
+                          "runAfter": {},
+                          "type": "IncrementVariable",
+                          "inputs": {
+                            "name": "failure_count",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "equals": [
+                            "@body('Infoblox_TIDE_Lookup_For_URL')?['status']",
+                            "success"
+                          ]
+                        }
+                      ]
+                    },
+                    "type": "If"
+                  },
+                  "Infoblox_TIDE_Lookup_For_URL": {
+                    "runAfter": {
+                      "Set_Target_Type_As_URL": ["Succeeded"]
+                    },
+                    "type": "Workflow",
+                    "inputs": {
+                      "body": {
+                        "target": "@{variables('target')}",
+                        "type": "@{variables('target_type')}"
+                      },
+                      "host": {
+                        "triggerName": "manual",
+                        "workflow": {
+                          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/','Infoblox-TIDE-Lookup')]"
+                        }
+                      }
+                    }
+                  },
+                  "Set_Target_Type_As_URL": {
+                    "runAfter": {
+                      "Set_Target_URL": ["Succeeded"]
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target_type",
+                      "value": "url"
+                    }
+                  },
+                  "Set_Target_URL": {
+                    "runAfter": {},
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "target",
+                      "value": "@items('For_Each_URL')?['Url']"
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Get_URLs_From_Entities": ["Succeeded"]
+                },
+                "type": "Foreach",
+                "runtimeConfiguration": {
+                  "concurrency": {
+                    "repetitions": 1
+                  }
+                }
+              },
+              "Get_FileHashes_From_Entities": {
+                "runAfter": {
+                  "For_Each_Host": ["Succeeded", "TimedOut", "Failed"]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "path": "/entities/filehash"
+                }
+              },
+              "Get_Hosts_From_Entities": {
+                "runAfter": {
+                  "For_Each_IP": ["Succeeded", "Failed", "TimedOut"]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "path": "/entities/host"
+                }
+              },
+              "Get_IPs_From_Entities": {
+                "runAfter": {
+                  "For_Each_URL": ["Succeeded", "Failed", "TimedOut"]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "path": "/entities/ip"
+                }
+              },
+              "Get_URLs_From_Entities": {
+                "runAfter": {
+                  "Initialize_Error_Message": ["Succeeded"]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "path": "/entities/url"
+                }
+              },
+              "Initialize_Error_Message": {
+                "runAfter": {
+                  "Initialize_Failure_Count": ["Succeeded"]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "error_message",
+                      "type": "array"
+                    }
+                  ]
+                }
+              },
+              "Initialize_Failure_Count": {
+                "runAfter": {
+                  "Initialize_Target": ["Succeeded"]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "failure_count",
+                      "type": "integer",
+                      "value": 0
+                    }
+                  ]
+                }
+              },
+              "Initialize_Target": {
+                "runAfter": {
+                  "Initialize_Target_Type": ["Succeeded"]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "target",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "Initialize_Target_Type": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "target_type",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "outputs": {}
+          },
+          "parameters": {
+            "$connections": {
+              "value": {
+                "azuresentinel_1": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                  "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                  "connectionProperties": {
+                    "authentication": {
+                      "type": "ManagedServiceIdentity"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "name": "[parameters('PlaybookName')]",
+        "type": "Microsoft.Logic/workflows",
+        "location": "[resourceGroup().location]",
+        "tags": {
+          "hidden-SentinelTemplateName": "Infoblox-TIDE-Lookup-Via-Incident",
+          "hidden-SentinelTemplateVersion": "1.0"
+        },
+        "identity": {
+          "type": "SystemAssigned"
+        },
+        "apiVersion": "2017-07-01",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+        ]
+      },
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('MicrosoftSentinelConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "kind": "V1",
+        "properties": {
+          "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+          "customParameterValues": {},
+          "parameterValueType": "Alternative",
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+          }
+        }
+      }
+    ]
+  }
+  

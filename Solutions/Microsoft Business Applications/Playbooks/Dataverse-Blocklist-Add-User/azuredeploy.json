@@ -1,0 +1,271 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Dataverse: Add user to blocklist (incident trigger)",
+        "description": "This playbook can be triggered when a Microsoft Sentinel incident is raised and will automatically add affected user entitites to a pre-defined Microsoft Entra group, resulting in blocked access. The Microsoft Entra group is used with Conditional Access to block sign-in to the Dataverse.",
+        "prerequisites": [
+            "1. Create a security group in Microsoft Entra used to block access and take note of the group's object ID.",
+            "2. Create a Conditional Access policy in Microsoft Entra.",
+            "3. Configure the Conditional Access Policy to block access to Common Data Service (appid 00000007-0000-0000-c000-000000000000) for members of the group created in step 1."
+        ],
+        "postDeployment": [
+            "1. Grant permissions to Sentinel for Playook managed identity.",
+            "2. Authorize connection for Microsoft Entra."
+        ],
+        "entities": [
+            "Account"
+        ],
+        "tags": [
+            "Remediation"
+        ],
+        "lastUpdateTime": "2022-10-11T00:00:00.000Z",
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Dataverse-Blocklist-Add-User",
+            "type": "string"
+        },
+        "GroupId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter object ID for Microsoft Entra group"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "GroupId": {
+                            "type": "string",
+                            "defaultValue": "[parameters('GroupId')]"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Add_user_to_group": {
+                                    "runAfter": {
+                                        "Get_user": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "@@odata.id": "@body('Get_user')?['id']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v1.0/groups/@{encodeURIComponent(parameters('GroupId'))}/members/$ref"
+                                    }
+                                },
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>User was added to CA block group in AAD: @{items('For_each')?['Name']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Add_user_to_group": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>Account name: @{items('For_each')?['Name']}<br>\nError: @{body('Add_user_to_group')['error']['message']}</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@int(actionOutputs('Add_user_to_group').statusCode)",
+                                                    204
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Verify the execution result of function"
+                                },
+                                "Get_user": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v1.0/users/@{encodeURIComponent(concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix']))}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "Iterate on each Dynamics 365 user account"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+                                "connectionName": "[variables('AzureadConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "D365-Blocklist-Add-User",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureadConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureadConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+                }
+            }
+        }
+    ]
+}

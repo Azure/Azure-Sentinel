@@ -1,0 +1,77 @@
+id: 5c768e7d-7e5e-4d57-80d4-3f50c96fbf70
+kind: Scheduled
+name: Dataverse - New Dataverse application user activity type
+description: Identifies new or previously unseen activity types associated with Dataverse
+  application (non-interactive) user.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Execution
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1635
+  - T0871
+  - T1078
+query: |
+  let query_frequency = 1h;
+  let query_lookback = 14d;
+  let app_user_regex = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\.com$";
+  let guid_regex = "([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})";
+  let application_users = DataverseActivity
+      | where UserId !endswith "@onmicrosoft.com" and UserId != "Unknown"
+      | summarize by UserId
+      | where split(UserId, "@")[1] matches regex app_user_regex;
+  let historical_app_activity = application_users
+      | join kind = inner (
+          DataverseActivity
+          | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+          | summarize by UserId, EntityName, Message, InstanceUrl)
+          on
+          UserId;
+  let current_activity = application_users
+      | join kind= inner (
+          DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | summarize by UserId, EntityName, Message, InstanceUrl)
+          on
+          UserId;
+  current_activity
+  | join kind = leftanti (historical_app_activity) on UserId, Message, EntityName, InstanceUrl
+  | summarize NewActivities = make_set(strcat(Message, " ", EntityName), 1000) by UserId, InstanceUrl
+  | extend
+      AadUserId = extract(guid_regex, 1, tostring(split(UserId, "@")[0])),
+      CloudAppId = int(32780)
+  | project
+      UserId,
+      NewActivities,
+      InstanceUrl,
+      AadUserId,
+      CloudAppId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AadUserId
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Unusual non-interactive account activity in
+    {{InstanceUrl}} '
+  alertDescriptionFormat: '{{UserId}} generated new activities in {{InstanceUrl}}
+    which had not been seen previously in the Dataverse.'
+version: 3.2.0

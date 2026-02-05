@@ -1,10 +1,10 @@
 id: 633a91df-d031-4b6e-a413-607a61540559
-name: Changes made to AWS CloudTrail logs
+name: Tampering to AWS CloudTrail logs
 description: |
   'Attackers often try to hide their steps by deleting or stopping the collection of logs that could show their activity. 
   This alert identifies any manipulation of AWS CloudTrail, Cloudwatch/EventBridge or VPC Flow logs.
-  More Information: AWS CloudTrail API: https://docs.aws.amazon.com/awscloudtrail/latest/APIReference/API_Operations.html
-  AWS Cloudwatch/Eventbridge API: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Operations.html
+  More Information: AWS CloudTrail API: https://docs.aws.amazon.com/awscloudtrail/latest/APIReference/API_Operations.html 
+  AWS Cloudwatch/Eventbridge API: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Operations.html 
   AWS DelteteFlowLogs API : https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteFlowLogs.html '
 severity: High
 status: Available
@@ -18,21 +18,32 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - DefenseEvasion
+relevantTechniques:
+  - T1070
 query: |
       let EventNameList = dynamic(["UpdateTrail","DeleteTrail","StopLogging","DeleteFlowLogs","DeleteEventBus","DeleteLogGroup"]);
       AWSCloudTrail
       | where (EventName in~ (EventNameList) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and isempty(ErrorMessage) and isempty(ErrorCode)
-      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+       AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
       UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource
-      | extend timestamp = StartTimeUtc, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress
+      | extend timestamp = StartTimeUtc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: SourceIpAddress
+version: 1.0.4
 kind: Scheduled

@@ -1,0 +1,408 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.1.0.0",
+    "metadata": {
+        "title": "RFI-Playbook-Alert-Importer",
+        "description": "This playbook fetches identity compromises from Recorded Future, places users in a security group and confirms them as 'risky users' in Entra ID.",
+        "prerequisites": [
+            "First install the RFI-CustomConnector-0-2-0 custom connector",
+            "To use the Recorded Future Identity connector, you will need a valid API token from Recorded Future as described in the [documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/readme.md#how-to-obtain-recorded-future-api-token)"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "../Connectors/RFI-CustomConnector-0-2-0/azuredeploy.json",
+        "lastUpdateTime": "2025-04-29T00:00:00.000Z",
+        "entities": [],
+        "tags": ["Identity protection"],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [ "Initial version" ]
+            },
+            {
+                "version": "1.1",
+                "title": "Improved stability",
+                "notes": [ "Removed Get Risky User action due to instability" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RFI-Playbook-Alert-Importer",
+            "type": "string"
+        },
+        "RFICustomConnector": {
+            "defaultValue": "RFI-CustomConnector-0-2-0",
+            "metadata": {
+                "description": "Required. Name of the logic app connector which performs Recorded Future Communication. Normally this should not change from RFI-CustomConnector-0-2-0."
+            },
+            "type": "string"
+        },
+        "entra_id_security_group_id": {
+            "defaultValue": "Insert Entra ID security group or leave empty",
+            "metadata": {
+                "description": "Optional. The ID of the Entra ID security group where we should put users who have leaked credentials. If left empty, a user will not be placed in an Entra ID security group."
+            },
+            "type": "String"
+        },
+        "confirm_user_as_risky": {
+            "metadata":{
+                "description": "Optional. If specified, will confirm user as risky. Requires Microsoft Entra ID P1 or P2 license"
+            },
+                "defaultValue": false,
+                "type": "Bool"
+        },
+        "entra_id_domain": {
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional. If specified, will replace the domain of any leaked credentials with this value."
+            },
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RFI-Playbook-Alert-Importer",
+                "hidden-SentinelTemplateVersion": "1.1"
+            },
+            "name": "[parameters('PlaybookName')]",
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "For_each": {
+                            "actions": {
+                               "Add_user_to_Entra_ID_security_group": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@parameters('entra_id_security_group_id')",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuread']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "@@odata.id": "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']"
+                                                },
+                                                "path": "/v1.0/groups/@{encodeURIComponent(parameters('entra_id_security_group_id'))}/members/$ref"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Succeeded"
+                                        ],
+                                        "Workaround_-_Current_Time": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Compute_user_principal_name": {
+                                    "description": "Replace the domain of the leaked identity with entra_id_domain, if the entra_id_domain parameter is provided.",
+                                    "inputs": "@if(\n  and(\n    not(\n      equals(parameters('entra_id_domain'), null)\n    ),\n    not(\n      equals(parameters('entra_id_domain'), '')\n    )\n  ),\n  concat(split(item()?['identity'], '@')[0], '@', parameters('entra_id_domain')),\n  item()?['identity']\n)",
+                                    "type": "Compose"
+                                },
+                                "Confirm_user_as_risky_(requires_P1_or_P2_license)": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@parameters('confirm_user_as_risky')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Confirm_a_risky_user_as_compromised": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureadip']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "userIds": [
+                                                        "@body('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['id']"
+                                                    ]
+                                                },
+                                                "path": "/beta/riskyUsers/confirmCompromised"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "runAfter": {
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Succeeded"
+                                        ],
+                                        "Workaround_-_Current_Time": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Get_User_-_Check_if_the_user_exists_in_Active_Directory": {
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuread']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v1.0/users/@{encodeURIComponent(outputs('Compute_user_principal_name'))}"
+                                    },
+                                    "runAfter": {
+                                        "Compute_user_principal_name": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Playbook_Alerts_-_Update_Playbook_Alert": {
+                                    "inputs": {
+                                        "body": {
+                                            "alert_id": "@item()?['alert_id']",
+                                            "log_entry": "Actions taken in Entra ID integration: \n- User found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), string('- Placed into security group.'), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}",
+                                            "status": "Resolved",
+                                            "added_actions_taken": [
+                                                "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/playbook-alerts/update"
+                                    },
+                                    "runAfter": {
+                                        "Add_user_to_Entra_ID_security_group": [
+                                            "Succeeded",
+                                            "Skipped"
+                                        ],
+                                        "Confirm_user_as_risky_(requires_P1_or_P2_license)": [
+                                            "Succeeded",
+                                            "Failed",
+                                            "Skipped"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
+                                    "inputs": {
+                                        "body": {
+                                            "alert_id": "@item()?['alert_id']",
+                                            "log_entry": "User not found. Might be false positive. Dismissed",
+                                            "status": "Dismissed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/playbook-alerts/update"
+                                    },
+                                    "runAfter": {
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Failed"
+                                        ],
+                                        "Workaround_-_Current_Time": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Workaround_-_Current_Time": {
+                                    "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct",
+                                    "inputs": {},
+                                    "kind": "CurrentTime",
+                                    "runAfter": {
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Expression"
+                                }
+                            },
+                            "foreach": "@body('Playbook_Alerts_-_Search_for_novel_identity_exposures')?['pba_items']",
+                            "runAfter": {
+                                "Playbook_Alerts_-_Search_for_novel_identity_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Playbook_Alerts_-_Search_for_novel_identity_exposures": {
+                            "inputs": {
+                                "body": {
+                                    "lookback_days": 7,
+                                    "priorities": [
+                                        "High",
+                                        "Moderate"
+                                    ]
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/playbook-alerts/search"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "entra_id_domain": {
+                            "defaultValue": "[parameters('entra_id_domain')]",
+                            "type": "String"
+                        },
+                        "entra_id_security_group_id": {
+                            "defaultValue": "[parameters('entra_id_security_group_id')]",
+                            "type": "String"
+                        },
+                        "confirm_user_as_risky": {
+                            "defaultValue": "[parameters('confirm_user_as_risky')]",
+                            "type": "Bool"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": 15
+                            },
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 15
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuread": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
+                                "connectionName": "[variables('AzureadConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+                            },
+                            "azureadip": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]",
+                                "connectionName": "[variables('AzureadipConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureadip')]"
+                            },
+                            "rfi-customconnector-0-2-0": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
+                                "connectionName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('RFICustomConnector'))]"
+                            }
+                        }
+                    }
+                },
+                "provisioningState": "Succeeded",
+                "state": "Disabled"
+            },
+            "type": "Microsoft.Logic/workflows"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('RFICustomConnector'))]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzureadConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuread')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzureadConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzureadipConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureadip')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzureadipConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
+        }
+    ],
+    "variables": {
+        "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
+        "AzureadipConnectionName": "[concat('Azureadip-', parameters('PlaybookName'))]",
+        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0"
+    }
+}

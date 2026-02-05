@@ -1,7 +1,7 @@
 Parser:
   Title: User Management ASIM filtering parser for Cisco ISE
-  Version: '0.1'
-  LastUpdated: July 13, 2023
+  Version: '0.1.2'
+  LastUpdated: Mar 06, 2024
 Product:
   Name: Cisco ISE
 Normalization:
@@ -16,7 +16,7 @@ References:
   Link: https://www.cisco.com/c/en/us/td/docs/security/ise/3-2/admin_guide/b_ise_admin_3_2/b_ISE_admin_32_maintain_monitor.html#ID58
 Description: |
   This ASIM parser supports normalizing user management activity in the Cisco ISE events to the ASIM User Management schema.
-ParserName: ASimUserManagementCiscoISE
+ParserName: vimUserManagementCiscoISE
 EquivalentBuiltInParser: _Im_UserManagement_CiscoISE
 ParserParams:
   - Name: starttime
@@ -37,9 +37,6 @@ ParserParams:
   - Name: eventtype_in
     Type: dynamic
     Default: dynamic([])
-  - Name: eventresult
-    Type: string
-    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -97,23 +94,24 @@ ParserQuery: |
     let CiscoISEUsrMgmtParser=(
         starttime: datetime=datetime(null), 
         endtime: datetime=datetime(null),
-        srcipaddr_has_any_prefix: dynamic=dynamic([]), 
-        eventresult: string='*',
+        srcipaddr_has_any_prefix: dynamic=dynamic([]),
         eventtype_in: dynamic=dynamic([]),
         actorusername_has_any: dynamic=dynamic([]),
+        targetusername_has_any: dynamic=dynamic([]),
         disabled: bool = false
     ) {
         let EventOriginalTypeList = toscalar(EventFieldsLookup
-            | where (eventresult == "*" or eventresult == EventResult)
-                    and (array_length(eventtype_in) == 0 or EventType in (eventtype_in))
+            | where (array_length(eventtype_in) == 0 or EventType in (eventtype_in))
             | summarize make_set(EventOriginalType));
         Syslog
+        | where Computer in (_ASIM_GetSourceBySourceType("CiscoISE"))
         | where not(disabled)
         //***************************** <Prefiltering> **************************
         | where (isnull(starttime) or TimeGenerated >= starttime) 
             and (isnull(endtime) or TimeGenerated <= endtime) 
             and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SyslogMessage, srcipaddr_has_any_prefix))
             and (array_length(actorusername_has_any) == 0 or SyslogMessage has_any (actorusername_has_any))
+            and (array_length(targetusername_has_any) == 0)
         //***************************** </Prefiltering> *************************
         | where ProcessName has_any ("CISE", "CSCO")
         | parse SyslogMessage with * " " longvalue:long " " EventOriginalType:int " " *
@@ -168,8 +166,8 @@ ParserQuery: |
         starttime = starttime,
         endtime = endtime,
         srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
-        eventresult = eventresult,
         eventtype_in = eventtype_in,
         actorusername_has_any = actorusername_has_any,
+        targetusername_has_any = targetusername_has_any,
         disabled=disabled
     )

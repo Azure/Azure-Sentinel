@@ -2,7 +2,7 @@ id: 22a320c2-e1e5-4c74-a35b-39fc9cdcf859
 name: Suspicious linking of existing user to external User
 description: |
   ' This query will detect when an attempt is made to update an existing user and link it to an guest or external identity. These activities are unusual and such linking of external 
-  identities should be investigated. In some cases you may see internal AAD sync accounts (Sync_) do this which may be benign'
+  identities should be investigated. In some cases you may see internal Entra ID sync accounts (Sync_) do this which may be benign'
 severity: Medium
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -19,38 +19,63 @@ relevantTechniques:
 tags:
   - GuestorExternalIdentities
 query: |
-  let lookback = 1d;
-  AuditLogs 
-  | where TimeGenerated > ago(lookback)
+  AuditLogs
   | where OperationName=~ "Update user" 
   | where Result =~ "success" 
   | mv-expand TargetResources 
   | mv-expand TargetResources.modifiedProperties 
-  | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) , oldValue_ = tostring(TargetResources_modifiedProperties.oldValue), newValue_ = tostring(TargetResources_modifiedProperties.newValue)
-  | where displayName_ == "UserPrincipalName" and oldValue_ !has "#EXT" and newValue_ has "#EXT"
-  | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) 
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) , IPAddress = tostring(InitiatedBy.["user"].["ipAddress"])
-  | project TimeGenerated, AADTenantId, IPAddress, Initiator, displayName_, oldValue_, newValue_
+  | extend displayName = tostring(TargetResources_modifiedProperties.displayName), 
+  TargetUPN_oldValue = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue))[0]), 
+  TargetUPN_newValue = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue))[0])
+  | where displayName == "UserPrincipalName" and TargetUPN_oldValue !has "#EXT" and TargetUPN_newValue has "#EXT"
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))
+  | summarize arg_max(TimeGenerated, *) by CorrelationId
+  | project-reorder TimeGenerated, InitiatedBy, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, TargetUPN_oldValue, TargetUPN_newValue
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | extend TargetAccountName = tostring(split(TargetUPN_oldValue, "@")[0]), TargetUPNSuffix = tostring(split(TargetUPN_oldValue, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Initiator
+      - identifier: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: displayName_
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUPN_oldValue
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPAddress
-version: 1.0.1
+        columnName: InitiatingIPAddress
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ashwin Patil
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

@@ -1,0 +1,86 @@
+{
+  "type": "Microsoft.SecurityInsights/dataConnectors",
+  "apiVersion": "2024-09-01",
+  "name": "SalesforceServiceCloudPolling",
+  "location": "[[parameters('location')]",
+  "kind": "RestApiPoller",
+  "properties": {
+    "auth": {
+      "type": "OAuth2",
+      "ClientId": "[[parameters('clientId')]",
+      "ClientSecret": "[[parameters('clientSecret')]",
+      "GrantType": "client_credentials",
+      "TokenEndpoint": "[[concat(parameters('salesforceDomainName'),'/services/oauth2/token')]",
+      "TokenEndpointHeaders": {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      "TokenEndpointQueryParameters": {}
+    },
+    "request": {
+      "apiEndpoint": "[[concat(parameters('salesforceDomainName'),'/services/data/v65.0/query')]",
+      "httpMethod": "GET",
+      "rateLimitQPS": 10,
+      "queryWindowInMin": 10,
+      "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+      "retryCount": 3,
+      "timeoutInSeconds": 60,
+      "headers": {
+        "Accept": "application/json",
+        "User-Agent": "Scuba"
+      },
+      "queryParameters": {
+        "q": "[[parameters('queryType')[0]]"
+      }
+    },
+    "response": {
+      "eventsJsonPaths": [
+        "$.records"
+      ],
+      "format": "json"
+    },
+    "paging": {
+      "pagingType": "NextPageUrl",
+      "nextPageUrl": "[[parameters('salesforceDomainName')]",
+      "nextPageTokenJsonPath": "$.nextRecordsUrl",
+      "isNextPageTokenRelativeUrl": true
+    },
+    "stepInfo": {
+      "stepType": "Nested",
+      "nextSteps": [
+        {
+          "stepId": "fetchLogFileData",
+          "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project logFileUrl = res.LogFile"
+        }
+      ]
+    },
+    "stepCollectorConfigs": {
+      "fetchLogFileData": {
+        "shouldJoinNestedData": true,
+        "joinedDataStepName": "LogData",
+        "request": {
+          "apiEndpoint": "[[concat(parameters('salesforceDomainName'),'$logFileUrl$')]",
+          "httpMethod": "GET",
+          "headers": {
+            "Accept": "application/json",
+            "User-Agent": "Scuba"
+          }
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$"
+          ],
+          "format": "csv",
+          "hasCsvHeader": true
+        }
+      }
+    },
+    "connectorDefinitionName": "SalesforceServiceCloudCCPDefinition",
+    "dataType": "SalesforceServiceCloudV2_CL",
+    "dcrConfig": {
+      "streamName": "Custom-SalesforceServiceCloudV2_CL",
+      "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+      "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+    }
+  }
+}

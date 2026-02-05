@@ -21,6 +21,7 @@ MAX_QUEUE_MESSAGES_MAIN_QUEUE = int(os.environ.get('MAX_QUEUE_MESSAGES_MAIN_QUEU
 MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
 REQUIRE_SECONDARY_STRING = os.environ.get('USER_SELECTION_REQUIRE_SECONDARY', 'false')
 
+
 if REQUIRE_SECONDARY_STRING.lower() == "true":
     REQUIRE_SECONDARY = True
 else:
@@ -46,25 +47,28 @@ def check_if_script_runs_too_long(percentage, script_start_time):
     return duration > max_duration
 
 async def main(mytimer: func.TimerRequest):
+    logging.getLogger().setLevel(logging.INFO)
     script_start_time = int(time.time())
-   
-    logging.info("Creating SQS connection")
+    logging.info("TimeTrigger Starting script. Parameter Selection-  REQUIRE_SECONDARY_STRING: {} MAX_QUEUE_MESSAGES_MAIN_QUEUE: {} MAX_SCRIPT_EXEC_TIME_MINUTES: {} AWS_KEY: {} AWS_REGION_NAME: {} AWS_SECRET: IWontReveal QUEUE_URL:{} ".format(REQUIRE_SECONDARY_STRING, MAX_QUEUE_MESSAGES_MAIN_QUEUE, MAX_SCRIPT_EXEC_TIME_MINUTES, AWS_KEY, AWS_REGION_NAME, QUEUE_URL))
     async with _create_sqs_client() as client:
             mainQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items")
             backlogQueueHelper = AzureStorageQueueHelper(connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items-backlog")    
-
-            logging.info("Check if we already have enough backlog to process")
+            logging.getLogger().setLevel(logging.INFO)
+            logging.info("Check if we already have enough backlog to process in main queue. Maxmum set is MAX_QUEUE_MESSAGES_MAIN_QUEUE: {} ".format(MAX_QUEUE_MESSAGES_MAIN_QUEUE))
             mainQueueCount = mainQueueHelper.get_queue_current_count()
+            logging.getLogger().setLevel(logging.INFO)
             logging.info("Main queue size is {}".format(mainQueueCount))
             while (mainQueueCount ) >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
                 time.sleep(15)
                 if check_if_script_runs_too_long(0.7, script_start_time):
-                    logging.warn("We already have queue already have enough messages to process. Not clearing any backlog or reading a new SQS message in this iteration.")
+                    logging.warn("We already have enough messages to process. Not clearing any backlog or reading a new SQS message in this iteration.")
                     return
                 mainQueueCount = mainQueueHelper.get_queue_current_count()
 
-            logging.info("Check if backlog queue have any records.")
+            logging.getLogger().setLevel(logging.INFO)
+            logging.info("Check if we already have files in backlog queue, these are pending to process. Moved to main queue when its get free")
             backlogQueueCount = backlogQueueHelper.get_queue_current_count()
+            logging.getLogger().setLevel(logging.INFO)
             logging.info("Backlog queue size is {}".format(backlogQueueCount))
             mainQueueCount = mainQueueHelper.get_queue_current_count()
             while backlogQueueCount > 0:
@@ -75,6 +79,7 @@ async def main(mytimer: func.TimerRequest):
                 if messageFromBacklog != None:
                     mainQueueHelper.send_to_queue(messageFromBacklog.content,False)
                     backlogQueueHelper.delete_queue_message(messageFromBacklog.id, messageFromBacklog.pop_receipt)
+                    logging.getLogger().setLevel(logging.INFO)
                     backlogQueueCount = backlogQueueHelper.get_queue_current_count()
                     mainQueueCount = mainQueueHelper.get_queue_current_count()
                 if check_if_script_runs_too_long(0.7, script_start_time):
@@ -84,7 +89,8 @@ async def main(mytimer: func.TimerRequest):
             if check_if_script_runs_too_long(0.5, script_start_time):
                 logging.warn("Queue already have enough messages to process. Read all messages from backlog queue but not reading a new SQS message in this iteration.")
                 return
-
+            
+            logging.getLogger().setLevel(logging.INFO)
             logging.info('Trying to check messages off the SQS...')
             try:
                 response = await client.receive_message(
@@ -101,10 +107,11 @@ async def main(mytimer: func.TimerRequest):
                         logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
                         
                         diffFromNow = int(time.time()*1000) - int(body_obj["timestamp"])
-                        if diffFromNow >= 3600:
+                        if diffFromNow >= 3600000:
                             logging.warn("More than 1 hour old records are getting processed now. This indicates requirement for additional function app.")
+                        await download_message_files_queue(mainQueueHelper, backlogQueueHelper, msg["MessageId"], body_obj)
                         
-                            await download_message_files_queue(mainQueueHelper, backlogQueueHelper, msg["MessageId"], body_obj)
+                        logging.getLogger().setLevel(logging.INFO)
                         logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))
                         try:
                             await client.delete_message(
@@ -141,6 +148,7 @@ async def download_message_files_queue(mainQueueHelper, backlogQueueHelper, mess
 
 class AzureStorageQueueHelper:
     def __init__(self,connectionString,queueName):
+        logging.getLogger().setLevel(logging.WARNING)
         self.__service_client = QueueServiceClient.from_connection_string(conn_str=connectionString)
         self.__queue = self.__service_client.get_queue_client(queueName)
         try:
@@ -160,11 +168,13 @@ class AzureStorageQueueHelper:
     # This method is used to read messages from the queue. 
     # This will pop the message from the queue (deque operation)
     def deque_from_queue(self):
+        logging.getLogger().setLevel(logging.WARNING)
         message = self.__queue.receive_message()
         return message
 
     # This method send data into the queue
     def send_to_queue(self, message, encoded):
+        logging.getLogger().setLevel(logging.WARNING)
         if encoded:
             self.__queue.send_message(self.base64Encoded(message))
         else:
@@ -172,9 +182,11 @@ class AzureStorageQueueHelper:
     
     # This method deletes the message based on messageId
     def delete_queue_message(self, messageId, popReceipt):
+        logging.getLogger().setLevel(logging.WARNING)
         self.__queue.delete_message(messageId,popReceipt)
 
     # This method reads an approximate count of messages in the queue
     def get_queue_current_count(self):
+        logging.getLogger().setLevel(logging.WARNING)
         properties = self.__queue.get_queue_properties()
         return properties.approximate_message_count

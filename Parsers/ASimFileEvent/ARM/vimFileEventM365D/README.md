@@ -1,6 +1,6 @@
-# M365 Defender for EndPoint ASIM FileEvent Normalization Parser
+# Microsoft 365 Defender for EndPoint ASIM FileEvent Normalization Parser
 
-ARM template for ASIM FileEvent schema parser for M365 Defender for EndPoint.
+ARM template for ASIM FileEvent schema parser for Microsoft 365 Defender for EndPoint.
 
 This ASIM parser supports normalizing M365 Defender, stored in the DeviceFileEvents table, for Endpoint events to the ASIM file activity schema.
 
@@ -11,6 +11,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM FileEvent normalization schema reference](https://aka.ms/ASimFileEventDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimFileEvent/CHANGELOG/vimFileEventM365D.md)
 
 <br>
 

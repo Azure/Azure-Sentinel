@@ -2,7 +2,7 @@
 
 ARM template for ASIM NetworkSession schema parser for Windows Sysmon.
 
-This ASIM parser supports normalizing Sysmon network session events (event 3) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
+This ASIM parser supports normalizing Sysmon network session events (event 3) collected logs ingested in 'Event' table to the ASIM Process Event normalized schema. 
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/CHANGELOG/ASimNetworkSessionMicrosoftSysmon.md)
 
 <br>
 

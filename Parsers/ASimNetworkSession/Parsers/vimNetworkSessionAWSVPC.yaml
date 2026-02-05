@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for AWS VPC logs
-  Version: '0.3'
-  LastUpdated: Dec 11, 2021
+  Version: '0.3.1'
+  LastUpdated: March 05, 2024
 Product:
   Name: AWS VPC
 Normalization:
@@ -232,6 +232,10 @@ ParserQuery: |
     | where
            (isnull(dstportnumber) or (DstPort == dstportnumber))
       and (array_length(hostname_has_any) == 0)
+    | extend EventResult = iff (Action=="ACCEPT","Success","Failure")
+    | where (eventresult == "*" or eventresult == EventResult) 
+    | lookup ActionLookup on Action
+    | where  (array_length(dvcaction) == 0 or DvcAction in (dvcaction))
     | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcAddr,src_or_any)
            , temp_isDstMatch=has_any_ipv4_prefix(DstAddr,dst_or_any)
     | extend ASimMatchingIpAddr = case(
@@ -243,10 +247,6 @@ ParserQuery: |
     )
     | project-away temp_*
     | where ASimMatchingIpAddr != "No match"
-    | extend EventResult = iff (Action=="ACCEPT","Success","Failure")
-    | where (eventresult == "*" or eventresult == EventResult) 
-    | lookup ActionLookup on Action
-    | where  (array_length(dvcaction) == 0 or DvcAction in (dvcaction))
     // -- End pre-filtering
     | extend
         EventVendor="AWS", 

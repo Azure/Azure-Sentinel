@@ -1,0 +1,310 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Veeam-ResolveTriggeredAlarm",
+    "description": "A Microsoft Sentinel playbook with an incident trigger that resolves Veeam ONE alarms (identified by TriggeredAlarmId custom incident field) on the Veeam ONE server specified by the VoneHostName custom incident field.",
+    "prerequisites": [
+      "1. Microsoft Sentinel workspace configured.",
+      "2. Permissions to create Logic Apps and API Connections.",
+      "3. Permissions to assign roles to the Resource Group.",
+      "4. Veeam Azure Function App deployed and configured.",
+      "5. Hybrid Connection and Key Vault secrets configured for each VBR Server."
+    ],
+    "entities": [],
+    "tags": [ "Automation", "Veeam", "VeeamONE", "Alarm", "Resolution" ],
+    "lastUpdateTime": "2025-08-25T00:00:00.000Z",
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Custom Template"
+    },
+    "parameterTemplateVersion": "1.0.0",
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Contributor role to the Logic App's managed identity on the Microsoft Sentinel workspace."
+    ],
+    "_generator": {
+      "name": "bicep",
+      "version": "0.36.177.2456",
+      "templateHash": "8701067040678761767"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Veeam-ResolveTriggeredAlarm",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the playbook (Logic App) to be created"
+      }
+    },
+    "functionAppName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Name of the Azure Function App for Veeam integration"
+      }
+    },
+    "AzureSentinelConnectionName": {
+      "type": "string",
+      "defaultValue": "azuresentinel-connection",
+      "metadata": {
+        "description": "The name to use for the Microsoft Sentinel Connector in the Logic App (This will exist as an API Connection in your subscription)"
+      }
+    }
+  },
+  "variables": {
+    "functionAppId": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[parameters('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        },
+        "parameterValueType": "Alternative"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Veeam-ResolveTriggeredAlarm",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@listCallbackUrl()"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Parse_Alarm_Details": {
+              "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+              "actions": {
+                "Parse_JSON": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('Parse_Alarm_Details')?['properties']?['additionalData']?['Custom Details']",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "TriggeredAlarmId": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "VoneHostName": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "For_each_TriggeredAlarmId": {
+                  "foreach": "@outputs('Parse_JSON')?['body']?['TriggeredAlarmId']",
+                  "actions": {
+                    "Set_TriggeredAlarmId_variable": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "TriggeredAlarmId",
+                        "value": "@items('For_each_TriggeredAlarmId')"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Parse_JSON": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                },
+                "For_each_VoneHostName": {
+                  "foreach": "@outputs('Parse_JSON')?['body']?['VoneHostName']",
+                  "actions": {
+                    "Set_VoneHostName_variable": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VoneHostName",
+                        "value": "@items('For_each_VoneHostName')"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "For_each_TriggeredAlarmId": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                }
+              },
+              "runAfter": {
+                "Initialize_variables": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Initialize_variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "TriggeredAlarmId",
+                    "type": "string"
+                  },
+                  {
+                    "name": "VoneHostName",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "ResolveTriggeredAlarm": {
+              "runAfter": {
+                "Parse_Alarm_Details": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Function",
+              "inputs": {
+                "queries": {
+                  "TriggeredAlarmId": "@variables('TriggeredAlarmId')",
+                  "voneHostName": "@variables('VoneHostName')"
+                },
+                "function": {
+                  "id": "[concat(variables('functionAppId'), '/functions/ResolveTriggeredAlarmAsync')]"
+                }
+              }
+            },
+            "Check_Alarm_Resolution_Result": {
+              "actions": {
+                "Add_success_comment": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p class=\"editor-paragraph\">Alarm with ID @{variables('TriggeredAlarmId')} has been successfully resolved on @{variables('VoneHostName')}.</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                }
+              },
+              "runAfter": {
+                "ResolveTriggeredAlarm": [
+                  "Succeeded",
+                  "TimedOut",
+                  "Skipped",
+                  "Failed"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Add_failure_comment": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                      },
+                      "method": "post",                      "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "<p class=\"editor-paragraph\">Alarm with ID @{variables('TriggeredAlarmId')} has not been resolved on @{variables('VoneHostName')}. Reason: Function call failed or returned an error.</p>"
+                      },
+                      "path": "/Incidents/Comment"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@outputs('ResolveTriggeredAlarm')?['statusCode']",
+                        404
+                      ]
+                    }
+                  },
+                  {
+                    "not": {
+                      "equals": [
+                        "@outputs('ResolveTriggeredAlarm')?['statusCode']",
+                        500
+                      ]
+                    }
+                  }
+                ]
+              },
+              "type": "If"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionName": "[parameters('AzureSentinelConnectionName')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('AzureSentinelConnectionName'))]",
+                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

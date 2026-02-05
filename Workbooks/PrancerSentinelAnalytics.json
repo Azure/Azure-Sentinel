@@ -1,0 +1,2851 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Prancer Analytics\n---\n\n"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "85ada798-ad50-4bd2-9f51-a5dfc3cd0081",
+            "version": "KqlParameterItem/1.0",
+            "name": "Time_Range",
+            "type": 4,
+            "isRequired": true,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": {
+              "durationMs": 7776000000
+            }
+          },
+          {
+            "id": "084b679c-4ff7-479b-8cce-ff7eb6667dd1",
+            "version": "KqlParameterItem/1.0",
+            "name": "Dashboard_Mode",
+            "type": 2,
+            "isRequired": true,
+            "isGlobal": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\n    \"value\":\"pAlert\",\n    \"label\":\"Alert\"\n},\n{\n    \"value\":\"pResource\",\n    \"label\":\"Resource\"\n}]",
+            "value": "pAlert"
+          },
+          {
+            "id": "3b41aaed-330f-404a-b039-6265fddd3ae2",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscription",
+            "type": 2,
+            "query": "//union prancer_CL\n//| where deviceProduct_s == 'azure'\n//| extend Subscription = replace('\"', '', tostring(split(parse_json(data_data_snapshots_s)[0].path, \"/\")[2]))\n//| extend Subscription = \n//| summarize  by Subscription\n\nprancer_CL\n| where data_data_resourceID_s != '' and data_data_resourceID_s contains '-'\n| extend startPos = indexof(data_data_resourceID_s , \"/subscriptions/\") + strlen(\"/subscriptions/\")\n| extend endPos = indexof(data_data_resourceID_s , \"/\", startPos)\n| extend subscriptionId = substring(data_data_resourceID_s , startPos, endPos - startPos)\n| project subscriptionId\n| summarize by subscriptionId",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "Time_Range",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": null
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "\nlet TotalAlerts = prancer_CL\n    | where act_s == \"message\" and severity_s != '' and iff('{Subscription}' != \"\", data_data_resourceID_s contains '{Subscription}', true)\n    | summarize arg_max(data_data_configId_s, data_alert_name_s, data_alert_url_s) by data_data_configId_s, data_alert_name_s, data_alert_url_s, severity_s\n    | summarize count()\n    | extend AlertType = \"Application Alerts\";\nlet HighRiskAlerts = prancer_CL\n    | where act_s == \"message\" and severity_s == \"High\" and iff('{Subscription}' != \"\", data_data_resourceID_s contains '{Subscription}', true)\n    | summarize arg_max(data_data_configId_s, data_alert_name_s, data_alert_url_s) by data_data_configId_s, data_alert_name_s, data_alert_url_s\n    | summarize count()\n    | extend AlertType = \"High Risk Alerts\";\nunion TotalAlerts, HighRiskAlerts\n| project AlertType, Count = count_\n| order by AlertType desc\n\n",
+        "size": 4,
+        "timeContextFromParameter": "Time_Range",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "AlertType",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 0,
+              "options": {
+                "style": "decimal"
+              },
+              "emptyValCustomText": "Total Alerts"
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "redGreen"
+            }
+          },
+          "showBorder": true,
+          "size": "auto"
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pAlert"
+      },
+      "customWidth": "50",
+      "name": "query - 5",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//union prancer_CL\n//| where  \n//| count\n//| extend id = 1\n//| join (union prancer_CL | where act_s == \"alert\" and data_data_risk_s == \"High\" | count as highSeverityAlertCount | extend id = 1) on id\n\n//prancer_CL\n//| where act_s == \"alert\"\n//| summarize \n//    TotalAlerts = count(),\n//    HighRiskAlerts = countif(data_data_risk_s == \"High\")\n\nlet TotalAlerts = prancer_CL\n| where deviceProduct_s != 'pentesting' and data_data_result_s == 'failed' and iff('{Subscription}' != \"\", data_data_snapshots_s contains '{Subscription}', true)\n| extend snapshot = parse_json(data_data_snapshots_s)\n| mv-expand snapshot \n| extend\n    id = tostring(snapshot.id),\n    structure = tostring(snapshot.structure),\n    reference = tostring(snapshot.reference),\n    source = tostring(snapshot.source),\n    collection = tostring(snapshot.collection),\n    type = tostring(snapshot.type),\n    region = tostring(snapshot.region),\n    resourceTypes = tostring(snapshot.resourceTypes),\n    path = tostring(snapshot.path)\n| summarize arg_min(id, *) by path, data_data_title_s\n| summarize count()\n| extend AlertType = \"Total Failed Infra Alerts\";\n\nlet HighRiskAlerts = prancer_CL\n| where act_s == \"message\" and data_data_risk_s == \"High\" and iff('{Subscription}' != \"\", data_data_snapshots_s contains '{Subscription}', true)\n| summarize count()\n| extend AlertType = \"High Risk Alerts\";\n\nunion  TotalAlerts\n//HighRiskAlerts\n//| project AlertType, Count = count_\n//| order by AlertType desc\n\n",
+        "size": 4,
+        "timeContextFromParameter": "Time_Range",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "AlertType",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 0,
+              "options": {
+                "style": "decimal"
+              },
+              "emptyValCustomText": "Total Alerts"
+            }
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "redGreen"
+            }
+          },
+          "showBorder": true,
+          "size": "auto"
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pAlert"
+      },
+      "customWidth": "50",
+      "name": "query - 5 - Copy",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where act_s == \"message\" and severity_s != '' and iff('{Subscription}' != \"\", data_data_resourceID_s contains '{Subscription}', true)\n| summarize arg_max(data_data_configId_s, data_alert_name_s, data_alert_url_s) by data_data_configId_s, data_alert_name_s, data_alert_url_s, severity_s\n| summarize Count = count() by severity_s\n| extend Order = case(severity_s == \"High\", 1, severity_s == \"Medium\", 2, severity_s == \"Low\", 3, severity_s == \"Informational\", 4, 5)\n| order by Order asc\n| project severity_s, Count\n",
+        "size": 1,
+        "timeContextFromParameter": "Time_Range",
+        "exportFieldName": "series",
+        "exportParameterName": "pRisk",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar"
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pAlert"
+      },
+      "customWidth": "50",
+      "name": "query - 2",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where deviceProduct_s != 'pentesting'  and iff('{Subscription}' != \"\", data_data_snapshots_s contains '{Subscription}', true)\n| extend snapshot = parse_json(data_data_snapshots_s)\n| mv-expand snapshot \n| extend\n    id = tostring(snapshot.id),\n    structure = tostring(snapshot.structure),\n    reference = tostring(snapshot.reference),\n    source = tostring(snapshot.source),\n    collection = tostring(snapshot.collection),\n    type = tostring(snapshot.type),\n    region = tostring(snapshot.region),\n    resourceTypes = tostring(snapshot.resourceTypes),\n    path = tostring(snapshot.path)\n| summarize arg_min(id, *) by path, data_data_title_s\n| summarize count() by data_data_result_s\n",
+        "size": 0,
+        "timeContextFromParameter": "Time_Range",
+        "exportFieldName": "series",
+        "exportParameterName": "pInfraPassFail",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "categoricalbar",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "failed",
+              "color": "redBright"
+            },
+            {
+              "seriesName": "passed",
+              "color": "blue"
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pAlert"
+      },
+      "customWidth": "50",
+      "name": "query - 6",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where act_s == \"message\" and severity_s ==  '{pRisk}' and iff('{Subscription}' != \"\", data_data_resourceID_s contains '{Subscription}', true)\n| summarize arg_max(TimeGenerated, *) by name_s, data_data_url_s, data_data_param_s \n| project-rename Name = name_s, Severity = severity_s, Config_ID = data_data_configId_s, URL = data_alert_url_s, Collection = collection_s, Company = companyName_s, MITRE_ID = data_alert_mitreId_s\n",
+        "size": 0,
+        "timeContextFromParameter": "Time_Range",
+        "showRefreshButton": true,
+        "exportedParameters": [
+          {
+            "parameterName": "pAlertRow",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestHeader_s",
+            "parameterName": "pRequestHeader",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseBody_s",
+            "parameterName": "pResponseBody",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseHeader_s",
+            "parameterName": "pResponseHeader",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_tags_s",
+            "parameterName": "pTags",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Name",
+            "parameterName": "pAlertName",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Severity",
+            "parameterName": "pAlertSeverity",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "URL",
+            "parameterName": "pUrls",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_reference_s",
+            "parameterName": "pAlertReference",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_wascid_s",
+            "parameterName": "pAlertWascID",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_cweid_s",
+            "parameterName": "pAlertCWEID",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_description_s",
+            "parameterName": "pAlertDesc",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_solution_s",
+            "parameterName": "pAlertSolution",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "TimeGenerated",
+            "parameterName": "pTimeGenerated",
+            "parameterType": 1
+          }
+        ],
+        "showExportToExcel": true,
+        "exportToExcelOptions": "all",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "data_data_url_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "TenantId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "SourceSystem",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "MG",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "ManagementGroupName",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Computer",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "RawData",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_mitreId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_references_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_applicationName_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskLevel_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskProfit_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_target_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_compliance_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_authenticationMethod_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resourceID_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cvss_score_d",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_eval_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_function_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshots_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_autoRemediate_b",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterSnapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterTestId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rule_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_status_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_title_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "CEF_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVendor_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceProduct_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVersion_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "act_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "cat_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A06_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "URL",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_configId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cookieParams_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_timestamp_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_type_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rtt_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "_ResourceId",
+              "formatter": 5
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "Collection",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "Collection",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "Dashboard_Mode",
+          "comparison": "isEqualTo",
+          "value": "pAlert"
+        },
+        {
+          "parameterName": "pRisk",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where act_s == \"message\" and severity_s == '{pRisk}' and name_s == '{pAlertName}'  and iff('{Subscription}' != \"\", data_data_resourceID_s contains '{Subscription}', true)\n| project-rename Name = name_s, Severity = severity_s, Config_ID = data_data_configId_s, URL = data_alert_url_s, Collection = data_data_applicationName_s, MITRE = data_alert_mitreId_s, Company = companyName_s\n| summarize arg_max(TimeGenerated, *) by URL, Config_ID\n//| project name_s = Name, severity_s = Severity, data_data_configId_s = Config_ID, data_alert_url_s = URL, TimeGenerated\n| project Company, Collection, Name, Severity, MITRE, URL, data_alert_solution_s, data_alert_wascid_s, data_alert_cweid_s, data_data_requestBody_s, data_data_requestHeader_s, data_data_responseHeader_s, data_data_responseBody_s, data_alert_description_s, data_alert_other_s, data_alert_evidence_s\n",
+        "size": 0,
+        "timeContextFromParameter": "Time_Range",
+        "showRefreshButton": true,
+        "exportedParameters": [
+          {
+            "parameterName": "pAlertRow",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestHeader_s",
+            "parameterName": "pRequestHeader",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseBody_s",
+            "parameterName": "pResponseBody",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseHeader_s",
+            "parameterName": "pResponseHeader",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_tags_s",
+            "parameterName": "pTags",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Severity",
+            "parameterName": "pAlertSeverity",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "URL",
+            "parameterName": "pUrls",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_reference_s",
+            "parameterName": "pAlertReference",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_wascid_s",
+            "parameterName": "pAlertWASCID",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_cweid_s",
+            "parameterName": "pAlertCWEID",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_description_s",
+            "parameterName": "pAlertDesc",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_solution_s",
+            "parameterName": "pAlertSolution",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "TimeGenerated",
+            "parameterName": "pTimeGenerated",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_other_s",
+            "parameterName": "pOther",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestHeader_s",
+            "parameterName": "pRH",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestBody_s",
+            "parameterName": "pRB",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseHeader_s",
+            "parameterName": "pRsH",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseBody_s",
+            "parameterName": "pRsB",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "MITRE",
+            "parameterName": "pMitre",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_evidence_s",
+            "parameterName": "pEvidence",
+            "parameterType": 1
+          }
+        ],
+        "showExportToExcel": true,
+        "exportToExcelOptions": "all",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TenantId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "SourceSystem",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "MG",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "ManagementGroupName",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Computer",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "RawData",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_mitreId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "collection_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "companyName_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_references_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskLevel_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskProfit_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_target_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_compliance_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_authenticationMethod_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resourceID_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cvss_score_d",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_eval_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_function_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshots_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_autoRemediate_b",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterSnapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterTestId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rule_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_status_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_title_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "CEF_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVendor_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceProduct_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVersion_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "act_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "cat_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A06_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_url_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_configId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cookieParams_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_timestamp_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_type_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rtt_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "_ResourceId",
+              "formatter": 5
+            }
+          ]
+        },
+        "sortBy": []
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "Dashboard_Mode",
+          "comparison": "isEqualTo",
+          "value": "pAlert"
+        },
+        {
+          "parameterName": "pRisk",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "name": "query - 2 - Copy - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where deviceProduct_s != 'pentesting' and data_data_result_s == '{pInfraPassFail}' and iff('{Subscription}' != \"\", data_data_snapshots_s contains '{Subscription}', true)\n| extend snapshot = parse_json(data_data_snapshots_s)\n| mv-expand snapshot \n| extend id = tostring(snapshot.id),\n          structure = tostring(snapshot.structure),\n          reference = tostring(snapshot.reference),\n          source = tostring(snapshot.source),\n          collection = tostring(snapshot.collection),\n          type = tostring(snapshot.type),\n          region = tostring(snapshot.region),\n          resourceTypes = tostring(snapshot.resourceTypes),\n          path = tostring(snapshot.path)\n| extend parsedJson = parse_json(data_data_tags_s)\n| extend complianceArray = parsedJson[0].compliance\n| extend compliance = strcat_array(complianceArray, \", \")\n| where structure == 'azure'\n| project id, structure, Finding = data_data_title_s, Result = data_data_result_s, Type = type,  Region = region, Resource = path, compliance, data_data_title_s, data_data_description_s, data_data_remediation_description_s",
+        "size": 0,
+        "timeContextFromParameter": "Time_Range",
+        "exportedParameters": [
+          {
+            "fieldName": "Finding",
+            "parameterName": "pInfraTitle",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_description_s",
+            "parameterName": "pInfraDesc",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Resource",
+            "parameterName": "pInfraPath",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_remediation_description_s",
+            "parameterName": "pInfraRemediation",
+            "parameterType": 1
+          },
+          {
+            "parameterType": 1
+          },
+          {
+            "fieldName": "compliance",
+            "parameterName": "pInfraCompliance",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_remediation_description_s",
+            "parameterName": "data_data_remediation_description_s",
+            "parameterType": 1
+          }
+        ],
+        "exportToExcelOptions": "all",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "structure",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "compliance",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_title_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_description_s",
+              "formatter": 5
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "pInfraPassFail",
+        "comparison": "isNotEqualTo"
+      },
+      "name": "query - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where data_data_resourceID_s != \"\"  and data_data_cloudType_s == 'azure'\n| summarize count_unique_resourceID = dcount(data_data_resourceID_s)\n| extend label = \"Vulnerable VMs\"\n",
+        "size": 4,
+        "timeContextFromParameter": "Time_Range",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "label",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_unique_resourceID",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pResource"
+      },
+      "customWidth": "50",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where deviceProduct_s == 'azure'\n| extend Path = tostring(parse_json(data_data_snapshots_s)[0].path)\n| extend snapshot = parse_json(data_data_snapshots_s)\n| mv-expand snapshot \n| extend\n    id = tostring(snapshot.id)\n| summarize arg_min(id, *) by Path, data_data_title_s\n| summarize\n    TotalCount = count(),\n    UniqueCount = dcount(deviceProduct_s),\n    PathUniqueCount = dcount(Path)\n| project\n    Resource = \"Total Resource Alerts\",\n    Count = TotalCount,\n    UniqueCount,\n    PathUniqueCount\n",
+        "size": 4,
+        "timeContextFromParameter": "Time_Range",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Resource",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pResource"
+      },
+      "customWidth": "25",
+      "name": "query - 12 - Copy",
+      "styleSettings": {
+        "maxWidth": "25"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where deviceProduct_s == 'azure'\n| extend Path = tostring(parse_json(data_data_snapshots_s)[0].path)\n| summarize TotalCount = count(), UniqueCount = dcount(deviceProduct_s), PathUniqueCount = dcount(Path)\n| project Resource = \"<Total Count>\", Count = TotalCount, UniqueCount, PathUniqueCount, unique = 'Unique Resources'\n",
+        "size": 4,
+        "timeContextFromParameter": "Time_Range",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "unique",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "PathUniqueCount",
+            "formatter": 12,
+            "formatOptions": {
+              "min": 1,
+              "palette": "red"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pResource"
+      },
+      "customWidth": "25",
+      "name": "query - 12 - Copy - Copy",
+      "styleSettings": {
+        "maxWidth": "25"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where data_data_resourceID_s != \"\" and data_data_resourceID_s contains \"/\"  and iff('{Subscription}' != \"\", data_data_resourceID_s contains '{Subscription}', true)\n| extend Resource = data_data_resourceID_s\n| extend resourceId = tostring(split(data_data_resourceID_s, \"/\")[-1]) \n| extend Type = tostring(split(data_data_resourceID_s, \"/\")[-3])\n| extend Subscription = tostring(split(data_data_resourceID_s, \"/\")[2])\n| extend SeverityValue = case(\n    data_alert_cvss_severity_s == \"information\", 1,\n    data_alert_cvss_severity_s == \"low\", 2,\n    data_alert_cvss_severity_s == \"medium\", 3,\n    data_alert_cvss_severity_s == \"high\", 4,\n    0)\n| summarize Count = count(), MaxSeverity = arg_max(SeverityValue, data_alert_cvss_severity_s) by Resource, resourceId, Type, Subscription\n| project-rename Severity = data_alert_cvss_severity_s\n",
+        "size": 0,
+        "title": "App Findings",
+        "timeContextFromParameter": "Time_Range",
+        "exportMultipleValues": true,
+        "exportedParameters": [
+          {
+            "fieldName": "Resource",
+            "parameterName": "resourceID",
+            "parameterType": 1
+          }
+        ],
+        "exportToExcelOptions": "all",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "resourceId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "MaxSeverity",
+              "formatter": 5
+            }
+          ]
+        },
+        "sortBy": []
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pResource"
+      },
+      "customWidth": "50",
+      "name": "query - 11",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where deviceProduct_s == 'azure' and iff('{Subscription}' != \"\", data_data_snapshots_s contains '{Subscription}', true)\n| project Resource = tostring(parse_json(data_data_snapshots_s)[0].path), Type = parse_json(data_data_snapshots_s)[0].type, Subscription = tostring(split(parse_json(data_data_snapshots_s)[0].path, \"/\")[2])\n| summarize Types = make_set(Type), Subscriptions = make_set(Subscription), Count = count() by Resource",
+        "size": 0,
+        "title": "Infra findings",
+        "timeContextFromParameter": "Time_Range",
+        "exportMultipleValues": true,
+        "exportedParameters": [
+          {
+            "fieldName": "Resource",
+            "parameterName": "SI_resourceid",
+            "parameterType": 1
+          }
+        ],
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Resource",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "Dashboard_Mode",
+        "comparison": "isEqualTo",
+        "value": "pResource"
+      },
+      "customWidth": "50",
+      "name": "query - 18",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where deviceProduct_s == 'azure'\n| extend Path = parse_json(data_data_snapshots_s)[0].path\n| project-rename Result = data_data_result_s, Finding = data_data_title_s, remediation = data_data_remediation_description_s\n| order by Result asc\n//| extend Resource = tostring(split(parse_json(data_data_snapshots_s)[0].path, \"/\")[-1])\n//| extend Type = parse_json(data_data_snapshots_s)[0].type\n//| extend Subscription = tostring(split(parse_json(data_data_snapshots_s)[0].path, \"/\")[2])",
+        "size": 0,
+        "timeContextFromParameter": "Time_Range",
+        "exportedParameters": [
+          {
+            "fieldName": "Result",
+            "parameterName": "SI_result",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_snapshots_s",
+            "parameterName": "SI_Snapshot",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_severity_s",
+            "parameterName": "Si_Severity",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Finding",
+            "parameterName": "pInfraTitle",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_description_s",
+            "parameterName": "pInfraDesc",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_tags_s",
+            "parameterName": "Si_Tags",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Path",
+            "parameterName": "pInfraPath",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "remediation",
+            "parameterName": "pInfraRemediation",
+            "parameterType": 1
+          }
+        ],
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TenantId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "SourceSystem",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "MG",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "ManagementGroupName",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Computer",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "RawData",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_mitreId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_mitreId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "scanType_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_references_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cloudType_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_applicationName_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskLevel_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskProfit_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_applicationType_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_target_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_compliance_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_authenticationMethod_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resourceID_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cvss_score_d",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_eval_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "remediation",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_function_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshots_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_autoRemediate_b",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterSnapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterTestId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rule_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_status_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "CEF_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVendor_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceProduct_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVersion_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "act_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "cat_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A06_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_url_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_configId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_url_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_configId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cookieParams_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_timestamp_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_type_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rtt_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "SI_resourceid",
+        "comparison": "isNotEqualTo"
+      },
+      "name": "query - 19"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "union prancer_CL\n| where data_data_resourceID_s == replace('\"', '', '{resourceID}')\n| where name_s  != ''\n| project-rename Name = name_s, Config_ID = data_data_configId_s, URL = data_alert_url_s, Severity = data_alert_risk_s, Collection = data_data_applicationName_s, Company = companyName_s, MITRE = data_alert_mitreId_s, Description = data_alert_description_s\n| summarize arg_max(TimeGenerated, *) by Name, Config_ID, URL, Severity, Collection, Company\n| order by TimeGenerated\n",
+        "size": 0,
+        "timeContextFromParameter": "Time_Range",
+        "showRefreshButton": true,
+        "exportedParameters": [
+          {
+            "parameterName": "pAlertRow",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestHeader_s",
+            "parameterName": "pRequestHeader",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseBody_s",
+            "parameterName": "pResponseBody",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseHeader_s",
+            "parameterName": "pResponseHeader",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_tags_s",
+            "parameterName": "pTags",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Severity",
+            "parameterName": "pAlertSeverity",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "URL",
+            "parameterName": "pUrls",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_reference_s",
+            "parameterName": "pAlertReference",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_wascid_s",
+            "parameterName": "pAlertWASCID",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_cweid_s",
+            "parameterName": "pAlertCWEID",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Description",
+            "parameterName": "pAlertDesc",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_solution_s",
+            "parameterName": "pAlertSolution",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "TimeGenerated",
+            "parameterName": "pTimeGenerated",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_other_s",
+            "parameterName": "pOther",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestHeader_s",
+            "parameterName": "pRH",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_requestBody_s",
+            "parameterName": "pRB",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseHeader_s",
+            "parameterName": "pRsH",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_data_responseBody_s",
+            "parameterName": "pRsB",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "MITRE",
+            "parameterName": "pMitre",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "data_alert_evidence_s",
+            "parameterName": "pEvidence",
+            "parameterType": 1
+          },
+          {
+            "fieldName": "Name",
+            "parameterName": "pAlertName",
+            "parameterType": 1
+          }
+        ],
+        "showExportToExcel": true,
+        "exportToExcelOptions": "all",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Config_ID",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "TenantId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "SourceSystem",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "MG",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "ManagementGroupName",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Computer",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "RawData",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "collection_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_mitreId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_references_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskLevel_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_riskProfit_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_target_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_compliance_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_authenticationMethod_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resourceID_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_cvss_score_d",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cvss_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_eval_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_message_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_remediation_function_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshots_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_autoRemediate_b",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_result_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterSnapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_masterTestId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rule_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_status_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_title_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_snapshotId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "CEF_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVendor_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceProduct_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "deviceVersion_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "act_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "cat_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "severity_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A06_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_url_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_alert_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_name_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_attack_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_messageId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Description",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_evidence_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_reference_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_resultId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A08_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_solution_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_param_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_configId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_wascid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_sourceid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_pluginId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_cweid_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_id_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_cookieParams_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_requestHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseHeader_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_responseBody_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_timestamp_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_description_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_mitreId_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "companyName_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_risk_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_type_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_rtt_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_data_tags_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A05_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2021_A01_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_other_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "data_alert_tags_OWASP_2017_A03_s",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "_ResourceId",
+              "formatter": 5
+            }
+          ]
+        },
+        "sortBy": []
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "Dashboard_Mode",
+          "comparison": "isEqualTo",
+          "value": "pResource"
+        },
+        {
+          "parameterName": "resourceID",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "name": "query - 2 - Copy - Copy - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# {pAlertName}\n\n## Url: \n{pUrls}\n\n## Description: \n{pAlertDesc}\n\n{pOther}\n"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "customWidth": "75",
+      "name": "text - 4",
+      "styleSettings": {
+        "maxWidth": "75"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### SEVERITY: {pAlertSeverity}\n\n### CWE ID: {pAlertCWEID}\n\n### WASC ID: {pAlertWASCID}\n"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pMitre",
+          "comparison": "isEqualTo"
+        }
+      ],
+      "customWidth": "25",
+      "name": "text - 29",
+      "styleSettings": {
+        "maxWidth": "25"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### SEVERITY: {pAlertSeverity}\n\n### CWE ID: {pAlertCWEID}\n\n### WASC ID: {pAlertWASCID}\n\n### MITRE ID: {pMitre}\n"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pMitre",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "customWidth": "25",
+      "name": "text - 29 - Copy",
+      "styleSettings": {
+        "maxWidth": "25"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Solution: \n{pAlertSolution}\n\n"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "name": "text - 4 - Copy"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Evidence\n\n{pEvidence}",
+        "style": "info"
+      },
+      "conditionalVisibility": {
+        "parameterName": "pEvidence",
+        "comparison": "isNotEqualTo"
+      },
+      "name": "text - 36"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Request Header: \n{pRH}\n\n\n",
+        "style": "info"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pRB",
+          "comparison": "isEqualTo"
+        }
+      ],
+      "customWidth": "50",
+      "name": "text - 4 - Copy - Copy - Copy",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Request Header: \n{pRH}\n\n## Request Body:\n{pRB}\n\n",
+        "style": "info"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pRB",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "customWidth": "50",
+      "name": "text - 4 - Copy - Copy",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Response Header: \n{pRsH}\n\n## Response Body:\n{pRsB}\n\n",
+        "style": "info"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pRsB",
+          "comparison": "isNotEqualTo"
+        }
+      ],
+      "customWidth": "50",
+      "name": "text - 4 - Copy - Copy",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Response Header: \n{pRsH}\n\n\n",
+        "style": "info"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pAlertName",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pAlertDesc",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pRsB",
+          "comparison": "isEqualTo"
+        }
+      ],
+      "customWidth": "50",
+      "name": "text - 4 - Copy - Copy - Copy",
+      "styleSettings": {
+        "maxWidth": "50"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# {pInfraTitle}\n\n#### Resource Path: {pInfraPath}\n\n## Description: \n\n### {pInfraDesc}\n\n\n"
+      },
+      "conditionalVisibility": {
+        "parameterName": "pInfraTitle",
+        "comparison": "isNotEqualTo"
+      },
+      "name": "text - 10"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Remediation: \n\n### {pInfraRemediation}",
+        "style": "info"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pInfraTitle",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "pInfraPassFail",
+          "comparison": "isEqualTo",
+          "value": "failed"
+        }
+      ],
+      "name": "text - 24"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Remediation: \n\n### {pInfraRemediation}",
+        "style": "info"
+      },
+      "conditionalVisibilities": [
+        {
+          "parameterName": "pInfraTitle",
+          "comparison": "isNotEqualTo"
+        },
+        {
+          "parameterName": "Si_Severity",
+          "comparison": "isNotEqualTo",
+          "value": ""
+        }
+      ],
+      "name": "text - 24 - Copy"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-Prancer",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

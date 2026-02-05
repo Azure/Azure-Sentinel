@@ -7,17 +7,18 @@ Category: Microsoft Sentinel Parser
 FunctionName: JuniperSRX
 FunctionAlias: JuniperSRX
 FunctionQuery: |
+    let datasource = union isfuzzy=true  (datatable(Source: string)[]), (_GetWatchlist('ASimSourceType') | where SearchKey == 'JuniperSRX' | project Source);
     let LogHeader = Syslog
+    | where Computer in (datasource) or CollectorHostName in (datasource)
     | extend Parser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage)
     | mv-expand Parser
     | extend EventTimestamp = EventTime,
              DvcHostname = HostName,
-             EventType = ProcessName,
              ProcessId = ProcessID,
              Message = trim("- ",tostring(Parser[1]))
     | project-away Parser;
     let SshEvents = LogHeader
-    | where EventType =~ "sshd"
+    | where ProcessName =~ "sshd"
     | extend Parser = extract_all(@"password\sfor\s(\w+)\sfrom\s([0-9.]+)\sport\s(\d+)",dynamic([1,2,3]), Message)
     | mv-expand Parser
     | extend UserName = tostring(Parser[0]),
@@ -45,17 +46,12 @@ FunctionQuery: |
     | extend Action = iif(isempty(Action), extract(@"action\:\s([\w]+)",1, Message), Action)
     | project-away Parser;
     let IdsEvents = LogHeader
-    | where EventType == "RT_IDS"
-    | extend SrcIpAddr = extract(@"source\:\s([0-9.]+)\,?\:?(\d+)?",1, Message),
-             SrcPortNumber = toint(extract(@"source\:\s([0-9.]+)\,?\:?(\d+)?",2, Message)),
-             DstIpAddr = extract(@"destination\:\s([0-9.]+)\,?",1, Message),
-             DstPortNumber = toint(extract(@"destination\:\s([0-9.]+)\,?\:?(\d+)?",2, Message)),
-             ProtocolId = toint(extract(@"protocol-id\:\s([0-9.]+)\,",1, Message)),
+    | where ProcessName =~ "RT_IDS"
+    | extend ProtocolId = toint(extract(@"protocol-id\:\s([0-9.]+)\,",1, Message)),
              ZoneName = extract(@"zone\sname\:\s([\w]+)\,",1, Message),
-             InterfaceName = extract(@"interface\sname\:\s([\w\.]+)\,",1, Message),
-             Action = extract(@"action\:\s([\w\-\.]+)",1, Message);
+             InterfaceName = extract(@"interface\sname\:\s([\w\.]+)\,",1, Message);
     let FlowEvents = LogHeader
-    | where EventType == "RT_FLOW"
+    | where ProcessName == "RT_FLOW"
     | extend FlowEventName = extract(@"^([\w\s]+)\s(\d.*)",1, Message);
     let FlowDenyEvents = FlowEvents
     | where FlowEventName =~ 'session denied'
@@ -86,14 +82,28 @@ FunctionQuery: |
              Substring = tostring(Parser[12])
     | extend Parser2 = extract_all(@"(0x0/s)?([\S]+)\s([\S]+)\s([\S]+)\s([\S]+)\s(\d+)\s([\S]+)\s([\S]+)\s([\S]+)\s(\d+)",dynamic([1,2,3,4,5,6,7,8,9,10]), Substring)
     | mvexpand Parser2
-    | extend ProtocolId = toint(Parser2[5]),
+    | extend SrcNatRuleName = tostring(Parser2[2]),
+             DstNatRuleName = tostring(Parser2[4]),
+             ProtocolId = toint(Parser2[5]),
              PolicyName = tostring(Parser2[6]),
-             SrcNatRuleName = tostring(Parser2[7]),
-             DstNatRuleName = tostring(Parser2[8]),
+             SourceZoneName = tostring(Parser2[7]),
+             DestinationZoneName = tostring(Parser2[8]),
              SessionId = toint(Parser2[9])
     | project-away Parser, Parser2, Substring;
     let AllOtherEvents = LogHeader
-    | where EventType !in ("sshd","RT_IDS","RT_FLOW")
-    | extend EventName = extract(@"^([\w\s]+)\s(0)",1, Message);
+    | where ProcessName !in ("sshd","RT_IDS","RT_FLOW")
+    | extend EventName = extract(@"^([\w\s]+)\s(0)",1, Message)
+    | parse-kv SyslogMessage as (device_id:string, policy_id:string,  service:string, src:string, src_port:int, proto: string, ['src zone']:string, session_id:int, ['dst zone']:string, action:string, dst:string, dst_port:int) with (pair_delimiter=' ', kv_delimiter='=')
+    | project-rename ServiceName = service,
+                     SrcIpAddr = src,
+                     SrcPortNumber = src_port,
+                     SourceZoneName = ['src zone'],
+                     DstIpAddr = dst,
+                     DstPortNumber = dst_port,
+                     DestinationZoneName = ['dst zone'],
+                     SessionId = session_id,
+                     PolicyId = policy_id,
+                     DeviceID = device_id,
+                     Action = action;
     union SshEvents, IdsEvents, AllOtherEvents, FlowNotDenyEvents, FlowDenyEvents
     | extend EventName = iif(isempty(EventName), extract(@"^([\w\s]+)\s(\d.*)",1, Message), EventName)

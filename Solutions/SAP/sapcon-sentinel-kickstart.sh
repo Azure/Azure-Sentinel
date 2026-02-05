@@ -8,6 +8,82 @@ function verlt() {
 	[ "$1" = "$2" ] && return 1 || verlte $1 $2
 }
 
+function validate_guid() {
+	local input="$1"
+	local name="$2"
+	
+	if [ -z "$input" ]; then
+		return 0
+	fi
+	
+	if ! [[ "$input" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+		echo "Invalid $name: must be a valid GUID format (e.g., 12345678-1234-1234-1234-123456789012)"
+		exit 1
+	fi
+}
+
+function validate_port() {
+	local input="$1"
+	local name="$2"
+	
+	if [ -z "$input" ]; then
+		return 0
+	fi
+	
+	if ! [[ "$input" =~ ^[0-9]+$ ]] || [ "$input" -lt 1 ] || [ "$input" -gt 65535 ]; then
+		echo "Invalid $name: must be a valid port number (1-65535)"
+		exit 1
+	fi
+}
+
+function validate_sap_systemnr() {
+	local input="$1"
+	local name="$2"
+	
+	if [ -z "$input" ]; then
+		return 0
+	fi
+	
+	if ! [[ "$input" =~ ^[0-9]{2}$ ]]; then
+		echo "Invalid $name: must be exactly 2 digits (00-99)"
+		exit 1
+	fi
+}
+
+function validate_sap_client() {
+	local input="$1"
+	local name="$2"
+	
+	if [ -z "$input" ]; then
+		return 0
+	fi
+	
+	if ! [[ "$input" =~ ^[0-9]{3}$ ]]; then
+		echo "Invalid $name: must be exactly 3 digits (000-999)"
+		exit 1
+	fi
+}
+
+function validate_sap_sid() {
+	local input="$1"
+	local name="$2"
+	
+	if [ -z "$input" ]; then
+		return 0
+	fi
+	
+	# Convert to uppercase
+	input=$(echo "$input" | tr '[:lower:]' '[:upper:]')
+	
+	if ! [[ "$input" =~ ^[A-Z][A-Z0-9]{2}$ ]]; then
+		echo "Invalid $name: must be 3 characters (first letter A-Z, remaining alphanumeric)"
+		exit 1
+	fi
+	
+	# Update the variable in the caller's scope using indirect assignment
+	printf -v "$2" '%s' "$input"
+}
+
 function read_password() {
 	varname="$1"
 	while [ -z "${!varname}" ]; do
@@ -40,7 +116,7 @@ function read_password() {
 		done
 		stty echo
 		echo ""
-		eval "$1"='$PASSWORD'
+		printf -v "$1" '%s' "$PASSWORD"
 		if [ -z "${!varname}" ]; then
 			echo "Invalid value supplied for $1. Value cannot be empty. Please try again" >$(tty)
 		fi
@@ -54,7 +130,7 @@ function read_value() {
 		if [ -z "$varvalue" ]; then
 			echo "Supplied value for $2 is empty. Please try again." >$(tty)
 		fi
-		eval "$1"='$varvalue'
+		printf -v "$1" '%s' "$varvalue"
 	done
 }
 
@@ -89,8 +165,10 @@ function install_package() {
 MODE="kvmi"
 CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
+CUSTOM_CONFIGPATH=""
 TRUSTEDCA=()
 CLOUD='public'
+UPDATEPOLICY='{ "auto_update" : true }'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -99,7 +177,9 @@ while [[ $# -gt 0 ]]; do
 		shift 2
 		;;
 	--configpath)
-		CONFIGPATH="$2"
+		CUSTOM_CONFIGPATH="$2"
+		# For security, always use /opt. Custom path migration shown at end.
+		CONFIGPATH="/opt"
 		shift 2
 		;;
 	--connectionmode)
@@ -112,14 +192,21 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--systemnr)
 		SYSTEMNR="$2"
+		validate_sap_systemnr "$SYSTEMNR" "System Number (--systemnr)"
 		shift 2
 		;;
 	--sid)
 		SID="$2"
+		validate_sap_sid "$SID" "SID"
 		shift 2
+		;;
+    --hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--clientnumber)
 		CLIENTNUMBER="$2"
+		validate_sap_client "$CLIENTNUMBER" "Client Number (--clientnumber)"
 		shift 2
 		;;
 	--messageserverhost)
@@ -128,6 +215,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--messageserverport)
 		MESSAGESERVERPORT="$2"
+		validate_port "$MESSAGESERVERPORT" "Message Server Port (--messageserverport)"
 		shift 2
 		;;
 	--logongroup)
@@ -149,6 +237,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--appid)
 		APPID="$2"
+		validate_guid "$APPID" "Application ID (--appid)"
 		shift 2
 		;;
 	--appsecret)
@@ -157,6 +246,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--tenantid)
 		TENANT="$2"
+		validate_guid "$TENANT" "Tenant ID (--tenantid)"
 		shift 2
 		;;
 	--kvaultname)
@@ -165,6 +255,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--loganalyticswsid)
 		logwsid="$2"
+		validate_guid "$logwsid" "Log Analytics Workspace ID (--loganalyticswsid)"
 		shift 2
 		;;
 	--loganalyticskey)
@@ -265,6 +356,7 @@ while [[ $# -gt 0 ]]; do
 		echo "--abapserver <servername>"
 		echo "--systemnr <system number>"
 		echo "--sid <SID>"
+  		echo "--hostnetwork"
 		echo "--clientnumber <client number>"
 		echo "--messageserverhost <servername>"
 		echo "--messageserverport <servername>"
@@ -387,6 +479,23 @@ if [ "$CLOUD" != 'public' ] && [  "$CLOUD" != 'fairfax' ] && [  "$CLOUD" != 'moo
 fi
 
 # End of parameter validation
+
+# Deprecation Warning
+echo ''
+echo '************************************************************'
+echo '*** ATTENTION: The Sentinel SAP Agent is now deprecated and will no longer ingest logs in September 2026.'
+echo '*** Customers must now use the Agentless connector for continued support.'
+echo '************************************************************'
+echo ''
+if [ ! "$CONFIRMALL" ]; then
+	read -r -p 'Do you wish to proceed? (Yes/No): ' PROCEED_RESPONSE
+	if [ "${PROCEED_RESPONSE,,}" != "yes" ]; then
+		echo 'Installation cancelled.'
+		exit 0
+	fi
+fi
+echo ''
+
 echo '
 ************************************************************
 THIS INSTALLATION SCRIPT WILL USE ROOT ACCESS TO:
@@ -411,12 +520,9 @@ In order to complete the installation process, you need:
 
 - SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
 
-- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
-
-Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
-- SAP Basis versions 7.5 and higher:  install NPLK900180
-- SAP Basis version 7.4:  install NPLK900179
-- To create your SAP role in any SAP version: install NPLK900163
+- SAP change requests: To enable support for ingesting specific SAP logs into Microsoft Sentinel, you may need to configure additional SAP log change requests. 
+  Some change requests are mandatory for proper integration. 
+  Please consult our documentation to identify which CRs are required and which ones are recommended based on your environment.
 
 Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
@@ -431,6 +537,7 @@ pause '[Press enter to agree and proceed as we guide you through the installatio
 #Globals
 containername=sapcon
 sysconf=systemconfig.json
+settingsjson=settings.json
 
 os=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID" {print $2}')
 ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | awk '{print substr($0, 2, length($0) - 2) }')
@@ -495,7 +602,7 @@ elif [ "$os" == '"sles"' ]; then
 		if which az >/dev/null 2>&1; then
 			#AZ is installed, check if it is out-of date version with compatibility issues
 			azver=$(az version | jq '."azure-cli"')
-			if verlte "2.33.1" "$azver"; then
+			if verlte "$azver" "2.33.1"; then
 				echo "Installed version $azver is out of date, removing older version"
 				sudo zypper rm -y --clean-deps azure-cli >/dev/null
 				echo "Installing Azure CLI"
@@ -543,6 +650,14 @@ if { [ "$MODE" == 'kvmi' ] && [ -z "$kv" ]; } || { [ "$MODE" == 'kvsi' ] && [ -z
 	read_value kv "KeyVault Name"
 fi
 
+validateKeyVault() {
+	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
+	if [ ! $? -eq 0 ]; then
+		echo "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
+		exit 1
+	fi
+}
+
 if [ "$MODE" == "kvmi" ]; then
 	echo "Validating Azure managed identity"
 	az login --identity --allow-no-subscriptions >/dev/null 2>&1
@@ -550,6 +665,7 @@ if [ "$MODE" == "kvmi" ]; then
 		printf 'VM is not set with managed identity or the AZ client was not installed correctly.\nSet and grant relevant Key Vault permissions and make sure that Azure CLI is installed by running "az login"\nFor more information check - https://docs.microsoft.com/cli/azure/install-azure-cli'
 		exit 1
 	fi
+	validateKeyVault
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Validating service principal identity"
 	az login --service-principal -u "$APPID" -p "$APPSECRET" --tenant "$TENANT" --allow-no-subscriptions >/dev/null 2>&1
@@ -557,11 +673,32 @@ elif [ "$MODE" == "kvsi" ]; then
 		echo "Logon with $APPID failed, please check application ID, secret and tenant ID. Ensure the application has been added as an enterprise application"
 		exit 1
 	fi
-	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		echo "Cannot connect to keyvault $kv. Make sure application $APPID has been granted privileges to the keyvault"
-		exit 1
+	validateKeyVault
+fi
+
+# If $HTTPPROXY is set, configure the Docker Daemon to explicitly use it;
+# otherwise, Docker commands (e.g., 'docker pull') will ignore any proxy settings defined at the OS level.
+if [ -n "$HTTPPROXY" ]; then
+	# https://docs.docker.com/engine/daemon/proxy/#systemd-unit-file
+	if ! sudo mkdir -p /etc/systemd/system/docker.service.d; then
+			echo "Error: Failed to create directory /etc/systemd/system/docker.service.d"
+			exit 1
 	fi
+
+		if ! sudo tee /etc/systemd/system/docker.service.d/http-proxy.conf > /dev/null <<EOF
+[Service]
+Environment="HTTP_PROXY=${HTTPPROXY}"
+Environment="HTTPS_PROXY=${HTTPPROXY}"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+	then
+			echo "Error: Failed to write /etc/systemd/system/docker.service.d/http-proxy.conf"
+			exit 1
+	fi
+
+	echo "Proxy $HTTPPROXY successfully configured, restarting Docker Daemon..."
+	sudo systemctl daemon-reload
+	sudo systemctl restart docker
 fi
 
 echo 'Deploying Azure Sentinel SAP data connector.'
@@ -591,6 +728,8 @@ if [ -z "$SID" ]; then
 		echo 'Invalid SID, SID length should be 3'
 		read -r -p 'SID: ' SID
 	done
+	SID=$(echo "$SID" | tr '[:lower:]' '[:upper:]')
+	validate_sap_sid "$SID" "SID"
 fi
 
 if [ -z "$CLIENTNUMBER" ]; then
@@ -599,6 +738,7 @@ if [ -z "$CLIENTNUMBER" ]; then
 		echo 'Invalid Client number, Client number length should be 3'
 		read -r -p 'Client: ' CLIENTNUMBER
 	done
+	validate_sap_client "$CLIENTNUMBER" "Client Number"
 fi
 
 if [ "$CONNECTIONMODE" == 'abap' ] && [ ! $USESNC ]; then
@@ -652,8 +792,8 @@ if [ $USESNC ]; then
 
 	if [ -f "$CLIENTPFX" ]; then
 		#PFX file exists. unpack it
-		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -nodes -passin pass:$CLIENTPFXPWD
-		MYCERT=$(openssl pkcs12 -info -in "$CLIENTPFX" -nodes -nokeys -clcerts -passin pass:$CLIENTPFXPWD | awk '/-----BEGIN/{a=1}/-----END/{print;a=0}a' | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
+		openssl pkcs12 -in "$CLIENTPFX" -out "$sysfileloc"sec/client.p12 -nodes -passin "pass:$CLIENTPFXPWD"
+		MYCERT=$(openssl pkcs12 -info -in "$CLIENTPFX" -nodes -nokeys -clcerts -passin "pass:$CLIENTPFXPWD" | awk '/-----BEGIN/{a=1}/-----END/{print;a=0}a' | tr -d '\r\n' | sed -E 's/-+BEGIN CERTIFICATE-+//' | sed -E 's/-+END CERTIFICATE-+//' | sed 's/\//\\\//g')
 	fi
 
 	if [ ! -f "$CLIENTPFX" ]; then
@@ -775,29 +915,66 @@ if [ $? -eq 0 ]; then
 	sudo docker stop "$containername" >/dev/null
 	sudo docker container rm "$containername" >/dev/null
 fi
-sncline=""
-if [ $USESNC ]; then
-	sncline="-e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
-fi
 
-if [ -n "$HTTPPROXY" ]; then
-	httpproxyline="-e HTTP_PROXY=$HTTPPROXY"
-fi
-cmdparams=" --label Cloud=$CLOUD"
-# Generating SENTINEL_AGENT_GUID
-cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
+# Build base container parameters (safe, validated values only)
+cmdparams=("--label" "Cloud=$CLOUD" "-e" "SENTINEL_AGENT_GUID=$(uuidgen)")
 
 if [ "$MODE" == "kvmi" ]; then
 	echo "Creating docker container for use with Azure Key vault and managed VM identity"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system "${cmdparams[@]}" --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Creating docker container for use with Azure Key vault and application authentication"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system "${cmdparams[@]}" -e AZURE_CLIENT_ID="$APPID" -e AZURE_CLIENT_SECRET="$APPSECRET" -e AZURE_TENANT_ID="$TENANT" --name "$containername" $dockerimage$tagver >/dev/null
 elif [ "$MODE" == "cfgf" ]; then
 	echo "Creating docker container for use with secrets in config file"
-	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams $sncline $httpproxyline --name "$containername" $dockerimage$tagver >/dev/null
+	sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system "${cmdparams[@]}" --name "$containername" $dockerimage$tagver >/dev/null
 fi
 echo 'Azure Sentinel SAP connector was updated for instance '"$intprefix"
+
+# Show additional configuration instructions if user specified advanced options
+if [ $USESNC ] || [ -n "$HTTPPROXY" ] || [ $HOSTNETWORK ]; then
+	echo ""
+	echo "═══════════════════════════════════════════════════════════════════════════"
+	echo "ADDITIONAL CONFIGURATION REQUIRED"
+	echo "═══════════════════════════════════════════════════════════════════════════"
+	echo ""
+	echo "You specified advanced options that require manual configuration."
+	echo "Run the following commands to apply them:"
+	echo ""
+	echo "  sudo docker stop \"$containername\""
+	echo "  sudo docker rm \"$containername\""
+	echo -n "  sudo docker create -v \"$sysfileloc\":/sapcon-app/sapcon/config/system"
+	echo -n " --label Cloud=$CLOUD"
+	echo -n " -e SENTINEL_AGENT_GUID=$(sudo docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$containername" 2>/dev/null | grep SENTINEL_AGENT_GUID | cut -d= -f2)"
+	
+	if [ $USESNC ]; then
+		echo -n " -e SECUDIR=/sapcon-app/sapcon/config/system/sec/"
+	fi
+	
+	if [ -n "$HTTPPROXY" ]; then
+		echo -n " -e HTTP_PROXY='$HTTPPROXY'"
+		echo -n " -e HTTPS_PROXY='$HTTPPROXY'"
+		echo -n " -e NO_PROXY=169.254.169.254"
+	fi
+	
+	if [ $HOSTNETWORK ]; then
+		echo -n " --network host"
+	fi
+	
+	if [ "$MODE" == "kvsi" ]; then
+		echo -n " -e AZURE_CLIENT_ID=\"$APPID\""
+		echo -n " -e AZURE_CLIENT_SECRET=\"$APPSECRET\""
+		echo -n " -e AZURE_TENANT_ID=\"$TENANT\""
+	fi
+	
+	echo -n " --name \"$containername\""
+	echo " $dockerimage$tagver"
+	echo "  sudo docker start \"$containername\""
+	echo ""
+	echo "Review the command above before executing. Verify all values are correct."
+	echo "═══════════════════════════════════════════════════════════════════════════"
+	echo ""
+fi
 
 sudo docker cp "$containername":/sapcon-app/template/systemconfig-kickstart-blank.json "$sysfileloc$sysconf"
 if [ ! $? -eq 0 ]; then
@@ -828,10 +1005,60 @@ jq --arg sysnr "$SYSTEMNR" '.abap_central_instance += {"sysnr": $sysnr}' "$sysfi
 jq --arg client "$CLIENTNUMBER" '.abap_central_instance += {"client": $client}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 jq --arg sysid "$SID" '.abap_central_instance += {"sysid": $sysid}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
+# Show CONFIGPATH migration instructions if custom path was specified
+if [ -n "$CUSTOM_CONFIGPATH" ]; then
+	CUSTOM_SYSFILELOC="$CUSTOM_CONFIGPATH/$containername/$intprefix/"
+	ACTUAL_GUID=$(sudo docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$containername" 2>/dev/null | grep SENTINEL_AGENT_GUID | cut -d= -f2)
+	echo ""
+	echo "═══════════════════════════════════════════════════════════════════════════"
+	echo "CUSTOM CONFIGURATION PATH SPECIFIED"
+	echo "═══════════════════════════════════════════════════════════════════════════"
+	echo ""
+	echo "You specified: --configpath $CUSTOM_CONFIGPATH"
+	echo "Configuration files were created in: $sysfileloc"
+	echo ""
+	echo "To migrate to your custom path, run these commands:"
+	echo ""
+	echo "  # 1. Stop and remove the container"
+	echo "  sudo docker stop \"$containername\""
+	echo "  sudo docker rm \"$containername\""
+	echo ""
+	echo "  # 2. Move configuration files to custom location"
+	echo "  sudo mkdir -p \"$CUSTOM_SYSFILELOC\""
+	echo "  sudo mv \"$sysfileloc\"* \"$CUSTOM_SYSFILELOC\""
+	echo "  sudo rmdir \"$sysfileloc\""
+	echo ""
+	echo "  # 3. Recreate container with new mount path"
+	echo -n "  sudo docker create -v \"$CUSTOM_SYSFILELOC\":/sapcon-app/sapcon/config/system"
+	echo -n " --label Cloud=$CLOUD"
+	echo -n " -e SENTINEL_AGENT_GUID=$ACTUAL_GUID"
+	if [ "$MODE" == "kvsi" ]; then
+		echo -n " -e AZURE_CLIENT_ID=\"$APPID\""
+		echo -n " -e AZURE_CLIENT_SECRET=\"$APPSECRET\""
+		echo -n " -e AZURE_TENANT_ID=\"$TENANT\""
+	fi
+	echo -n " --name \"$containername\""
+	echo " $dockerimage$tagver"
+	echo ""
+	echo "  # 4. Start the container"
+	echo "  sudo docker start \"$containername\""
+	echo ""
+	echo "═══════════════════════════════════════════════════════════════════════════"
+	echo ""
+fi
+
 if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
     jq '.secrets_source += {"secrets": "AZURE_KEY_VAULT"}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg intprefix "$intprefix" '.secrets_source += {"intprefix": $intprefix}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg keyvault "$kv" '.secrets_source += {"keyvault": $keyvault}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
+
+	log 'Setting secrets in Azure Key Vault'
+	log 'Please sign-in with a user that has access to set secrets in Azure Key Vault.'
+	az login
+	if [ ! $? -eq 0 ]; then
+		echo 'Unable to sign-in to Azure. Exiting.'
+		exit 1
+	fi
 
 	if [ ! $USESNC ]; then
 		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
@@ -840,7 +1067,7 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
 		log 'Unable to set secrets in Azure Key Vault'
-		log 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
+		log 'Make sure user identity has permission to set secrets in the Key Vault.'
 		exit 1
 	fi
 	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null
@@ -872,6 +1099,9 @@ fi
 jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 ### end of json config creation
+
+# #populate settings.json
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 echo 'System information and credentials Has been Updated'
 

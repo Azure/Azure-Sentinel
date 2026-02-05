@@ -1,0 +1,276 @@
+Parser:
+  Title: Network Session ASIM parser for Palo Alto Cortex Data Lake
+  Version: '0.1.1'
+  LastUpdated: Mar 07 2024
+Product:
+  Name: Palo Alto Cortex Data Lake
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Palo Alto Cortex Data Lake Documentation
+- Link: https://docs.paloaltonetworks.com/cortex/cortex-data-lake/log-forwarding-schema-reference/network-logs/network-traffic-log
+Description: |
+  This ASIM parser supports normalizing NetworkSession logs from Palo Alto Cortex Data Lake to the ASIM NetworkSession normalized schema. These events are captured through the Palo Alto Networks CDL data connector that ingests CDL logs into Microsoft Sentinel.
+ParserName: ASimNetworkSessionPaloAltoCortexDataLake
+EquivalentBuiltInParser: _ASim_NetworkSession_PaloAltoCortexDataLake
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Low",
+      "5", "Low",
+      "6", "Medium",
+      "7", "Medium",
+      "8", "Medium",
+      "9", "High",
+      "10", "High"
+  ];
+  let EventResultDvcActionLookup = datatable (
+      DeviceAction: string,
+      DvcAction: string,
+      EventResult: string
+  )
+      [
+      "allow", "Allow", "Success",
+      "deny", "Deny", "Failure",
+      "reset client", "Reset Source", "Failure",
+      "reset server", "Reset Destination", "Failure",
+      "reset both", "Reset", "Failure",
+      "drop", "Drop", "Failure",
+      "drop ICMP", "Drop ICMP", "Failure",
+      "reset-both", "Reset", "Failure"
+  ];
+  let EventResultDetailsLookup = datatable(Reason: string, EventResultDetails: string)[
+      "threat", "Reset",
+      "policy-deny", "Unknown",
+      "decrypt-cert-validation", "Terminated",
+      "decrypt-unsupport-param", "Terminated",
+      "decrypt-error", "Terminated",
+      "tcp-rst-from-client", "Reset",
+      "tcp-rst-from-server", "Reset",
+      "resources-unavailable", "Unknown",
+      "tcp-fin", "Unknown",
+      "tcp-reuse", "Unknown",
+      "decoder", "Unknown",
+      "aged-out", "Unknown",
+      "unknown", "Unknown",
+      "n/a", "NA",
+  ];
+  let ThreatRiskLevelLookup = datatable(PanOSApplicationRisk: string, ThreatRiskLevel: int)
+      [
+      "1", 20,
+      "2", 40,
+      "3", 60,
+      "4", 80,
+      "5", 100
+  ];
+  let parser = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+          and DeviceVendor == "Palo Alto Networks" and DeviceProduct == "LF"
+          and DeviceEventClassID == "TRAFFIC"
+      | parse-kv AdditionalExtensions as (PanOSSessionStartTime: string, PanOSDestinationDeviceHost: string, PanOSSourceDeviceHost: string, PanOSDestinationUUID: string, PanOSDestinationLocation: string, PanOSSourceUUID: string, PanOSDestinationDeviceMac: string, PanOsBytes: long, PanOSIsClienttoServer: string, PanOSSourceLocation: string, PanOSSourceDeviceMac: string, PanOSPacketsReceived: long, PanOSPacketsSent: long, PanOSRuleUUID: int, PanOSApplicationCategory: string, PanOSApplicationSubcategory: string, PanOSChunksReceived: string, PanOSChunksSent: string, PanOSChunksTotal: string, PanOSApplicationContainer: string, PanOSDestinationDeviceCategory: string, PanOSLinkChangeCount: string, PanOSLinkSwitches: string, PanOSLogSource: string, PanOSNSSAINetworkSliceDifferentiator: string, PanOSNSSAINetworkSliceType: string, PanOSOutboundInterfaceDetailsPort: string, PanOSOutboundInterfaceDetailsSlot: string, PanOSOutboundInterfaceDetailsType: string, PanOSOutboundInterfaceDetailsUnit: string, PanOSParentSessionID: string, PanOsRuleUUID: string, PanOSSourceDeviceOS: string, PanOSSourceDeviceOSFamily: string, PanOSSourceDeviceOSVersion: string, PanOSSourceDeviceCategory: string, PanOSVirtualSystemID: string, PanOSVirtualSystemName: string, PanOSCortexDataLakeTenantID: string, PanOSApplicationRisk: string, PanOSIsSaaSApplication: string) with (pair_delimiter=";", kv_delimiter="=")
+      | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+      | invoke _ASIM_ResolveDstFQDN('PanOSDestinationDeviceHost')
+      | invoke _ASIM_ResolveSrcFQDN('PanOSSourceDeviceHost')
+      | lookup EventResultDvcActionLookup on DeviceAction
+      | lookup EventSeverityLookup on LogSeverity
+      | lookup EventResultDetailsLookup on Reason
+      | lookup ThreatRiskLevelLookup on PanOSApplicationRisk
+      | extend
+          EventStartTime = todatetime(PanOSSessionStartTime),
+          SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
+          DstIpAddr = coalesce(DestinationIP, DeviceCustomIPv6Address3),
+          NetworkSessionId = tostring(FieldDeviceCustomNumber1),
+          NetworkDuration = toint(FieldDeviceCustomNumber3),
+          DstBytes = tolong(ReceivedBytes),
+          SrcBytes = tolong(SentBytes),
+          SrcDomain = coalesce(SourceNTDomain, SrcDomain),
+          DstDomain = coalesce(DestinationNTDomain, DstDomain),
+          AdditionalFields = bag_pack(
+                        "urlcategory",
+                        DeviceCustomString2,
+                        "virtualLocation",
+                        DeviceCustomString3,
+                        "PanOSApplicationCategory",
+                        PanOSApplicationCategory,
+                        "PanOSApplicationSubcategory",
+                        PanOSApplicationSubcategory,
+                        "PanOSChunksReceived",
+                        PanOSChunksReceived,
+                        "PanOSChunksSent",
+                        PanOSChunksSent,
+                        "PanOSChunksTotal",
+                        PanOSChunksTotal,
+                        "PanOSApplicationContainer",
+                        PanOSApplicationContainer,
+                        "PanOSDestinationDeviceCategory",
+                        PanOSDestinationDeviceCategory,
+                        "PanOSIsClienttoServer",
+                        PanOSIsClienttoServer,
+                        "PanOSLinkChangeCount",
+                        PanOSLinkChangeCount,
+                        "PanOSLinkSwitches",
+                        PanOSLinkSwitches,
+                        "PanOSLogSource",
+                        PanOSLogSource,
+                        "PanOSNSSAINetworkSliceDifferentiator",
+                        PanOSNSSAINetworkSliceDifferentiator,
+                        "PanOSNSSAINetworkSliceType",
+                        PanOSNSSAINetworkSliceType,
+                        "PanOSOutboundInterfaceDetailsPort",
+                        PanOSOutboundInterfaceDetailsPort,
+                        "PanOSOutboundInterfaceDetailsSlot",
+                        PanOSOutboundInterfaceDetailsSlot,
+                        "PanOSOutboundInterfaceDetailsType",
+                        PanOSOutboundInterfaceDetailsType,
+                        "PanOSOutboundInterfaceDetailsUnit",
+                        PanOSOutboundInterfaceDetailsUnit,
+                        "PanOSParentSessionID",
+                        PanOSParentSessionID,
+                        "PanOsRuleUUID",
+                        PanOsRuleUUID,
+                        "PanOSSourceDeviceOS",
+                        PanOSSourceDeviceOS,
+                        "PanOSSourceDeviceOSFamily",
+                        PanOSSourceDeviceOSFamily,
+                        "PanOSSourceDeviceOSVersion",
+                        PanOSSourceDeviceOSVersion,
+                        "PanOSSourceDeviceCategory",
+                        PanOSSourceDeviceCategory,
+                        "PanOSVirtualSystemID",
+                        PanOSVirtualSystemID,
+                        "PanOSVirtualSystemName",
+                        PanOSVirtualSystemName
+                    )
+      | project-rename
+          DvcIpAddr = Computer,
+          EventUid = _ItemId,
+          DstDvcId = PanOSDestinationUUID,
+          DstGeoCountry = PanOSDestinationLocation,
+          DstMacAddr = PanOSDestinationDeviceMac,
+          DstNatIpAddr = DestinationTranslatedAddress,
+          DstNatPortNumber = DestinationTranslatedPort,
+          DstPackets = PanOSPacketsReceived,
+          DstPortNumber = DestinationPort,
+          DstUsername = DestinationUserName,
+          DvcId = DeviceExternalID,
+          DvcOriginalAction = DeviceAction,
+          EventOriginalSeverity = LogSeverity,
+          DstZone = DeviceCustomString5,
+          EventOriginalType = DeviceEventClassID,
+          EventOriginalUid = ExtID,
+          EventProductVersion = DeviceVersion,
+          NetworkPackets = FieldDeviceCustomNumber2,
+          NetworkRuleName = DeviceCustomString1,
+          SrcDvcId = PanOSSourceUUID,
+          SrcGeoCountry = PanOSSourceLocation,
+          SrcMacAddr = PanOSSourceDeviceMac,
+          SrcNatIpAddr = SourceTranslatedAddress,
+          SrcNatPortNumber = SourceTranslatedPort,
+          SrcPackets = PanOSPacketsSent,
+          SrcPortNumber = SourcePort,
+          SrcUsername = SourceUserName,
+          SrcZone = DeviceCustomString4,
+          DvcScopeId = PanOSCortexDataLakeTenantID,
+          EventOriginalSubType = Activity,
+          DstUserId = DestinationUserID,
+          EventOriginalResultDetails = Reason,
+          SrcUserId = SourceUserID,
+          DvcInboundInterface = DeviceInboundInterface,
+          DvcOutboundInterface = DeviceOutboundInterface,
+          SrcAppName = ApplicationProtocol,
+          ThreatOriginalRiskLevel = PanOSApplicationRisk
+      | extend
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          Dst = coalesce(DstDvcId, DstHostname, DstIpAddr),
+          Src = coalesce(SrcDvcId, SrcHostname, SrcIpAddr),
+          DstUserType = _ASIM_GetUserType(DstUsername, ""),
+          NetworkProtocol = toupper(Protocol),
+          NetworkBytes = SrcBytes + DstBytes,
+          NetworkProtocolVersion = case(
+                              DstIpAddr contains ".",
+                              "IPv4",       
+                              DstIpAddr contains ":",
+                              "IPv6", 
+                              ""
+                          ),
+          NetworkDirection = iff(PanOSIsClienttoServer == "true", "Outbound", "Inbound"),
+          Rule = NetworkRuleName,
+          SrcUserType = _ASIM_GetUserType(SrcUsername, ""),
+          DstUsernameType = _ASIM_GetUsernameType(DstUsername),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          Duration = NetworkDuration,
+          IpAddr = SrcIpAddr,
+          SessionId = NetworkSessionId,
+          User = DstUsername,
+          Hostname = DstHostname,
+          SrcDvcIdType = iff(isnotempty(SrcDvcId), "Other", ""),
+          DstDvcIdType = iff(isnotempty(DstDvcId), "Other", ""),
+          SrcDomainType = iff(isnotempty(SourceNTDomain), "Windows", SrcDomainType),
+          DstDomainType = iff(isnotempty(DestinationNTDomain), "Windows", DstDomainType),
+          DstUserIdType = iff(isnotempty(DstUserId), "UID", ""),
+          SrcUserIdType = iff(isnotempty(SrcUserId), "UID", ""),
+          SrcAppType = case(
+                  isnotempty(SrcAppName) and PanOSIsSaaSApplication == "true",
+                  "SaaS Application",
+                  isnotempty(SrcAppName) and PanOSIsSaaSApplication == "false",
+                  "Other",
+                  ""
+              )
+      | extend
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "NetworkSession",
+          EventProduct = "Cortex Data Lake",
+          EventVendor = "Palo Alto"
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          EventOutcome,
+          PanOS*,
+          PanOs*,
+          Protocol,
+          SimplifiedDeviceAction,
+          ExternalID,
+          Message,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          StartTime,
+          TenantId,
+          ReportReferenceLink,
+          ReceiptTime,
+          Indicator*,
+          _ResourceId,
+          ThreatConfidence,
+          ThreatDescription,
+          ThreatSeverity
+  };
+  parser(disabled=disabled)

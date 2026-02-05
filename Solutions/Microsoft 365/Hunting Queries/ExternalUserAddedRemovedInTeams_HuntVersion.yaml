@@ -1,5 +1,5 @@
 id: 119d9e1c-afcc-4d23-b239-cdb4e7bf851c
-name: External user added and removed in a short timeframe - Hunt Version
+name: External user added and removed in a short timeframe
 description: |
   'This hunting query identifies external user accounts that are added to a Team and then removed within one hour.'
 requiredDataConnectors:
@@ -11,7 +11,6 @@ tactics:
 relevantTechniques:
   - T1136
 query: |
-
   // If you want to look at user added further than 7 days ago adjust this value
   // If you want to change the timeframe of how quickly accounts need to be added and removed change this value
   let time_delta = 1h;
@@ -21,7 +20,7 @@ query: |
   | extend UPN = tostring(parse_json(Members)[0].UPN)
   | where UPN contains ("#EXT#")
   | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName, TeamGuid
-  | join (
+  | join kind=innerunique (
   OfficeActivity
   | where OfficeWorkload =~ "MicrosoftTeams" 
   | where Operation =~ "MemberRemoved"
@@ -30,10 +29,14 @@ query: |
   | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName, TeamGuid) on UPN, TeamGuid
   | where TimeDeleted < (TimeAdded + time_delta)
   | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName, TeamGuid
-  | extend timestamp = TimeAdded, AccountCustomEntity = UPN
+  | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+  | extend Account_0_Name = AccountName
+  | extend Account_0_UPNSuffix = AccountUPNSuffix
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 2.0.0
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1

@@ -1,0 +1,134 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location of the Log Analytics workspace"
+      }
+    }
+  },
+  "variables": {
+    "customTable": "[format('Custom-{0}', 'NordPassEventLogs_CL')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2021-04-01",
+      "name": "NordPass",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2021-09-01-preview",
+      "name": "NordPass",
+      "location": "[parameters('location')]",
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'NordPass')]",
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+              "name": "[parameters('workspaceName')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('customTable')]"
+            ],
+            "destinations": [
+              "[parameters('workspaceName')]"
+            ],
+            "outputStream": "[variables('customTable')]",
+            "transformKql": "source | extend TimeGenerated = now()"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', 'NordPass')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'NordPassEventLogs_CL')]"
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2023-09-01",
+      "name": "[concat(parameters('workspaceName'), '/NordPassEventLogs_CL')]",
+      "properties": {
+        "schema": {
+          "name": "NordPassEventLogs_CL",
+          "columns": [
+            {
+              "name": "action",
+              "type": "string"
+            },
+            {
+              "name": "initiator",
+              "type": "string"
+            },
+            {
+              "name": "metadata",
+              "type": "dynamic"
+            },
+            {
+              "name": "organization_uuid",
+              "type": "string"
+            },
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "timestamp",
+              "type": "long"
+            },
+            {
+              "name": "user_email",
+              "type": "string"
+            },
+            {
+              "name": "user_uuid",
+              "type": "string"
+            },
+            {
+              "name": "event_type",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "dataCollectionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'NordPass'), '2021-04-01').logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'NordPass'), '2021-04-01').immutableId]"
+    },
+    "dcrEndpointUri": {
+      "type": "string",
+      "value": "[format('{0}/dataCollectionRules/{1}/streams/{2}?api-version=2021-11-01-preview', reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', 'NordPass'), '2021-04-01').logsIngestion.endpoint, reference(resourceId('Microsoft.Insights/dataCollectionRules', 'NordPass'), '2021-09-01-preview').immutableId, variables('customTable'))]"
+    },
+    "tableName": {
+      "type": "string",
+      "value": "[variables('customTable')]"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 id: feb0a2fb-ae75-4343-8cbc-ed545f1da289
 name: Authentication Method Changed for Privileged Account
 description: |
-  'Identifies authentication methods being changed for a privileged account. This could be an indicated of an attacker adding an auth method to the account so they can have continued access.
+  'Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.
   Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
 severity: High
 requiredDataConnectors:
@@ -10,9 +10,9 @@ requiredDataConnectors:
       - AuditLogs
   - connectorId: BehaviorAnalytics
     dataTypes:
-      - BehaviorAnalytics
+      - IdentityInfo
 queryFrequency: 2h
-queryPeriod: 2h
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -22,23 +22,50 @@ relevantTechniques:
 tags:
   - AADSecOpsGuide
 query: |
-  let VIPUsers = (IdentityInfo
-  | where AssignedRoles contains "Admin"
-  | summarize by tolower(AccountUPN));
-  AuditLogs
-  | where Category =~ "UserManagement"
-  | where ActivityDisplayName =~ "User registered security info"
-  | where LoggedByService =~ "Authentication Methods"
-  | extend AccountCustomEntity = tostring(TargetResources[0].userPrincipalName), IPCustomEntity = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-  | where AccountCustomEntity in (VIPUsers)
+    let VIPUsers = (IdentityInfo
+    | where AssignedRoles contains "Admin"
+    | summarize by tolower(AccountUPN));
+    AuditLogs
+    | where TimeGenerated > ago(2h)
+    | where Category =~ "UserManagement"
+    | where ActivityDisplayName =~ "User registered security info"
+    | where LoggedByService =~ "Authentication Methods"
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | where tolower(TargetUserPrincipalName) in (VIPUsers)
+    | extend TargetAadUserId = tostring(TargetResources[0].id)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: TargetUserPrincipalName
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: InitiatingIPAddress
+version: 1.0.5
 kind: Scheduled

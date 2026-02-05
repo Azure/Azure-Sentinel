@@ -73,9 +73,7 @@ class AzureSentinel:
                 "Error while generating signature for posting data into log analytics."
             )
         uri = (
-            "https://"
-            + customer_id
-            + ".ods.opinsights.azure.com"
+            consts.LOG_ANALYTICS_URL
             + resource
             + "?api-version=2016-04-01"
         )

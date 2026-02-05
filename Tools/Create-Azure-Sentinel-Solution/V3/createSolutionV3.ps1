@@ -1,5 +1,25 @@
+
+param(
+    [string]$SolutionDataFolderPath = $null,
+    [ValidateSet("catalog", "local")]
+    [string]$VersionMode = "catalog",
+    [ValidateSet("patch", "minor", "major")]
+    [string]$VersionBump = "patch"
+)
+
 Write-Host '=======Starting Package Creation using V3 tool========='
-$path = Read-Host "Enter solution data file path "
+Write-Host "Version Mode: $VersionMode"
+if ($VersionMode -eq "local") {
+    Write-Host "Version Bump Type: $VersionBump"
+}
+
+if ($null -eq $SolutionDataFolderPath -or $SolutionDataFolderPath -eq '') {
+    $path = Read-Host "Enter solution data folder path "
+} else {
+    $path = $SolutionDataFolderPath
+    Write-Host "Solution Data folder path specified is : $path"
+}
+
 $defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
@@ -34,7 +54,7 @@ else {
     $hasDataFolder = $path -like '*/data'
     if ($hasDataFolder) {
         # DATA FOLDER PRESENT
-        $dataFolderIndex = $path.IndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
+        $dataFolderIndex = $path.LastIndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
 
         if ($dataFolderIndex -le 0) {
             Write-Host "Given path is not from Solutions data folders. Please provide data file path from Solution"
@@ -46,7 +66,7 @@ else {
             $solutionFolderBasePath = $path.Substring(0, $dataFolderIndex)
 
             # GET DATA FOLDER FILE NAME
-            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json")
+            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json", "testParameters.json")
             $dataFileName = Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\" -recurse -exclude $excluded | ForEach-Object -Process { [System.IO.Path]::GetFileName($_) }
 
             if ($dataFileName.Length -le 0) {
@@ -67,13 +87,180 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 
 $isPipelineRun = $false
 
-. "$repositoryBasePath/Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1" # load common functions
-. "$repositoryBasePath.script/package-automation/catelogAPI.ps1"
+$commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
+$getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
+
+. $commonFunctionsFilePath # load common functions
+. $getccpDetailsFilePath # load ccp functions
+
+# Load catalog API functions only if using catalog mode
+if ($VersionMode -eq "catalog") {
+    $catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
+    . $catalogAPIFilePath # load catalog api functions
+}
+
+# Function to increment version based on bump type (for local mode)
+function GetIncrementedVersion($version, $bumpType = "patch")
+{
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        Write-Host "Warning: Version is null or empty, using default 1.0.0"
+        $version = "1.0.0"
+    }
+    
+    $versionParts = $version.split(".")
+    
+    # Ensure we have at least 3 parts (major.minor.patch)
+    if ($versionParts.Length -lt 3) {
+        Write-Host "Warning: Version format invalid, padding with zeros"
+        while ($versionParts.Length -lt 3) {
+            $versionParts += "0"
+        }
+    }
+    
+    $major = $versionParts[0].Trim()
+    $minor = $versionParts[1].Trim()
+    $patch = $versionParts[2].Trim()
+    
+    # Convert to integers with error handling
+    try {
+        [int]$majorInt = [Convert]::ToInt32($major)
+        [int]$minorInt = [Convert]::ToInt32($minor)
+        [int]$patchInt = [Convert]::ToInt32($patch)
+    }
+    catch {
+        Write-Host "Error: Cannot convert version parts to integers. Version: $version, Parts: $($versionParts -join ', ')"
+        Write-Host "Using fallback version 1.0.0"
+        $majorInt = 1
+        $minorInt = 0
+        $patchInt = 0
+    }
+    
+    $originalMajor = $majorInt
+    $originalMinor = $minorInt
+    $originalPatch = $patchInt
+    
+    switch ($bumpType.ToLower().Trim()) {
+        "major" { 
+            $majorInt += 1
+            $minorInt = 0
+            $patchInt = 0
+            Write-Host "Incrementing MAJOR version: $originalMajor.$originalMinor.$originalPatch -> $majorInt.$minorInt.$patchInt"
+        }
+        "minor" { 
+            $minorInt += 1
+            $patchInt = 0
+            Write-Host "Incrementing MINOR version: $originalMajor.$originalMinor.$originalPatch -> $majorInt.$minorInt.$patchInt"
+        }
+        "patch" { 
+            $patchInt += 1
+            Write-Host "Incrementing PATCH version: $originalMajor.$originalMinor.$originalPatch -> $majorInt.$minorInt.$patchInt"
+        }
+        default { 
+            $patchInt += 1
+            Write-Host "Incrementing PATCH version (default): $originalMajor.$originalMinor.$originalPatch -> $majorInt.$minorInt.$patchInt"
+        }
+    }
+    
+    return "$majorInt.$minorInt.$patchInt"
+}
+
+# Function to get package version from local solution data file instead of Microsoft catalog
+function GetLocalPackageVersion($defaultPackageVersion, $userInputPackageVersion, $packageVersionAttribute, $versionBumpType, $dataFilePath)
+{
+    Write-Host "Using local version from solution data file instead of Microsoft catalog (Bump type: $versionBumpType)"
+    
+    if ($packageVersionAttribute -and $null -ne $userInputPackageVersion -and $userInputPackageVersion -ne '')
+    {
+        Write-Host "Current version from data file: $userInputPackageVersion"
+        
+        # Validate version format before processing
+        if ([string]::IsNullOrWhiteSpace($userInputPackageVersion)) {
+            Write-Host "Warning: User input version is null or empty, using default"
+            return $defaultPackageVersion
+        }
+        
+        $versionParts = $userInputPackageVersion.split(".")
+        if ($versionParts.Length -lt 3) {
+            Write-Host "Warning: Invalid version format in data file: $userInputPackageVersion. Using default: $defaultPackageVersion"
+            return $defaultPackageVersion
+        }
+
+        try {
+            $userInputMajor = [int]$versionParts[0]
+            $userInputMinor = [int]$versionParts[1]
+            $userInputBuild = [int]$versionParts[2]
+        }
+        catch {
+            Write-Host "Error: Cannot parse version numbers from: $userInputPackageVersion. Using default: $defaultPackageVersion"
+            return $defaultPackageVersion
+        }
+
+        # Always increment the version based on the specified bump type, regardless of major version
+        $incrementedVersion = GetIncrementedVersion $userInputPackageVersion $versionBumpType
+        Write-Host "Package version incremented to $incrementedVersion (from local solution data: $userInputPackageVersion)"
+        
+        # Update the version in the original data file
+        if ($null -ne $dataFilePath -and $dataFilePath -ne '') {
+            try {
+                Write-Host "Updating version in data file: $dataFilePath"
+                $dataFileContent = Get-Content -Raw $dataFilePath | Out-String | ConvertFrom-Json
+                $dataFileContent.Version = $incrementedVersion
+                $updatedJson = $dataFileContent | ConvertTo-Json -Depth 100
+                Set-Content -Path $dataFilePath -Value $updatedJson -Encoding UTF8
+                Write-Host "Successfully updated version to $incrementedVersion in data file: $dataFilePath"
+                
+                # Also update the solution metadata file version if it exists
+                $solutionDir = Split-Path $dataFilePath -Parent | Split-Path -Parent
+                $metadataFile = $dataFileContent.Metadata
+                if ($metadataFile) {
+                    $metadataPath = Join-Path $solutionDir $metadataFile
+                    if (Test-Path $metadataPath) {
+                        try {
+                            Write-Host "Updating version in solution metadata file: $metadataPath"
+                            $metadataContent = Get-Content -Raw $metadataPath | Out-String | ConvertFrom-Json
+                            $metadataContent.version = $incrementedVersion
+                            $updatedMetadataJson = $metadataContent | ConvertTo-Json -Depth 100
+                            Set-Content -Path $metadataPath -Value $updatedMetadataJson -Encoding UTF8
+                            Write-Host "Successfully updated version to $incrementedVersion in metadata file: $metadataPath"
+                        }
+                        catch {
+                            Write-Host "Warning: Could not update version in metadata file: $metadataPath. Error: $_" -ForegroundColor Yellow
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-Host "Warning: Could not update version in data file: $dataFilePath. Error: $_" -ForegroundColor Yellow
+            }
+        }
+        
+        return $incrementedVersion
+    }
+    else {
+        # No version specified in data file, use default
+        Write-Host "Package version set to $defaultPackageVersion (default - no version in data file)"
+        return $defaultPackageVersion
+    }
+}
 
 try {
+    $ccpDict = @();
+    $ccpTablesFilePaths = @();
+    $ccpTablesCounter = 1; 
+    $isCCPConnector = $false;
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
         $contentToImport = Get-Content -Raw $inputFile | Out-String | ConvertFrom-Json
+
+        $has1PConnectorProperty = [bool]($contentToImport.PSobject.Properties.Name -match "Is1PConnector")
+        if ($has1PConnectorProperty) {
+            $Is1PConnectorPropertyValue = [bool]($contentToImport.Is1PConnector)
+            if ($Is1PConnectorPropertyValue) {
+                # when true we terminate package creation.
+                Write-Host "ERROR: Is1PConnector property is deprecated. Please use StaticDataConnector property. Refer link https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md for more details!"
+                exit 1;
+            }
+        }
 
         $basePath = $(if ($solutionBasePath) { $solutionBasePath } else { "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/" })
         $metadataAuthor = $contentToImport.Author.Split(" - ");
@@ -93,11 +280,20 @@ try {
         }
 
         #================START: IDENTIFY PACKAGE VERSION=============
-        $solutionOfferId = $baseMetadata.offerId
-        $offerId = "$solutionOfferId"
-        $offerDetails = GetCatelogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
-        $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
+        $packageVersionAttribute = [bool]($contentToImport.PSobject.Properties.Name -match "version")
+        
+        if ($VersionMode -eq "local") {
+            # Use local version bumping
+            $packageVersion = GetLocalPackageVersion $defaultPackageVersion $userInputPackageVersion $packageVersionAttribute $VersionBump $inputFile.FullName
+        } else {
+            # Use catalog API for version management
+            $solutionOfferId = $baseMetadata.offerId
+            $offerId = "$solutionOfferId"
+            $offerDetails = GetCatalogDetails $offerId
+            $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $packageVersionAttribute $userInputPackageVersion
+        }
+        
         if ($packageVersion -ne $contentToImport.version) {
             $contentToImport.PSObject.Properties.Remove('version')
             $contentToImport | Add-Member -MemberType NoteProperty -Name 'version' -Value $packageVersion 
@@ -114,7 +310,7 @@ try {
             $contentToImport.PSObject.Properties.Remove('TemplateSpec')
             $contentToImport | Add-Member -MemberType NoteProperty -Name 'TemplateSpec' -Value $true
         }
-        #================START: IDENTIFY PACKAGE VERSION=============
+        #================END: IDENTIFY PACKAGE VERSION=============
 
         Write-Host "Package version identified is $packageVersion"
 
@@ -126,7 +322,7 @@ try {
         $metadataAuthor = $contentToImport.Author.Split(" - ");
 
         $global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
         
         # VERIFY IF IT IS A CONTENTSPEC OR CONTENTPACKAGE RESOURCE TYPE BY VERIFYING VERSION FROM  DATA FILE
@@ -136,11 +332,30 @@ try {
             exit 1;
         }
 
+        $dcWithoutSpace = ($baseFolderPath + $solutionName + "/DataConnectors/").Replace("//", "/")
+        $hasDCWithoutSpace = Test-Path -Path $dcWithoutSpace
+
+        if ($hasDCWithoutSpace) {
+            $DCFolderName = "DataConnectors"
+        }
+
+        if ($isCCPConnector -eq $false) {
+            $DCFolderName = "Data Connectors"
+            
+            $ccpDict = Get-CCP-Dict -dataFileMetadata $contentToImport -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
+
+            if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
+                $isCCPConnector = $true
+                [array]$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
+            }
+        }
+        Write-Host "isCCPConnector $isCCPConnector"
+        $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
-            if ($objectProperties.Value -is [System.Array]) {
+            if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'dependentdomainsolutionids' -and $objectProperties.Name.ToLower() -ne 'staticdataconnectorids') {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
-                    $finalPath = $basePath + $solutionName + "/" + $file
+                    $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
                     $rawData = $null
                     try {
                         Write-Host "Downloading $finalPath"
@@ -169,7 +384,33 @@ try {
                             GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
                         }
                         elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
-                            GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
+                            if ($ccpDict.Count -gt 0) {
+                                $isCCPConnectorFile = $false;
+                                foreach($item in $ccpDict) {
+                                    if ($item.DCDefinitionFullPath -eq $finalPath) {
+                                        $isCCPConnectorFile = $true
+                                        break;
+                                    }
+                                }
+
+                                if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
+                                    # current file is a ccp connector
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
+
+                                    $ccpConnectorCodeExecutionCounter += 1
+                                } 
+                                elseif ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -gt 1) {
+                                    continue;
+                                }
+                                else {
+                                    # current file is a normal connector
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
+                                }
+                            }
+                            else {
+                                # current file is a normal connector
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter 
+                            }
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {
                             GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
@@ -185,6 +426,10 @@ try {
                             $objectKeyLowercase = $objectProperties.Name.ToLower()
                             if ($objectKeyLowercase -eq "hunting queries") {
                                 GetHuntingDataMetadata -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
+                            } elseif ($objectKeyLowercase -eq "summary rules" -or $objectKeyLowercase -eq "summaryrules") {
+                                $summaryRuleFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/summaryRules.ps1"
+                                . $summaryRuleFilePath
+                                GenerateSummaryRules -solutionName $solutionName -file $file -rawData $rawData -contentResourceDetails $contentResourceDetails
                             }
                             else {
                                 GenerateAlertRule -file $file -contentResourceDetails $contentResourceDetails
@@ -230,7 +475,7 @@ try {
                 }
             }
         }
-        
+
         $global:analyticRuleCounter -= 1
 		$global:workbookCounter -= 1
 		$global:playbookCounter -= 1
@@ -238,20 +483,29 @@ try {
 		$global:parserCounter -= 1
 		$global:huntingQueryCounter -= 1
 		$global:watchlistCounter -= 1
-		updateDescriptionCount $global:connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $global:parserCounter, $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $global:analyticRuleCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $global:playbookCounter, $global:watchlistCounter)
-		updateDescriptionCount $global:watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts @($global:playbookCounter))
+        $global:summaryRuleCounter -= 1
+
+		updateDescriptionCount $global:connectorCounter                                "**Data Connectors:** "                     "{{DataConnectorCount}}"            $(checkResourceCounts $global:parserCounter, $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:parserCounter                                   "**Parsers:** "                             "{{ParserCount}}"                   $(checkResourceCounts $global:analyticRuleCounter, $global:workbookCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:workbookCounter                                 "**Workbooks:** "                           "{{WorkbookCount}}"                 $(checkResourceCounts $global:analyticRuleCounter, $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:analyticRuleCounter                             "**Analytic Rules:** "                      "{{AnalyticRuleCount}}"             $(checkResourceCounts $global:playbookCounter, $global:huntingQueryCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+		updateDescriptionCount $global:huntingQueryCounter                             "**Hunting Queries:** "                     "{{HuntingQueryCount}}"             $(checkResourceCounts $global:playbookCounter, $global:watchlistCounter, $global:summaryRuleCounter)
+
+		updateDescriptionCount $global:watchlistCounter                                "**Watchlists:** "                          "{{WatchlistCount}}"                $(checkResourceCounts $global:playbookCounter, $global:summaryRuleCounter)
+        
+        updateDescriptionCount $global:summaryRuleCounter                           "**Summary Rules:** "                       "{{SummaryRuleCount}}"             $(checkResourceCounts @($global:playbookCounter))
+
 		updateDescriptionCount $global:customConnectorsList.Count                      "**Custom Azure Logic Apps Connectors:** "  "{{LogicAppCustomConnectorCount}}"  $(checkResourceCounts @($global:playbookCounter))
 		updateDescriptionCount $global:functionAppList.Count                           "**Function Apps:** "                       "{{FunctionAppsCount}}"             $(checkResourceCounts @($global:playbookCounter))
         updateDescriptionCount ($global:playbookCounter - $global:customConnectorsList.Count - $global:functionAppList.Count)  "**Playbooks:** "   "{{PlaybookCount}}"       $false
 
         GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;
         RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
+
+        # check if mainTemplate and createUiDefinition json files are valid or not
+        CheckJsonIsValid($solutionFolderBasePath)
     }
 }
 catch {
-    Write-Host "Error occured in catch of createSolutionV3 file Error details are $_"
+    Write-Host "Error occurred in catch of createSolutionV3 file Error details are $_" -ForegroundColor Red
 }

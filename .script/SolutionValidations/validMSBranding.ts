@@ -1,5 +1,5 @@
-import { InvalidFileContentError } from "./../utils/validationError";
-import { ExitCode } from "../utils/exitCode";
+import { InvalidFileContentError } from "./../utils/validationError.js";
+import { ExitCode } from "../utils/exitCode.js";
 import fs from "fs";
 
 type AttributeConfig = {

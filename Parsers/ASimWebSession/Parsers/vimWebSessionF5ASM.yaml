@@ -1,0 +1,263 @@
+Parser:
+  Title: Web Session ASIM parser for F5 BIG-IP Application Security Manager (ASM)
+  Version: '0.1.0'
+  LastUpdated: Dec 04 2023
+Product:
+  Name: F5 BIG-IP Application Security Manager (ASM)
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: F5 Big IP ASM Documentation
+  Link: 
+    https://techdocs.f5.com/en-us/bigip-15-0-0/external-monitoring-of-big-ip-systems-implementations/event-messages-and-attack-types.html
+    https://docplayer.net/9349757-Common-event-format-configuration-guide.html
+Description: |
+  This ASIM parser supports normalizing F5 Big IP ASM(Application Security Manager) logs to the ASIM Web Session normalized schema. F5 Big IP ASM events are captured through F5 Network data connector which ingests attack events and data into Microsoft Sentinel in CEF format over Syslog using F5's technology partner Arcsight.
+ParserName: vimWebSessionF5ASM
+EquivalentBuiltInParser: _Im_WebSession_F5ASM
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DvcActionLookup = datatable (DeviceAction: string, DvcAction: string)
+  [
+      "Blocked", "Deny",
+      "blocked", "Deny",
+      "Passed", "Allow",
+      "passed", "Allow",
+      "Alerted", "Deny",
+      "alerted", "Deny"
+  ];
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+      [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Medium",
+      "5", "Medium",
+      "6", "Medium",
+      "7", "High",
+      "8", "High",
+      "9", "High",
+      "10", "High"
+  ];
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      url_has_any: dynamic=dynamic([]),
+      httpuseragent_has_any: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false
+      ) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+      let DeviceEventClassIDList = dynamic(["Brute Force Attack", "IP Enforcer Attack", "Web Scraping Attack", "DoS Attack"]);
+      let AllData = CommonSecurityLog
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+              and DeviceVendor == "F5"
+              and DeviceProduct == "ASM"
+          | where ((substring(DeviceEventClassID, 0, 1) == "2" and strlen(DeviceEventClassID) == 9) or (DeviceEventClassID == Activity)) or (DeviceEventClassID in (DeviceEventClassIDList))
+          | where (array_length(url_has_any) == 0 or RequestURL has_any (url_has_any))
+          | extend
+              temp_SrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any)
+          | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+          | project-rename DvcIpAddr = DeviceAddress;
+      let GeneralEnforcementData = AllData
+          | where ((substring(DeviceEventClassID, 0, 1) == "2" and strlen(DeviceEventClassID) == 9) or (DeviceEventClassID == Activity)) and (DeviceEventClassID !in (DeviceEventClassIDList))
+          | where (array_length(httpuseragent_has_any) == 0 or DeviceCustomString3 has_any(httpuseragent_has_any))
+          | where (array_length(eventresultdetails_in) == 0 or tostring(FieldDeviceCustomNumber1) has_any(eventresultdetails_in))
+          | extend temp_DstMatch1 = has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix)
+          | extend ASimMatchingIpAddr = case(
+                                    array_length(src_or_any) == 0,
+                                    "-",
+                                    temp_SrcMatch and temp_DstMatch1,
+                                    "Both",
+                                    temp_SrcMatch,
+                                    "SrcIpAddr",
+                                    temp_DstMatch1,
+                                    "DstIpAddr",
+                                    "No match"
+                                )
+          | where ASimMatchingIpAddr != "No match"
+          | parse-kv DeviceCustomString3 as (Host: string, ["User-Agent"]: string, Cookie: string, Referer: string) with (pair_delimiter="\\r\\n", kv_delimiter=":")
+          | parse DeviceCustomString3 with * "HTTP/" HttpVersion: string "\\r\\n" rest: string
+          | extend
+              EventResultDetails = tostring(FieldDeviceCustomNumber1)
+          | extend
+              EventResult = iff(toint(EventResultDetails) >= 400 or DeviceAction =~ "blocked", "Failure", "Success")
+          | where eventresult == '*' or EventResult =~ eventresult
+          | project-rename 
+              DstIpAddr = DestinationIP,
+              DstPortNumber = DestinationPort,
+              EventOriginalUid = ExtID,
+              HttpRequestMethod = RequestMethod,
+              NetworkApplicationProtocol = ApplicationProtocol,
+              HttpCookie = Cookie,
+              HttpHost = Host,
+              HttpReferrer = Referer,
+              HttpUserAgent = ['User-Agent'],
+              HttpRequestXff = DeviceCustomString5
+          | extend
+              HttpStatusCode = EventResultDetails,
+              AdditionalFields = bag_pack(
+                        "Full Request", DeviceCustomString3,
+                        "Attack Type", DeviceCustomString4,
+                        "Policy Apply Date", DeviceCustomDate1,
+                        "Web Application Name",
+                        DeviceCustomString2
+                    ),
+              Dst = DstIpAddr;
+      let AnomalyDetectionData = AllData
+          | where DeviceEventClassID in (DeviceEventClassIDList)
+          | where array_length(httpuseragent_has_any) == 0 
+          | where array_length(eventresultdetails_in) == 0
+          | extend temp_DstMatch2 = has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix)
+          | extend ASimMatchingIpAddr = case(
+                                    array_length(src_or_any) == 0,
+                                    "-",
+                                    temp_SrcMatch and temp_DstMatch2,
+                                    "Both",
+                                    temp_SrcMatch,
+                                    "SrcIpAddr",
+                                    temp_DstMatch2,
+                                    "DstIpAddr",
+                                    "No match"
+                                ),
+                EventResult = iff(DeviceAction =~ "passed", "Success", "Failure")
+          | where ASimMatchingIpAddr != "No match"
+          | where eventresult == '*' or EventResult =~ eventresult
+          | extend
+              AdditionalFields = bag_pack(
+                        "Detection Average",
+                        FieldDeviceCustomNumber1,
+                        "Dropped Requests",
+                        FieldDeviceCustomNumber2,
+                        "Attack Status",
+                        DeviceCustomString4,
+                        "Detection Mode",
+                        DeviceCustomString5,
+                        "Web Application Name",
+                        DeviceCustomString2
+                    ),
+              ThreatId = tostring(FieldDeviceCustomNumber3)
+          | project-away ApplicationProtocol, ExtID;
+      union GeneralEnforcementData, AnomalyDetectionData
+      | lookup DvcActionLookup on DeviceAction
+      | lookup EventSeverityLookup on LogSeverity
+      | extend 
+          EventStartTime = todatetime(ReceiptTime),
+          EventOriginalType = iff(isempty(toint(DeviceEventClassID)), DeviceEventClassID, Activity)
+      | extend
+          EventCount = int(1),
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "HTTPsession"
+      | project-rename 
+          EventProduct = DeviceProduct,
+          EventVendor = DeviceVendor,
+          EventUid = _ItemId,
+          EventOriginalSeverity = LogSeverity,
+          DvcOriginalAction = DeviceAction,
+          Url = RequestURL,
+          SrcIpAddr = SourceIP,
+          SrcGeoCountry = DeviceCustomString6,
+          SrcPortNumber = SourcePort,
+          SrcUserId = SourceUserID,
+          SrcUsername = SourceUserName,
+          EventMessage = Message,
+          EventProductVersion = DeviceVersion,
+          RuleName = DeviceCustomString1
+      | extend 
+          SrcUserIdType = iff(isnotempty(SrcUserId), "Other", ""),
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType = _ASIM_GetUserType(SrcUsername, SrcUserId),
+          Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          UserAgent = HttpUserAgent,
+          User = SrcUsername,
+          Rule = RuleName
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          Activity,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          EventOutcome,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          IndicatorThreatType,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          ThreatDescription,
+          ThreatSeverity,
+          ThreatConfidence,
+          Reason,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          rest,
+          temp_*,
+          _ResourceId
+  };
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,  
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+      url_has_any=url_has_any,
+      httpuseragent_has_any=httpuseragent_has_any,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled
+  )

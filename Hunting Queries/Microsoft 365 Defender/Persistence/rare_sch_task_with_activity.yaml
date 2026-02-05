@@ -1,0 +1,56 @@
+id: ce76992a-8cd6-4605-9f45-cde9aae87244
+name: rare_sch_task_with_activity
+description: |
+  Looks for rare process launch as a scheduled task and activity done by the processes.
+  Author: Jouni Mikkola
+  More info: https://threathunt.blog/hunting-for-malicious-scheduled-tasks/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceNetworkEvents
+  - DeviceFileEvents
+  - DeviceRegistryEvents
+  - DeviceLogonEvents
+  - DeviceImageLoadEvents
+  - DeviceEvents
+tactics:
+- Persistence
+relevantTechniques:
+  - T1053
+query: |
+  let RunningScheduledTasks = materialize(
+  DeviceProcessEvents
+  | where InitiatingProcessFileName == @"svchost.exe"
+  | where InitiatingProcessCommandLine == @"svchost.exe -k netsvcs -p -s Schedule"
+  | project Timestamp, DeviceName, AccountName, FileName, ProcessCommandLine, ProcessId, FolderPath
+  | where FileName != @"MpCmdRun.exe"
+  | where FolderPath !startswith @"C:\Windows\System32\" or FileName =~ "cmd.exe" or FileName =~ "powershell.exe" or FileName =~ "rundll32.exe" or FileName =~ "regsvr32.exe"
+  | summarize count() by FileName, ProcessCommandLine, FolderPath
+  | where count_ < 3
+  | summarize
+      Names = make_set(FileName),
+      CommandLines = make_set(ProcessCommandLine),
+      FolderPaths = make_set(FolderPath)
+  );
+  let Names = RunningScheduledTasks
+  | project Names
+  | mv-expand extended = Names
+  | project asstring = tostring(extended)
+  | distinct tolower(asstring);
+  let CommandLines = RunningScheduledTasks
+  | project CommandLines
+  | mv-expand extended = CommandLines
+  | project asstring = tostring(extended)
+  | distinct tolower(asstring);
+  let FolderPaths = RunningScheduledTasks
+  | project FolderPaths
+  | mv-expand extended = FolderPaths
+  | project asstring = tostring(extended)
+  | distinct tolower(asstring);
+  union DeviceProcessEvents,DeviceNetworkEvents,DeviceFileEvents,DeviceRegistryEvents,DeviceLogonEvents,DeviceImageLoadEvents,DeviceEvents
+  | where tolower(InitiatingProcessFileName) in (Names)
+  and tolower(InitiatingProcessCommandLine) in (CommandLines)
+  and tolower(InitiatingProcessFolderPath) in (FolderPaths)
+  | sort by Timestamp desc
+  | summarize Actions = make_set(ActionType), FileNames = make_set(FileName), RemoteIPs = make_set(RemoteIP) by InitiatingProcessFileName, InitiatingProcessId, InitiatingProcessCommandLine, InitiatingProcessCreationTime, DeviceName

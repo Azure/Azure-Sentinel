@@ -38,11 +38,12 @@ query: |
   | join kind=inner (
       SigninLogs
       | where TimeGenerated > ago(query_period)
+      | where ResultType == 0
       | summarize take_any(*) by UserPrincipalName
       | extend ParsedUserPrincipalName = translate("@", "_", UserPrincipalName)
       | project SigninLogs_TimeGenerated = TimeGenerated, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, IPAddress, LocationDetails, AppDisplayName, ResourceDisplayName, ClientAppUsed, UserAgent, DeviceDetail, UserId, UserType, OriginalRequestId, ParsedUserPrincipalName
       ) on $left.ParsedDeletedUserPrincipalName == $right.ParsedUserPrincipalName
-  | where Delete_TimeGenerated > SigninLogs_TimeGenerated
+  | where SigninLogs_TimeGenerated > Delete_TimeGenerated
   | project-away ParsedDeletedUserPrincipalName, ParsedUserPrincipalName
   | extend
       AccountName = tostring(split(UserPrincipalName, "@")[0]),
@@ -50,6 +51,8 @@ query: |
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
       - identifier: Name
         columnName: AccountName
       - identifier: UPNSuffix
@@ -58,13 +61,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 1.0.2
+version: 1.0.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ashwin Patil
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

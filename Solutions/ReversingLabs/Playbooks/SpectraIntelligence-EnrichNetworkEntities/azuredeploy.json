@@ -1,0 +1,799 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SpectraIntelligence-EnrichNetworkEntities",
+        "description": "This playbook will enrich a Microsoft Sentinel Incident with information about network entities (IP addresses, URLs, and domain names) from ReversingLabs Spectra Intelligence (formerly TitaniumCloud). A comment will be added to the incident with details about the entity.",
+        "prerequisites": [
+            "ReversingLabs Spectra Intelligence license",
+            "ReversingLabs Spectra Intelligence username and password"
+        ],
+        "lastUpdateTime": "2024-07-18T10:00:00.000Z",
+        "postDeploymentSteps": ["None"], 
+        "version": "2.1.0",
+        "entities": [ "Ip", "Url", "DomainName" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "name": "ReversingLabs",
+            "tier": "Partner",
+            "email": "support@reversinglabs.com",
+            "link": "https://support.reversinglabs.com/hc/en-us"
+        },
+        "author": {
+            "name": "Aaron Hoffmann"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SpectraIntelligence-EnrichNetworkEntities",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook (Logic Apps resources) which will be created"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ReversingLabsConnectionName": "[concat('reversinglabs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('ReversingLabsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('ReversingLabsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/reversinglabstitaniu')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose_RL_logo": {
+                            "inputs": "<img src=\"https://www.reversinglabs.com/hubfs/RL%20Logo/rl-logo-long.svg\"></img>",
+                            "runAfter": {},
+                            "type": "Compose"
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_1": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Compose_RL_logo')}</p><p><b><strong style=\"font-size: 16px;\">URL Enrichment</strong></b>@{variables('url comment')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Close_URL_comment_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Close_URL_comment_table": {
+                                    "inputs": {
+                                        "name": "url comment",
+                                        "value": "</table>"
+                                    },
+                                    "runAfter": {
+                                        "For_each_URL_entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable"
+                                },
+                                "For_each_URL_entity": {
+                                    "actions": {
+                                        "Dedupe_categories": {
+                                            "inputs": "@union(variables('url categories'), variables('url categories'))",
+                                            "runAfter": {
+                                                "For_each_third_party_source": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "For_each_third_party_source": {
+                                            "actions": {
+                                                "Condition_if_source_has_categories": {
+                                                    "actions": {
+                                                        "For_each_source_category": {
+                                                            "actions": {
+                                                                "Append_to_array_variable": {
+                                                                    "inputs": {
+                                                                        "name": "url categories",
+                                                                        "value": "@items('For_each_third_party_source')"
+                                                                    },
+                                                                    "type": "AppendToArrayVariable"
+                                                                }
+                                                            },
+                                                            "foreach": "@items('For_each_third_party_source')?['categories']",
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {}
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "contains": [
+                                                                    "@items('For_each_third_party_source')",
+                                                                    "categories"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Get_the_URL_report')?['rl']?['third_party_reputations']?['sources']",
+                                            "runAfter": {
+                                                "Get_the_URL_report": [
+                                                    "Succeeded",
+                                                    "Failed",
+                                                    "Skipped",
+                                                    "TimedOut"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Get_the_URL_report": {
+                                            "inputs": {
+                                                "body": {
+                                                    "rl": {
+                                                        "query": {
+                                                            "response_format": "json",
+                                                            "url": "@item()?['Url']"
+                                                        }
+                                                    }
+                                                },
+                                                "headers": {
+                                                    "User-Agent": "ReversingLabs Azure Connector TitaniumCloud v1.4.0"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['reversinglabstitaniu']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/networking/url/v1/report/query/json"
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Switch_classification": {
+                                            "cases": {
+                                                "Case_known": {
+                                                    "actions": {
+                                                        "Append_to_string_variable_2": {
+                                                            "inputs": {
+                                                                "name": "url comment",
+                                                                "value": "<tr><td>@{concat(substring(item()?['Url'], 0, indexOf(item()?['Url'], '.')),'[.]',substring(item()?['Url'], add(indexOf(item()?['Url'], '.'), 1), sub(length(item()?['Url']), add(indexOf(item()?['Url'], '.'), 1))))}</td><td style=\"background-color:green;color:white;font-weight:bold\">@{body('Get_the_URL_report')?['rl']?['classification']}</td><td>@{body('Get_the_URL_report')?['rl']?['reason']}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}</br><strong style=\"color: green\">clean:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td><td>@{outputs('Dedupe_categories')}</td><td>@{body('Get_the_URL_report')?['rl']?['last_seen']}</td></tr>"
+                                                            },
+                                                            "type": "AppendToStringVariable"
+                                                        }
+                                                    },
+                                                    "case": "known"
+                                                },
+                                                "Case_malicious": {
+                                                    "actions": {
+                                                        "Append_to_string_variable": {
+                                                            "inputs": {
+                                                                "name": "url comment",
+                                                                "value": "<tr><td>@{concat(substring(item()?['Url'], 0, indexOf(item()?['Url'], '.')),'[.]',substring(item()?['Url'], add(indexOf(item()?['Url'], '.'), 1), sub(length(item()?['Url']), add(indexOf(item()?['Url'], '.'), 1))))}</td><td style=\"background-color:red;color:white;font-weight:bold\">@{body('Get_the_URL_report')?['rl']?['classification']}</td><td>@{body('Get_the_URL_report')?['rl']?['reason']}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}</br><strong style=\"color: green\">clean:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td><td>@{outputs('Dedupe_categories')}</td><td>@{body('Get_the_URL_report')?['rl']?['last_seen']}</td></tr>"
+                                                            },
+                                                            "type": "AppendToStringVariable"
+                                                        }
+                                                    },
+                                                    "case": "malicious"
+                                                },
+                                                "Case_suspicious": {
+                                                    "actions": {
+                                                        "Append_to_string_variable_1": {
+                                                            "inputs": {
+                                                                "name": "url comment",
+                                                                "value": "<tr><td>@{concat(substring(item()?['Url'], 0, indexOf(item()?['Url'], '.')),'[.]',substring(item()?['Url'], add(indexOf(item()?['Url'], '.'), 1), sub(length(item()?['Url']), add(indexOf(item()?['Url'], '.'), 1))))}</td><td style=\"background-color:orange;color:black;font-weight:bold\">@{body('Get_the_URL_report')?['rl']?['classification']}</td><td>@{body('Get_the_URL_report')?['rl']?['reason']}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}</br><strong style=\"color: green\">clean:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td><td>@{outputs('Dedupe_categories')}</td><td>@{body('Get_the_URL_report')?['rl']?['last_seen']}</td></tr>"
+                                                            },
+                                                            "type": "AppendToStringVariable"
+                                                        }
+                                                    },
+                                                    "case": "suspicious"
+                                                },
+                                                "Case_unknown": {
+                                                    "actions": {
+                                                        "Append_to_string_variable_3": {
+                                                            "inputs": {
+                                                                "name": "url comment",
+                                                                "value": "<tr><td>@{concat(substring(item()?['Url'], 0, indexOf(item()?['Url'], '.')),'[.]',substring(item()?['Url'], add(indexOf(item()?['Url'], '.'), 1), sub(length(item()?['Url']), add(indexOf(item()?['Url'], '.'), 1))))}</td><td style=\"background-color:grey;color:black;font-weight:bold\">@{body('Get_the_URL_report')?['rl']?['classification']}</td><td>@{body('Get_the_URL_report')?['rl']?['reason']}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}</br><strong style=\"color: green\">clean:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td><td>@{outputs('Dedupe_categories')}</td><td>@{body('Get_the_URL_report')?['rl']?['last_seen']}</td></tr>"
+                                                            },
+                                                            "type": "AppendToStringVariable"
+                                                        }
+                                                    },
+                                                    "case": "unknown"
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {
+                                                    "Append_to_URL_comment": {
+                                                        "inputs": {
+                                                            "name": "url comment",
+                                                            "value": "<tr><td>@{concat(substring(item()?['Url'], 0, indexOf(item()?['Url'], '.')),'[.]',substring(item()?['Url'], add(indexOf(item()?['Url'], '.'), 1), sub(length(item()?['Url']), add(indexOf(item()?['Url'], '.'), 1))))}</td><td>@{body('Get_the_URL_report')?['rl']?['classification']}</td><td>@{body('Get_the_URL_report')?['rl']?['reason']}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}</br><strong style=\"color: green\">clean:</strong> @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_URL_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td><td>@{outputs('Dedupe_categories')}</td><td>@{body('Get_the_URL_report')?['rl']?['last_seen']}</td></tr>"
+                                                        },
+                                                        "type": "AppendToStringVariable"
+                                                    }
+                                                }
+                                            },
+                                            "expression": "@body('Get_the_URL_report')?['rl']?['classification']",
+                                            "runAfter": {
+                                                "Dedupe_categories": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                    "type": "Foreach"
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_URLs')?['URLs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_url_categories_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_1": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_2": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Compose_RL_logo')}</p><p><b><strong style=\"font-size: 16px;\">Domain Enrichment</strong></b>@{variables('domain comment')}</p><p><b><strong>DNS Records</strong></b>@{variables('dns records')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Close_domain_comment_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Close_domain_comment_table": {
+                                    "inputs": {
+                                        "name": "domain comment",
+                                        "value": "</table>"
+                                    },
+                                    "runAfter": {
+                                        "For_each_DNS_domain_entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable"
+                                },
+                                "For_each_DNS_domain_entity": {
+                                    "actions": {
+                                        "Append_last_seen_to_domain_enrichment": {
+                                            "inputs": {
+                                                "name": "domain comment",
+                                                "value": "</td><td>@{body('Get_the_domain_report')?['rl']?['last_seen']}</td></tr>"
+                                            },
+                                            "runAfter": {
+                                                "For_each_top_threat": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "Append_to_domain_comment": {
+                                            "inputs": {
+                                                "name": "domain comment",
+                                                "value": "<tr><td>@{replace(item()?['DomainName'], '.', '[.]')}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_domain_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_domain_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}<br/><strong style=\"color: green\">clean:</strong> @{body('Get_the_domain_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_domain_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td></td><td><strong style=\"color: red\">malicious:</strong> @{body('Get_the_domain_report')?['rl']?['downloaded_files_statistics']['malicious']}<br/><strong style=\"color: grey\">unknown:</strong> @{body('Get_the_domain_report')?['rl']?['downloaded_files_statistics']['unknown']}<br/><strong style=\"color: orange\">suspicious:</strong> @{body('Get_the_domain_report')?['rl']?['downloaded_files_statistics']['suspicious']}<br/><strong style=\"color:green\">known:</strong> @{body('Get_the_domain_report')?['rl']?['downloaded_files_statistics']['known']}<br/>total: @{body('Get_the_domain_report')?['rl']?['downloaded_files_statistics']['total']}</td><td>"
+                                            },
+                                            "runAfter": {
+                                                "Get_the_domain_report": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Skipped",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "Close_dns_records_table": {
+                                            "inputs": {
+                                                "name": "dns records",
+                                                "value": "</table>"
+                                            },
+                                            "runAfter": {
+                                                "For_each_dns_record": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "For_each_dns_record": {
+                                            "actions": {
+                                                "Append_dns_record_to_dns_comment": {
+                                                    "inputs": {
+                                                        "name": "dns records",
+                                                        "value": "<tr><td> @{items('For_each_dns_record')?['type']}</td><td>@{items('For_each_dns_record')?['value']}</td><td>@{items('For_each_dns_record')?['provider']}</td></tr>"
+                                                    },
+                                                    "type": "AppendToStringVariable"
+                                                }
+                                            },
+                                            "foreach": "@body('Get_the_domain_report')?['rl']?['last_dns_records']",
+                                            "runAfter": {
+                                                "Append_last_seen_to_domain_enrichment": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_top_threat": {
+                                            "actions": {
+                                                "Append_to_string_variable_8": {
+                                                    "inputs": {
+                                                        "name": "domain comment",
+                                                        "value": "@{items('For_each_top_threat')?['threat_name']} "
+                                                    },
+                                                    "type": "AppendToStringVariable"
+                                                }
+                                            },
+                                            "foreach": "@body('Get_the_domain_report')?['rl']?['top_threats']",
+                                            "runAfter": {
+                                                "Append_to_domain_comment": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Get_the_domain_report": {
+                                            "inputs": {
+                                                "body": {
+                                                    "rl": {
+                                                        "query": {
+                                                            "domain": "@item()?['DomainName']",
+                                                            "response_format": "json"
+                                                        }
+                                                    }
+                                                },
+                                                "headers": {
+                                                    "User-Agent": "ReversingLabs Azure Connector TitaniumCloud v1.4.0"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['reversinglabstitaniu']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/networking/domain/report/v1/query/json"
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "foreach": "@body('Entities_-_Get_DNS')?['Dnsresolutions']",
+                                    "type": "Foreach"
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_DNS')?['Dnsresolutions'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_dns_records_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_2": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Compose_RL_logo')}</p><p><b><strong style=\"font-size: 16px;\">IP Address Enrichment</strong></b>@{variables('ip comment')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runAfter": {
+                                        "Close_IP_comment_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Close_IP_comment_table": {
+                                    "inputs": {
+                                        "name": "ip comment",
+                                        "value": "</table>"
+                                    },
+                                    "runAfter": {
+                                        "For_each_IP_entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable"
+                                },
+                                "For_each_IP_entity": {
+                                    "actions": {
+                                        "Append_to_IP_comment": {
+                                            "inputs": {
+                                                "name": "ip comment",
+                                                "value": "<tr><td>@{item()?['Address']}</td><td><strong style=\"color:red\">malicious:</strong> @{body('Get_the_IP_address_report')?['rl']?['third_party_reputations']?['statistics']['malicious']}<br/><strong style=\"color:grey\">undetected:</strong> @{body('Get_the_IP_address_report')?['rl']?['third_party_reputations']?['statistics']['undetected']}<br/><strong style=\"color: green\">clean:</strong> @{body('Get_the_IP_address_report')?['rl']?['third_party_reputations']?['statistics']['clean']}<br/>total: @{body('Get_the_IP_address_report')?['rl']?['third_party_reputations']?['statistics']['total']}</td><td><strong style=\"color: red\">malicious:</strong> @{body('Get_the_IP_address_report')?['rl']?['downloaded_files_statistics']['malicious']}<br/><strong style=\"color: grey\">unknown:</strong> @{body('Get_the_IP_address_report')?['rl']?['downloaded_files_statistics']['unknown']}<br/><strong style=\"color: orange\">suspicious:</strong> @{body('Get_the_IP_address_report')?['rl']?['downloaded_files_statistics']['suspicious']}<br/><strong style=\"color:green\">known:</strong> @{body('Get_the_IP_address_report')?['rl']?['downloaded_files_statistics']['known']}<br/>total: @{body('Get_the_IP_address_report')?['rl']?['downloaded_files_statistics']['total']}</td><td>@{outputs('Dedupe_IP_categories')}</td><td>@{body('Get_the_IP_address_report')?['rl']?['last_seen']}</td></tr>"
+                                            },
+                                            "runAfter": {
+                                                "Dedupe_IP_categories": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable"
+                                        },
+                                        "Dedupe_IP_categories": {
+                                            "inputs": "@union(variables('ip categories'), variables('ip categories'))",
+                                            "runAfter": {
+                                                "For_each_third_party_source_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose"
+                                        },
+                                        "For_each_third_party_source_2": {
+                                            "actions": {
+                                                "Condition_if_source_has_categories_2": {
+                                                    "actions": {
+                                                        "For_each_category_2": {
+                                                            "actions": {
+                                                                "Append_to_array_variable_1": {
+                                                                    "inputs": {
+                                                                        "name": "ip categories",
+                                                                        "value": "@items('For_each_category_2')"
+                                                                    },
+                                                                    "type": "AppendToArrayVariable"
+                                                                }
+                                                            },
+                                                            "foreach": "@items('For_each_third_party_source_2')?['categories']",
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "else": {
+                                                        "actions": {}
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "contains": [
+                                                                    "@items('For_each_third_party_source_2')",
+                                                                    "categories"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Get_the_IP_address_report')?['rl']?['third_party_reputations']?['sources']",
+                                            "runAfter": {
+                                                "Get_the_IP_address_report": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Failed",
+                                                    "Skipped"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Get_the_IP_address_report": {
+                                            "inputs": {
+                                                "body": {
+                                                    "rl": {
+                                                        "query": {
+                                                            "ip": "@item()?['Address']",
+                                                            "response_format": "json"
+                                                        }
+                                                    }
+                                                },
+                                                "headers": {
+                                                    "User-Agent": "ReversingLabs Azure Connector TitaniumCloud v1.4.0"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['reversinglabstitaniu']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/networking/ip/report/v1/query/json"
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                    "type": "Foreach"
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_ip_categories_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_DNS": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/dnsresolution"
+                            },
+                            "runAfter": {
+                                "Compose_RL_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            },
+                            "runAfter": {
+                                "Compose_RL_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            },
+                            "runAfter": {
+                                "Compose_RL_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_dns_records_table": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dns records",
+                                        "type": "string",
+                                        "value": "<table style=\"width:100%\"><tr><th>Type</th><th>Value</th><th>Provider</th></tr>"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_domain_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_ip_categories_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip categories",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_ip_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_url_categories_array": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "url categories",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_URL_comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_URL_comment": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "url comment",
+                                        "type": "string",
+                                        "value": "<table style=\"width:100%\"><tr><th>URL</th><th>Classification</th><th>Reason</th><th>Reputation</th><th>Categories</th><th>LastSeen</th></tr>"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_domain_comment": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain comment",
+                                        "type": "string",
+                                        "value": "<table style=\"width:100%\"><tr><th>Domain</th><th>Reputation</th><th>DownloadedFiles</th><th>TopThreats</th><th>LastSeen</th></tr>"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_DNS": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_ip_comment": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip comment",
+                                        "type": "string",
+                                        "value": "<table style=\"width:100%\"><tr><th>IPAddress</th><th>Reputation</th><th>DownloadedFiles</th><th>Categories</th><th>LastSeen</th></tr>"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "azuresentinel",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "reversinglabstitaniu": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('ReversingLabsConnectionName'))]",
+                                "connectionName": "reversinglabstitaniu",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/reversinglabstitaniu')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

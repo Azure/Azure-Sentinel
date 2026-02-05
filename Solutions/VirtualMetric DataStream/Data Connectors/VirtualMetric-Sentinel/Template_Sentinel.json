@@ -1,0 +1,101 @@
+{
+    "id": "VirtualMetricMSSentinelConnector",
+    "title": "VirtualMetric DataStream for Microsoft Sentinel",
+    "publisher": "VirtualMetric",
+    "descriptionMarkdown": "VirtualMetric DataStream connector deploys Data Collection Rules to ingest security telemetry into Microsoft Sentinel.",
+    "graphQueriesTableName": "CommonSecurityLog",
+    "graphQueries": [
+        {
+            "metricName": "Total CommonSecurityLog Events",
+            "legend": "CommonSecurityLog",
+            "baseQuery": "CommonSecurityLog"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "Get sample CommonSecurityLog events from the last 24 hours",
+            "query": "CommonSecurityLog\n| where TimeGenerated > ago(24h)\n| take 10"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "CommonSecurityLog",
+            "lastDataReceivedQuery": "CommonSecurityLog\n| where TimeGenerated > ago(7d)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriteria": [
+        {
+            "type": "HasDataConnectors"
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required.",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": false
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "App Registration or Azure Managed Identity",
+                "description": "VirtualMetric DataStream requires an Entra ID identity to authenticate and send logs to Microsoft Sentinel. You can choose between creating an App Registration with Client ID and Client Secret, or using Azure Managed Identity for enhanced security without credential management."
+            },
+            {
+                "name": "Resource Group Role Assignment",
+                "description": "The chosen identity (App Registration or Managed Identity) must be assigned to the resource group containing the Data Collection Endpoint with the following roles: Monitoring Metrics Publisher (for log ingestion) and Monitoring Reader (for reading stream configuration)."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "Configure VirtualMetric DataStream for Microsoft Sentinel",
+            "description": "Configure the VirtualMetric DataStream for Microsoft Sentinel to send data.",
+            "instructions": [
+                {
+                    "type": "InstructionStepsGroup",
+                    "parameters": {
+                        "enable": true,
+                        "instructionSteps": [
+                            {
+                                "title": "Register Application in Microsoft Entra ID (Optional)",
+                                "description": "**Choose your authentication method:**\n\n**Option A: Use Azure Managed Identity (Recommended)**\n- Skip this step if you plan to use Azure Managed Identity for authentication.\n- Azure Managed Identity provides a more secure authentication method without managing credentials.\n\n**Option B: Register a Service Principal Application**\n\n1. **Open the [Microsoft Entra ID page](https://entra.microsoft.com/)**:\n   - Click the provided link to open the **Microsoft Entra ID** registration page in a new tab.\n   - Ensure you are logged in with an account that has **Application Administrator** or **Global Administrator** permissions.\n\n2. **Create a New Application**:\n   - In the **Microsoft Entra ID portal**, select **App registrations** from the left-hand navigation.\n   - Click on **+ New registration**.\n   - Fill out the following fields:\n     - **Name**: Enter a descriptive name for the app (e.g., \"VirtualMetric ASIM Connector\").\n     - **Supported account types**: Choose **Accounts in this organizational directory only** (Single tenant).\n     - **Redirect URI**: Leave this blank.\n   - Click **Register** to create the application.\n\n3. **Copy Application and Tenant IDs**:\n   - Once the app is registered, note the **Application (client) ID** and **Directory (tenant) ID** from the **Overview** page. You'll need these for VirtualMetric DataStream configuration.\n\n4. **Create a Client Secret**:\n   - In the **Certificates & secrets** section, click **+ New client secret**.\n   - Add a description (e.g., 'VirtualMetric ASIM Secret') and set an appropriate expiration period.\n   - Click **Add**.\n   - **Copy the client secret value immediately**, as it will not be shown again. Store this securely for VirtualMetric DataStream configuration."
+                            },
+                            {
+                                "title": "Assign Required Permissions",
+                                "description": "Assign the required roles to your chosen authentication method (Service Principal or Managed Identity) in the resource group.\n\n**For Service Principal (if you completed Step 1):**\n\n1. **Navigate to Your Resource Group**:\n   - Open the **Azure Portal** and navigate to the **Resource Group** that contains your **Log Analytics Workspace** and where **Data Collection Rules (DCRs)** will be deployed.\n\n2. **Assign the Monitoring Metrics Publisher Role**:\n   - In the **Resource Group**, click on **Access control (IAM)** from the left-hand menu.\n   - Click **+ Add** and select **Add role assignment**.\n   - In the **Role** tab, search for and select **Monitoring Metrics Publisher**.\n   - Click **Next** to go to the **Members** tab.\n   - Under **Assign access to**, select **User, group, or service principal**.\n   - Click **+ Select members** and search for your registered application by name or client ID.\n   - Select your application and click **Select**.\n   - Click **Review + assign** twice to complete the assignment.\n\n3. **Assign the Monitoring Reader Role**:\n   - Repeat the same process to assign the **Monitoring Reader** role:\n   - Click **+ Add** and select **Add role assignment**.\n   - In the **Role** tab, search for and select **Monitoring Reader**.\n   - Follow the same member selection process as above.\n   - Click **Review + assign** twice to complete the assignment.\n\n**For Azure Managed Identity:**\n\n1. **Create or Identify Your Managed Identity**:\n   - If using **System-assigned Managed Identity**: Enable it on your Azure resource (VM, App Service, etc.).\n   - If using **User-assigned Managed Identity**: Create one in your resource group if it doesn't exist.\n\n2. **Assign the Monitoring Metrics Publisher Role**:\n   - Follow the same steps as above, but in the **Members** tab:\n   - Under **Assign access to**, select **Managed identity**.\n   - Click **+ Select members** and choose the appropriate managed identity type and select your identity.\n   - Click **Select**, then **Review + assign** twice to complete.\n\n3. **Assign the Monitoring Reader Role**:\n   - Repeat the process to assign the **Monitoring Reader** role to the same managed identity.\n\n**Required Permission Summary:**\nThe assigned roles provide the following capabilities:\n- **Monitoring Metrics Publisher**: Write data to Data Collection Endpoints (DCE) and send telemetry through Data Collection Rules (DCR)\n- **Monitoring Reader**: Read stream configuration and access Log Analytics workspace for ASIM table ingestion"
+                            },
+                            {
+                                "title": "Deploy Azure Infrastructure",
+                                "description": "Deploy the required Data Collection Endpoint (DCE) and Data Collection Rules (DCR) for Microsoft Sentinel tables using our ARM template.\n\n1. **Deploy to Azure**:\n   - Click the Deploy to Azure button below to automatically deploy the required infrastructure:\n   - [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirtualMetric%2520DataStream%2FData%2520Connectors%2FVirtualMetric-Sentinel%2FDeployToAzure.json)\n   - This will take you directly to the Azure portal to start the deployment.\n\n2. **Configure Deployment Parameters**:\n   - On the custom deployment page, configure the following settings:\n   \n   **Project details:**\n   - **Subscription**: Select your Azure subscription from the dropdown\n   - **Resource group**: Select an existing resource group or click **Create new** to create a new one\n   \n   **Instance details:**\n   - **Region**: Select the Azure region where your Log Analytics workspace is located (e.g., West Europe)\n   - **Workspace**: Enter your Log Analytics workspace name\n   - **DCE Name**: Provide a name for the Data Collection Endpoint (e.g., \"vmetric-dce\")\n   - **DCR Name Prefix**: Provide a prefix for the Data Collection Rules (e.g., \"vmetric-dcr\")\n\n3. **Complete the Deployment**:\n   - Click **Review + create** to validate the template.\n   - Review the parameters and click **Create** to deploy the resources.\n   - Wait for the deployment to complete (typically takes 2-5 minutes).\n\n4. **Verify Deployed Resources**:\n   - After deployment, verify the following resources were created:\n     - **Data Collection Endpoint (DCE)**: Check **Azure Portal > Monitor > Data Collection Endpoints**\n     - **Data Collection Rules (DCRs)**: Check **Azure Portal > Monitor > Data Collection Rules**\n   - **Copy the DCE Logs Ingestion URI** from the DCE **Overview** page (format: `https://<dce-name>.<region>.ingest.monitor.azure.com`)\n   - **Copy the DCE Resource ID** from the DCE **Overview** page (format: `/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.Insights/dataCollectionEndpoints/<dce-name>`)\n   - For each DCR, note the **Immutable ID** from the **Overview** page - you'll need these for VirtualMetric DataStream configuration."
+                            },
+                            {
+                                "title": "Configure VirtualMetric DataStream Integration",
+                                "description": "Set up VirtualMetric DataStream to send security telemetry to Microsoft Sentinel tables.\n\n1. **Access VirtualMetric DataStream Configuration**:\n   - Log into your **VirtualMetric DataStream** management console.\n   - Navigate to **Fleet Management** > **Targets** section.\n   - Click **Add new target** button.\n   - Select **Microsoft Sentinel** target.\n\n2. **Configure General Settings**:\n   - **Name**: Enter a name for your target (e.g., \"cus01-ms-sentinel\")\n   - **Description**: Optionally provide a description for the target configuration\n\n3. **Configure Azure Authentication** (choose based on Step 1):\n   \n   **For Service Principal Authentication:**\n   - **Managed Identity for Azure**: Keep **Disabled**\n   - **Tenant ID**: Enter the Directory (tenant) ID from Step 1\n   - **Client ID**: Enter the Application (client) ID from Step 1\n   - **Client Secret**: Enter the client secret value from Step 1\n   \n   **For Azure Managed Identity:**\n   - **Managed Identity for Azure**: Set to **Enabled**\n\n4. **Configure Stream Properties**:\n   - **Endpoint**: Choose your configuration method:\n     - **For manual stream configuration**: Enter the DCE Logs Ingestion URI (format: `https://<dce-name>.<region>.ingest.monitor.azure.com`)\n     - **For auto stream detection**: Enter the DCE Resource ID (format: `/subscriptions/<subscription-id>/resourceGroups/<resource-group-name>/providers/Microsoft.Insights/dataCollectionEndpoints/<dce-name>`)\n   - **Streams**: Select **Auto** for automatic stream detection, or configure specific streams if needed\n\n5. **Verify Data Ingestion in Microsoft Sentinel**:\n   - Return to your **Log Analytics Workspace**\n   - Run sample queries on the ASIM tables to confirm data is being received:\n     ```kql\n     ASimNetworkSessionLogs\n     | where TimeGenerated > ago(1h)\n     | take 10\n     ```\n   - Check the **Microsoft Sentinel Overview** dashboard for new data sources and event counts."
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,61 @@
+id: f1634822-b7e9-44f5-95ac-fa4a04f14513
+kind: Scheduled
+name: Dataverse - Audit log data deletion
+description: Identifies audit log data deletion activity in Dataverse.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1070
+query: |
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message =~ 'DeleteRecordChangeHistory' or Message =~ 'DeleteAuditData'
+  | extend CloudAppId = int(32780)
+  | extend AccountName = tostring(split(UserId, "@")[0])
+  | extend UPNSuffix = tostring(split(UserId, "@")[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      UserAgent,
+      Message,
+      EntityName,
+      InstanceUrl,
+      AccountName,
+      UPNSuffix,
+      CloudAppId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - Audit logs deleted in {{InstanceUrl}}
+  alertDescriptionFormat: User {{UserId}} deleted audit log data in {{InstanceUrl}}.
+    The message type is  {{Message}}.
+version: 3.2.0

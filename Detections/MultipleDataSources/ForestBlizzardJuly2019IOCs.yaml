@@ -57,20 +57,25 @@ query: |
   "accounts-web-mail.com","customer-certificate.com","session-users-activities.com","user-profile-credentials.com","verify-linke.com","support-servics.net",
   "onedrive-sharedfile.com","onedrv-live.com","transparencyinternational-my-sharepoint.com","transparencyinternational-my-sharepoints.com","soros-my-sharepoint.com"]);
   (union isfuzzy=true
-    (CommonSecurityLog 
-    | parse Message with * '(' DNSName ')' * 
-    | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP
+    (CommonSecurityLog
+    | where Message has_any (DomainNames)
+    | parse Message with * '(' DNSName ')' *
+    | extend AccountName = SourceUserID, DeviceName, IPAddress = SourceIP
     ),
     (_Im_Dns(domain_has_any=DomainNames)
-    | extend IPAddress = SrcIpAddr, DNSName = DnsQuery, Host = Dvc),
-    (VMConnection 
+    | where DnsQuery has_any (DomainNames)
+    | extend IPAddress = SrcIpAddr, DeviceName = Dvc
+    ),
+    (VMConnection
+    | where RemoteDnsCanonicalNames has_any (DomainNames)
     | parse RemoteDnsCanonicalNames with * '["' DNSName '"]' *
-    | extend IPAddress = RemoteIp, Host = Computer
+    | extend IPAddress = RemoteIp, DeviceName = Computer
     ),
     (AzureDiagnostics 
     | where ResourceType == "AZUREFIREWALLS"
     | where Category == "AzureFirewallApplicationRule"
     | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action
+    | where DestinationHost has_any (DomainNames)
     | extend DNSName = DestinationHost 
     | extend IPAddress = SourceHost
     ),
@@ -79,7 +84,7 @@ query: |
     | where Category == "AzureFirewallDnsProxy"
     | project TimeGenerated,Resource, msg_s, Type
     | parse msg_s with "DNS Request: " ClientIP ":" ClientPort " - " QueryID " " Request_Type " " Request_Class " " Request_Name ". " Request_Protocol " " Request_Size " " EDNSO_DO " " EDNS0_Buffersize " " Responce_Code " " Responce_Flags " " Responce_Size " " Response_Duration
-    | where  Request_Name  has_any (DomainNames)
+    | where Request_Name  has_any (DomainNames)
     | extend DNSName = Request_Name
     | extend IPAddress = ClientIP
     ),
@@ -97,32 +102,41 @@ query: |
     ),
     (
       _Im_WebSession(url_has_any=DomainNames)
-      | extend IPCustomEntity=IpAddr, HostCustomEntity=Hostname, AccoutCustomEntity=User
+      | extend IPAddress=IpAddr, DeviceName=Hostname, AccountName = tostring(split(User, "@")[0]), AccountDomain = tostring(split(User, "@")[1])
     )
   )
-  | where isnotempty(DNSName)
-  | where DNSName  has_any (DomainNames)
-  | extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = Account, HostCustomEntity = Host
+  | where DNSName has_any (DomainNames)
+  | extend timestamp = TimeGenerated
+  | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.5.2
+        columnName: IPAddress
+version: 1.6.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: petebryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
