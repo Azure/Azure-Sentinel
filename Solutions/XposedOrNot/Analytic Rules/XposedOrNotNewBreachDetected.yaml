@@ -1,0 +1,80 @@
+id: 4fefb861-f370-4196-a9fd-07fe1ddbdcfc
+name: XposedOrNot - New Breach Exposure Detected
+description: |
+  'Creates an incident when XposedOrNot reports a breach exposure that was not previously seen for a monitored domain.
+  The first sync of each domain is treated as a baseline, so historical breaches of a newly verified domain do not raise incidents.
+  Breaches added to XposedOrNot in the last 7 days are always reported, so the first breach of a previously clean domain is not missed.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: XposedOrNot
+    dataTypes:
+      - XposedOrNotExposures_CL
+      - XposedOrNotBreachCatalog_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+  - T1110
+query: |
+  let lookback = 14d;
+  let window = 1h;
+  let baselineGrace = 30m;
+  let recentBreach = 7d;
+  let Exposures = XposedOrNotExposures_CL
+      | where TimeGenerated > ago(lookback)
+      | extend IngestedAt = ingestion_time()
+      | summarize FirstSeen = min(IngestedAt) by Domain, Email, BreachName;
+  let DomainBaseline = Exposures
+      | summarize DomainFirstSeen = min(FirstSeen) by Domain;
+  let Catalog = XposedOrNotBreachCatalog_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, BreachedDate, AddedDate, PasswordRisk, ExposedData, ExposedRecords) by BreachName
+      | project-away TimeGenerated;
+  Exposures
+  | where FirstSeen > ago(window)
+  | join kind=inner DomainBaseline on Domain
+  | join kind=leftouter Catalog on BreachName
+  | where FirstSeen > DomainFirstSeen + baselineGrace or AddedDate > ago(recentBreach)
+  | extend PasswordRisk = iff(isempty(PasswordRisk), "unknown", PasswordRisk)
+  | extend ExposedDataTypes = strcat_array(ExposedData, "; ")
+  | summarize
+      TimeGenerated = max(FirstSeen),
+      ExposedEmailCount = dcount(Email),
+      ExposedEmails = strcat_array(make_set(Email, 25), ", ")
+      by Domain, BreachName, BreachedDate, AddedDate, PasswordRisk, ExposedDataTypes, ExposedRecords
+  | extend Severity = iff(PasswordRisk in ("plaintext", "easytocrack"), "High", "Medium")
+  | project TimeGenerated, Domain, BreachName, BreachedDate, AddedDate, PasswordRisk, Severity, ExposedEmailCount, ExposedEmails, ExposedDataTypes, ExposedRecords
+suppressionDuration: 1h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - BreachName
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+customDetails:
+  BreachName: BreachName
+  PasswordRisk: PasswordRisk
+  ExposedEmailCount: ExposedEmailCount
+  BreachedDate: BreachedDate
+alertDetailsOverride:
+  alertDisplayNameFormat: 'New breach exposure: {{BreachName}} affects {{Domain}}'
+  alertDescriptionFormat: '{{ExposedEmailCount}} email addresses on {{Domain}} were found in the {{BreachName}} breach. See the alert custom details for the password risk.'
+  alertSeverityColumnName: Severity
+version: 2.0.1
+kind: Scheduled
