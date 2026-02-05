@@ -3,6 +3,8 @@
 ## Version 0.2.0
 
 - (2026-01-22) [ASIM] Authentication M365Defender - Parser Fixes - [PR #13441](https://github.com/Azure/Azure-Sentinel/pull/13441)
+- Remove unnormalized columns
+- Previously unnormalized columns were added to AdditionalFields in case there are needed
 
 ## Version 0.1.3
 

@@ -3,6 +3,9 @@
 ## Version 0.3.0
 
 - (2026-01-22) [ASIM] Authentication su parser fixes - [PR #13453](https://github.com/Azure/Azure-Sentinel/pull/13453)
+- Re-evaluate successful su events as `Logon` instead of `Elevate`
+- Normalized failed su events as Logon failures
+- Remove unnormalized columns
 
 ## Version 0.2.1
 
