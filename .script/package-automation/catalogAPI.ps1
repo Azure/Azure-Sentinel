@@ -25,11 +25,10 @@ function GetCatalogDetails($offerId)
                 return $null;
             }
             else {
-                # Handle case where multiple offers are returned with same name
+                # Handle case where multiple offers are returned with same OfferId
                 if ($offerDetails -is [System.Object[]])
                 {
                     Write-Host "Multiple offers found for offerId $offerId. Selecting the latest one."
-                    # If multiple results, sort by displayRank (higher is newer/better) or by modifiedDate if available
                     if ($offerDetails[0].PSObject.Properties.Name -contains 'displayRank')
                     {
                         $offerDetails = $offerDetails | Sort-Object -Property displayRank -Descending | Select-Object -First 1
@@ -40,7 +39,6 @@ function GetCatalogDetails($offerId)
                     }
                     else
                     {
-                        # If no rank or date property, just pick the first one
                         $offerDetails = $offerDetails[0]
                     }
                 }
