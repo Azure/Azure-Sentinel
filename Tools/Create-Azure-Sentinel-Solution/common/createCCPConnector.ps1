@@ -509,6 +509,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 $outputString = ''
                 $guidValue = "parameters('guidValue')"
 
+                #if the $dataConnectorName already starts with [[concat - assume it contains all needed data, and return it as is
+                if ($dataConnectorName.StartsWith('[[concat', [StringComparison]::OrdinalIgnoreCase)) {
+                    Write-Host "****************** Data connector name is already in concat format, skipping processing and returning as is: $dataConnectorName"
+                    return $dataConnectorName
+                }
+
                 foreach ($currentName in $splitNamesBySlash) {
                     if ($currentName.Contains('{{')) {
                         $placeHolderFieldName = $currentName -replace '{{', '' -replace '}}', ''
@@ -556,7 +562,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 if ($concatenateParts.Count -gt 1 -and $concatenateParts -notmatch 'concat') {
                     if ($useRandomGuid) {
                         $outputString = "[[concat($($concatenateParts -join ', '), $guidValue"
-                    } else {
+                    }
+                    else {
                         $outputString = "[[concat($($concatenateParts -join ', ')"
                     }
                 }
@@ -564,7 +571,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     # if we just have parameters('abcwork')
                     if ($useRandomGuid) {
                         $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0]), $guidValue"
-                    } else {
+                    }
+                    else {
                         $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', $($concatenateParts[0])"
                     }
                 }
@@ -572,7 +580,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     # if we just have 'abcwork'
                     if ($useRandomGuid) {
                         $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])', $guidValue"
-                    } else {
+                    }
+                    else {
                         $outputString = "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', '$($concatenateParts[0])'"
                     }
                 }
@@ -616,6 +625,14 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
+
+                    if ($null -ne $fileContent.condition) {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "condition" -Value $fileContent.condition                       
+                    }
+
+                    if ($null -ne $fileContent.copy) {
+                        $armResource | Add-Member -MemberType NoteProperty -Name "copy" -Value $fileContent.copy
+                    }
 
                     if ($global:commaSeparatedTextFieldName -ne "") {
                         $copyObject = [ordered]@{
@@ -1169,8 +1186,7 @@ function CreateRestApiPollerResourceProperties($armResource, $templateContentCon
         # AccessKeyId 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource.properties.auth -propertyName 'AccessKeyId' -isInnerObject $true -innerObjectName 'auth' -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 4 -isCreateArray $false
     }
-    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken')
-    {
+    elseif ($armResource.properties.auth.type.ToLower() -eq 'jwttoken') {
         # Check for userName.value format OR UserToken format
         $hasUserName = $armResource.properties.auth.userName -and $armResource.properties.auth.userName.value
         $hasPassword = $armResource.properties.auth.password -and $armResource.properties.auth.password.value
