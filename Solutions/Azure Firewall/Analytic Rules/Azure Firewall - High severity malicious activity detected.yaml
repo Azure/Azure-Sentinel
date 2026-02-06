@@ -1,0 +1,86 @@
+id: 504257c1-81e2-4609-8d40-b395e62f11c7
+name: High severity malicious activity detected
+description: |
+  Identifies high severity malicious activity in Azure Firewall IDPS logs.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AZFWIdpsSignature
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - InitialAccess
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1041
+  - T1003
+  - T1204
+query: |
+  let TimeWindow   = 90d;    // How far back to look (aligns with queryPeriod)
+  let HitThreshold = 10;     // Minimum hits to alert per SourceIp + Category
+  let MinSeverity  = 1;      // Set Minimum Severity
+  let EnableCategoryFilter    = true;   // Filter 1: use CategoriesOfInterest
+  let EnableDescriptionFilter = false;  // Filter 2: use DescriptionsOfInterest
+  let EnableActionFilter      = false;  // Filter 3: use MatchActions
+  let CategoriesOfInterest    = dynamic([
+      "Targeted Malicious Activity was Detected",
+      "Exploit Kit Activity Detected",
+      "Domain Observed Used for C2 Detected",
+      "Successful Credential Theft Detected",
+      "Malware Command and Control Activity Detected",
+      "Executable code was detected",
+      "A Network Trojan was detected"
+  ]);
+  let DescriptionsOfInterest  = dynamic([
+      "targeted-activity",
+      "exploit-kit",
+      "domain-c2",
+      "credential-theft",
+      "command-and-control",
+      "shellcode-detect",
+      "trojan-activity"
+  ]);
+  let MatchActions = dynamic(["Deny", "alert"]);
+  AZFWIdpsSignature
+  | where TimeGenerated >= ago(TimeWindow)
+  | where Severity >= MinSeverity
+  // Filter 1: Category filter (optional)
+  | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+  // Filter 2: Description filter (optional)
+  | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+  // Filter 3: Action filter (optional)
+  | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+  | summarize
+      StartTime   = min(TimeGenerated),
+      EndTime     = max(TimeGenerated),
+      TotalHits   = count(),
+      MaxSeverity = max(Severity),
+      Actions     = make_set(Action, 5),
+      Signatures  = make_set(SignatureId, 20),
+      Description = make_set(substring(tostring(Description), 0, 120), 3)
+      by SourceIp, ThreatCategory = Category
+  | where TotalHits >= HitThreshold
+  | project
+      StartTime,
+      EndTime,
+      SourceIp,
+      ThreatCategory,
+      TotalHits,
+      MaxSeverity,
+      Actions,
+      Signatures,
+      Description
+  | order by MaxSeverity desc, TotalHits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0
+kind: Scheduled
