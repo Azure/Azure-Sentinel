@@ -25,6 +25,23 @@ function GetCatalogDetails($offerId)
                 return $null;
             }
             else {
+                # Handle case where multiple offers are returned with same OfferId
+                if ($offerDetails -is [System.Object[]])
+                {
+                    Write-Host "Multiple offers found for offerId $offerId. Selecting the latest one."
+                    if ($offerDetails[0].PSObject.Properties.Name -contains 'displayRank')
+                    {
+                        $offerDetails = $offerDetails | Sort-Object -Property displayRank -Descending | Select-Object -First 1
+                    }
+                    elseif ($offerDetails[0].PSObject.Properties.Name -contains 'modifiedDate')
+                    {
+                        $offerDetails = $offerDetails | Sort-Object -Property modifiedDate -Descending | Select-Object -First 1
+                    }
+                    else
+                    {
+                        $offerDetails = $offerDetails[0]
+                    }
+                }
                 Write-Host "CatalogAPI Details found for offerId $offerId"
                 return $offerDetails;
             }
