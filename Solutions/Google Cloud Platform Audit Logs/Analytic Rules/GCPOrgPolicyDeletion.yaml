@@ -1,0 +1,97 @@
+id: 205e1c9f-faee-43f1-b3b8-1952ffbbeea4
+name: GCP Audit Logs - Detect Organization Policy Deletion or Updation
+description: |
+  'Detects when a Google Cloud Platform organization policy is deleted or updated. 
+  Organization policies provide centralized control over your organization's cloud resources and help ensure security and compliance.
+  Deletion or modification of org policies may indicate an attempt to bypass security controls or weaken the security posture of GCP projects.
+  Adversaries may delete or update organization policies to disable security constraints before performing malicious activities.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+tags:
+  - GCP
+  - IAM Organization Policy
+  - Compliance
+query: |
+  GCPAuditLogs
+  | where ServiceName == "orgpolicy.googleapis.com"
+  | where MethodName has_any ("OrgPolicy.DeletePolicy", "OrgPolicy.UpdatePolicy")
+  | extend 
+      RequestMetadataJson = parse_json(RequestMetadata),
+      AuthInfoJson = parse_json(AuthenticationInfo),
+      AuthzInfoJson = parse_json(AuthorizationInfo)
+  | extend 
+      PolicyName = split(GCPResourceName, "/")[-1],
+      CallerIpAddress = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      AuthEmail = tostring(AuthInfoJson.principalEmail),
+      Permission = tostring(AuthzInfoJson[0].permission),
+      PermissionGranted = tostring(AuthzInfoJson[0].granted)
+  | extend 
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project TimeGenerated,
+            PrincipalEmail,
+            AuthEmail,
+            ProjectId,
+            ResourceName = GCPResourceName,
+            PolicyName,
+            CallerIpAddress,
+            UserAgent,
+            MethodName,
+            ServiceName,
+            Severity,
+            Permission,
+            PermissionGranted,
+            LogName,
+            InsertId,
+            AccountName,
+            AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ProjectId
+      - identifier: InstanceName
+        columnName: ResourceName
+customDetails:
+  ProjectId: ProjectId
+  PolicyName: PolicyName
+  ResourceName: ResourceName
+  UserAgent: UserAgent
+  Permission: Permission
+  MethodName: MethodName
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP Organization Policy {{PolicyName}} Deleted by {{PrincipalEmail}}"
+  alertDescriptionFormat: |-
+    Orgnization policy {{PolicyName}} was deleted. This action may weaken security controls and compliance posture.
+    
+    Resource: {{ResourceName}}
+    Source IP: {{CallerIpAddress}}
+    
+    Investigate whether this deletion was authorized and assess the impact on security controls.
+version: 1.0.0
+kind: Scheduled
