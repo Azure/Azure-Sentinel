@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
 |-------------|--------------------------------|--------------------------------------------------------|
+|  3.1.0      |  03-02-2026                    | Python runtime compatibility fix (breaking for connector deployments running on Python 3.11). Fixed solution installation via Azure portal by deriving deployment **location** from selected workspace (prevents empty location). |
 |  3.0.4      |  26-09-2025                    | Updated support **Microsoft** to **Partner**                   |
 |  3.0.3      |  02-09-2025                    | Added support for new log endpoints                   |
 |  3.0.2      |  16-04-2024                    | Added Deploy to Azure Goverment button for Government portal in **Dataconnector**<br/> Fixed **Parser** issue for Parser name and ParentID mismatch |
