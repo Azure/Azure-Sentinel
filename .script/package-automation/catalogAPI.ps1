@@ -26,19 +26,24 @@ function GetCatalogDetails($offerId)
             }
             else {
                 # Handle case where multiple offers are returned with same OfferId
-                if ($offerDetails -is [System.Object[]])
+                if ($offerDetails -is [System.Object[]] -and $offerDetails.Count -gt 1)
                 {
-                    Write-Host "Multiple offers found for offerId $offerId. Selecting the latest one."
-                    if ($offerDetails[0].PSObject.Properties.Name -contains 'displayRank')
+                    Write-Host "Multiple offers found for offerId $offerId. Matching by publisherId from baseMetadata."
+                    $matched = $offerDetails | Where-Object { $_.publisherId -eq $baseMetadata.publisherId }
+                    if ($null -ne $matched)
                     {
-                        $offerDetails = $offerDetails | Sort-Object -Property displayRank -Descending | Select-Object -First 1
-                    }
-                    elseif ($offerDetails[0].PSObject.Properties.Name -contains 'modifiedDate')
-                    {
-                        $offerDetails = $offerDetails | Sort-Object -Property modifiedDate -Descending | Select-Object -First 1
+                        if ($matched -is [System.Object[]])
+                        {
+                            $offerDetails = $matched[0]
+                        }
+                        else
+                        {
+                            $offerDetails = $matched
+                        }
                     }
                     else
                     {
+                        Write-Host "No offer matched publisherId '$($baseMetadata.publisherId)'. Defaulting to first offer."
                         $offerDetails = $offerDetails[0]
                     }
                 }
