@@ -2,14 +2,14 @@
 # Recorded Future Intelligence for Microsoft Sentinel
 
 > [!IMPORTANT]
-> ## Microsoft Defender XDR Unified Portal Migration - Breaking Changes
+> ## Microsoft Defender Unified Portal Migration - Breaking Changes
 >
 > With Microsoft's transition from the standalone Azure Sentinel Portal to the **unified Microsoft Defender XDR portal**, the following **breaking changes** affect these playbooks:
 >
 > ### Incident Creation via Logic Apps No Longer Supported
-> Incidents created using the Azure Sentinel Logic Apps connector (`/azuresentinel`) **will not appear** in the unified Microsoft Defender XDR incident queue. This affects:
+> Incidents created using the Azure Sentinel Logic Apps connector (`/azuresentinel`) **will not appear** in the unified Microsoft Defender incident queue. This affects:
 >
-> | Playbook | Previous Behavior | New Behavior (v2.0) |
+> | Playbook | Previous Behavior | New Behavior (v4.0) |
 > |----------|-------------------|---------------------|
 > | **RecordedFuture-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePortalAlerts_CL` log only |
 > | **RecordedFuture-Playbook-Alert-Importer** | Created incidents directly | Writes to `RecordedFuturePlaybookAlerts_CL` log only |
@@ -17,7 +17,7 @@
 > | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
 >
 > ## Incident Creation via Analytic Rules
-> Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents.
+> Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents. See [Incident Creation](../readme.md#incident-creation) for more information.
 
 ## Prerequisites
 
@@ -247,9 +247,11 @@ The following Analytic rules are provided in the Solution. All of them requires 
 |Threat Hunt|RecordedFutureThreatHuntingDomainAllActors|
 |Threat Hunt|RecordedFutureThreatHuntingUrlAllActors|
 
+### Incident creation
+
 Following changes made by Microsoft, removing the possibility to create incidents via Logic Apps, we now provide the following analytic rules. For these to work out of the box, it's important that the `Custom Log Names` in the corresponding Logic Apps are used.
 
-|User Case|Analytic Rule|
+|Use Case|Analytic Rule|
 |-|-|
 |Alerts|RecordedFutureAlerts|
 |Playbook Alerts| RecordedFuturePlaybookAlerts|

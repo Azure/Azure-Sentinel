@@ -7,14 +7,15 @@ The Recorded Future Sandbox integration requires an API key for `Recorded Future
 
 If you use the Enterprise Sandbox, you need to provide an additional key `Enterprise Sandbox API token`.  This can be retrieved from https://sandbox.recordedfuture.com/account. It should be provided to the corresponding logic apps as a logic app parameter `Enterprise Sandbox API token`.
 > [!IMPORTANT]
-> ## Microsoft Defender XDR Migration - Breaking Changes (v2.0)
+> ## Microsoft Defender Migration - Breaking Changes (v4.0)
 >
-> Starting with version 2.0, **direct incident creation via Logic Apps has been removed** from the `RecordedFuture-Sandbox_Outlook_Attachment` and `RecordedFuture-Sandbox_StorageAccount` playbooks. Incidents created via the Azure Sentinel connector do not appear in the unified Microsoft Defender XDR portal.
+> Starting with version 4.0, **direct incident creation via Logic Apps has been removed** from the `RecordedFuture-Sandbox_Outlook_Attachment` and `RecordedFuture-Sandbox_StorageAccount` playbooks. Incidents created via the Azure Sentinel connector do not appear in the unified Microsoft Defender portal.
 >
 > ### What Changed
 > - Sandbox results are now written to **RecordedFutureSandboxResults_CL** custom log table
 > - **No incidents are created directly by these playbooks**
 > - Email notifications are still sent (Outlook playbook only)
+> - We provide Analytic Rules that will handle **incident creation**, see [Incident Creation](../readme.md#incident-creation)
 
 The Recorded Future Sandbox integration requires **BOTH** a API key for ```Recorded Future Sandbox for Microsoft Sentinel``` **AND** a ```Recorded Future for Microsoft Sentinel``` API key that is different than the one used in the ```Recorded Future for Microsoft Sentinel``` integration. They need to both be input in their respective places.
 
@@ -38,8 +39,6 @@ Type: **Response**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connector-authorization) section. \
 Connectors used: ***recordedfuturesandbo*** and ***azuresentinel*** see [Connector authorization](../readme.md#connector-authorization) for guidance.
-
-> **⚠️ Microsoft Defender XDR Migration Warning:** This playbook uses the Azure Sentinel connector to add comments to incidents. Comments added via this connector may not sync to the unified Microsoft Defender XDR portal. Consider updating this playbook to write results to a custom log table instead.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -67,7 +66,7 @@ Connectors used: ***recordedfuturesandbo***, ***azureloganalyticsdatacollector**
 
 Enables submission of file attachments, from Microsoft Outlook emails, to Recorded to Future's Malware Analysis Sandbox. Results are written to the **RecordedFutureSandboxResults_CL** custom log table. An email summary is sent to the recipient if the score exceeds the threshold.
 
-> **Note:** To create incidents, use a Scheduled Analytics Rule that queries `RecordedFutureSandboxResults_CL`.
+> **Note:** To create incidents, use a Scheduled Analytics Rule that queries `RecordedFutureSandboxResults_CL`. See [Incident Creation](../readme.md#incident-creation) for more information
 
 **Information in summary**
 * Severity Score
@@ -97,7 +96,7 @@ Enables security and IT teams to submit files from Azure Blob Storage to Recorde
 * Sample ID
 * HTML Report
 
-> **Note:** To create incidents, use a Scheduled Analytics Rule that queries `RecordedFutureSandboxResults_CL`.
+> **Note:** To create incidents, use a Scheduled Analytics Rule that queries `RecordedFutureSandboxResults_CL`. See [Incident Creation](../readme.md#incident-creation) for more information
 
 To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" traget="_blank">custom analytic rule</a>.
 
@@ -106,8 +105,6 @@ To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft
 
 
 ## Automate Incident Enrichment
-
-> **⚠️ Microsoft Defender XDR Migration Warning:** Enrichment playbooks that add comments to incidents via the Azure Sentinel connector may not work correctly in the unified Microsoft Defender XDR portal. Comments may not sync between portals. Consider migrating to a log-based enrichment approach.
 
 After enrichment playbooks is installed and all connections are configured. Create an automation rule to automate enrichment of known entities with Recorded Future intelligence in all incidents.
 
