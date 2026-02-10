@@ -8,7 +8,7 @@ More information about Recorded Future Intelligence Solution for Microsoft Senti
 > Starting with version 4.0, **direct incident creation via Logic Apps has been removed** from these playbooks. Incidents created via the Azure Sentinel connector do not appear in the unified Microsoft Defender portal.
 >
 > ### What Changed
-> - The `create_incident` parameter is now **deprecated and ignored**
+> - The `create_incident` parameter is now **removed**
 > - Alerts are stored only in custom log tables
 > - **No incidents are created directly by these playbooks**
 > - We provide Analytic Rules that will handle **incident creation**, see [Incident Creation](../readme.md#incident-creation)
@@ -24,7 +24,7 @@ Connectors used: ***recordedfuturev2***, ***azureloganalyticsdatacollector*** an
 
 Retrieves Alerts and stores them in the **RecordedFuturePortalAlerts_CL** custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts" target="_blank">Alerts</a> (requires Recorded Future login)
 
-> **Note:** The `create_incident` parameter is deprecated. Use Scheduled Analytics Rules to create incidents from the `RecordedFuturePortalAlerts_CL` table. See [Incident Creation](../readme.md#incident-creation) for more information.
+> **Note:** The `create_incident` parameter is removed. Use Scheduled Analytics Rules to create incidents from the `RecordedFuturePortalAlerts_CL` table. See [Incident Creation](../readme.md#incident-creation) for more information.
 
 
 
@@ -39,7 +39,7 @@ Connectors used: ***recordedfuturev2*** and ***azureloganalyticsdatacollector***
 
 Retrieves Playbook Alerts and stores them in the **RecordedFuturePlaybookAlerts_CL** custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/13152506878739-Playbook-Alerting-Rules" target="_blank">Playbook Alerts</a> (requires Recorded Future login)
 
-> **Note:** The `create_incident` parameter is deprecated. Use Scheduled Analytics Rules to create incidents from the `RecordedFuturePlaybookAlerts_CL` table. See [Incident Creation](../readme.md#incident-creation) for more information.
+> **Note:** The `create_incident` parameter is removed. Use Scheduled Analytics Rules to create incidents from the `RecordedFuturePlaybookAlerts_CL` table. See [Incident Creation](../readme.md#incident-creation) for more information.
 
 
 ### Limiting Playbook Alert categories
