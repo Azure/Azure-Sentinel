@@ -4,12 +4,13 @@
 
 ## Overview
 
-Collects comprehensive table metadata from Microsoft Azure Monitor documentation sources:
+Collects comprehensive table metadata from Microsoft documentation sources:
 
 - Azure Monitor Logs table reference
 - Microsoft Defender XDR schema reference
 - Table feature support information
 - Ingestion API compatibility
+- Microsoft Sentinel data connectors reference (lake-only ingestion, DCR support)
 
 The collected data is saved to `tables_reference.csv` which is used by:
 - **`map_solutions_connectors_tables.py`** - To enrich table metadata in `tables.csv` and determine collection methods
@@ -42,12 +43,15 @@ python collect_table_info.py --skip-details
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--output` | `tables_reference.csv` | Path for the output CSV file |
+| `--output`, `-o` | Script directory | Output directory for CSV and report files |
 | `--skip-details` | `False` | Skip fetching details from individual table pages (faster but less data) |
-| `--max-details` | None | Maximum number of table detail pages to fetch (for testing) |
+| `--max-details` | `0` (all) | Maximum number of table detail pages to fetch (0=all, useful for testing) |
+| `--refresh-cache` | `False` | Clear cache and fetch fresh content |
+| `--skip-cache` | `False` | Skip cache for this run only |
 | `--cache-ttl` | `604800` | Cache time-to-live in seconds (default: 1 week) |
-| `--clear-cache` | `False` | Clear all cached files before running |
+| `--cache-dir` | `.cache` | Directory for cache files |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
+| `--quiet`, `-q` | `False` | Suppress verbose output |
 
 ## Output Files
 
@@ -55,24 +59,36 @@ python collect_table_info.py --skip-details
 
 Comprehensive CSV with table metadata:
 
-| Column | Description |
-|--------|-------------|
-| `table_name` | Table name |
-| `description` | Table description from documentation |
-| `category` | Table category (e.g., Security, Audit, Azure Resources) |
-| `support_tier` | Support tier (from overrides) |
-| `collection_method` | Data collection method (from resource_types or overrides) |
-| `solutions` | Associated Log Analytics solutions |
-| `resource_types` | Azure resource types that emit to this table |
-| `source_azure_monitor` | Whether table is in Azure Monitor reference |
-| `source_defender_xdr` | Whether table is in Defender XDR schema |
-| `source_feature_support` | Whether table has feature support info |
-| `source_ingestion_api` | Whether table supports ingestion API |
-| `azure_monitor_doc_link` | Link to Azure Monitor documentation |
-| `defender_xdr_doc_link` | Link to Defender XDR documentation |
-| `basic_logs_eligible` | Whether table supports Basic Logs plan |
-| `supports_transformations` | Whether ingestion-time transformations are supported |
-| `ingestion_api_supported` | Whether Data Collector API ingestion is supported |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `table_name` | Table name | All sources |
+| `description` | Table description from documentation | Azure Monitor individual pages, Defender XDR schema |
+| `category` | Table category (e.g., Security, Audit, Azure Resources) | Azure Monitor tables-category |
+| `support_tier` | Support tier (from overrides) | Override system |
+| `collection_method` | Data collection method (from resource_types or overrides) | Azure Monitor individual pages, Override system |
+| `solutions` | Associated Log Analytics solutions | Azure Monitor individual pages |
+| `resource_types` | Azure resource types that emit to this table | Azure Monitor individual pages |
+| `table_type` | Table type (e.g., Microsoft, Azure, Custom) | Azure Monitor individual pages |
+| `source_azure_monitor` | Whether table is in Azure Monitor reference | Azure Monitor tables-category |
+| `source_defender_xdr` | Whether table is in Defender XDR schema | Defender XDR schema |
+| `xdr_only` | Whether table is only available in Defender XDR (not in Azure Monitor) | Computed (in XDR but not Azure Monitor) |
+| `source_feature_support` | Whether table has feature support info | Tables feature support |
+| `source_ingestion_api` | Whether table supports ingestion API | Logs Ingestion API overview |
+| `source_sentinel_tables` | Whether table has Sentinel connector reference info | Sentinel tables/connectors include |
+| `azure_monitor_doc_link` | Link to Azure Monitor documentation | Azure Monitor tables-category |
+| `defender_xdr_doc_link` | Link to Defender XDR documentation | Defender XDR schema |
+| `basic_logs_eligible` | Whether table supports Basic Logs plan | Azure Monitor individual pages |
+| `supports_transformations` | Whether ingestion-time transformations are supported | Tables feature support (primary), Sentinel tables/connectors (fallback) |
+| `ingestion_api_supported` | Whether Data Collector API ingestion is supported | Logs Ingestion API overview |
+| `lake_only_supported` | Whether lake-only ingestion is supported | Sentinel tables/connectors include |
+
+## Transformation Support Enrichment
+
+The `supports_transformations` field is populated from two sources:
+1. **Primary**: [Tables Feature Support](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support) page
+2. **Fallback**: [Sentinel Tables/Connectors Reference](https://learn.microsoft.com/azure/sentinel/data-connectors-reference) (used when primary source has no data)
+
+When both sources have data for a table, the script validates consistency and generates a `transformation_support_mismatch_report.md` file if any discrepancies are found.
 
 ## Override System
 
@@ -102,7 +118,7 @@ The script uses file-based caching to minimize network requests:
 
 ```bash
 # Clear cache and fetch fresh data
-python collect_table_info.py --clear-cache
+python collect_table_info.py --refresh-cache
 
 # Use shorter cache TTL (e.g., 1 day = 86400 seconds)
 python collect_table_info.py --cache-ttl 86400
@@ -119,6 +135,7 @@ The script collects table information from the following Microsoft documentation
 | Defender XDR Schema | [advanced-hunting-schema-tables](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables) | Table names, descriptions, Defender documentation links |
 | Tables Feature Support | [tables-feature-support](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tables-feature-support) | Tables that support ingestion-time transformations |
 | Logs Ingestion API | [logs-ingestion-api-overview](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview) | Tables that support ingestion via Data Collector API |
+| Sentinel Tables/Connectors | [sentinel-tables-connectors](https://learn.microsoft.com/en-us/azure/sentinel/data-connectors-reference) (include file) | DCR support and lake-only ingestion support |
 
 ## Collection Method Detection
 
