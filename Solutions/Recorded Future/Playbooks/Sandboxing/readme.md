@@ -43,7 +43,7 @@ Connectors used: ***recordedfuturesandbo*** and ***azuresentinel*** see [Connect
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
-Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Microsoft Sentinel incident with the following information from the analysis report:
+Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Microsoft Sentinel comment with the following information from the analysis report:
 
 * Severity Score
 * Signatures

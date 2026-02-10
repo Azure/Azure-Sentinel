@@ -25,7 +25,7 @@
 
 The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be installed for indicators to be forwarded to Microsoft Sentinel ThreatIntelligenceIndicator log table. The Threat Intelligence Solution contains both the new **Threat Intelligence Upload Indicators API** and the _deprecated_ **Threat Intelligence Platforms Data Connector**.
 
-![](Images/2023-11-17-22-53-18.png)
+![Content Hub](Images/threat_intel_contethub.png)
 
 ### Roles and Permissions
 
@@ -87,14 +87,15 @@ It is possible to install specific playbooks as specified in the [Playbooks](#pl
 
 ## 1. Content Hub Installation
 
-1. Locate the `Recorded Future Intelligence` in Microsoft Sentinel Content Hub.
-![](Images/2023-04-18-08-39-58.png)
+1. Locate the `Recorded Future Intelligence` in Microsoft Sentinel Content Hub in Microsoft Defender Portal.
+
+![defender_hub](Images/defender_hub.png)
 Press **Install**  and continue to configure the solution.
 
 > [!NOTE]
 > The Content Hub installation provides templates and you have to create playbooks, workbooks, and analytic rules based on the templates.
 
-![](Images/2023-11-20-12-13-25.png)
+![alt text](Images/playbook_templates.png)
 
 When installing playbooks from templates, read the description and look for dependencies that have to be installed.
 
@@ -187,7 +188,8 @@ Workbook templates are installed as part of the Solution and and can be saved an
 <details>
 <summary>Expand image</summary>
 
-![Workbooks](Images/workbook.png)
+![defender workbook](Images/defender_workbook.png)
+
 </details>
 
 The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependencies on corresponding Playbooks configured and running.
@@ -205,12 +207,12 @@ The Recorded Future Solutions contains the following Workbooks. Note that workbo
 # Analytic Rules
 Recorded Future Solution includes Threat Hunt Analytic Rule templates. Which can be used in conjunction with Microsoft's out of the box analytic rules. The Analytic Rules can be configured to trigger alerts related to our imported risk lists and threat hunts.
 
-To operationalize  Recorded Future threat intelligence, we recommend deploying Microsoft's out of the box threat TI analytic rules, which Recorded Future is fully compatible with. You can find these rules in your Sentinel instance under `Configuration -> Analytics -> Rule Templates`. Searching for rules that start with "TI Map" will bring up all Microsoft out of the box intelligence rules. You should search for rules that use tables that contain relevant log data and then deploy them. Once deployed, these rules will automatically correlate Recorded Future Threat Intelligence against your internal telemetry.
+To operationalize  Recorded Future threat intelligence, we recommend deploying Microsoft's out of the box threat TI analytic rules, which Recorded Future is fully compatible with. You can find these rules in your Sentinel instance under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`. Searching for rules that start with "TI Map" will bring up all Microsoft out of the box intelligence rules. You should search for rules that use tables that contain relevant log data and then deploy them. Once deployed, these rules will automatically correlate Recorded Future Threat Intelligence against your internal telemetry.
 
 <details>
 <summary>Expand image</summary>
 
-![Analyticrule](Images/analyticrules.png)
+![Defender analytic rules](Images/defender_analytics.png)
 </details>
 
 When creating Analytic Rules from templates, modify the provided KQL to match you infrastructure. The KQL query below is an example where the ASIM imNetworkSession table can be exchanged for any table containing outgoing IP traffic in your infrastructure.
@@ -258,7 +260,7 @@ Following changes made by Microsoft, removing the possibility to create incident
 |Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|
 |Sandbox Storage Account|RecordedFutureSandboxStorage|
 
-These analytic should be available under `Configuration -> Analytics -> Rule Templates` - if not, there are importable versions provided under the `Recorded Future\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Configuration -> Analytics` then press the `Import` button.
+These analytic should be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates` - if not, there are importable versions provided under the `Recorded Future\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Microsoft Sentinel -> Configuration -> Analytics` then press the `Import` button.
 
 
 # Upgrade from previous versions
