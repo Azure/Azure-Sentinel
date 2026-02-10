@@ -1,0 +1,39 @@
+id: CBSLog_Parser
+Function:
+  Title: Parser for CBSLog (Incidents)
+  Version: '1.1.0'
+  LastUpdated: '2025-01-27'
+Category: Microsoft Sentinel Parser
+FunctionName: CBSLog
+FunctionAlias: CBSLog
+FunctionQuery: |
+  let CBSV1_Empty = datatable(
+      id_s:string, subject_s:string, severity_s:string, type_s:string,
+      class_s:string, status_s:string, coa_s:string, remarks_s:string,
+      external_link_s:string, first_seen_s:string, last_seen_s:string,
+      brand_s:string, screenshots_g:dynamic
+  )[];
+  let CBSV1_view = union isfuzzy=true CBSLog_Azure_1_CL, CBSV1_Empty
+      | extend EventVendor = 'CTM360',
+               EventProduct = 'CyberBlindSpot',
+               SourceConnector = 'FunctionApp',
+               IncidentId = column_ifexists('id_s', ''),
+               Subject = column_ifexists('subject_s', ''),
+               Severity = column_ifexists('severity_s', ''),
+               IncidentType = column_ifexists('type_s', ''),
+               Class = column_ifexists('class_s', ''),
+               Status = column_ifexists('status_s', ''),
+               COA = column_ifexists('coa_s', ''),
+               Remarks = column_ifexists('remarks_s', ''),
+               ExternalLink = column_ifexists('external_link_s', ''),
+               FirstSeen = column_ifexists('first_seen_s', ''),
+               LastSeen = column_ifexists('last_seen_s', ''),
+               Brand = column_ifexists('brand_s', ''),
+               Screenshots = column_ifexists('screenshots_g', dynamic(null));
+  let CBSV2_view = CBSLog_AzureV2_CL
+      | extend EventVendor = 'CTM360',
+               EventProduct = 'CyberBlindSpot',
+               SourceConnector = 'CCF';
+  union isfuzzy=true CBSV2_view, CBSV1_view
+  | project TimeGenerated, EventVendor, EventProduct, SourceConnector, IncidentId, Subject, Severity, IncidentType, Class, Status, COA, Screenshots, Remarks, ExternalLink, FirstSeen, LastSeen, Brand
+  | project-away *_s, *_d, *_g
