@@ -3,9 +3,9 @@
 More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
 
 > [!IMPORTANT]
-> ## Microsoft Defender XDR Migration - Breaking Changes (v2.0)
+> ## Microsoft Defender Migration - Breaking Changes (v4.0)
 >
-> Starting with version 2.0, **direct incident creation via Logic Apps has been removed** from these playbooks. Incidents created via the Azure Sentinel connector do not appear in the unified Microsoft Defender XDR portal.
+> Starting with version 4.0, **direct incident creation via Logic Apps has been removed** from these playbooks. Incidents created via the Azure Sentinel connector do not appear in the unified Microsoft Defender portal.
 >
 > ### What Changed
 > - The `create_incident` parameter is now **deprecated and ignored**

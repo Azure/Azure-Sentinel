@@ -4,7 +4,7 @@
 > [!IMPORTANT]
 > ## Microsoft Defender Unified Portal Migration - Breaking Changes
 >
-> With Microsoft's transition from the standalone Azure Sentinel Portal to the **unified Microsoft Defender XDR portal**, the following **breaking changes** affect these playbooks:
+> With Microsoft's transition from the standalone Azure Sentinel Portal to the **unified Microsoft Defender portal**, the following **breaking changes** affect these playbooks:
 >
 > ### Incident Creation via Logic Apps No Longer Supported
 > Incidents created using the Azure Sentinel Logic Apps connector (`/azuresentinel`) **will not appear** in the unified Microsoft Defender incident queue. This affects:
