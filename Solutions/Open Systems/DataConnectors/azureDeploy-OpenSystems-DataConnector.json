@@ -2,10 +2,10 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "logAnalyticsWorkspaceName": {
+    "workspace": {
       "type": "string",
       "metadata": {
-        "description": "Name of the Log Analytics workspace."
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup."
       }
     },
     "principalId": {
@@ -40,25 +40,11 @@
         "description": "Enable Secure Web Gateway logs ingestion."
       }
     },
-    "proxyConsumerThreads": {
-      "type": "int",
-      "defaultValue": 1,
-      "metadata": {
-        "description": "Number of consumer threads for Secure Web Gateway logs."
-      }
-    },
     "identity": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
         "description": "Enable Identity service logs ingestion."
-      }
-    },
-    "identityConsumerThreads": {
-      "type": "int",
-      "defaultValue": 1,
-      "metadata": {
-        "description": "Number of consumer threads for Identity service logs."
       }
     },
     "firewall": {
@@ -68,25 +54,11 @@
         "description": "Enable firewall logs ingestion."
       }
     },
-    "firewallConsumerThreads": {
-      "type": "int",
-      "defaultValue": 1,
-      "metadata": {
-        "description": "Number of consumer threads for Firewall logs."
-      }
-    },
     "zeroTrustNetworkAccess": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
         "description": "Enable Zero Trust Network Access logs ingestion."
-      }
-    },
-    "ztnaConsumerThreads": {
-      "type": "int",
-      "defaultValue": 1,
-      "metadata": {
-        "description": "Number of consumer threads for Zero Trust Network Access logs."
       }
     },
     "secureE-MailGateway": {
@@ -96,25 +68,11 @@
         "description": "Enable Secure E-Mail Gateway logs ingestion."
       }
     },
-    "secureE-MailGatewayConsumerThreads": {
-      "type": "int",
-      "defaultValue": 1,
-      "metadata": {
-        "description": "Number of consumer threads for Secure E-Mail Gateway logs."
-      }
-    },
     "intrusionDetectionSystem": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
         "description": "Enable Intrusion Detection System logs ingestion."
-      }
-    },
-    "intrusionDetectionSystemConsumerThreads": {
-      "type": "int",
-      "defaultValue": 1,
-      "metadata": {
-        "description": "Number of consumer threads for Intrusion Detection System logs."
       }
     },
     "dceName": {
@@ -138,21 +96,21 @@
     },
     "containerCpu": {
       "type": "string",
-      "defaultValue": "2.0",
+      "defaultValue": "1.0",
       "metadata": {
         "description": "Allocated CPU resource for log processor container."
       }
     },
     "containerMemory": {
       "type": "int",
-      "defaultValue": 4,
+      "defaultValue": 2,
       "metadata": {
         "description": "Allocated memory resource for log processor container."
       }
     },
     "containerImage": {
       "type": "string",
-      "defaultValue": "docker.elastic.co/logstash/logstash-oss:8.12.0",
+      "defaultValue": "ghcr.io/observiq/observiq-otel-collector:latest",
       "metadata": {
         "description": "Log processor container image."
       }
@@ -185,24 +143,6 @@
         "description": "Enable autoscale for log processor container."
       }
     },
-    "xmxPercentage": {
-      "type": "int",
-      "defaultValue": 75,
-      "minValue": 1,
-      "maxValue": 100,
-      "metadata": {
-        "description": "Percentage of container memory to allocate to Xmx."
-      }
-    },
-    "xmsPercentage": {
-      "type": "int",
-      "defaultValue": 70,
-      "minValue": 1,
-      "maxValue": 100,
-      "metadata": {
-        "description": "Percentage of container memory to allocate to Xms."
-      }
-    },
     "collectContainerLogs": {
       "type": "bool",
       "defaultValue": false,
@@ -222,15 +162,11 @@
             "type": "datetime"
           },
           {
-            "name": "timestamp",
-            "type": "datetime"
-          },
-          {
             "name": "message",
             "type": "dynamic"
           }
         ],
-        "transformKql": "source | extend TimeGenerated = todatetime(timestamp)"
+        "transformKql": "source | extend data = parse_json(RawData) | extend TimeGenerated = datetime(1970-01-01) + tolong(data.ts) * 1s, message = tostring(data) | project TimeGenerated, message"
       },
       {
         "name": "Mail",
@@ -241,15 +177,11 @@
             "type": "datetime"
           },
           {
-            "name": "timestamp",
-            "type": "datetime"
-          },
-          {
             "name": "message",
             "type": "dynamic"
           }
         ],
-        "transformKql": "source | extend TimeGenerated = todatetime(timestamp)"
+        "transformKql": "source | extend data = parse_json(RawData) | extend TimeGenerated = datetime(1970-01-01) + tolong(data.unix_timestamp) * 1s, message = tostring(data) | project TimeGenerated, message"
       },
       {
         "name": "Ztna",
@@ -316,7 +248,7 @@
             "type": "string"
           }
         ],
-        "transformKql": "source | extend TimeGenerated = todatetime(timestamp)"
+        "transformKql": "source | extend data = parse_json(RawData) | extend TimeGenerated = datetime(1970-01-01) + tolong(data.timestamp) * 1s, authority_name = tostring(data.authority_name), message = tostring(data.message), message_type = tostring(data.message_type), object_name = tostring(data.object_name), object_name_portal = tostring(data.object_name_portal), remote_address = tostring(data.remote_address), status = tostring(data.status), subject_name = tostring(data.subject_name), timestamp = tostring(data.timestamp), uuid = tostring(data.uuid), ztna_tenant = tostring(data.ztna_tenant), ztna_upstream = tostring(data.ztna_upstream), action = tostring(data.action), result = tostring(data.result) | project TimeGenerated, authority_name, message, message_type, object_name, object_name_portal, remote_address, status, subject_name, timestamp, uuid, ztna_tenant, ztna_upstream, action, result"
       },
       {
         "name": "Firewall",
@@ -371,7 +303,7 @@
             "type": "string"
           }
         ],
-        "transformKql": "source | extend TimeGenerated = datetime_add('second', timestamp, datetime(1970-01-01))"
+        "transformKql": "source | extend data = parse_json(RawData) | extend TimeGenerated = datetime(1970-01-01) + tolong(data.timestamp) * 1s, action = tostring(data.action), host_name = tostring(data.host_name), iface_in = tostring(data.iface_in), iface_out = tostring(data.iface_out), ip_dst = tostring(data.ip_dst), ip_src = tostring(data.ip_src), port_dst = toint(data.port_dst), port_src = toint(data.port_src), timestamp = toint(data.timestamp), zone_dst = tostring(data.zone_dst), zone_src = tostring(data.zone_src) | project TimeGenerated, action, host_name, iface_in, iface_out, ip_dst, ip_src, port_dst, port_src, timestamp, zone_dst, zone_src"
       },
       {
         "name": "Authentication",
@@ -402,7 +334,7 @@
             "type": "string"
           }
         ],
-        "transformKql": "source | extend TimeGenerated = todatetime(event_time)"
+        "transformKql": "source | extend data = parse_json(RawData) | extend TimeGenerated = datetime(1970-01-01) + tolong(data['time']) * 1s, login = tostring(data.login), remoteAddress = data.remoteAddress, result = tostring(data.result), event_time = datetime(1970-01-01) + tolong(data['time']) * 1s, error = tostring(data.error) | project TimeGenerated, login, remoteAddress, result, event_time, error"
       },
       {
         "name": "Proxy",
@@ -545,36 +477,38 @@
             "type": "string"
           }
         ],
-        "transformKql": "source | extend TimeGenerated = datetime_add('second', tolong(timestamp), datetime(1970-01-01))"
+        "transformKql": "source | extend data = parse_json(RawData) | extend TimeGenerated = datetime(1970-01-01) + tolong(data.timestamp) * 1s, casb_application = tostring(data.casb_application), casb_category = tostring(data.casb_category), casb_operation = tostring(data.casb_operation), casb_risk_score = tostring(data.casb_risk_score), client_ip = tostring(data.client_ip), client_request_size = tostring(data.client_request_size), client_response_size = tostring(data.client_response_size), client_response_status = tostring(data.client_response_status), content_type = tostring(data.content_type), duration = tostring(data.duration), error_details = tostring(data.error_details), http_method = tostring(data.http_method), server_ip = tostring(data.server_ip), server_response_size = tostring(data.server_response_size), time_dns = tostring(data.time_dns), time_icap = tostring(data.time_icap), time_server = tostring(data.time_server), timestamp = toreal(data.timestamp), tls_cert_errors = tostring(data.tls_cert_errors), tls_client_cipher = tostring(data.tls_client_cipher), tls_client_max_version = tostring(data.tls_client_max_version), tls_client_version = tostring(data.tls_client_version), tls_server_cipher = tostring(data.tls_server_cipher), tls_server_max_version = tostring(data.tls_server_max_version), tls_server_version = tostring(data.tls_server_version), url = tostring(data.url), url_filter_action = tostring(data.url_filter_action), url_filter_categories = tostring(data.url_filter_categories), url_filter_result = tostring(data.url_filter_result), user_agent = tostring(data.user_agent), user_id = tostring(data.user_id), host_id = tostring(data.host_id), referer = tostring(data.referer) | project TimeGenerated, casb_application, casb_category, casb_operation, casb_risk_score, client_ip, client_request_size, client_response_size, client_response_status, content_type, duration, error_details, http_method, server_ip, server_response_size, time_dns, time_icap, time_server, timestamp, tls_cert_errors, tls_client_cipher, tls_client_max_version, tls_client_version, tls_server_cipher, tls_server_max_version, tls_server_version, url, url_filter_action, url_filter_categories, url_filter_result, user_agent, user_id, host_id, referer"
       }
     ],
-    "proxyProcessorConf": {
-      "input": "\n          kafka { \n            bootstrap_servers=>\"${LOGS_API_ENDPOINT}\" \n            security_protocol=>\"SASL_SSL\" \n            sasl_mechanism=>\"PLAIN\" \n            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${LOGS_API_STRING};EntityPath=proxy';\" \n            topics=>[\"proxy\"]\n            decorate_events => \"basic\"\n            codec => json { ecs_compatibility => disabled }\n            group_id => \"$Default\"\n            auto_offset_reset => \"earliest\"\n            client_id => \"sentinel-connector-proxy\"\n            consumer_threads => \"${PROXY_CONSUMER_THREADS}\"\n            enable_auto_commit => false\n          }\n        ",
-      "output": "\n          if [@metadata][kafka][topic] == \"proxy\" {\n            microsoft-sentinel-log-analytics-logstash-output-plugin {\n              client_app_Id => \"${CLIENT_ID}\"\n              client_app_secret => \"${CLIENT_SECRET}\"\n              tenant_id => \"${TENANT_ID}\"\n              data_collection_endpoint => \"${DCR_ENDPOINT}\"\n              dcr_immutable_id => \"${PROXY_DCR_ID}\"\n              dcr_stream_name => \"${PROXY_DCR_STREAM}\"\n            }\n          }\n        "
-    },
-    "authProcessorConf": {
-      "input": "\n          kafka { \n            bootstrap_servers=>\"${LOGS_API_ENDPOINT}\" \n            security_protocol=>\"SASL_SSL\" \n            sasl_mechanism=>\"PLAIN\" \n            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${LOGS_API_STRING};EntityPath=auth';\" \n            topics=>[\"auth\"]\n            decorate_events => \"basic\"\n            codec => json { ecs_compatibility => disabled }\n            group_id => \"$Default\"\n            auto_offset_reset => \"earliest\"\n            client_id => \"sentinel-connector-auth\"\n            consumer_threads => \"${AUTH_CONSUMER_THREADS}\"\n            enable_auto_commit => false\n          }\n        ",
-      "output": "\n          if [@metadata][kafka][topic] == \"auth\" {\n            microsoft-sentinel-log-analytics-logstash-output-plugin {\n              client_app_Id => \"${CLIENT_ID}\"\n              client_app_secret => \"${CLIENT_SECRET}\"\n              tenant_id => \"${TENANT_ID}\"\n              data_collection_endpoint => \"${DCR_ENDPOINT}\"\n              dcr_immutable_id => \"${AUTH_DCR_ID}\"\n              dcr_stream_name => \"${AUTH_DCR_STREAM}\"\n            }\n          }\n        "
-    },
-    "firewallProcessorConf": {
-      "input": "\n          kafka { \n            bootstrap_servers=>\"${LOGS_API_ENDPOINT}\" \n            security_protocol=>\"SASL_SSL\" \n            sasl_mechanism=>\"PLAIN\" \n            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${LOGS_API_STRING};EntityPath=firewall';\" \n            topics=>[\"firewall\"]\n            decorate_events => \"basic\"\n            codec => json { ecs_compatibility => disabled }\n            group_id => \"$Default\"\n            auto_offset_reset => \"earliest\"\n            client_id => \"sentinel-connector-firewall\"\n            consumer_threads => \"${FIREWALL_CONSUMER_THREADS}\"\n            enable_auto_commit => false\n          }\n        ",
-      "output": "\n          if [@metadata][kafka][topic] == \"firewall\" {\n            microsoft-sentinel-log-analytics-logstash-output-plugin {\n              client_app_Id => \"${CLIENT_ID}\"\n              client_app_secret => \"${CLIENT_SECRET}\"\n              tenant_id => \"${TENANT_ID}\"\n              data_collection_endpoint => \"${DCR_ENDPOINT}\"\n              dcr_immutable_id => \"${FIREWALL_DCR_ID}\"\n              dcr_stream_name => \"${FIREWALL_DCR_STREAM}\"\n            }\n          }\n        "
-    },
-    "ztnaProcessorConf": {
-      "input": "\n          kafka { \n            bootstrap_servers=>\"${LOGS_API_ENDPOINT}\" \n            security_protocol=>\"SASL_SSL\" \n            sasl_mechanism=>\"PLAIN\" \n            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${LOGS_API_STRING};EntityPath=ztna';\" \n            topics=>[\"ztna\"]\n            decorate_events => \"basic\"\n            codec => json { ecs_compatibility => disabled }\n            group_id => \"$Default\"\n            auto_offset_reset => \"earliest\"\n            client_id => \"sentinel-connector-ztna\"\n            consumer_threads => \"${ZTNA_CONSUMER_THREADS}\"\n            enable_auto_commit => false\n          }\n        ",
-      "output": "\n          if [@metadata][kafka][topic] == \"ztna\" {\n            microsoft-sentinel-log-analytics-logstash-output-plugin {\n              client_app_Id => \"${CLIENT_ID}\"\n              client_app_secret => \"${CLIENT_SECRET}\"\n              tenant_id => \"${TENANT_ID}\"\n              data_collection_endpoint => \"${DCR_ENDPOINT}\"\n              dcr_immutable_id => \"${ZTNA_DCR_ID}\"\n              dcr_stream_name => \"${ZTNA_DCR_STREAM}\"\n            }\n          }\n        "
-    },
-    "mailProcessorConf": {
-      "input": "\n          kafka { \n            bootstrap_servers=>\"${LOGS_API_ENDPOINT}\" \n            security_protocol=>\"SASL_SSL\" \n            sasl_mechanism=>\"PLAIN\" \n            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${LOGS_API_STRING};EntityPath=mail';\" \n            topics=>[\"mail\"]\n            decorate_events => \"basic\"\n            group_id => \"$Default\"\n            auto_offset_reset => \"earliest\"\n            client_id => \"sentinel-connector-mail\"\n            consumer_threads => \"${MAIL_CONSUMER_THREADS}\"\n            enable_auto_commit => false\n          }\n        ",
-      "output": "\n          if [@metadata][kafka][topic] == \"mail\" {\n            microsoft-sentinel-log-analytics-logstash-output-plugin {\n              client_app_Id => \"${CLIENT_ID}\"\n              client_app_secret => \"${CLIENT_SECRET}\"\n              tenant_id => \"${TENANT_ID}\"\n              data_collection_endpoint => \"${DCR_ENDPOINT}\"\n              dcr_immutable_id => \"${MAIL_DCR_ID}\"\n              dcr_stream_name => \"${MAIL_DCR_STREAM}\"\n            }\n          }\n        "
-    },
-    "zeekProcessorConf": {
-      "input": "\n          kafka { \n            bootstrap_servers=>\"${LOGS_API_ENDPOINT}\" \n            security_protocol=>\"SASL_SSL\" \n            sasl_mechanism=>\"PLAIN\" \n            sasl_jaas_config=>\"org.apache.kafka.common.security.plain.PlainLoginModule required username='$ConnectionString' password='${LOGS_API_STRING};EntityPath=zeek';\" \n            topics=>[\"zeek\"]\n            decorate_events => \"basic\"\n            group_id => \"$Default\"\n            auto_offset_reset => \"earliest\"\n            client_id => \"sentinel-connector-zeek\"\n            consumer_threads => \"${ZEEK_CONSUMER_THREADS}\"\n            enable_auto_commit => false\n          }\n        ",
-      "output": "\n          if [@metadata][kafka][topic] == \"zeek\" {\n            microsoft-sentinel-log-analytics-logstash-output-plugin {\n              client_app_Id => \"${CLIENT_ID}\"\n              client_app_secret => \"${CLIENT_SECRET}\"\n              tenant_id => \"${TENANT_ID}\"\n              data_collection_endpoint => \"${DCR_ENDPOINT}\"\n              dcr_immutable_id => \"${ZEEK_DCR_ID}\"\n              dcr_stream_name => \"${ZEEK_DCR_STREAM}\"\n            }\n          }\n        "
-    },
-    "enabledLogstashInputs": "[concat('input {\n', if(parameters('secureWebGateway'), variables('proxyProcessorConf').input, ''), if(parameters('identity'), variables('authProcessorConf').input, ''), if(parameters('firewall'), variables('firewallProcessorConf').input, ''), if(parameters('zeroTrustNetworkAccess'), variables('ztnaProcessorConf').input, ''), if(parameters('secureE-MailGateway'), variables('mailProcessorConf').input, ''), if(parameters('intrusionDetectionSystem'), variables('zeekProcessorConf').input, ''), '\n}\n')]",
-    "enabledLogstashOutputs": "[concat('output {\n', if(parameters('secureWebGateway'), variables('proxyProcessorConf').output, ''), if(parameters('identity'), variables('authProcessorConf').output, ''), if(parameters('firewall'), variables('firewallProcessorConf').output, ''), if(parameters('zeroTrustNetworkAccess'), variables('ztnaProcessorConf').output, ''), if(parameters('secureE-MailGateway'), variables('mailProcessorConf').output, ''), if(parameters('intrusionDetectionSystem'), variables('zeekProcessorConf').output, ''), '\n}\n')]",
-    "logstashConfig": "[concat(variables('enabledLogstashInputs'), 'filter { mutate { remove_field => [ \"event\", \"ls_version\"] }}\n', variables('enabledLogstashOutputs'))]",
+    "dcrStreamColumns": [
+      {
+        "name": "RawData",
+        "type": "string"
+      }
+    ],
+    "proxyReceiverConf": "  kafka/proxy:\n    brokers:\n      - \"${env:LOGS_API_ENDPOINT}\"\n    protocol_version: \"1.0.0\"\n    use_leader_epoch: false\n    logs:\n      topic: proxy\n      encoding: json\n    auth:\n      sasl:\n        mechanism: PLAIN\n        username: \"$ConnectionString\"\n        password: \"${env:KAFKA_PASSWORD_PROXY}\"\n      tls:\n        insecure: false\n    initial_offset: earliest\n    group_id: \"$$Default\"\n    autocommit:\n      enable: false\n    message_marking:\n      after: true\n",
+    "authReceiverConf": "  kafka/auth:\n    brokers:\n      - \"${env:LOGS_API_ENDPOINT}\"\n    protocol_version: \"1.0.0\"\n    use_leader_epoch: false\n    logs:\n      topic: auth\n      encoding: json\n    auth:\n      sasl:\n        mechanism: PLAIN\n        username: \"$ConnectionString\"\n        password: \"${env:KAFKA_PASSWORD_AUTH}\"\n      tls:\n        insecure: false\n    initial_offset: earliest\n    group_id: \"$$Default\"\n    autocommit:\n      enable: false\n    message_marking:\n      after: true\n",
+    "firewallReceiverConf": "  kafka/firewall:\n    brokers:\n      - \"${env:LOGS_API_ENDPOINT}\"\n    protocol_version: \"1.0.0\"\n    use_leader_epoch: false\n    logs:\n      topic: firewall\n      encoding: json\n    auth:\n      sasl:\n        mechanism: PLAIN\n        username: \"$ConnectionString\"\n        password: \"${env:KAFKA_PASSWORD_FIREWALL}\"\n      tls:\n        insecure: false\n    initial_offset: earliest\n    group_id: \"$$Default\"\n    autocommit:\n      enable: false\n    message_marking:\n      after: true\n",
+    "ztnaReceiverConf": "  kafka/ztna:\n    brokers:\n      - \"${env:LOGS_API_ENDPOINT}\"\n    protocol_version: \"1.0.0\"\n    use_leader_epoch: false\n    logs:\n      topic: ztna\n      encoding: json\n    auth:\n      sasl:\n        mechanism: PLAIN\n        username: \"$ConnectionString\"\n        password: \"${env:KAFKA_PASSWORD_ZTNA}\"\n      tls:\n        insecure: false\n    initial_offset: earliest\n    group_id: \"$$Default\"\n    autocommit:\n      enable: false\n    message_marking:\n      after: true\n",
+    "mailReceiverConf": "  kafka/mail:\n    brokers:\n      - \"${env:LOGS_API_ENDPOINT}\"\n    protocol_version: \"1.0.0\"\n    use_leader_epoch: false\n    logs:\n      topic: mail\n      encoding: json\n    auth:\n      sasl:\n        mechanism: PLAIN\n        username: \"$ConnectionString\"\n        password: \"${env:KAFKA_PASSWORD_MAIL}\"\n      tls:\n        insecure: false\n    initial_offset: earliest\n    group_id: \"$$Default\"\n    autocommit:\n      enable: false\n    message_marking:\n      after: true\n",
+    "zeekReceiverConf": "  kafka/zeek:\n    brokers:\n      - \"${env:LOGS_API_ENDPOINT}\"\n    protocol_version: \"1.0.0\"\n    use_leader_epoch: false\n    logs:\n      topic: zeek\n      encoding: json\n    auth:\n      sasl:\n        mechanism: PLAIN\n        username: \"$ConnectionString\"\n        password: \"${env:KAFKA_PASSWORD_ZEEK}\"\n      tls:\n        insecure: false\n    initial_offset: earliest\n    group_id: \"$$Default\"\n    autocommit:\n      enable: false\n    message_marking:\n      after: true\n",
+    "proxyExporterConf": "  azureloganalytics/proxy:\n    endpoint: \"${env:DCR_ENDPOINT}\"\n    client_id: \"${env:CLIENT_ID}\"\n    client_secret: \"${env:CLIENT_SECRET}\"\n    tenant_id: \"${env:TENANT_ID}\"\n    rule_id: \"${env:PROXY_DCR_ID}\"\n    stream_name: \"${env:PROXY_DCR_STREAM}\"\n    raw_log_field: body\n    timeout: 30s\n    sending_queue:\n      enabled: false\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n",
+    "authExporterConf": "  azureloganalytics/auth:\n    endpoint: \"${env:DCR_ENDPOINT}\"\n    client_id: \"${env:CLIENT_ID}\"\n    client_secret: \"${env:CLIENT_SECRET}\"\n    tenant_id: \"${env:TENANT_ID}\"\n    rule_id: \"${env:AUTH_DCR_ID}\"\n    stream_name: \"${env:AUTH_DCR_STREAM}\"\n    raw_log_field: body\n    timeout: 30s\n    sending_queue:\n      enabled: false\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n",
+    "firewallExporterConf": "  azureloganalytics/firewall:\n    endpoint: \"${env:DCR_ENDPOINT}\"\n    client_id: \"${env:CLIENT_ID}\"\n    client_secret: \"${env:CLIENT_SECRET}\"\n    tenant_id: \"${env:TENANT_ID}\"\n    rule_id: \"${env:FIREWALL_DCR_ID}\"\n    stream_name: \"${env:FIREWALL_DCR_STREAM}\"\n    raw_log_field: body\n    timeout: 30s\n    sending_queue:\n      enabled: false\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n",
+    "ztnaExporterConf": "  azureloganalytics/ztna:\n    endpoint: \"${env:DCR_ENDPOINT}\"\n    client_id: \"${env:CLIENT_ID}\"\n    client_secret: \"${env:CLIENT_SECRET}\"\n    tenant_id: \"${env:TENANT_ID}\"\n    rule_id: \"${env:ZTNA_DCR_ID}\"\n    stream_name: \"${env:ZTNA_DCR_STREAM}\"\n    raw_log_field: body\n    timeout: 30s\n    sending_queue:\n      enabled: false\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n",
+    "mailExporterConf": "  azureloganalytics/mail:\n    endpoint: \"${env:DCR_ENDPOINT}\"\n    client_id: \"${env:CLIENT_ID}\"\n    client_secret: \"${env:CLIENT_SECRET}\"\n    tenant_id: \"${env:TENANT_ID}\"\n    rule_id: \"${env:MAIL_DCR_ID}\"\n    stream_name: \"${env:MAIL_DCR_STREAM}\"\n    raw_log_field: body\n    timeout: 30s\n    sending_queue:\n      enabled: false\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n",
+    "zeekExporterConf": "  azureloganalytics/zeek:\n    endpoint: \"${env:DCR_ENDPOINT}\"\n    client_id: \"${env:CLIENT_ID}\"\n    client_secret: \"${env:CLIENT_SECRET}\"\n    tenant_id: \"${env:TENANT_ID}\"\n    rule_id: \"${env:ZEEK_DCR_ID}\"\n    stream_name: \"${env:ZEEK_DCR_STREAM}\"\n    raw_log_field: body\n    timeout: 30s\n    sending_queue:\n      enabled: false\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n",
+    "batchProcessorConf": "processors:\n  batch:\n    timeout: 5s\n    send_batch_size: 100\n",
+    "proxyPipelineConf": "    logs/proxy:\n      receivers: [kafka/proxy]\n      processors: [batch]\n      exporters: [azureloganalytics/proxy]\n",
+    "authPipelineConf": "    logs/auth:\n      receivers: [kafka/auth]\n      processors: [batch]\n      exporters: [azureloganalytics/auth]\n",
+    "firewallPipelineConf": "    logs/firewall:\n      receivers: [kafka/firewall]\n      processors: [batch]\n      exporters: [azureloganalytics/firewall]\n",
+    "ztnaPipelineConf": "    logs/ztna:\n      receivers: [kafka/ztna]\n      processors: [batch]\n      exporters: [azureloganalytics/ztna]\n",
+    "mailPipelineConf": "    logs/mail:\n      receivers: [kafka/mail]\n      processors: [batch]\n      exporters: [azureloganalytics/mail]\n",
+    "zeekPipelineConf": "    logs/zeek:\n      receivers: [kafka/zeek]\n      processors: [batch]\n      exporters: [azureloganalytics/zeek]\n",
+    "enabledReceivers": "[concat('receivers:\n', if(parameters('secureWebGateway'), variables('proxyReceiverConf'), ''), if(parameters('identity'), variables('authReceiverConf'), ''), if(parameters('firewall'), variables('firewallReceiverConf'), ''), if(parameters('zeroTrustNetworkAccess'), variables('ztnaReceiverConf'), ''), if(parameters('secureE-MailGateway'), variables('mailReceiverConf'), ''), if(parameters('intrusionDetectionSystem'), variables('zeekReceiverConf'), ''))]",
+    "enabledExporters": "[concat('exporters:\n', if(parameters('secureWebGateway'), variables('proxyExporterConf'), ''), if(parameters('identity'), variables('authExporterConf'), ''), if(parameters('firewall'), variables('firewallExporterConf'), ''), if(parameters('zeroTrustNetworkAccess'), variables('ztnaExporterConf'), ''), if(parameters('secureE-MailGateway'), variables('mailExporterConf'), ''), if(parameters('intrusionDetectionSystem'), variables('zeekExporterConf'), ''))]",
+    "enabledPipelines": "[concat('service:\n  pipelines:\n', if(parameters('secureWebGateway'), variables('proxyPipelineConf'), ''), if(parameters('identity'), variables('authPipelineConf'), ''), if(parameters('firewall'), variables('firewallPipelineConf'), ''), if(parameters('zeroTrustNetworkAccess'), variables('ztnaPipelineConf'), ''), if(parameters('secureE-MailGateway'), variables('mailPipelineConf'), ''), if(parameters('intrusionDetectionSystem'), variables('zeekPipelineConf'), ''))]",
+    "otelConfig": "[concat(variables('enabledReceivers'), '\n', variables('batchProcessorConf'), '\n', variables('enabledExporters'), '\n', variables('enabledPipelines'))]",
     "scalingRule": {
       "name": "cpu",
       "custom": {
@@ -585,9 +519,7 @@
         }
       }
     },
-    "xmxMemoryInMi": "[div(mul(parameters('containerMemory'), mul(1024, parameters('xmxPercentage'))), 100)]",
-    "xmsMemoryInMi": "[div(mul(parameters('containerMemory'), mul(1024, parameters('xmsPercentage'))), 100)]",
-    "javaOpts": "[concat('-Xms', variables('xmsMemoryInMi'), 'm -Xmx', variables('xmxMemoryInMi'), 'm')]",
+
     "maxReplicas": "[if(parameters('enableAutoScale'), parameters('containerAppMaxReplicas'), parameters('containerAppMinReplicas'))]"
   },
   "resources": [
@@ -610,7 +542,7 @@
       "condition": "[variables('logTypes')[copyIndex()].enabled]",
       "type": "Microsoft.OperationalInsights/workspaces/tables",
       "apiVersion": "2023-09-01",
-      "name": "[concat(parameters('logAnalyticsWorkspaceName'), '/OpenSystems', variables('logTypes')[copyIndex()].name, 'Logs_CL')]",
+      "name": "[concat(parameters('workspace'), '/OpenSystems', variables('logTypes')[copyIndex()].name, 'Logs_CL')]",
       "properties": {
         "schema": {
           "name": "[concat('OpenSystems', variables('logTypes')[copyIndex()].name, 'Logs_CL')]",
@@ -632,14 +564,14 @@
         "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
         "streamDeclarations": {
           "[concat('Custom-OpenSystems', variables('logTypes')[copyIndex()].name, 'Logs')]": {
-            "columns": "[variables('logTypes')[copyIndex()].columns]"
+            "columns": "[variables('dcrStreamColumns')]"
           }
         },
         "destinations": {
           "logAnalytics": [
             {
               "name": "logAnalyticsDestination",
-              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
             }
           ]
         },
@@ -654,7 +586,7 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
-        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('logAnalyticsWorkspaceName'), concat('OpenSystems', variables('logTypes')[copyIndex()].name, 'Logs_CL'))]"
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), concat('OpenSystems', variables('logTypes')[copyIndex()].name, 'Logs_CL'))]"
       ]
     },
     {
@@ -685,8 +617,8 @@
         "appLogsConfiguration": {
           "destination": "log-analytics",
           "logAnalyticsConfiguration": {
-            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('logAnalyticsWorkspaceName')), '2022-10-01').customerId]",
-            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('logAnalyticsWorkspaceName')), '2022-10-01').primarySharedKey]"
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspace')), '2022-10-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspace')), '2022-10-01').primarySharedKey]"
           }
         }
       }
@@ -713,45 +645,76 @@
           "activeRevisionsMode": "Single",
           "secrets": [
             {
-              "name": "logs-api-connection-string",
-              "value": "[parameters('openSystemsLogsAPIConnectionString')]"
-            },
-            {
               "name": "principal-secret",
               "value": "[parameters('principalSecret')]"
             },
             {
-              "name": "protocols",
-              "value": "ip      0       IP      # internet protocol\nicmp    1       ICMP    # internet control message protocol\ntcp     6       TCP     # transmission control protocol\nudp     17      UDP     # user datagram protocol"
+              "name": "kafka-password-proxy",
+              "value": "[concat(parameters('openSystemsLogsAPIConnectionString'), ';EntityPath=proxy')]"
+            },
+            {
+              "name": "kafka-password-auth",
+              "value": "[concat(parameters('openSystemsLogsAPIConnectionString'), ';EntityPath=auth')]"
+            },
+            {
+              "name": "kafka-password-firewall",
+              "value": "[concat(parameters('openSystemsLogsAPIConnectionString'), ';EntityPath=firewall')]"
+            },
+            {
+              "name": "kafka-password-ztna",
+              "value": "[concat(parameters('openSystemsLogsAPIConnectionString'), ';EntityPath=ztna')]"
+            },
+            {
+              "name": "kafka-password-mail",
+              "value": "[concat(parameters('openSystemsLogsAPIConnectionString'), ';EntityPath=mail')]"
+            },
+            {
+              "name": "kafka-password-zeek",
+              "value": "[concat(parameters('openSystemsLogsAPIConnectionString'), ';EntityPath=zeek')]"
             }
           ]
         },
         "template": {
           "containers": [
             {
-              "name": "logstash",
+              "name": "otel-collector",
               "image": "[parameters('containerImage')]",
               "resources": {
                 "cpu": "[json(parameters('containerCpu'))]",
                 "memory": "[concat(parameters('containerMemory'), 'Gi')]"
               },
-              "command": [
-                "/bin/bash",
-                "-c",
-                "/usr/share/logstash/bin/logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin && /usr/local/bin/docker-entrypoint"
+              "args": [
+                "--config",
+                "/config/config.yaml"
               ],
               "env": [
-                {
-                  "name": "LS_JAVA_OPTS",
-                  "value": "[variables('javaOpts')]"
-                },
                 {
                   "name": "LOGS_API_ENDPOINT",
                   "value": "[parameters('openSystemsLogsAPIEndpoint')]"
                 },
                 {
-                  "name": "LOGS_API_STRING",
-                  "secretRef": "logs-api-connection-string"
+                  "name": "KAFKA_PASSWORD_PROXY",
+                  "secretRef": "kafka-password-proxy"
+                },
+                {
+                  "name": "KAFKA_PASSWORD_AUTH",
+                  "secretRef": "kafka-password-auth"
+                },
+                {
+                  "name": "KAFKA_PASSWORD_FIREWALL",
+                  "secretRef": "kafka-password-firewall"
+                },
+                {
+                  "name": "KAFKA_PASSWORD_ZTNA",
+                  "secretRef": "kafka-password-ztna"
+                },
+                {
+                  "name": "KAFKA_PASSWORD_MAIL",
+                  "secretRef": "kafka-password-mail"
+                },
+                {
+                  "name": "KAFKA_PASSWORD_ZEEK",
+                  "secretRef": "kafka-password-zeek"
                 },
                 {
                   "name": "CLIENT_ID",
@@ -816,41 +779,12 @@
                 {
                   "name": "ZEEK_DCR_STREAM",
                   "value": "Custom-OpenSystemsZeekLogs"
-                },
-                {
-                  "name": "PROXY_CONSUMER_THREADS",
-                  "value": "[parameters('proxyConsumerThreads')]"
-                },
-                {
-                  "name": "AUTH_CONSUMER_THREADS",
-                  "value": "[parameters('identityConsumerThreads')]"
-                },
-                {
-                  "name": "FIREWALL_CONSUMER_THREADS",
-                  "value": "[parameters('firewallConsumerThreads')]"
-                },
-                {
-                  "name": "ZTNA_CONSUMER_THREADS",
-                  "value": "[parameters('ztnaConsumerThreads')]"
-                },
-                {
-                  "name": "MAIL_CONSUMER_THREADS",
-                  "value": "[parameters('secureE-MailGatewayConsumerThreads')]"
-                },
-                {
-                  "name": "ZEEK_CONSUMER_THREADS",
-                  "value": "[parameters('intrusionDetectionSystemConsumerThreads')]"
                 }
               ],
               "volumeMounts": [
                 {
-                  "volumeName": "logstash-config",
-                  "mountPath": "/usr/share/logstash/pipeline"
-                },
-                {
-                  "volumeName": "protocols",
-                  "mountPath": "/etc/protocols",
-                  "subPath": "protocols"
+                  "volumeName": "otel-config",
+                  "mountPath": "/config"
                 }
               ]
             }
@@ -862,17 +796,8 @@
           },
           "volumes": [
             {
-              "name": "logstash-config",
+              "name": "otel-config",
               "storageType": "EmptyDir"
-            },
-            {
-              "name": "protocols",
-              "storageType": "Secret",
-              "secrets": [
-                {
-                  "secretRef": "protocols"
-                }
-              ]
             }
           ],
           "initContainers": [
@@ -880,13 +805,13 @@
               "name": "init-config",
               "image": "busybox",
               "command": [
-                "sh",
+                "/bin/sh",
                 "-c",
-                "[concat('cat > /config/logstash.conf << ''EOT''\n', variables('logstashConfig'), '\nEOT\n')]"
+                "[concat('printf ''', variables('otelConfig'), ''' > /config/config.yaml')]"
               ],
               "volumeMounts": [
                 {
-                  "volumeName": "logstash-config",
+                  "volumeName": "otel-config",
                   "mountPath": "/config"
                 }
               ]
