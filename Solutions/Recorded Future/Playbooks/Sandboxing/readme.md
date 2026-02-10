@@ -66,7 +66,7 @@ Connectors used: ***recordedfuturesandbo***, ***azureloganalyticsdatacollector**
 
 Enables submission of file attachments, from Microsoft Outlook emails, to Recorded to Future's Malware Analysis Sandbox. Results are written to the **RecordedFutureSandboxResults_CL** custom log table. An email summary is sent to the recipient if the score exceeds the threshold.
 
-> **Note:** To create incidents, use a Scheduled Analytics Rule that queries `RecordedFutureSandboxResults_CL`. See [Incident Creation](../readme.md#incident-creation) for more information
+> **Note:** To create incidents, use a Analytics Rule that queries `RecordedFutureSandboxResults_CL`. See [Incident Creation](../readme.md#incident-creation) for more information
 
 **Information in summary**
 * Severity Score
@@ -96,7 +96,7 @@ Enables security and IT teams to submit files from Azure Blob Storage to Recorde
 * Sample ID
 * HTML Report
 
-> **Note:** To create incidents, use a Scheduled Analytics Rule that queries `RecordedFutureSandboxResults_CL`. See [Incident Creation](../readme.md#incident-creation) for more information
+> **Note:** To create incidents, use a Analytics Rule that queries `RecordedFutureSandboxResults_CL`. See [Incident Creation](../readme.md#incident-creation) for more information
 
 To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" traget="_blank">custom analytic rule</a>.
 
