@@ -264,6 +264,9 @@ These analytic should be available under `Configuration -> Analytics -> Rule Tem
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.
 
+### From version 3.2
+Microsoft is unifying their security portals, moving Microsoft Sentinel into the Microsoft Defender portal, this changes how incidents are created. Incidents created by Logic Apps are not visible in the Microsoft Defender portal. With the release of version 4.0 we are re-hauling how incidents are created. Now we'll rely on saving logs to _custom logs_ and use _analytic rules_ to create incidents. We provide updated Logic Apps and analytic rules for incident creation.
+
 ### From version 2.4
 We are deprecating the RecordedFuture-ImportToSentinel and all *-TIProcessor playbooks. Going forward, install the new IndicatorImport playbooks and configure them to download you selection of risk lists. Use the same risk lists being downloaded today, same cadence, and use the same description using the TIProcessor playbooks. Use the same description for threat indicators if you have analytic rules set up for alerting.
 
