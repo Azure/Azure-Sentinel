@@ -48,7 +48,9 @@ If you use the Enterprise Sandbox, you need to provide an additional key `Enterp
 <details>
 <summary>Expand to see API request form</summary>
 <img src="Images/2023-09-08-12-13-06.png" width="600"  /><br/>
+
 or\
+
 <img src="Images/2023-09-08-12-13-54.png" width="600"  />
 
 </details>
@@ -253,14 +255,16 @@ The following Analytic rules are provided in the Solution. All of them requires 
 
 Following changes made by Microsoft, removing the possibility to create incidents via Logic Apps, we now provide the following analytic rules. For these to work out of the box, it's important that the `Custom Log Names` in the corresponding Logic Apps are used.
 
-|Use Case|Analytic Rule|
-|-|-|
-|Alerts|RecordedFutureAlerts|
-|Playbook Alerts| RecordedFuturePlaybookAlerts|
-|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|
-|Sandbox Storage Account|RecordedFutureSandboxStorage|
+|Use Case|Analytic Rule|Custom Log Name
+|-|-|-|
+|Alerts|RecordedFutureAlerts|RecordedFuturePortalAlerts_CL
+|Playbook Alerts| RecordedFuturePlaybookAlerts|RecordedFuturePlaybookAlerts_CL
+|Sandbox Outlook Attachment|RecordedFutureSandboxOutlook|RecordedFutureSandboxResults_CL
+|Sandbox Storage Account|RecordedFutureSandboxStorage|RecordedFutureSandboxResults_CL
 
-These analytic should be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates` - if not, there are importable versions provided under the `Recorded Future\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Microsoft Sentinel -> Configuration -> Analytics` then press the `Import` button.
+These analytic should be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
+
+There are importable versions provided under the `Recorded Future\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Microsoft Sentinel -> Configuration -> Analytics` then press the `Import` button.
 
 
 # Upgrade from previous versions
