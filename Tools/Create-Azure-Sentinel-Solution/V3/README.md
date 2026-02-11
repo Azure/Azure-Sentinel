@@ -102,6 +102,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "dependentDomainSolutionIds": [],
   "BasePath": "{Path to Solution Content}",
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
+  "DataConnectorCCFVersion": "3.0.1", // Optional. The version of the ccf data connector, it will show up as the version of the connector in the portal. If not specified, the value of "Version" will be used.
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true, // Default should be true
   "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify. 
@@ -172,7 +173,8 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
     "Playbooks/Playbooks/CiscoUmbrella-GetDomainInfo/azuredeploy.json"
   ],
   "BasePath": "C:\\GitHub\\Azure-Sentinel",
-  "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
+  "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file
+  "DataConnectorCCFVersion": "3.0.1", // Optional. The version of the ccf data connector, it will show up as the version of the connector in the portal. If not specified, the value of "Version" will be used.
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true, // Default should be true
   "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify.
