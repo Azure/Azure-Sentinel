@@ -1,0 +1,64 @@
+id: 71e6586e-0d3f-4e33-b390-faa50b5e08fa
+name: Netskope - Large Outbound Data Transfer / Sensitive Upload (DLP)
+description: |
+  Detects large outbound data transfers and sensitive file uploads. Monitors for potential data exfiltration via cloud applications.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1567
+  - T1048
+query: |
+  let uploadThresholdMB = 100;
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername)
+  | where XCsAppActivity =~ 'Upload' or XCsAppActivity =~ 'Post' or XCsAppActivity =~ 'Share' 
+      or CsMethod =~ 'POST' or CsMethod =~ 'PUT'
+  | where CsBytes > 0 or XRsFileSize > 0
+  | extend UploadBytes = coalesce(CsBytes, XRsFileSize, 0)
+  | summarize 
+      TotalUploadBytes = sum(UploadBytes),
+      FileCount = dcount(XCsAppObjectName),
+      Files = make_set(XCsAppObjectName, 10),
+      FileTypes = make_set(XRsFileType),
+      Apps = make_set(XCsApp),
+      Destinations = make_set(XCsAppInstanceName),
+      Countries = make_set(XSCountry)
+      by CsUsername, XCDevice, XCCountry, bin(TimeGenerated, 1h)
+  | extend TotalUploadMB = round(TotalUploadBytes / 1048576.0, 2)
+  | where TotalUploadMB > uploadThresholdMB
+  | extend AlertSeverity = case(
+      TotalUploadMB > 1000, 'Critical',
+      TotalUploadMB > 500, 'High',
+      TotalUploadMB > 100, 'Medium',
+      'Low')
+  | project 
+      TimeGenerated,
+      User = CsUsername,
+      UploadVolumeMB = TotalUploadMB,
+      FileCount,
+      Files,
+      FileTypes,
+      Applications = Apps,
+      DestinationInstances = Destinations,
+      SourceCountry = XCCountry,
+      DestinationCountries = Countries,
+      Device = XCDevice,
+      AlertSeverity
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+version: 1.0.0
+kind: Scheduled

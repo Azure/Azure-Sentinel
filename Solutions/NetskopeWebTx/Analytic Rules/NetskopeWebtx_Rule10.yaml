@@ -1,0 +1,73 @@
+id: cdc01279-d6ea-41b1-a32d-49d726be95b8
+name: Netskope - Unsanctioned/Risky Cloud App Access (Shadow IT)
+description: |
+  Alerts when users access unsanctioned or risky cloud applications based on Cloud Confidence Level (CCL) and app tags. Detects Shadow IT usage.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1199
+  - T1567
+query: |
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername) and isnotempty(XCsApp)
+  | where XCsAppTags contains 'Unsanctioned' 
+      or XCsAppCcl =~ 'poor'
+      or XCsAppCcl =~ 'low'
+      or XCsAppCci < 50
+  | summarize 
+      EventCount = count(),
+      TotalBytesMB = round(sum(Bytes) / 1048576.0, 2),
+      Activities = make_set(XCsAppActivity),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+      by 
+      CsUsername,
+      XCsApp,
+      XCsAppCategory,
+      XCsAppCcl,
+      XCsAppCci,
+      XCsAppTags,
+      XCCountry,
+      XCDevice
+  | extend RiskLevel = case(
+      XCsAppCci < 30, 'Critical',
+      XCsAppCci < 50, 'High',
+      XCsAppCci < 70, 'Medium',
+      'Low')
+  | project 
+      TimeGenerated = LastSeen,
+      User = CsUsername,
+      RiskyApplication = XCsApp,
+      AppCategory = XCsAppCategory,
+      CloudConfidenceLevel = XCsAppCcl,
+      CloudConfidenceIndex = XCsAppCci,
+      AppTags = XCsAppTags,
+      RiskLevel,
+      Country = XCCountry,
+      Device = XCDevice,
+      Activities,
+      EventCount,
+      DataTransferMB = TotalBytesMB
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: RiskyApplication
+version: 1.0.0
+kind: Scheduled

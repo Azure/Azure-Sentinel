@@ -1,0 +1,67 @@
+id: dd0ebd84-ffbe-45df-848b-0615ac446b04
+name: Netskope - Excessive Downloads Detection (Spike vs Baseline)
+description: |
+  Detects users with excessive download activity compared to their 7-day baseline. Triggers when current download volume exceeds 3x the average.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1530
+  - T1074
+query: |
+  let lookbackPeriod = 7d;
+  let currentPeriod = 1h;
+  let threshold = 3;
+  let baseline = NetskopeWebTransactions_CL
+      | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))
+      | where isnotempty(CsUsername)
+      | where XCsAppActivity =~ 'Download' or ScBytes > 0
+      | summarize 
+          BaselineAvgBytes = avg(ScBytes),
+          BaselineTotalBytes = sum(ScBytes),
+          BaselineCount = count()
+          by CsUsername
+      | extend BaselineDailyAvg = BaselineTotalBytes / 7;
+  let current = NetskopeWebTransactions_CL
+      | where TimeGenerated > ago(currentPeriod)
+      | where isnotempty(CsUsername)
+      | where XCsAppActivity =~ 'Download' or ScBytes > 0
+      | summarize 
+          CurrentTotalBytes = sum(ScBytes),
+          CurrentCount = count(),
+          Apps = make_set(XCsApp),
+          Files = make_set(XCsAppObjectName)
+          by CsUsername;
+  current
+  | join kind=inner baseline on CsUsername
+  | where CurrentTotalBytes > (BaselineDailyAvg * threshold)
+  | extend 
+      SpikeMultiplier = round(CurrentTotalBytes / BaselineDailyAvg, 2),
+      CurrentTotalMB = round(CurrentTotalBytes / 1048576.0, 2),
+      BaselineDailyMB = round(BaselineDailyAvg / 1048576.0, 2)
+  | project 
+      TimeGenerated = now(),
+      User = CsUsername,
+      CurrentDownloadMB = CurrentTotalMB,
+      BaselineDailyAvgMB = BaselineDailyMB,
+      SpikeMultiplier,
+      DownloadCount = CurrentCount,
+      ApplicationsUsed = Apps,
+      FilesDownloaded = Files
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+version: 1.0.0
+kind: Scheduled

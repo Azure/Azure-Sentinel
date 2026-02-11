@@ -1,0 +1,78 @@
+id: fa4c4f1c-3c5f-4c3a-a13f-924c30db56e9
+name: Netskope - Anomalous User Behavior (High Volume from Unmanaged Device)
+description: |
+  Detects anomalous user behavior including high data volume transfers from unmanaged devices, unusual access patterns, and suspicious application usage.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1074
+query: |
+  let highVolumeThresholdGB = 1;
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername)
+  | summarize 
+      TotalBytes = sum(Bytes),
+      UploadBytes = sum(CsBytes),
+      DownloadBytes = sum(ScBytes),
+      UniqueApps = dcount(XCsApp),
+      Apps = make_set(XCsApp, 20),
+      UniqueHosts = dcount(CsHost),
+      Activities = make_set(XCsAppActivity),
+      Countries = make_set(XCCountry),
+      Devices = make_set(XCDevice),
+      AccessMethods = make_set(XCsAccessMethod),
+      EventCount = count()
+      by CsUsername, XCDevice, XCsAccessMethod
+  | extend 
+      TotalGB = round(TotalBytes / 1073741824.0, 3),
+      UploadGB = round(UploadBytes / 1073741824.0, 3),
+      DownloadGB = round(DownloadBytes / 1073741824.0, 3)
+  | where TotalGB > highVolumeThresholdGB
+  | extend IsUnmanagedDevice = XCDevice =~ 'unmanaged' or XCDevice =~ 'BYOD' or XCDevice =~ 'Personal' or XCDevice =~ 'Unknown' or XCsAccessMethod != 'Client'
+  | where IsUnmanagedDevice or TotalGB > 5 or UniqueApps > 20
+  | extend RiskIndicators = strcat_array(array_concat(
+      iff(IsUnmanagedDevice, dynamic(['Unmanaged Device']), dynamic([])),
+      iff(TotalGB > 5, dynamic(['High Data Volume']), dynamic([])),
+      iff(UniqueApps > 20, dynamic(['Many Apps Accessed']), dynamic([])),
+      iff(array_length(Countries) > 1, dynamic(['Multiple Countries']), dynamic([]))
+  ), ', ')
+  | project 
+      TimeGenerated = now(),
+      User = CsUsername,
+      Device = XCDevice,
+      AccessMethod = XCsAccessMethod,
+      TotalDataGB = TotalGB,
+      UploadGB,
+      DownloadGB,
+      UniqueApplications = UniqueApps,
+      Applications = Apps,
+      UniqueHosts,
+      Activities,
+      Countries,
+      EventCount,
+      IsUnmanagedDevice,
+      RiskIndicators
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Device
+version: 1.0.0
+kind: Scheduled

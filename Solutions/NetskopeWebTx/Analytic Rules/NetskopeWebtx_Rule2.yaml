@@ -1,0 +1,72 @@
+id: cf103180-cb81-4796-921d-3cc7eef4e817
+name: Netskope - Data Movement Tracking (Upload/Download Monitoring)
+description: |
+  Tracks file uploads and downloads, monitoring data movement direction, size, and destination. Provides visibility into data flow patterns.
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1074
+query: |
+  let significantSizeMB = 50;
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername)
+  | where CsBytes > 0 or ScBytes > 0 or XRsFileSize > 0
+  | extend 
+      Direction = case(
+          CsBytes > ScBytes, 'Upload',
+          ScBytes > CsBytes, 'Download',
+          'Unknown'),
+      TransferSize = max_of(CsBytes, ScBytes, XRsFileSize)
+  | summarize 
+      TotalUploadBytes = sumif(CsBytes, Direction == 'Upload'),
+      TotalDownloadBytes = sumif(ScBytes, Direction == 'Download'),
+      UploadCount = countif(Direction == 'Upload'),
+      DownloadCount = countif(Direction == 'Download'),
+      UniqueFiles = dcount(XCsAppObjectName),
+      Files = make_set(XCsAppObjectName, 20),
+      FileTypes = make_set(XRsFileType),
+      Apps = make_set(XCsApp),
+      Destinations = make_set(CsHost, 20)
+      by CsUsername, XCDevice, XCCountry, bin(TimeGenerated, 1h)
+  | extend 
+      TotalUploadMB = round(TotalUploadBytes / 1048576.0, 2),
+      TotalDownloadMB = round(TotalDownloadBytes / 1048576.0, 2),
+      TotalTransferMB = round((TotalUploadBytes + TotalDownloadBytes) / 1048576.0, 2)
+  | where TotalTransferMB > significantSizeMB
+  | extend DataFlowSummary = strcat('Upload: ', TotalUploadMB, ' MB (', UploadCount, ' ops), Download: ', TotalDownloadMB, ' MB (', DownloadCount, ' ops)')
+  | project 
+      TimeGenerated,
+      User = CsUsername,
+      Device = XCDevice,
+      Country = XCCountry,
+      TotalUploadMB,
+      TotalDownloadMB,
+      TotalTransferMB,
+      UploadOperations = UploadCount,
+      DownloadOperations = DownloadCount,
+      UniqueFiles,
+      FilesSample = Files,
+      FileTypes,
+      Applications = Apps,
+      Destinations,
+      DataFlowSummary
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+version: 1.0.0
+kind: Scheduled
