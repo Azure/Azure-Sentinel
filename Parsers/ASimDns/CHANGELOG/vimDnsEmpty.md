@@ -2,9 +2,26 @@
 
 ## Version 0.4
 
-- (2023-01-09) Update vimDnsEmpty.yaml - [PR #7063](https://github.com/Azure/Azure-Sentinel/pull/7063)
+- (2023-01-09) Asim/dns yaml schema - [PR #7063](https://github.com/Azure/Azure-Sentinel/pull/7063)
 
 ## Version 0.3
 
-- (2022-03-19) ASIM Dns - Rearrangement (#4402) - [PR #4402](https://github.com/Azure/Azure-Sentinel/pull/4402)
+- (2022-02-03) Dns aliases - [PR #3898](https://github.com/Azure/Azure-Sentinel/pull/3898)
+
+## Version 0.2
+
+- (2021-11-11) DNS parser updated for schema 1.3 - [PR #3438](https://github.com/Azure/Azure-Sentinel/pull/3438)
+
+## Version 0.1
+
+- (2021-09-12) Dev/normalization/3rd party dns parsers: Corelight Zeek and GCP DNS - [PR #2987](https://github.com/Azure/Azure-Sentinel/pull/2987)
+
+## Version 0.1.1
+
+- (2021-09-12) Dev/normalization/dns empty update - [PR #2999](https://github.com/Azure/Azure-Sentinel/pull/2999)
+- (2021-09-09) Replace UserName -> Username - [PR #2983](https://github.com/Azure/Azure-Sentinel/pull/2983)
+
+## Version 0.0
+
+- (2021-06-14) DNS Normalization - Parsers and content - [PR #2379](https://github.com/Azure/Azure-Sentinel/pull/2379)
 
