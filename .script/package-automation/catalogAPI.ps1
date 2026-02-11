@@ -25,6 +25,28 @@ function GetCatalogDetails($offerId)
                 return $null;
             }
             else {
+                # Handle case where multiple offers are returned with same OfferId
+                if ($offerDetails -is [System.Object[]] -and $offerDetails.Count -gt 1)
+                {
+                    Write-Host "Multiple offers found for offerId $offerId. Matching by publisherId from baseMetadata."
+                    $matched = $offerDetails | Where-Object { $_.publisherId -eq $baseMetadata.publisherId }
+                    if ($null -ne $matched)
+                    {
+                        if ($matched -is [System.Object[]])
+                        {
+                            $offerDetails = $matched[0]
+                        }
+                        else
+                        {
+                            $offerDetails = $matched
+                        }
+                    }
+                    else
+                    {
+                        Write-Host "No offer matched publisherId '$($baseMetadata.publisherId)'. Defaulting to first offer."
+                        $offerDetails = $offerDetails[0]
+                    }
+                }
                 Write-Host "CatalogAPI Details found for offerId $offerId"
                 return $offerDetails;
             }
