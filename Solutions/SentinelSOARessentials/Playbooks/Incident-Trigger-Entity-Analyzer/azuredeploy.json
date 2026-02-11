@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Incident Trigger Entity Analyzer",
-        "description": "This playbook is triggered by Microsoft Sentinel incidents and performs automated investigation and enrichment of URL and User entities associated with the incident.",
+        "description": "This playbook is triggered by Microsoft Sentinel incidents and performs automated investigation and enrichment of URL and User entities associated with the incident. It includes intelligent user identifier detection supporting objectGuid, aadUserId, UPN, and Name+UPNSuffix combinations.",
         "prerequisites": [
             "1. A Microsoft Sentinel workspace must be configured.",
             "2. The user deploying this Logic App needs to have a Contributor Role.",
@@ -17,7 +17,7 @@
             "4. Consider creating an automation rule to run this playbook automatically on specific incident types."
         ],
         "prerequisitesDeployTemplateFile": "",
-        "lastUpdateTime": "2025-12-07T00:00:00.000Z",
+        "lastUpdateTime": "2026-02-10T00:00:00.000Z",
         "entities": [
             "URL",
             "Account"
@@ -31,13 +31,16 @@
             "tier": "community"
         },
         "author": {
-            "name": "yaniv shasha"
+            "name": "Yaniv Shasha"
         }
     },
     "parameters": {
         "PlaybookName": {
             "defaultValue": "Entity-Analyzer-Incident-Trigger",
-            "type": "string"
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App playbook"
+            }
         },
         "lookBackDays": {
             "defaultValue": 7,
@@ -61,7 +64,9 @@
                 "type": "SystemAssigned"
             },
             "tags": {
-                "Created By": "ARM Template"
+                "Created By": "ARM Template",
+                "hidden-SentinelTemplateName": "Entity-Analyzer-Incident-Trigger",
+                "hidden-SentinelTemplateVersion": "2.0"
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
@@ -151,7 +156,7 @@
                                         "method": "post",
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Security Analysis Report</strong></b><br><br><br><b><strong class=\"editor-text-bold\">Analysis ID:</strong></b> @{body('URL_Analyzer')?['id']}<br><br><b><strong class=\"editor-text-bold\">Entity Type:</strong></b> Url<br><br><br>🔗 <b><strong class=\"editor-text-bold\">URL Analysis for:</strong></b>@{item()}<br><br><br>🏷️ <b><strong class=\"editor-text-bold\">Classification:</strong></b> @{body('URL_Analyzer')?['classification']}<br><br><br>🔍 <b><strong class=\"editor-text-bold\">Analysis Result:</strong></b> @{body('URL_Analyzer')?['analysis']}<br><br><br>✅ <b><strong class=\"editor-text-bold\">Recommendation:</strong></b> @{body('URL_Analyzer')?['recommendation']}<br><br><br>📋 <b><strong class=\"editor-text-bold\">Data Sources:</strong></b> @{body('URL_Analyzer')?['dataSourceList']}<br><br><br>❗ <b><strong class=\"editor-text-bold\">Disclaimer:</strong></b> @{body('URL_Analyzer')?['disclaimer']}</p>"
+                                            "message": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Security Analysis Report</strong></b><br><br><b><strong class=\"editor-text-bold\">Analysis ID:</strong></b> @{body('URL_Analyzer')?['id']}<br><br><b><strong class=\"editor-text-bold\">Entity Type:</strong></b> Url<br><br>🔗 <b><strong class=\"editor-text-bold\">URL Analysis for:</strong></b> @{item()?['Url']}<br><br>🏷️ <b><strong class=\"editor-text-bold\">Classification:</strong></b> @{body('URL_Analyzer')?['classification']}<br><br>🔍 <b><strong class=\"editor-text-bold\">Analysis Result:</strong></b> @{body('URL_Analyzer')?['analysis']}<br><br>✅ <b><strong class=\"editor-text-bold\">Recommendation:</strong></b> @{body('URL_Analyzer')?['recommendation']}<br><br>📋 <b><strong class=\"editor-text-bold\">Data Sources:</strong></b> @{body('URL_Analyzer')?['dataSourceList']}<br><br>❗ <b><strong class=\"editor-text-bold\">Disclaimer:</strong></b> @{body('URL_Analyzer')?['disclaimer']}</p>"
                                         },
                                         "path": "/Incidents/Comment"
                                     }
@@ -186,48 +191,129 @@
                         "For_each_User": {
                             "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "actions": {
-                                "User_Analyzer": {
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                                "Condition_-_Check_Valid_User_Identifier": {
+                                    "type": "If",
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_User')?['objectGuid']",
+                                                        null
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_User')?['aadUserId']",
+                                                        null
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_User')?['userPrincipalName']",
+                                                        null
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_each_User')?['UserPrincipalName']",
+                                                        null
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each_User')?['Name']",
+                                                                null
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each_User')?['UPNSuffix']",
+                                                                null
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
                                             }
-                                        },
-                                        "method": "post",
-                                        "body": {
-                                            "workspaceId": "@triggerBody()?['workspaceId']",
-                                            "lookBackDays": "[parameters('lookBackDays')]",
-                                            "properties": {
-                                                "entityType": "User",
-                                                "userId": "@{item()?['AadUserId']}"
-                                            }
-                                        },
-                                        "path": "/aiprimitives/analysis",
-                                        "queries": {
-                                            "api-version": "2025-08-01-preview"
-                                        }
-                                    }
-                                },
-                                "Add_User_comment_to_incident": {
-                                    "runAfter": {
-                                        "User_Analyzer": [
-                                            "Succeeded"
                                         ]
                                     },
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    "actions": {
+                                        "User_Analyzer": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "workspaceId": "@triggerBody()?['workspaceId']",
+                                                    "lookBackDays": "[parameters('lookBackDays')]",
+                                                    "properties": {
+                                                        "entityType": "User",
+                                                        "userId": "@{coalesce(items('For_each_User')?['objectGuid'], items('For_each_User')?['aadUserId'], items('For_each_User')?['userPrincipalName'], items('For_each_User')?['UserPrincipalName'], if(and(not(empty(items('For_each_User')?['Name'])), not(empty(items('For_each_User')?['UPNSuffix']))), concat(items('For_each_User')?['Name'], '@', items('For_each_User')?['UPNSuffix']), null))}"
+                                                    }
+                                                },
+                                                "path": "/aiprimitives/analysis",
+                                                "queries": {
+                                                    "api-version": "2025-08-01-preview"
+                                                }
                                             }
                                         },
-                                        "method": "post",
-                                        "body": {
-                                            "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Security Analysis Report</strong></b><br><br><br><b><strong class=\"editor-text-bold\">Analysis ID:</strong></b> @{body('User_Analyzer')?['id']}<br><br><b><strong class=\"editor-text-bold\">Entity Type:</strong></b> User<br><br><br>👤 <b><strong class=\"editor-text-bold\">User Analysis for:</strong></b> @{item()?['Name']}<br><br><br>🏷️ <b><strong class=\"editor-text-bold\">Classification:</strong></b> @{body('User_Analyzer')?['classification']}<br><br><br>🔍 <b><strong class=\"editor-text-bold\">Analysis Result:</strong></b> @{body('User_Analyzer')?['analysis']}<br><br><br>✅ <b><strong class=\"editor-text-bold\">Recommendation:</strong></b> @{body('User_Analyzer')?['recommendation']}<br><br><br>📋 <b><strong class=\"editor-text-bold\">Data Sources:</strong></b> @{body('User_Analyzer')?['dataSourceList']}<br><br><br>❗ <b><strong class=\"editor-text-bold\">Disclaimer:</strong></b> @{body('User_Analyzer')?['disclaimer']}</p>"
-                                        },
-                                        "path": "/Incidents/Comment"
+                                        "Add_User_comment_to_incident": {
+                                            "runAfter": {
+                                                "User_Analyzer": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Security Analysis Report</strong></b><br><br><b><strong class=\"editor-text-bold\">Analysis ID:</strong></b> @{body('User_Analyzer')?['id']}<br><br><b><strong class=\"editor-text-bold\">Entity Type:</strong></b> User<br><br>👤 <b><strong class=\"editor-text-bold\">User Analysis for:</strong></b> @{items('For_each_User')?['Name']}<br><br>🏷️ <b><strong class=\"editor-text-bold\">Classification:</strong></b> @{body('User_Analyzer')?['classification']}<br><br>🔍 <b><strong class=\"editor-text-bold\">Analysis Result:</strong></b> @{body('User_Analyzer')?['analysis']}<br><br>✅ <b><strong class=\"editor-text-bold\">Recommendation:</strong></b> @{body('User_Analyzer')?['recommendation']}<br><br>📋 <b><strong class=\"editor-text-bold\">Data Sources:</strong></b> @{body('User_Analyzer')?['dataSourceList']}<br><br>❗ <b><strong class=\"editor-text-bold\">Disclaimer:</strong></b> @{body('User_Analyzer')?['disclaimer']}</p>"
+                                                },
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_Skip_comment_to_incident": {
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p class=\"editor-paragraph\">⚠️ <b><strong class=\"editor-text-bold\">User Analysis Skipped</strong></b><br><br>User with account name \"@{items('For_each_User')?['Name']}\" did not have an objectGuid, aadUserId, nor UPN. Therefore, it was not run through the User Analyzer.</p>"
+                                                    },
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             },
@@ -252,7 +338,7 @@
                             "azuresentinel": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                                 "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                                 "connectionProperties": {
                                     "authentication": {
                                         "type": "ManagedServiceIdentity"
@@ -280,7 +366,7 @@
                 "customParameterValues": {},
                 "parameterValueType": "Alternative",
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
                 }
             }
         },
