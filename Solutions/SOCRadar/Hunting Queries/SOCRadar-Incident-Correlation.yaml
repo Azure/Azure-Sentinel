@@ -1,0 +1,31 @@
+id: 0d4f5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d
+name: SOCRadar Incident Correlation
+description: |
+  Correlates SOCRadar alarms with Sentinel incidents to find sync gaps.
+  Shows alarms that may not have been imported or incidents missing SOCRadar data.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SOCRadar
+    dataTypes:
+      - SOCRadar_Alarms_CL
+tactics:
+  - Discovery
+relevantTechniques: []
+query: |
+  SOCRadar_Alarms_CL
+  | where TimeGenerated > ago(24h)
+  | where Status == "OPEN"
+  | join kind=leftanti (
+      SecurityIncident
+      | where TimeGenerated > ago(24h)
+      | where Title contains "[SOCRadar]"
+      | extend AlarmId = extract(@"#(\d+)", 1, Title)
+  ) on AlarmId
+  | project
+      TimeGenerated,
+      AlarmId,
+      Severity,
+      Title,
+      AlarmMainType,
+      Status
+  | order by Severity desc, TimeGenerated desc
