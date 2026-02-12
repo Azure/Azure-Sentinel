@@ -8,7 +8,7 @@ Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connector-authorization) section.\
 Connectors used: ***recordedfuturev2*** and ***azuresentinel***, see [Connector authorization](../readme.md#connector-authorization) for guidance.
 
-Enriches IOCs (IPs, Domains, URLs and hashes) in Microsoft Sentinel incidents with Recorded Future Intelligence. The Playbook adds the following data for all IOCs an incident:
+Enriches IOCs (IPs, Domains, URLs and hashes) in Microsoft Sentinel incidents with Recorded Future Intelligence. The Playbook adds the following data for all IOCs in an incident:
 
 * Recorded Future Risk Score
 * Triggered Risk Rules
@@ -17,7 +17,7 @@ Enriches IOCs (IPs, Domains, URLs and hashes) in Microsoft Sentinel incidents wi
 * Previous detections
 * Link to the IOC Intelligence Card in the Recorded Future portal.
 
-Data is added as a **comment** in the incident.
+Data is added as a **comment** in the incident. To reduce noise, the playbook omits comments for IOCs with a risk score below 5 (this limit `RiskScoreThreshold` is configurable as a logic app parameter).
 
 Enable automatic enrichment by mapping enrichments to alerts using a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" target="_blank">custom analytics rule</a>
 
