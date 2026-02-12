@@ -145,10 +145,17 @@ def main(mytimer: func.TimerRequest) -> None:
     five_minutes_ago_str = format_iso8601(five_minutes_ago_bahrain)
 
     if backupflag == "true":
+        logging.info("Backup flag is true. Checking state for backup mode.")
         state = StateManager(connection_string)
-        statsusss= state.get()
-        # if statsusss is not None:
-        if statsusss in [None, "", "false"]:
+        stored = state.get()
+        logging.info(f"State retrieved: {stored}")
+        
+        if stored is None:
+            stored = "true"
+            logging.info("No state found; defaulting to backup mode (true).")
+        
+        if stored == "true":
+            logging.info("Backup requested. Using provided backup dates.")
             date_from = olddate_from
             date_to = olddate_to
             url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
@@ -157,14 +164,14 @@ def main(mytimer: func.TimerRequest) -> None:
                 "api-key": HV_api_key
             }
             response = requests.get(url, headers=headers)
-            logging.warn(url)
+            logging.warning(url)
             message1 = response.json()
             
-            
             if perform_request(url, headers):
-                statsusss= state.post("true")
+                logging.info("Updating state to false after backup processing.")
+                state.post("false")
         else:
-            
+            logging.info("Backup already processed; using rolling window.")
             date_from = five_minutes_ago_str
             date_to = current_time_str
             url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
@@ -175,7 +182,7 @@ def main(mytimer: func.TimerRequest) -> None:
             }
 
             response = requests.get(url, headers=headers)
-            logging.warn(url)
+            logging.warning(url)
             message1 = response.json()
             
             perform_request(url, headers)
@@ -190,7 +197,7 @@ def main(mytimer: func.TimerRequest) -> None:
         }
 
         response = requests.get(url, headers=headers)
-        logging.warn(url)
+        logging.warning(url)
 
         message1 = response.json()
         
