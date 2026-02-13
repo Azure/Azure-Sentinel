@@ -69,6 +69,9 @@ INGESTION_API_OVERVIEW_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/az
 AZURE_MONITOR_TABLE_REF_BASE = 'https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/'
 AZURE_MONITOR_TABLE_REF_RAW_BASE = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-monitor-docs/main/articles/azure-monitor/reference/tables/'
 
+# Sentinel tables and connectors reference (includes lake-only support info)
+SENTINEL_TABLES_CONNECTORS_RAW = 'https://raw.githubusercontent.com/MicrosoftDocs/azure-docs/main/articles/sentinel/includes/sentinel-tables-connectors.md'
+
 # Cache configuration
 DEFAULT_CACHE_DIR = Path('.cache')
 DEFAULT_CACHE_TTL = 604800  # 1 week in seconds
@@ -177,12 +180,14 @@ class TableInfo:
     category: str = ""
     solutions: str = ""
     resource_types: str = ""
+    table_type: str = ""
     
     # Source tracking
     source_azure_monitor: bool = False
     source_defender_xdr: bool = False
     source_feature_support: bool = False
     source_ingestion_api: bool = False
+    source_sentinel_tables: bool = False  # From sentinel-tables-connectors reference
     xdr_only: bool = False  # True if table only exists in Defender XDR (not in Azure Monitor)
     
     # Links
@@ -191,10 +196,20 @@ class TableInfo:
     
     # Feature support attributes
     basic_logs_eligible: str = ""
+    auxiliary_table_eligible: str = ""
     supports_transformations: str = ""
+    search_job_support: str = ""
     
     # Ingestion API support
     ingestion_api_supported: bool = False
+    
+    # Sentinel table features (from sentinel-tables-connectors reference)
+    lake_only_supported: str = ""  # Supports lake-only ingestion
+    
+    # Detail page attributes
+    retention_default: str = ""
+    retention_max: str = ""
+    plan: str = ""
     
     # Override target fields
     collection_method: str = ""
@@ -203,7 +218,7 @@ class TableInfo:
 
 def get_cache_path(url: str) -> Path:
     """Get the cache file path for a URL."""
-    url_hash = hashlib.md5(url.encode()).hexdigest()
+    url_hash = hashlib.md5(url.encode()).hexdigest()  # CodeQL [SM02167] MD5 used for cache key generation, not for cryptographic security purposes
     url_parts = url.rstrip('/').split('/')
     readable_name = url_parts[-1] if url_parts else 'unknown'
     readable_name = re.sub(r'[^\w\-.]', '_', readable_name)
@@ -622,6 +637,79 @@ def parse_ingestion_api_tables(content: str, verbose: bool = False) -> Set[str]:
     return supported_tables
 
 
+def parse_sentinel_tables_connectors(content: str, verbose: bool = False) -> Dict[str, Dict[str, str]]:
+    """Parse the Sentinel tables-connectors reference page.
+    
+    This page contains a table with columns:
+    - Table name
+    - Connectors
+    - Supports DCR (Yes/No)
+    - Lake-only ingestion supported (Yes/No)
+    
+    Args:
+        content: Raw markdown content of the page
+        verbose: Whether to print progress messages
+    
+    Returns:
+        Dict mapping table name to {supports_transformations_sentinel, lake_only_supported}
+    """
+    table_info = {}
+    
+    lines = content.split('\n')
+    in_table = False
+    
+    for line in lines:
+        # Detect table separator row (indicates we're in the table)
+        if re.match(r'^\s*\|[-:\s|]+\|', line):
+            in_table = True
+            continue
+        
+        if not in_table or '|' not in line:
+            continue
+        
+        # Parse table row: |Table|Connectors|Supports DCR|Lake-only|
+        parts = [p.strip() for p in line.split('|')]
+        parts = [p for p in parts if p != '']  # Remove empty parts from split
+        
+        if len(parts) >= 4:
+            # Extract table name from first column (may be markdown link)
+            table_col = parts[0]
+            
+            # Skip header row
+            if table_col.lower() in ['table', 'table name', '']:
+                continue
+            
+            # Extract table name from markdown link like [TableName](/azure/...)
+            link_match = re.search(r'\[([A-Za-z0-9_]+)\]', table_col)
+            if link_match:
+                table_name = link_match.group(1)
+            else:
+                # Plain table name (may have _CL suffix)
+                table_name = table_col.strip()
+            
+            # Skip non-table entries (like union queries)
+            if not table_name or table_name.startswith('union') or '(' in table_name:
+                continue
+            
+            # Get supports_transformations (column 3) and lake_only (column 4)
+            supports_transformations_sentinel = parts[2].strip() if len(parts) > 2 else ''
+            lake_only = parts[3].strip() if len(parts) > 3 else ''
+            
+            # Normalize to Yes/No
+            supports_transformations_sentinel = 'Yes' if supports_transformations_sentinel.lower() == 'yes' else ('No' if supports_transformations_sentinel.lower() == 'no' else '')
+            lake_only = 'Yes' if lake_only.lower() == 'yes' else ('No' if lake_only.lower() == 'no' else '')
+            
+            table_info[table_name] = {
+                'supports_transformations_sentinel': supports_transformations_sentinel,
+                'lake_only_supported': lake_only
+            }
+    
+    if verbose:
+        print(f"  Found {len(table_info)} tables with transformation/lake-only info")
+    
+    return table_info
+
+
 def fetch_table_details(table_name: str, verbose: bool = False) -> Dict:
     """Fetch detailed information about a table from its reference page."""
     details = {
@@ -701,8 +789,20 @@ def fetch_table_details(table_name: str, verbose: bool = False) -> Dict:
 def merge_table_info(tables: Dict[str, TableInfo], 
                       defender_tables: Dict[str, TableInfo],
                       feature_info: Dict[str, Dict],
-                      ingestion_tables: Set[str]) -> Dict[str, TableInfo]:
-    """Merge table information from all sources."""
+                      ingestion_tables: Set[str],
+                      sentinel_tables_info: Dict[str, Dict[str, str]] = None) -> Dict[str, TableInfo]:
+    """Merge table information from all sources.
+    
+    Args:
+        tables: Azure Monitor tables
+        defender_tables: Defender XDR tables
+        feature_info: Feature support info (basic logs, transformations, etc.)
+        ingestion_tables: Set of tables that support Ingestion API
+        sentinel_tables_info: Dict of table -> {supports_transformations_sentinel, lake_only_supported}
+    
+    Returns:
+        Merged dictionary of table information
+    """
     
     # Start with Azure Monitor tables
     merged = dict(tables)
@@ -763,6 +863,25 @@ def merge_table_info(tables: Dict[str, TableInfo],
         if info.resource_types and 'virtualmachines' in info.resource_types.lower():
             info.collection_method = 'AMA'
     
+    # Merge Sentinel tables/connectors info (enrich supports_transformations and add lake-only)
+    if sentinel_tables_info:
+        for table_name, info_dict in sentinel_tables_info.items():
+            sentinel_transforms = info_dict.get('supports_transformations_sentinel', '')
+            if table_name in merged:
+                merged[table_name].source_sentinel_tables = True
+                merged[table_name].lake_only_supported = info_dict.get('lake_only_supported', '')
+                # Enrich supports_transformations if not already set from feature-support page
+                if not merged[table_name].supports_transformations and sentinel_transforms:
+                    merged[table_name].supports_transformations = sentinel_transforms
+            else:
+                # Add new entry with just sentinel tables info
+                merged[table_name] = TableInfo(
+                    table_name=table_name,
+                    source_sentinel_tables=True,
+                    supports_transformations=sentinel_transforms,
+                    lake_only_supported=info_dict.get('lake_only_supported', '')
+                )
+    
     return merged
 
 
@@ -782,11 +901,13 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
         'xdr_only',
         'source_feature_support',
         'source_ingestion_api',
+        'source_sentinel_tables',
         'azure_monitor_doc_link',
         'defender_xdr_doc_link',
         'basic_logs_eligible',
         'supports_transformations',
         'ingestion_api_supported',
+        'lake_only_supported',
     ]
     
     with open(output_path, 'w', encoding='utf-8', newline='') as f:
@@ -809,11 +930,13 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
                 'xdr_only': 'Yes' if info.xdr_only else 'No',
                 'source_feature_support': 'Yes' if info.source_feature_support else 'No',
                 'source_ingestion_api': 'Yes' if info.source_ingestion_api else 'No',
+                'source_sentinel_tables': 'Yes' if info.source_sentinel_tables else 'No',
                 'azure_monitor_doc_link': info.azure_monitor_doc_link,
                 'defender_xdr_doc_link': info.defender_xdr_doc_link,
                 'basic_logs_eligible': info.basic_logs_eligible,
                 'supports_transformations': info.supports_transformations,
                 'ingestion_api_supported': 'Yes' if info.ingestion_api_supported else 'No',
+                'lake_only_supported': info.lake_only_supported,
             })
     
     print(f"Wrote {len(tables)} tables to {output_path}")
@@ -967,10 +1090,20 @@ Examples:
         print(f"   Error: {e}")
         ingestion_tables = set()
     
+    # 5. Fetch Sentinel tables/connectors reference (DCR and lake-only support)
+    if verbose:
+        print("\n5. Fetching Sentinel tables/connectors reference (lake-only support)...")
+    try:
+        content = fetch_content(SENTINEL_TABLES_CONNECTORS_RAW, verbose)
+        sentinel_tables_info = parse_sentinel_tables_connectors(content, verbose)
+    except Exception as e:
+        print(f"   Error: {e}")
+        sentinel_tables_info = {}
+    
     # Merge all information
     if verbose:
-        print("\n5. Merging table information...")
-    tables = merge_table_info(azure_monitor_tables, defender_tables, feature_info, ingestion_tables)
+        print("\n6. Merging table information...")
+    tables = merge_table_info(azure_monitor_tables, defender_tables, feature_info, ingestion_tables, sentinel_tables_info)
     
     if verbose:
         print(f"   Total unique tables: {len(tables)}")
@@ -985,10 +1118,10 @@ Examples:
         if args.max_details > 0:
             azure_tables = azure_tables[:args.max_details]
             if verbose:
-                print(f"\n6. Fetching detailed info for {len(azure_tables)} of {total} Azure Monitor tables...")
+                print(f"\n7. Fetching detailed info for {len(azure_tables)} of {total} Azure Monitor tables...")
         else:
             if verbose:
-                print(f"\n6. Fetching detailed info for {total} Azure Monitor tables (this may take a while)...")
+                print(f"\n7. Fetching detailed info for {total} Azure Monitor tables (this may take a while)...")
         
         fetched_count = 0
         for i, (table_name, info) in enumerate(azure_tables):
@@ -1035,8 +1168,8 @@ Examples:
                 if verbose:
                     print(f"   Error fetching {table_name}: {e}")
             
-            if verbose and (i + 1) % 50 == 0:
-                print(f"   Processed {i + 1}/{len(azure_tables)} tables...")
+            if verbose and (i + 1) % 25 == 0:
+                print(f"   [{i + 1}/{len(azure_tables)}] Fetched details for {fetched_count} tables so far...")
         
         if verbose:
             print(f"   Successfully fetched details for {fetched_count} tables")
@@ -1050,6 +1183,35 @@ Examples:
         if verbose:
             print(f"   Modified {modified_count} tables")
     
+    # Validate transformation support consistency between sources and generate report
+    # We need to compare before enrichment, so we need access to sentinel_tables_info
+    dcr_mismatches = []
+    for table_name, info in tables.items():
+        if not info.source_sentinel_tables:
+            continue
+        # Get sentinel value from the sentinel_tables_info dict (before enrichment)
+        sentinel_info = sentinel_tables_info.get(table_name, {})
+        sentinel_val = sentinel_info.get('supports_transformations_sentinel', '').lower()
+        existing_val = ''
+        
+        # We need to check if the table had a value from feature-support BEFORE enrichment
+        # source_feature_support tells us if it came from that source
+        if info.source_feature_support:
+            # The current supports_transformations could be from either source
+            # If source_feature_support is True, the value came from feature-support originally
+            existing_val = info.supports_transformations.lower() if info.supports_transformations else ''
+        
+        # Only compare when both sources have values
+        if existing_val and sentinel_val:
+            existing_norm = 'yes' if 'yes' in existing_val else 'no' if 'no' in existing_val else existing_val
+            sentinel_norm = 'yes' if 'yes' in sentinel_val else 'no' if 'no' in sentinel_val else sentinel_val
+            if existing_norm != sentinel_norm:
+                dcr_mismatches.append({
+                    'table': table_name,
+                    'supports_transformations_feature_support': info.supports_transformations,
+                    'supports_transformations_sentinel': sentinel_info.get('supports_transformations_sentinel', '')
+                })
+    
     # Write outputs
     if verbose:
         print("\nWriting outputs...")
@@ -1058,6 +1220,24 @@ Examples:
     
     csv_path = args.output / 'tables_reference.csv'
     write_tables_csv(tables, csv_path)
+    
+    # Write transformation support mismatch report if there are any
+    if dcr_mismatches:
+        report_path = args.output / 'transformation_support_mismatch_report.md'
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write("# Transformation Support Mismatch Report\n\n")
+            f.write("This report identifies tables where transformation support information differs between sources:\n")
+            f.write("- **Feature Support Page**: From [Tables Feature Support](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support)\n")
+            f.write("- **Sentinel Reference**: From [Sentinel Tables/Connectors Reference](https://learn.microsoft.com/azure/sentinel/data-connectors-reference)\n\n")
+            f.write(f"**Total mismatches found: {len(dcr_mismatches)}**\n\n")
+            f.write("| Table | Feature Support Page | Sentinel Reference |\n")
+            f.write("|:------|:--------------------|:-------------------|\n")
+            for m in sorted(dcr_mismatches, key=lambda x: x['table']):
+                f.write(f"| {m['table']} | {m['supports_transformations_feature_support']} | {m['supports_transformations_sentinel']} |\n")
+        if verbose:
+            print(f"\nWrote transformation support mismatch report ({len(dcr_mismatches)} mismatches) to {report_path}")
+    elif verbose:
+        print("\nNo transformation support mismatches found.")
     
     if verbose:
         print("\nDone!")
