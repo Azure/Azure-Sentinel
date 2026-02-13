@@ -185,7 +185,7 @@
               "type": "Http",
               "inputs": {
                 "method": "POST",
-                "uri": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAuthPlaybookName'), '/triggers/manual'), '2019-05-01').value]",
+                "uri": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAuthPlaybookName')), '/triggers/manual'), '2019-05-01').value]",
                 "headers": {
                   "Content-Type": "application/json"
                 },
@@ -264,7 +264,7 @@
               "type": "Http",
               "inputs": {
                 "method": "POST",
-                "uri": "http://k8s-istioing-istioing-4ff0b93b67-74a65bde8c3bb0e5.elb.us-east-1.amazonaws.com/bavinash/v1/account/@{variables('AccountId')}/storage/take-volume-offline",
+                "uri": "https://api.bluexp.netapp.com/v1/services/rps/v1/account/@{variables('AccountId')}/storage/take-volume-offline",
                 "headers": {
                   "Authorization": "Bearer @{variables('Token')}",
                   "Content-Type": "application/json",
@@ -398,10 +398,11 @@
               },
               "actions": {
                 "Call_Async_Poll_Playbook": {
+                  "runAfter": {},
                   "type": "Http",
                   "inputs": {
                     "method": "POST",
-                    "uri": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAsyncPollPlaybookName'), '/triggers/manual'), '2019-05-01').value]",
+                    "uri": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAsyncPollPlaybookName')), '/triggers/manual'), '2019-05-01').value]",
                     "headers": {
                       "Content-Type": "application/json"
                     },
@@ -436,24 +437,8 @@
                   "Succeeded"
                 ]
               },
-              "type": "ParseJson",
-              "inputs": {
-                "content": "@body('Call_Async_Poll_Playbook')",
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    },
-                    "jobId": {
-                      "type": "string"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
+              "type": "Compose",
+              "inputs": "@if(equals(actions('Call_Async_Poll_Playbook')['status'], 'Succeeded'), body('Call_Async_Poll_Playbook'), json('{\"success\": false, \"status\": \"FAILED\", \"error\": \"Poll playbook failed or timed out\"}'))"
             },
             "Store_Poll_Response": {
               "runAfter": {
@@ -464,23 +449,43 @@
               "type": "SetVariable",
               "inputs": {
                 "name": "PollResponse",
-                "value": "@body('Parse_Poll_Response')"
+                "value": "@outputs('Parse_Poll_Response')"
               }
             },
-            "Return_Response": {
+            "Finalize_Execution": {
               "runAfter": {
                 "Store_Poll_Response": [
                   "Succeeded",
-                  "Skipped"
+                  "Skipped",
+                  "Failed",
+                  "TimedOut"
                 ],
                 "Check_If_Should_Poll": [
-                  "Succeeded"
+                  "Succeeded",
+                  "Skipped",
+                  "Failed",
+                  "TimedOut"
                 ],
                 "Call_Auth_Playbook": [
                   "Failed",
                   "TimedOut"
                 ],
                 "Submit_Volume_Offline": [
+                  "Failed",
+                  "TimedOut"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "execution_completed": true,
+                "timestamp": "@utcNow()"
+              }
+            },
+            "Return_Response": {
+              "runAfter": {
+                "Finalize_Execution": [
+                  "Succeeded",
+                  "Skipped",
                   "Failed",
                   "TimedOut"
                 ]
@@ -535,7 +540,7 @@
     },
     "TriggerUrl": {
       "type": "string",
-      "value": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'), '/triggers/manual'), '2019-05-01').value]"
+      "value": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '/triggers/manual'), '2019-05-01').value]"
     }
   }
 }

@@ -2,23 +2,25 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "title": "NetApp Ransomware Resilience Enrich StorageVM Playbook",
-    "description": "This playbook enriches storage data by calling the updated NetApp Ransomware Resilience enrich storage API endpoint.",
+    "title": "NetApp Ransomware Resilience Enrich IP Playbook",
+    "description": "This playbook enriches IP data by calling the updated NetApp Ransomware Resilience enrich IP address API endpoint and asynchronously polls multiple job results.",
     "prerequisites": [
       "1. NetApp Ransomware Resilience Auth Playbook must be deployed first and ensure that it is functioning correctly",
-      "2. Valid NetApp Ransomware Resilience API credentials configured in the Auth Playbook",
-      "3. Caller must provide agent_id and system_id parameters"
+      "2. NetApp Ransomware Resilience Async Poll Playbook must be deployed and ensure that it is functioning correctly",
+      "3. Valid NetApp Ransomware Resilience API credentials configured in the Auth Playbook",
+      "4. Caller must provide ip_address parameter"
     ],
     "postDeployment": [
-      "1. Test the storage enrichment functionality with valid agent_id and system_id"
+      "1. Test the IP enrichment functionality with valid IP address"
     ],
-    "lastUpdateTime": "2025-09-23T00:00:00.000Z",
+    "lastUpdateTime": "2025-09-26T00:00:00.000Z",
     "tags": [
       "NetApp",
       "RansomwareResilience",
       "Playbook",
-      "StorageVM",
-      "Enrich"
+      "IP",
+      "Enrich",
+      "NetworkInterface"
     ],
     "support": {
       "tier": "Community"
@@ -30,7 +32,7 @@
   "parameters": {
     "PlaybookName": {
       "type": "String",
-      "defaultValue": "NetApp-RansomwareResilience_Enrich_StorageVM_Playbook",
+      "defaultValue": "NetApp-RansomwareResilience-Enrich-IP-Playbook",
       "metadata": {
         "description": "Name of the Logic App/Playbook"
       }
@@ -40,6 +42,13 @@
       "defaultValue": "NetApp-RansomwareResilience-Auth-Playbook",
       "metadata": {
         "description": "Name of the NetApp Ransomware Resilience authentication playbook"
+      }
+    },
+    "NetAppRansomwareResilienceAsyncPollPlaybookName": {
+      "type": "String",
+      "defaultValue": "NetApp-RansomwareResilience-Async-Poll-Playbook",
+      "metadata": {
+        "description": "Name of the NetApp Ransomware Resilience async poll playbook"
       }
     },
     "location": {
@@ -69,6 +78,10 @@
             "authPlaybookName": {
               "defaultValue": "[parameters('NetAppRansomwareResilienceAuthPlaybookName')]",
               "type": "String"
+            },
+            "asyncPollPlaybookName": {
+              "defaultValue": "[parameters('NetAppRansomwareResilienceAsyncPollPlaybookName')]",
+              "type": "String"
             }
           },
           "triggers": {
@@ -79,10 +92,7 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "agent_id": {
-                      "type": "string"
-                    },
-                    "system_id": {
+                    "ip_address": {
                       "type": "string"
                     },
                     "callbackData": {
@@ -90,8 +100,7 @@
                     }
                   },
                   "required": [
-                    "agent_id",
-                    "system_id"
+                    "ip_address"
                   ]
                 }
               }
@@ -104,14 +113,9 @@
               "inputs": {
                 "variables": [
                   {
-                    "name": "AgentId",
+                    "name": "IpAddress",
                     "type": "string",
-                    "value": "@triggerBody()?['agent_id']"
-                  },
-                  {
-                    "name": "SystemId",
-                    "type": "string",
-                    "value": "@triggerBody()?['system_id']"
+                    "value": "@triggerBody()?['ip_address']"
                   },
                   {
                     "name": "CallbackData",
@@ -127,7 +131,11 @@
                     "type": "string"
                   },
                   {
-                    "name": "StorageVMData",
+                    "name": "JobIds",
+                    "type": "array"
+                  },
+                  {
+                    "name": "PollingResults",
                     "type": "array"
                   },
                   {
@@ -147,7 +155,7 @@
               "type": "Http",
               "inputs": {
                 "method": "POST",
-                "uri": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAuthPlaybookName'), '/triggers/manual'), '2019-05-01').value]",
+                "uri": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAuthPlaybookName')), '/triggers/manual'), '2019-05-01').value]",
                 "headers": {
                   "Content-Type": "application/json"
                 },
@@ -164,7 +172,8 @@
                   "interval": "PT5S",
                   "minimumInterval": "PT5S",
                   "maximumInterval": "PT30S"
-                }
+                },
+                "timeout": "PT30S"
               }
             },
             "Parse_Auth_Response": {
@@ -217,7 +226,7 @@
                 "value": "@body('Parse_Auth_Response')?['account_id']"
               }
             },
-            "Get_StorageVM_Data": {
+            "Get_IP_NetworkInterfaces": {
               "runAfter": {
                 "Set_Account_ID": [
                   "Succeeded"
@@ -225,11 +234,15 @@
               },
               "type": "Http",
               "inputs": {
-                "method": "GET",
-                "uri": "http://k8s-istioing-istioing-4ff0b93b67-74a65bde8c3bb0e5.elb.us-east-1.amazonaws.com/bavinash/v1/account/@{variables('AccountId')}/enrich/storage?agent_id=@{variables('AgentId')}&system_id=@{variables('SystemId')}",
+                "method": "POST",
+                "uri": "https://api.bluexp.netapp.com/v1/services/rps/v1/account/@{variables('AccountId')}/enrich/ip-address",
                 "headers": {
                   "Authorization": "Bearer @{variables('Token')}",
-                  "accept": "application/json"
+                  "accept": "application/json",
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "ip_address": "@{variables('IpAddress')}"
                 },
                 "retryPolicy": {
                   "type": "exponential",
@@ -237,12 +250,13 @@
                   "interval": "PT5S",
                   "minimumInterval": "PT5S",
                   "maximumInterval": "PT30S"
-                }
+                },
+                "timeout": "PT45S"
               }
             },
             "Capture_Enrichment_Status_Code": {
               "runAfter": {
-                "Get_StorageVM_Data": [
+                "Get_IP_NetworkInterfaces": [
                   "Succeeded",
                   "Failed"
                 ]
@@ -250,10 +264,10 @@
               "type": "SetVariable",
               "inputs": {
                 "name": "EnrichmentStatusCode",
-                "value": "@outputs('Get_StorageVM_Data')['statusCode']"
+                "value": "@outputs('Get_IP_NetworkInterfaces')['statusCode']"
               }
             },
-            "Parse_StorageVM_Response": {
+            "Parse_JobIds_Response": {
               "runAfter": {
                 "Capture_Enrichment_Status_Code": [
                   "Succeeded"
@@ -261,19 +275,22 @@
               },
               "type": "ParseJson",
               "inputs": {
-                "content": "@body('Get_StorageVM_Data')",
+                "content": "@body('Get_IP_NetworkInterfaces')",
                 "schema": {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
-                      "volume_uuid": {
+                      "job_id": {
                         "type": "string"
                       },
-                      "volume_name": {
+                      "status": {
                         "type": "string"
                       },
-                      "svm_name": {
+                      "source": {
+                        "type": "string"
+                      },
+                      "agent_id": {
                         "type": "string"
                       }
                     }
@@ -281,29 +298,128 @@
                 }
               }
             },
-            "Store_StorageVM_Data": {
+            "Extract_Job_IDs": {
               "runAfter": {
-                "Parse_StorageVM_Response": [
+                "Parse_JobIds_Response": [
                   "Succeeded"
                 ]
               },
               "type": "SetVariable",
               "inputs": {
-                "name": "StorageVMData",
-                "value": "@body('Parse_StorageVM_Response')"
+                "name": "JobIds",
+                "value": "@body('Parse_JobIds_Response')"
               }
             },
-            "Return_Response": {
+            "Poll_All_Jobs": {
               "runAfter": {
-                "Store_StorageVM_Data": [
+                "Extract_Job_IDs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach",
+              "foreach": "@variables('JobIds')",
+              "actions": {
+                "Call_Async_Poll_Playbook": {
+                  "runAfter": {},
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('NetAppRansomwareResilienceAsyncPollPlaybookName')), '/triggers/manual'), '2019-05-01').value]",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "job_id": "@item()?['job_id']",
+                      "agent_id": "@item()?['agent_id']",
+                      "system_id": "default",
+                      "source": "@item()?['source']",
+                      "caller_info": {
+                        "playbook_name": "@workflow().name",
+                        "correlation_id": "@workflow().run.name",
+                        "original_ip": "@variables('IpAddress')"
+                      }
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT5S",
+                      "minimumInterval": "PT5S",
+                      "maximumInterval": "PT30S"
+                    },
+                    "timeout": "PT90S"
+                  }
+                },
+                "Add_Poll_Result": {
+                  "runAfter": {
+                    "Call_Async_Poll_Playbook": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "PollingResults",
+                    "value": {
+                      "job_id": "@item()?['job_id']",
+                      "poll_response": "@body('Call_Async_Poll_Playbook')",
+                      "original_job_info": "@item()"
+                    }
+                  }
+                },
+                "Add_Failed_Poll_Result": {
+                  "runAfter": {
+                    "Call_Async_Poll_Playbook": [
+                      "Failed",
+                      "TimedOut"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "PollingResults",
+                    "value": {
+                      "job_id": "@item()?['job_id']",
+                      "poll_response": {
+                        "success": false,
+                        "error": "Failed to poll job or timeout occurred"
+                      },
+                      "original_job_info": "@item()"
+                    }
+                  }
+                }
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
+            },
+            "Finalize_Execution": {
+              "runAfter": {
+                "Poll_All_Jobs": [
                   "Succeeded",
-                  "Skipped"
+                  "Skipped",
+                  "Failed",
+                  "TimedOut"
                 ],
                 "Call_Auth_Playbook": [
                   "Failed",
                   "TimedOut"
                 ],
-                "Get_StorageVM_Data": [
+                "Get_IP_NetworkInterfaces": [
+                  "Failed",
+                  "TimedOut"
+                ]
+              },
+              "type": "Compose",
+              "inputs": {
+                "execution_completed": true,
+                "timestamp": "@utcNow()"
+              }
+            },
+            "Return_Response": {
+              "runAfter": {
+                "Finalize_Execution": [
+                  "Succeeded",
+                  "Skipped",
                   "Failed",
                   "TimedOut"
                 ]
@@ -311,20 +427,23 @@
               "type": "Response",
               "kind": "Http",
               "inputs": {
-                "statusCode": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 401, if(or(equals(actions('Get_StorageVM_Data')['status'], 'Failed'), equals(actions('Get_StorageVM_Data')['status'], 'TimedOut')), 500, if(equals(variables('EnrichmentStatusCode'), 200), 200, if(equals(variables('EnrichmentStatusCode'), 0), 500, variables('EnrichmentStatusCode')))))",
+                "statusCode": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 401, if(or(equals(actions('Get_IP_NetworkInterfaces')['status'], 'Failed'), equals(actions('Get_IP_NetworkInterfaces')['status'], 'TimedOut')), 500, if(equals(variables('EnrichmentStatusCode'), 200), 200, if(equals(variables('EnrichmentStatusCode'), 0), 500, variables('EnrichmentStatusCode')))))",
                 "headers": {
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "success": "@and(not(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut'))), not(or(equals(actions('Get_StorageVM_Data')['status'], 'Failed'), equals(actions('Get_StorageVM_Data')['status'], 'TimedOut'))), equals(variables('EnrichmentStatusCode'), 200))",
-                  "error": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 'Authentication failed in auth playbook', if(or(equals(actions('Get_StorageVM_Data')['status'], 'Failed'), equals(actions('Get_StorageVM_Data')['status'], 'TimedOut')), 'Failed retrieving storage VM data', null))",
-                  "stage": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 'auth', if(or(equals(actions('Get_StorageVM_Data')['status'], 'Failed'), equals(actions('Get_StorageVM_Data')['status'], 'TimedOut')), 'enrichment', 'success'))",
+                  "success": "@and(not(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut'))), not(or(equals(actions('Get_IP_NetworkInterfaces')['status'], 'Failed'), equals(actions('Get_IP_NetworkInterfaces')['status'], 'TimedOut'))), equals(variables('EnrichmentStatusCode'), 200))",
+                  "error": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 'Authentication failed in auth playbook', if(or(equals(actions('Get_IP_NetworkInterfaces')['status'], 'Failed'), equals(actions('Get_IP_NetworkInterfaces')['status'], 'TimedOut')), 'Failed retrieving IP network interfaces data', null))",
+                  "stage": "@if(or(equals(actions('Call_Auth_Playbook')['status'], 'Failed'), equals(actions('Call_Auth_Playbook')['status'], 'TimedOut')), 'auth', if(or(equals(actions('Get_IP_NetworkInterfaces')['status'], 'Failed'), equals(actions('Get_IP_NetworkInterfaces')['status'], 'TimedOut')), 'enrichment', 'success'))",
                   "account_id": "@variables('AccountId')",
+                  "ip_address": "@variables('IpAddress')",
                   "enrichment": {
                     "statusCode": "@variables('EnrichmentStatusCode')",
-                    "storage_vms": "@variables('StorageVMData')",
-                    "count": "@length(variables('StorageVMData'))",
-                    "raw": "@body('Get_StorageVM_Data')"
+                    "job_ids_count": "@length(variables('JobIds'))",
+                    "polling_results_count": "@length(variables('PollingResults'))",
+                    "original_jobs": "@variables('JobIds')",
+                    "polling_results": "@variables('PollingResults')",
+                    "raw_initial_response": "@body('Get_IP_NetworkInterfaces')"
                   },
                   "callbackData": "@variables('CallbackData')",
                   "timestamp": "@utcnow()"
@@ -353,7 +472,7 @@
     },
     "TriggerUrl": {
       "type": "string",
-      "value": "[listCallbackURL(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'), '/triggers/manual'), '2019-05-01').value]"
+      "value": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '/triggers/manual'), '2019-05-01').value]"
     }
   }
 }
