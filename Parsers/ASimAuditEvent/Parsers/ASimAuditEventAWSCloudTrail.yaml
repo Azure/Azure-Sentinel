@@ -1,0 +1,234 @@
+Parser:
+  Title: Audit Event ASIM parser for AWS CloudTrail activity
+  Version: '0.1.0'
+  LastUpdated: Jan 12, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.2'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing AWS CloudTrail activity logs to the ASIM Audit Event schema.
+ParserName: ASimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _ASim_AuditEvent_AWSCloudTrail
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool) {
+    let UserTypeLookup = datatable(ActorOriginalUserType: string, ActorUserType: string)
+    [
+        "AWSService", "Service",
+        "Directory", "Other",
+        "Unknown", "Other",
+        "Root", "Admin"
+    ];
+    AWSCloudTrail
+    | where not(disabled)
+    | where EventName != "ConsoleLogin" or EventName != "UserAuthentication"
+    | extend
+        EventSchema = 'AuditEvent',
+        EventSchemaVersion = '0.1.2',
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventProduct = "CloudTrail",
+        EventVendor = "AWS",
+        Dvc = "CloudTrail",
+        Type = "AWSCloudTrail",
+        EventResult = iff(isempty(ErrorMessage) == True and isempty(ErrorCode) == True, 'Success', 'Failure'),
+        EventType = case(
+            EventName startswith "Abort", "Set",
+            EventName == "AcceptHandshake", "Status",
+            EventName == "AcceptVpcPeeringConnection", "Status",
+            EventName startswith "Accept", "Set",
+            EventName startswith "Add", "Set",
+            EventName startswith "Allocate", "Create",
+            EventName startswith "Associate", "Set",
+            EventName startswith "Assume", "Read",
+            EventName startswith "Attach", "Set",
+            EventName startswith "Authorize", "Set",
+            EventName == "AutomatedDefaultVpcCreation" "Automated", "Create",
+            EventName == "BatchDeleteImage", "Delete",
+            EventName == "BatchEnableStandards", "Set",
+            EventName == "BidEvictedEvent", "Set",
+            EventName startswith "Batch", "Read",
+            EventName startswith "Bid", "Set",
+            EventName startswith "Change", "Set",
+            EventName startswith "Check", "Read",
+            EventName startswith "Close", "Delete",
+            EventName startswith "Complete", "Status",
+            EventName startswith "Configure", "Create",
+            EventName startswith "Copy", "Set",
+            EventName startswith "Create", "Create",
+            EventName startswith "Deactivate", "Delete",
+            EventName startswith "Decrypt", "Read",
+            EventName startswith "Delete", "Delete",
+            EventName startswith "Deregister", "Delete",
+            EventName startswith "Describe", "Read",
+            EventName startswith "Detach", "Set",
+            EventName startswith "Disable", "Set",
+            EventName startswith "Disassociate", "Set",
+            EventName startswith "Download", "Read",
+            EventName startswith "Enable", "Set",
+            EventName startswith "Encrypt", "Read",
+            EventName == "FailoverDBCluster", "Set",
+            EventName startswith "GenerateDataKey", "Create",
+            EventName startswith "Generate", "Read",
+            EventName startswith "Get", "Read",
+            EventName startswith "Head", "Read",
+            EventName startswith "Import", "Create",
+            EventName startswith "Initiate", "Set",
+            EventName startswith "Invite", "Set",
+            EventName startswith "Invoke", "Set",
+            EventName startswith "List", "Read",
+            EventName startswith "Lookup", "Read",
+            EventName startswith "Modify", "Set",
+            EventName startswith "Move", "Set",
+            EventName == "PolicyExecutionEvent", "Status",
+            EventName == "PreflightRequest", "Status",
+            EventName startswith "Publish", "Set",
+            EventName startswith "Put", "Create",
+            EventName startswith "Reboot", "Set",
+            EventName startswith "Redeem", "Set",
+            EventName startswith "ReEncrypt", "Read",
+            EventName startswith "Register", "Set",
+            EventName startswith "Release", "Delete",
+            EventName startswith "Remove", "Set",
+            EventName startswith "Replace", "Set",
+            EventName startswith "Restore", "Set",
+            EventName startswith "Resume", "Set",
+            EventName startswith "Resync", "Set",
+            EventName startswith "Retire", "Set",
+            EventName startswith "Revoke", "Set",
+            EventName startswith "Rotate", "Set",
+            EventName == "RotationStarted", "Status",
+            EventName == "RunInstances", "Create",
+            EventName == "RunTask", "Set",
+            EventName startswith "Scan", "Read",
+            EventName == "ScheduleKeyDeletion", "Delete",
+            EventName == "Search", "Read",
+            EventName startswith "Select", "Read",
+            EventName == "SendHeartBeat", "Status",
+            EventName startswith "Send", "Set",
+            EventName == "SharedSnapshotVolumeCreated", "Create",
+            EventName startswith "Sign", "Set",
+            EventName startswith "Simulate", "Set",
+            EventName == "StartLogging", "Set",
+            EventName startswith "Start", "Status",
+            EventName startswith "Stop", "Stop",
+            EventName startswith "Suspend", "Set",
+            EventName startswith "Synchronize", "Set",
+            EventName startswith "Tag", "Set",
+            EventName startswith "Terminate", "Delete",
+            EventName startswith "Transfer", "Set",
+            EventName startswith "Untag", "Set",
+            EventName startswith "Update", "Set",
+            EventName == "UploadLayerPart", "Create",
+            EventName startswith "Upload", "Set",
+            "Other"
+        ),
+        UserIdentityAccessKeyId,
+        AwsRequestId
+    | project-rename
+        EventSubType = EventTypeName,
+        EventUid = AwsEventId,
+        EventMessage = ErrorMessage,
+        EventOriginalType = EventName,
+        EventProductVersion = EventVersion,
+        TargetAppName = EventSource
+    | extend TargetAppType = iff(isempty(TargetAppName), "", "Service")
+    // Parse Object
+    | extend Resources = todynamic(Resources)
+    | mv-apply Resources on (where Resources.ARN != "") // Get first object that has an ARN
+    | extend 
+        ObjectType = "Cloud Resource",
+        Object = tostring(Resources.ARN),
+        ObjectId = tostring(Resources.ARN),
+        OriginalObjectType = tostring(Resources.type)
+    | extend
+        ActorUserIdType = iff(isempty(UserIdentityAccountId), "", "AWSId"),
+        ActorUsernameType = iff(isempty(UserIdentityUserName), "", "Simple"),
+        SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+        TargetHostname = tostring(todynamic(RequestParameters).Host)
+    | project-rename 
+        ActorUserId = UserIdentityAccountId,
+        ActorUsername = UserIdentityUserName,
+        ActorOriginalUserType = UserIdentityType,
+        HttpUserAgent = UserAgent
+    | lookup UserTypeLookup on ActorOriginalUserType
+    | extend ActorUserType = coalesce(ActorUserType, "Regular")
+    | invoke _ASIM_ResolveFQDN('TargetAppName')
+    | project-rename
+        TargetFQDN = FQDN,
+        TargetDomain = Domain
+    | extend TargetDomainType = "FQDN"
+    // Aliases
+    | extend
+        Operation = EventOriginalType,
+        Application = TargetAppName,
+        IpAddr = SrcIpAddr,
+        Src = SrcIpAddr,
+        User = ActorUserId
+    | extend AdditionalFields = bag_pack(
+        "ActorAccessKeyId", UserIdentityAccessKeyId,
+        "ActorARN", UserIdentityArn,
+        "APIVersion", APIVersion,
+        "AWSRegion", AWSRegion,
+        "ManagementEvent", ManagementEvent,
+        "ReadOnly", ReadOnly,
+        "RecipientAccountId", RecipientAccountId,
+        "RequestID", AwsRequestId,
+        "RequestParameters", RequestParameters,
+        "SharedEventId", SharedEventId
+    )
+    | project
+        TimeGenerated,
+        EventSchema,
+        EventSchemaVersion,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventProduct,
+        EventVendor,
+        Dvc,
+        Type,
+        EventResult,
+        EventType,
+        EventSubType,
+        EventUid,
+        EventMessage,
+        EventOriginalType,
+        EventProductVersion,
+        TargetAppName,
+        TargetAppType,
+        ObjectType,
+        Object,
+        ObjectId,
+        OriginalObjectType,
+        ActorUserIdType,
+        ActorUsernameType,
+        SrcIpAddr,
+        TargetHostname,
+        ActorUserId,
+        ActorUsername,
+        ActorOriginalUserType,
+        ActorUserType,
+        HttpUserAgent,
+        TargetFQDN,
+        TargetDomain,
+        TargetDomainType,
+        Operation,
+        Application,
+        IpAddr,
+        Src,
+        User,
+        AdditionalFields
+  };
+  parser(disabled)
