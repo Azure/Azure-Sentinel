@@ -1,0 +1,69 @@
+id: dacab67e-fcf3-41c6-a191-579c7be1814d
+name: Netskope - Repeated or Critical Policy Violations
+description: |
+  Detects users with repeated policy violations or critical policy blocks. Monitors policy enforcement effectiveness and compliance.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetskopeWebTxConnector
+    dataTypes:
+      - NetskopeWebTransactions_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: greaterthan
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Exfiltration
+relevantTechniques:
+  - T1562
+  - T1048
+query: |
+  let violationThreshold = 5;
+  NetskopeWebTransactions_CL
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(CsUsername)
+  | where isnotempty(XPolicyAction) and isnotempty(XPolicyName)
+  | where XPolicyAction =~ 'block' or XPolicyAction =~ 'alert'
+  | summarize 
+      ViolationCount = count(),
+      Policies = make_set(XPolicyName),
+      PolicyActions = make_set(XPolicyAction),
+      Apps = make_set(XCsApp),
+      Hosts = make_set(CsHost),
+      Activities = make_set(XCsAppActivity),
+      BlockCount = countif(XPolicyAction =~ 'block'),
+      AlertCount = countif(XPolicyAction =~ 'alert'),
+      FirstViolation = min(TimeGenerated),
+      LastViolation = max(TimeGenerated)
+      by CsUsername, XCCountry, XCDevice
+  | where ViolationCount >= violationThreshold or BlockCount > 0
+  | extend ViolationSeverity = case(
+      BlockCount > 10, 'Critical',
+      BlockCount > 5, 'High',
+      ViolationCount > 20, 'High',
+      ViolationCount > 10, 'Medium',
+      'Low')
+  | project 
+      TimeGenerated = LastViolation,
+      User = CsUsername,
+      TotalViolations = ViolationCount,
+      BlockedAttempts = BlockCount,
+      AlertedActions = AlertCount,
+      ViolatedPolicies = Policies,
+      PolicyActions,
+      ApplicationsInvolved = Apps,
+      TargetHosts = Hosts,
+      Activities,
+      Country = XCCountry,
+      Device = XCDevice,
+      ViolationSeverity,
+      FirstOccurrence = FirstViolation,
+      LastOccurrence = LastViolation
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+version: 1.0.0
+kind: Scheduled
