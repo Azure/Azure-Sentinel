@@ -22,7 +22,7 @@ def main(myTimer: func.TimerRequest) -> None:
         client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential, logging_enable=True)
         mmdb_file_path = "/tmp/asn.mmdb"
         reader = maxminddb.open_database(mmdb_file_path)
-        chunk_size = 100
+        chunk_size = 10000
         data_chunk = []
         logging.info("Uploading Standard ASN Data.\n")
         for ip, ip_data in reader:
