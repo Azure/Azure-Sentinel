@@ -22,7 +22,7 @@ def main(myTimer: func.TimerRequest) -> None:
         client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential, logging_enable=True)
         mmdb_file_path = "/tmp/asn.mmdb"
         reader = maxminddb.open_database(mmdb_file_path)
-        chunk_size = 10000
+        chunk_size = 100
         data_chunk = []
         logging.info("Uploading Standard ASN Data.\n")
         for ip, ip_data in reader:
@@ -55,7 +55,6 @@ def main(myTimer: func.TimerRequest) -> None:
     access_token = credential.get_token(AZURE_SCOPE).token
     if access_token:
         logging.info("\nAccess Token Retrieved\n")
-        logging.info(access_token)
     else:
         logging.error("\nFailed to retrieve access token\n")
 
