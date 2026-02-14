@@ -24,8 +24,8 @@ SUBCRIPTION_ID = parts[2]
 RESOURCE_GROUP_NAME = parts[4]
 WORKSPACE_NAME = parts[8]
 
-DATA_COLLECTION_ENDPOINT_NAME = "ipinfo-logs-ingestion"
-PRIVACY_EXTENDED_DCR_NAME = "ipinfo_rule_for_privacy_extended_tables"
+DATA_COLLECTION_ENDPOINT_NAME = f"ipinfo-logs-ingestion-{WORKSPACE_NAME.lower()}"
+PRIVACY_EXTENDED_DCR_NAME = f"ipinfo_rule_for_privacy_extended_tables-{WORKSPACE_NAME.lower()}"
 PRIVACY_EXTENDED_TABLE_NAME = "Ipinfo_Privacy_extended_CL"
 PRIVACY_EXTENDED_STREAM_DECLARATION = "Custom-Ipinfo_Privacy_extended_CL"
 

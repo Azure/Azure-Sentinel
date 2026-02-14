@@ -174,12 +174,9 @@ def check_and_create_data_collection_rules(
     access_token, data_collection_rule_name, stream_declaration, columns, endpoint
 ):
     dcr_immutableid, stream_name = get_data_collection_rule(access_token, data_collection_rule_name)
-    
     if dcr_immutableid is not None and stream_name is not None:
-
         logging.info(f"\nData collection Rule `{data_collection_rule_name}` already exists and is valid.")
         return dcr_immutableid, stream_name
-    
     logging.info(f"\nCreating Data collection Rule for {data_collection_rule_name}...")
     create_data_collection_rule(access_token, data_collection_rule_name, stream_declaration, columns, endpoint)
     return get_data_collection_rule(access_token, data_collection_rule_name)
