@@ -109,10 +109,25 @@ def get_data_collection_rule(access_token, data_collection_rule_name):
     url = generate_url("dataCollectionRule", rule_name=data_collection_rule_name)
     headers = {"Authorization": "Bearer " + access_token}
     response = requests.get(url, headers=headers)
+    
     if response.status_code == 200:
         data = response.json()
         immutableId = data["properties"]["immutableId"]
         streamDeclarations = list(data["properties"]["streamDeclarations"].keys())[0]
+        
+        try:
+            actual_workspace = data["properties"]["destinations"]["logAnalytics"][0]["workspaceResourceId"]
+            expected_workspace = f"/subscriptions/{SUBCRIPTION_ID}/resourcegroups/{RESOURCE_GROUP_NAME}/providers/microsoft.operationalinsights/workspaces/{WORKSPACE_NAME}"
+            
+            if actual_workspace.lower() != expected_workspace.lower():
+                logging.warning(f"DCR '{data_collection_rule_name}' points to WRONG workspace!")
+                logging.warning(f"Expected: {expected_workspace}")
+                logging.warning(f"Found: {actual_workspace}")
+                return None, None  
+        except (KeyError, IndexError) as e:
+            logging.error(f"Failed to extract workspace from DCR: {e}")
+            return None, None
+        
         return immutableId, streamDeclarations
     
     logging.info(f"{data_collection_rule_name} Data Rule endpoint not exist. Status code:{response.status_code}")
@@ -138,7 +153,7 @@ def create_data_collection_rule(access_token, data_collection_rule_name, stream_
                 {
                     "streams": [stream_declaration],
                     "destinations": [WORKSPACE_NAME],
-                    "transformKql": "source\n| extend TimeGenerated = now()\n",
+                    "transformKql": "source\n| extend TimeGenerated = now()\n| project-rename ip_range=range\n",
                     "outputStream": stream_declaration,
                 }
             ],
@@ -160,8 +175,8 @@ def check_and_create_data_collection_rules(
 ):
     dcr_immutableid, stream_name = get_data_collection_rule(access_token, data_collection_rule_name)
     if dcr_immutableid is not None and stream_name is not None:
-        logging.info(f"\nData collection Rule `{data_collection_rule_name}` already exists.")
+        logging.info(f"\nData collection Rule `{data_collection_rule_name}` already exists and is valid.")
         return dcr_immutableid, stream_name
-    logging.info(f"\nData collection Rule for {data_collection_rule_name} doesn't exist. Creating...")
+    logging.info(f"\nCreating Data collection Rule for {data_collection_rule_name}...")
     create_data_collection_rule(access_token, data_collection_rule_name, stream_declaration, columns, endpoint)
     return get_data_collection_rule(access_token, data_collection_rule_name)
