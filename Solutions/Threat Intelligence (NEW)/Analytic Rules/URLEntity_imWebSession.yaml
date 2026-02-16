@@ -1,0 +1,105 @@
+id: 3b4a8c72-5a2e-4f1e-b61a-9d8b2a6d7a21
+name: TI map URL entity to Web Session Events (ASIM Web Session schema)
+description: |
+  This rule identifies Web Sessions where the full requested URL matches a known
+  malicious URL from Threat Intelligence sources. The rule uses the Advanced Security
+  Information Model (ASIM) and supports any web session source compliant with ASIM.
+severity: Medium
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+kind: Scheduled
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelIndicators
+query: |
+  let HAS_ANY_MAX = 10000;
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  // Extract URL-based Threat Intelligence indicators
+  let URL_TI =
+    ThreatIntelIndicators
+    | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+    | where IndicatorType == "url"
+    | extend MaliciousUrl = tolower(ObservableValue)
+    | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | extend IndicatorId = tostring(split(Id, "--")[2])
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, MaliciousUrl
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
+  // Build a dynamic list of malicious URLs
+  let URL_TI_list =
+    todynamic(
+      toscalar(
+        URL_TI
+        | summarize NIoCs = dcount(MaliciousUrl),
+                    Urls = make_set(MaliciousUrl)
+        | project Urls = iff(NIoCs > HAS_ANY_MAX, dynamic([]), Urls)
+      )
+    );
+  // Match against ASIM Web Session events
+  URL_TI
+  | join kind=innerunique (
+      _Im_WebSession(starttime=ago(dt_lookBack), url_has_any = URL_TI_list)
+      | extend RequestedUrl = tolower(Url)
+      | where isnotempty(RequestedUrl)
+      | extend Event_TimeGenerated = TimeGenerated
+    ) on $left.MaliciousUrl == $right.RequestedUrl
+  | where Event_TimeGenerated < ValidUntil
+  | summarize Event_TimeGenerated = arg_max(Event_TimeGenerated, *) by IndicatorId, RequestedUrl
+  | extend Description = tostring(parse_json(Data).description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+  | extend ThreatType = tostring(Data.indicator_types[0])
+  | project
+      Event_TimeGenerated,
+      SrcIpAddr,
+      RequestedUrl,
+      IndicatorId,
+      ThreatType,
+      Confidence,
+      ValidUntil,
+      Description,
+      ActivityGroupNames
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestedUrl
+
+customDetails:
+  EventTime: Event_TimeGenerated
+  IoCDescription: Description
+  ActivityGroupNames: ActivityGroupNames
+  IndicatorId: IndicatorId
+  ThreatType: ThreatType
+  IoCExpirationTime: ValidUntil
+  IoCConfidenceScore: Confidence
+
+alertDetailsOverride:
+  alertDisplayNameFormat: A web request from {{SrcIpAddr}} to malicious URL matched an IoC
+  alertDescriptionFormat: A client with address {{SrcIpAddr}} requested the URL {{RequestedUrl}}, which is a known malicious URL associated with {{ThreatType}}. Review threat intelligence blade for further context.
+version: 1.0.0
