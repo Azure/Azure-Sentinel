@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 # - Azure CLI installed: https://learn.microsoft.com/cli/azure/install-azure-cli
-# - Cloud Foundry CLI (cf) installed and configured
+# - SAP BTP CLI installed: https://tools.hana.ondemand.com/#cloud-btpcli
 # - Successful run of provision-audit-to-subaccounts.ps1
 # - SAP BTP Solution installed from Content Hub
 # - SAP BTP data connector deployed in the workspace
@@ -38,13 +38,28 @@ param(
     [string]$CsvPath = ".\subaccounts.csv",
     
     [Parameter(Mandatory=$false)]
-    [string]$InstanceNamePrefix = "sentinel-audit-srv",
+    [string]$InstanceName = "sentinel-audit-srv",
     
     [Parameter(Mandatory=$false)]
     [string]$CfUsername = $env:CF_USERNAME,
     
     [Parameter(Mandatory=$false)]
     [SecureString]$CfPassword,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseCredentialsFromCsv,
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$UseKeyVault,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$KeyVaultName,
+    
+    [Parameter(Mandatory=$false)]
+    [int]$PollingFrequencyMinutes = 1,
+    
+    [Parameter(Mandatory=$false)]
+    [int]$IngestDelayMinutes = 20,
     
     [Parameter(Mandatory=$false)]
     [string]$ApiVersion = "2025-09-01"
@@ -54,17 +69,47 @@ param(
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 Import-Module "$scriptPath\BtpHelpers.ps1" -Force
 
-# Validate and get CF credentials using helper function
-$credentials = Get-CfCredentials -Username $CfUsername -Password $CfPassword
-if ($null -eq $credentials) {
-    exit 1
+# Validate Key Vault parameters if using Key Vault
+if ($UseKeyVault) {
+    if ([string]::IsNullOrWhiteSpace($KeyVaultName)) {
+        Write-Log "KeyVaultName parameter is required when UseKeyVault is specified" -Level "ERROR"
+        exit 1
+    }
 }
-$CfUsername = $credentials.Username
-$CfPassword = $credentials.Password
+
+# Determine credential source
+if ($UseCredentialsFromCsv) {
+    Write-Log "Credential source: CSV file (split permissions)" -Level "INFO"
+    $credentialSource = "CSV"
+    # CF credentials not required in CSV mode
+    $CfUsername = $null
+    $CfPassword = $null
+} elseif ($UseKeyVault) {
+    Write-Log "Credential source: Azure Key Vault (split permissions)" -Level "INFO"
+    $credentialSource = "KeyVault"
+    # CF credentials not required in Key Vault mode
+    $CfUsername = $null
+    $CfPassword = $null
+} else {
+    Write-Log "Credential source: CloudFoundry (full permissions)" -Level "INFO"
+    $credentialSource = "CloudFoundry"
+    
+    # Validate and get CF credentials using helper function
+    $credentials = Get-CfCredentials -Username $CfUsername -Password $CfPassword
+    if ($null -eq $credentials) {
+        exit 1
+    }
+    $CfUsername = $credentials.Username
+    $CfPassword = $credentials.Password
+}
 
 # Main script execution
 Write-Log "======================================================================="
 Write-Log "Starting Sentinel Solution for SAP BTP Connection Creation Process"
+Write-Log "Credential Source: $credentialSource"
+if ($credentialSource -eq "KeyVault") {
+    Write-Log "Key Vault Name: $KeyVaultName"
+}
 Write-Log "IMPORTANT: This adds connections to the existing SAP BTP data connector"
 Write-Log "Make sure the SAP BTP solution is installed from Content Hub first!"
 Write-Log "======================================================================="
@@ -75,11 +120,6 @@ if (-not (Test-AzCli)) {
     exit 1
 }
 
-# Check if CF CLI is installed
-if (-not (Test-CfCli)) {
-    Write-Log "Exiting script due to missing CF CLI." -Level "ERROR"
-    exit 1
-}
 
 # Check Azure login
 try {
@@ -97,19 +137,71 @@ catch {
     exit 1
 }
 
-# Set Azure subscription context
-try {
-    $setSubResult = az account set --subscription $SubscriptionId 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "Failed to set Azure subscription: $setSubResult" -Level "ERROR"
-        exit 1
-    }
-    Write-Log "Set Azure subscription context to: $SubscriptionId" -Level "SUCCESS"
-}
-catch {
-    Write-Log "Failed to set Azure subscription context: $_" -Level "ERROR"
+# Get workspace details for DCE/DCR setup
+Write-Log "======================================================================="
+Write-Log "Setting up Data Collection Endpoint (DCE) and Data Collection Rule (DCR)"
+Write-Log "======================================================================="
+
+# Single ARG query gets workspace details AND checks for existing DCE/DCR
+$workspaceDetails = Get-SentinelWorkspaceDetails `
+    -SubscriptionId $SubscriptionId `
+    -ResourceGroupName $ResourceGroupName `
+    -WorkspaceName $WorkspaceName
+
+if ($null -eq $workspaceDetails) {
+    Write-Log "Failed to get workspace details. Exiting." -Level "ERROR"
     exit 1
 }
+
+# Handle DCE: Use existing or create new
+if ($workspaceDetails.ExistingDCE) {
+    Write-Log "Using existing DCE" -Level "SUCCESS"
+    $dceInfo = $workspaceDetails.ExistingDCE
+} else {
+    Write-Log "Creating new DCE..."
+    $dceInfo = New-DataCollectionEndpoint `
+        -SubscriptionId $SubscriptionId `
+        -ResourceGroupName $ResourceGroupName `
+        -WorkspaceGuid $workspaceDetails.WorkspaceGuid `
+        -Location $workspaceDetails.Location
+    
+    if ($null -eq $dceInfo) {
+        Write-Log "Failed to create DCE. Exiting." -Level "ERROR"
+        exit 1
+    }
+}
+
+# Handle DCR: Use existing or create new
+if ($workspaceDetails.ExistingDCR) {
+    Write-Log "Using existing DCR" -Level "SUCCESS"
+    $dcrInfo = $workspaceDetails.ExistingDCR
+} else {
+    Write-Log "Creating new DCR..."
+    $dcrInfo = New-DataCollectionRule `
+        -SubscriptionId $SubscriptionId `
+        -ResourceGroupName $ResourceGroupName `
+        -WorkspaceName $WorkspaceName `
+        -WorkspaceShortId $workspaceDetails.ShortId `
+        -WorkspaceResourceId $workspaceDetails.ResourceId `
+        -DataCollectionEndpointId $dceInfo.ResourceId `
+        -Location $workspaceDetails.Location
+    
+    if ($null -eq $dcrInfo) {
+        Write-Log "Failed to create DCR. Exiting." -Level "ERROR"
+        exit 1
+    }
+}
+
+# Build DcrConfig for connections
+$dcrConfig = @{
+    DataCollectionEndpoint = $dceInfo.LogsIngestionEndpoint
+    DataCollectionRuleImmutableId = $dcrInfo.ImmutableId
+}
+
+Write-Log "DCE/DCR setup completed successfully" -Level "SUCCESS"
+Write-Log "  DCE Name: $($dceInfo.Name)"
+Write-Log "  DCE Logs Ingestion: $($dceInfo.LogsIngestionEndpoint)"
+Write-Log "  DCR Immutable ID: $($dcrInfo.ImmutableId)"
 
 # Load subaccounts from CSV using helper function
 $subaccounts = Import-BtpSubaccountsCsv -CsvPath $CsvPath
@@ -123,8 +215,8 @@ $failureCount = 0
 $currentApiEndpoint = $null
 
 foreach ($subaccount in $subaccounts) {
+    $subaccountName = $subaccount.SubaccountName
     $subaccountId = $subaccount.SubaccountId
-    $subaccountName = $subaccount.DisplayName
     $apiEndpoint = $subaccount.'cf-api-endpoint'
     $orgName = $subaccount.'cf-org-name'
     $spaceName = $subaccount.'cf-space-name'
@@ -140,43 +232,90 @@ foreach ($subaccount in $subaccounts) {
     Write-Log "Org: $orgName | Space: $spaceName"
     Write-Log "======================================================================="
     
-    # Switch API endpoint if needed
-    if ($currentApiEndpoint -ne $apiEndpoint) {
-        if (-not (Set-CfApiEndpoint -ApiEndpoint $apiEndpoint -Username $CfUsername -Password $CfPassword -OrgName $orgName -SpaceName $spaceName)) {
-            Write-Log "Failed to switch API endpoint. Skipping subaccount." -Level "ERROR"
+    # Get BTP credentials based on source
+    $btpCredentials = $null
+    
+    if ($credentialSource -eq "CSV") {
+        # Read credentials directly from CSV
+        Write-Log "Reading credentials from CSV..."
+        $btpCredentials = Get-ServiceKeyFromCsv -CsvPath $CsvPath -SubaccountId $subaccountId
+        
+        if ($null -eq $btpCredentials) {
+            Write-Log "Failed to read credentials from CSV for subaccount $subaccountId. Skipping." -Level "ERROR"
             $failureCount++
             continue
         }
-        $currentApiEndpoint = $apiEndpoint
-    }
-    
-    # Target the org and space
-    if (-not (Set-CfTarget -OrgName $orgName -SpaceName $spaceName)) {
-        Write-Log "Failed to target org/space. Skipping subaccount." -Level "ERROR"
-        $failureCount++
-        continue
-    }
-    
-    # Define instance and key names
-    $instanceName = $InstanceNamePrefix
-    $keyName = "$InstanceNamePrefix-key"
-    
-    # Get service key
-    $serviceKey = Get-CfServiceKey -InstanceName $instanceName -KeyName $keyName
-    
-    if ($null -eq $serviceKey) {
-        Write-Log "Failed to retrieve service key for subaccount $subaccountId. Skipping." -Level "ERROR"
-        $failureCount++
-        continue
-    }
-    
-    # Extract and validate credentials from service key
-    $btpCredentials = Get-BtpServiceKeyCredentials -ServiceKey $serviceKey
-    
-    if ($null -eq $btpCredentials) {
-        Write-Log "Failed to extract valid credentials from service key for subaccount $subaccountId. Skipping." -Level "ERROR"
-        $failureCount++
-        continue
+    } elseif ($credentialSource -eq "KeyVault") {
+        # Read credentials from Azure Key Vault
+        Write-Log "Reading credentials from Key Vault..."
+        $btpCredentials = Get-ServiceKeyFromKeyVault -KeyVaultName $KeyVaultName -SubaccountId $subaccountId
+        
+        if ($null -eq $btpCredentials) {
+            Write-Log "Failed to read credentials from Key Vault for subaccount $subaccountId. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+    } else {
+        # CloudFoundry mode: authenticate and retrieve service key
+        
+        # Switch API endpoint if needed
+        if ($currentApiEndpoint -ne $apiEndpoint) {
+            if (-not (Set-CfApiEndpoint -ApiEndpoint $apiEndpoint -Username $CfUsername -Password $CfPassword -OrgName $orgName -SpaceName $spaceName)) {
+                Write-Log "Failed to switch API endpoint. Skipping subaccount." -Level "ERROR"
+                $failureCount++
+                continue
+            }
+            $currentApiEndpoint = $apiEndpoint
+        }
+        
+        # Target the org and space
+        if (-not (Set-CfTarget -OrgName $orgName -SpaceName $spaceName)) {
+            Write-Log "Failed to target org/space. Skipping subaccount." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # Check if the specified service instance exists (using same approach as provision script)
+        Write-Log "Looking for service instance: $InstanceName" -Level "INFO"
+        
+        # Get existing service keys to verify instance exists (also needed later)
+        $existingKeys = @(Get-CfServiceKeys -InstanceName $InstanceName)
+        
+        if ($existingKeys.Count -eq 0) {
+            Write-Log "Service instance '$InstanceName' not found or has no keys in org '$orgName' space '$spaceName'. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        $instanceName = $InstanceName
+        Write-Log "Using instance: $instanceName" -Level "INFO"
+        
+        # CF returns keys in creation order - use the last one (newest)
+        # Ensure we handle both single key (string) and multiple keys (array)
+        $keyName = if ($existingKeys.Count -eq 1) { $existingKeys[0] } else { $existingKeys[-1] }
+        Write-Log "Using newest service key: $keyName" -Level "INFO"
+        
+        if ($existingKeys.Count -gt 1) {
+            Write-Log "Found $($existingKeys.Count) service keys. Using most recent: $keyName" -Level "INFO"
+        }
+        
+        # Get service key
+        $serviceKey = Get-CfServiceKey -InstanceName $instanceName -KeyName $keyName
+        
+        if ($null -eq $serviceKey) {
+            Write-Log "Failed to retrieve service key for subaccount $subaccountId. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
+        
+        # Extract and validate credentials from service key
+        $btpCredentials = Get-BtpServiceKeyCredentials -ServiceKey $serviceKey
+        
+        if ($null -eq $btpCredentials) {
+            Write-Log "Failed to extract valid credentials from service key for subaccount $subaccountId. Skipping." -Level "ERROR"
+            $failureCount++
+            continue
+        }
     }
     
     Write-Log "Successfully extracted credentials from service key:" -Level "SUCCESS"
@@ -185,18 +324,17 @@ foreach ($subaccount in $subaccounts) {
     Write-Log "  API URL: $($btpCredentials.ApiUrl)" -Level "SUCCESS"
     Write-Log "  Subdomain: $($btpCredentials.Subdomain)" -Level "SUCCESS"
     
-    # Generate connection name from subdomain or subaccount ID
-    $connectionName = Get-BtpConnectionName -BtpCredentials $btpCredentials -SubaccountId $subaccountId
-    
-    # Create Sentinel SAP BTP connection
+    # Create Sentinel SAP BTP connection with DCR configuration
     $connectionCreated = New-SentinelBtpConnection `
         -SubscriptionId $SubscriptionId `
         -ResourceGroupName $ResourceGroupName `
         -WorkspaceName $WorkspaceName `
-        -ConnectionName $connectionName `
+        -ConnectionName $subaccountName `
         -BtpCredentials $btpCredentials `
         -SubaccountId $subaccountId `
-        -SubaccountName $subaccountName `
+        -DcrConfig $dcrConfig `
+        -PollingFrequencyMinutes $PollingFrequencyMinutes `
+        -IngestDelayMinutes $IngestDelayMinutes `
         -ApiVersion $ApiVersion
     
     if ($connectionCreated) {

@@ -1,0 +1,70 @@
+id: c3ffdbe6-2e62-4984-9e80-933ed90b2f6a
+name: DDoS attack detected
+description: |
+  Identifies DDoS attack in Azure Firewall IDPS logs.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AZFWIdpsSignature
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+query: |
+  let TimeWindow   = 90d;    
+  let HitThreshold = 10;
+  let MinSeverity  = 2;
+  let EnableCategoryFilter    = true;
+  let EnableDescriptionFilter = false;
+  let EnableActionFilter      = false;
+  let CategoriesOfInterest = dynamic([
+      "Attempted Denial of Service",
+      "Denial of Service",
+      "Detection of a Denial of Service Attack"
+  ]);
+  let DescriptionsOfInterest = dynamic([
+      "attempted-dos",
+      "successful-dos",
+      "denial-of-service"
+  ]);
+  let MatchActions = dynamic(["Deny", "alert"]);
+  AZFWIdpsSignature
+  | where TimeGenerated >= ago(TimeWindow)
+  | where Severity >= MinSeverity
+  | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+  | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+  | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+  | summarize
+      StartTime   = min(TimeGenerated),
+      EndTime     = max(TimeGenerated),
+      TotalHits   = count(),
+      MaxSeverity = max(Severity),
+      Actions     = make_set(Action, 5),
+      Signatures  = make_set(SignatureId, 20),
+      Description = make_set(substring(tostring(Description), 0, 120), 3)
+      by SourceIp, ThreatCategory = Category
+  | where TotalHits >= HitThreshold
+  | project
+      StartTime,
+      EndTime,
+      SourceIp,
+      ThreatCategory,
+      TotalHits,
+      MaxSeverity,
+      Actions,
+      Signatures,
+      Description
+  | order by MaxSeverity desc, TotalHits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0
+kind: Scheduled

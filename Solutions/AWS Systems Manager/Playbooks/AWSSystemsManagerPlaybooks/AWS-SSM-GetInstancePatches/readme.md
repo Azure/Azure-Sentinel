@@ -58,6 +58,11 @@ Once deployment is complete, authorize each connection.
 #### d. Function App Settings Update Instructions
 Refer to [AWS Systems Manager API Function App Connector](../../CustomConnector/AWS_SSM_FunctionAppConnector/readme.md) documentation for Function App **Application Settings (Access Key ID, Secret Access Key and Region)** update instruction.
 
+#### e. Additional instruction while playbook configuration: 
+When configuring the playbook, ensure that pagination is disabled for GetInventory, as pagination is already handled by the connector.
+
+![alt text](image.png)
+
 #  References
 - [AWS Systems Manager API Documentation](https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DeleteDocument.html)
 - [AWS Systems Manager User Guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/what-is-systems-manager.html)
