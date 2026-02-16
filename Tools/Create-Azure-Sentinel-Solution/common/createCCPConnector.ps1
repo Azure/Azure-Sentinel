@@ -768,7 +768,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     # Process only the first item, it will be parameterized
                     CCPDataConnectorsResource -fileContent $fileContent[0];
-                } else {
+                }
+                else {
                     foreach ($content in $fileContent) {
                         CCPDataConnectorsResource -fileContent $content;
                     }
@@ -1458,15 +1459,18 @@ function CreateAwsResourceProperties($armResource, $templateContentConnections, 
                 if ($i -eq $mappingArray.Count - 1) {
                     # Last item (rightmost in the conditional)
                     $conditionalLogic = "'$destTable'"
-                } else {
+                }
+                else {
                     # Wrap with if(equals())
                     $conditionalLogic = "if(equals(parameters('streamName')[0], '$streamName'), '$destTable', $conditionalLogic)"
                 }
             }
             
             $armResource.properties.destinationTable = "[[$conditionalLogic]]"
-        } else {
+        }
+        else {
             # Fallback to _CL suffix if no mappings found
+            Write-Host "Warning: No streamNameMappings found. Defaulting destinationTable to streamName with _CL suffix." -BackgroundColor Yellow
             $armResource.properties.destinationTable = "[[concat(parameters('streamName')[0],'_CL')]"
         }
         
