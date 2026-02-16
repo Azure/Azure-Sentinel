@@ -414,7 +414,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     }
 
     if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue "1.0.0"
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue ($dataFileMetadata.DataConnectorCCFVersion ?? $dataFileMetadata.Version)
     }
 
     try {
