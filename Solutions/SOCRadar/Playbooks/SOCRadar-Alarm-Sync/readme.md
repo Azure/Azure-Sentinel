@@ -18,6 +18,12 @@ Syncs closed Microsoft Sentinel incidents back to SOCRadar with classification m
 | TruePositive | RESOLVED |
 | Undetermined | RESOLVED |
 
+## Deployment
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSOCRadar%2FPlaybooks%2FSOCRadar-Alarm-Sync%2Fazuredeploy.json)
+
+You can also install this playbook via **Microsoft Sentinel Content Hub**.
+
 ## Prerequisites
 
 - SOCRadar XTI Platform API Key

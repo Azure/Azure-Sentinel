@@ -20,4 +20,6 @@ Imports SOCRadar XTI platform alarms into Microsoft Sentinel as incidents.
 
 ## Deployment
 
-Deploy via the main SOCRadar solution or standalone using the Deploy to Azure button in the main repository.
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FSOCRadar%2FPlaybooks%2FSOCRadar-Alarm-Import%2Fazuredeploy.json)
+
+You can also install this playbook via **Microsoft Sentinel Content Hub**.

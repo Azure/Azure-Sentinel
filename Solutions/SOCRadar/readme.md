@@ -17,7 +17,7 @@ The SOCRadar solution for Microsoft Sentinel provides bidirectional integration 
 
 **Bidirectional Sync**
 - Closed incidents in Sentinel update alarm status in SOCRadar
-- Classification mapping: TruePositive → Resolved, FalsePositive → False Positive, BenignPositive → Mitigated
+- Classification mapping: TruePositive to Resolved, FalsePositive to False Positive, BenignPositive to Mitigated
 
 **Analytics**
 - SOCRadar Dashboard workbook with severity, status, and timeline charts
