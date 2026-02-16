@@ -1,24 +1,83 @@
 [{
-	"name": "GCPAuditLogs",
-	"apiVersion": "2021-09-01-preview",
-	"type": "Microsoft.Insights/dataCollectionRules",
-	"properties": {
-		"destinations": {
-			"logAnalytics": [
-				{
-					"name": "clv2ws1"
-				}
-			]
-		},
-		"dataFlows": [
-			{
-				"streams": [
-					"Microsoft-GCPAuditLogs"
-				],
-				"destinations": [
-					"clv2ws1"
-				]
-			}
-		]
-	}
+  "name": "GCPAuditLogs",
+  "apiVersion": "2021-09-01-preview",
+  "type": "Microsoft.Insights/dataCollectionRules",
+  "properties": {
+    "destinations": {
+      "logAnalytics": [
+        {
+          "name": "clv2ws1"
+        }
+      ]
+    },
+    "dataFlows": [
+      {
+        "streams": [
+          "Microsoft-GCPAuditLogs"
+        ],
+        "destinations": [
+          "clv2ws1"
+        ],
+        "transformKql": "source\n| extend \n    // Determine log type based on payload structure\n    LogType = case(\n        isnotempty(protoPayload), \"DataAccess\",\n        isnotempty(jsonPayload), \"AccessTransparency\",\n        \"Unknown\"\n    ),\n    \n    // Parse Data Access logs (existing functionality)\n    ServiceName_DA = iff(LogType == \"DataAccess\", tostring(parse_json(protoPayload).serviceName), \"\"),\n    MethodName_DA = iff(LogType == \"DataAccess\", tostring(parse_json(protoPayload).methodName), \"\"),\n    AuthenticationInfo_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.authenticationInfo), \"\"),\n    AuthorizationInfo_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.authorizationInfo), \"\"),\n    RequestMetadata_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.requestMetadata), \"\"),\n    Request_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.request), \"\"),\n    Response_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.response), \"\"),\n    Status_DA = iff(LogType == \"DataAccess\", tostring(parse_json(protoPayload).status), \"\"),\n    \n    // Parse Access Transparency logs (new functionality)\n    ServiceName_AT = iff(LogType == \"AccessTransparency\", \n        tostring(parse_json(jsonPayload).product[0]), \"\"),\n    MethodName_AT = iff(LogType == \"AccessTransparency\", \n        tostring(parse_json(jsonPayload).accesses[0].methodName), \"\"),\n    GCPResourceName_AT = iff(LogType == \"AccessTransparency\", \n        tostring(parse_json(jsonPayload).accesses[0].resourceName), \"\"),\n    \n    // Create structured AuthenticationInfo equivalent for AT logs\n    AuthenticationInfo_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"principalJobTitle\", tostring(parse_json(jsonPayload).principalJobTitle),\n            \"principalOfficeCountry\", tostring(parse_json(jsonPayload).location.principalOfficeCountry),\n            \"principalEmployingEntity\", tostring(parse_json(jsonPayload).location.principalEmployingEntity),\n            \"principalPhysicalLocationCountry\", tostring(parse_json(jsonPayload).location.principalPhysicalLocationCountry)\n        )), \n        \"\"),\n    \n    // Create structured AuthorizationInfo equivalent for AT logs\n    AuthorizationInfo_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"permissionType\", tostring(parse_json(jsonPayload).permissionDetails[0].permissionType),\n            \"reasonType\", tostring(parse_json(jsonPayload).reason[0].type),\n            \"reasonDetail\", tostring(parse_json(jsonPayload).reason[0].detail)\n        )), \n        \"\"),\n    \n    // Create Request equivalent for AT logs\n    Request_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"eventId\", tostring(parse_json(jsonPayload).eventId),\n            \"logMode\", tostring(parse_json(jsonPayload).logMode),\n            \"accesses\", tostring(parse_json(jsonPayload).accesses)\n        )), \n        \"\"),\n    \n    // Map additional AT-specific metadata\n    Metadata_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"location\", tostring(parse_json(jsonPayload).location),\n            \"product\", tostring(parse_json(jsonPayload).product),\n            \"permissionDetails\", tostring(parse_json(jsonPayload).permissionDetails),\n            \"reason\", tostring(parse_json(jsonPayload).reason)\n        )), \n        \"\"),\n    \n    // Status equivalent for AT logs\n    Status_AT = iff(LogType == \"AccessTransparency\", \"NOTICE\", \"\"),\n    \n    // Calculate NumResponseItems for AT logs (count of accesses)\n    NumResponseItems_AT = iff(LogType == \"AccessTransparency\", \n        array_length(parse_json(jsonPayload).accesses), 0)\n\n// Coalesce fields to create unified schema\n| extend\n    ServiceName = coalesce(ServiceName_DA, ServiceName_AT),\n    MethodName = coalesce(MethodName_DA, MethodName_AT),\n    GCPResourceName = coalesce(ResourceName, GCPResourceName_AT),\n    AuthenticationInfo = coalesce(AuthenticationInfo_DA, AuthenticationInfo_AT),\n    AuthorizationInfo = coalesce(AuthorizationInfo_DA, AuthorizationInfo_AT),\n    RequestMetadata = coalesce(RequestMetadata_DA, \"\"),\n    Request = coalesce(Request_DA, Request_AT),\n    Response = coalesce(Response_DA, \"\"),\n    Status = coalesce(Status_DA, Status_AT),\n    Metadata = coalesce(\"\", Metadata_AT),\n    StatusMessage = coalesce(\"\", \"\"),\n    NumResponseItems = coalesce(0, NumResponseItems_AT)\n\n// Clean up temporary columns\n| project-away \n    ServiceName_DA, ServiceName_AT, MethodName_DA, MethodName_AT,\n    AuthenticationInfo_DA, AuthenticationInfo_AT, AuthorizationInfo_DA, AuthorizationInfo_AT,\n    RequestMetadata_DA, Request_DA, Request_AT, Response_DA, Status_DA, Status_AT,\n    GCPResourceName_AT, Metadata_AT, NumResponseItems_AT, LogType"
+      }
+    ],
+    "streamDeclarations": {
+      "Microsoft-GCPAuditLogs": {
+        "columns": [
+          {
+            "name": "TimeGenerated",
+            "type": "datetime"
+          },
+          {
+            "name": "ServiceName",  
+            "type": "string"
+          },
+          {
+            "name": "MethodName",
+            "type": "string"
+          },
+          {
+            "name": "GCPResourceName",
+            "type": "string"
+          },
+          {
+            "name": "AuthenticationInfo",
+            "type": "string"
+          },
+          {
+            "name": "AuthorizationInfo", 
+            "type": "string"
+          },
+          {
+            "name": "RequestMetadata",
+            "type": "string"
+          },
+          {
+            "name": "Request",
+            "type": "string"
+          },
+          {
+            "name": "Response",
+            "type": "string"
+          },
+          {
+            "name": "Status",
+            "type": "string"
+          },
+          {
+            "name": "Metadata",
+            "type": "string"
+          },
+          {
+            "name": "StatusMessage",
+            "type": "string"
+          },
+          {
+            "name": "NumResponseItems",
+            "type": "int"
+          }
+        ]
+      }
+    }
+  }
 }]
