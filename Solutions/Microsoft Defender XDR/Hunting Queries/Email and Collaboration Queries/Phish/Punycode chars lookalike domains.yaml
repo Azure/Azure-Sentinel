@@ -1,0 +1,129 @@
+id: 9582b09c-a5cd-4da0-8244-52cc952da158
+name: Punycode lookalikes
+description: |
+  Punycode lookalike domains in Emails and Teams messages 
+description-detailed: |
+  Detects URLs containing punycode domains (xn--) where the decoded Unicode domain includes common Cyrillic/Greek/fullwidth ASCII lookalike characters.
+  This query covers a use-case which is on only detecting phishing attempts that use visually similar characters to impersonate legitimate domains.
+  The research started in october but didnt have the time to finish it until now. A diary on Sans by Xavier made me realize that I need to finish this work.
+  A diary on Sans ISC about this technique can be found here: https://isc.sans.edu/forums/diary/Detecting+Punycode+Lookalike+Domains+in+Emails/28812/
+  Contact: @MattiasBorg82 for questions or suggestions.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+  - EmailUrlInfo
+  - MessageUrlInfo
+  - MessageEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let AsciiLookalikeChars = @"([\u0430\u0435\u043E\u0440\u0441\u0445\u0456\u0443\u043C\u043D\u0455\u0442\u04BB\u0501\u03B1\u03B5\u03BF\u03C1\u03C7\u03BA\u03BD\u03F2\uFF41-\uFF5A\uFF21-\uFF3A])";
+  // Function 
+  let NormalizeLookalikes = (s:string) {
+    replace(@"\u0501","d",
+    replace(@"\u04BB","h",
+    replace(@"\u0442","t",
+    replace(@"\u0455","s",
+    replace(@"\u043D","n",
+    replace(@"\u043C","m",
+    replace(@"\u0443","y",
+    replace(@"\u0456","i",
+    replace(@"\u03C7","x",
+    replace(@"\u0445","x",
+    replace(@"\u03F2","c",
+    replace(@"\u0441","c",
+    replace(@"\u03C1","p",
+    replace(@"\u0440","p",
+    replace(@"\u03BF","o",
+    replace(@"\u043E","o",
+    replace(@"\u03B5","e",
+    replace(@"\u0435","e",
+    replace(@"\u03B1","a",
+    replace(@"\u0430","a",s)
+  )))))))))))))))))))};
+  // End Function
+  // Function
+  let SuspiciousPunycodeDomains = (T:(TimeGenerated:datetime, Url:string, UrlDomain:string, ReportId:string, NetworkMessageId:string, TeamsMessageId:string, Source:string)) {
+    T
+    | where UrlDomain has "xn--"
+    | extend DomainUnicode = punycode_domain_from_string(UrlDomain)
+    | extend Lookalikes = extract_all(AsciiLookalikeChars, DomainUnicode)
+    | where array_length(Lookalikes) > 0
+    | extend Normalized = NormalizeLookalikes(DomainUnicode)
+    | where Normalized matches regex @"^[A-Za-z0-9\.\-]+$"
+    | project TimeGenerated, Url, UrlDomain, DomainUnicode, Lookalikes, Normalized, ReportId, NetworkMessageId, TeamsMessageId, Source;
+  };
+  // End Function
+  let EmailFindings =
+    EmailUrlInfo
+    | project TimeGenerated, Url, UrlDomain, ReportId, NetworkMessageId, TeamsMessageId = "", Source = "Email"
+    | invoke SuspiciousPunycodeDomains()
+    | join kind=innerunique (
+      EmailEvents
+      | project NetworkMessageId, EmailTimeGenerated = TimeGenerated, ReportId, RecipientEmailAddress, SenderFromAddress, SenderMailFromAddress, SenderDisplayName, Subject, DeliveryAction, DeliveryLocation, ThreatTypes
+    ) on NetworkMessageId
+    | project
+        Timestamp = TimeGenerated,
+        Source,
+        TimeGenerated,
+        ReportId,
+        NetworkMessageId,
+        TeamsMessageId,
+        Url,
+        UrlDomain,
+        DomainUnicode,
+        Lookalikes,
+        Normalized,
+        Subject,
+        ThreatTypes,
+        DeliveryAction,
+        DeliveryLocation,
+        SenderDisplayName,
+        SenderFromAddress,
+        SenderMailFromAddress,
+        RecipientEmailAddress;
+  let TeamsFindings =
+    MessageUrlInfo
+    | project TimeGenerated, Url, UrlDomain, ReportId, NetworkMessageId = "", TeamsMessageId, Source = "Teams"
+    | invoke SuspiciousPunycodeDomains()
+    | join kind=innerunique (
+      MessageEvents
+      | project TeamsMessageId, MessageTimeGenerated = TimeGenerated, Timestamp, SenderEmailAddress, SenderDisplayName, SenderObjectId, SenderType, RecipientDetails, GroupId, GroupName, ThreadId, ThreadName, ThreadType, IsExternalThread, MessageType, MessageSubtype, Subject, ThreatTypes, DeliveryAction, DeliveryLocation, ReportId
+    ) on TeamsMessageId
+    | project
+        Timestamp = TimeGenerated,
+        Source,
+        TimeGenerated,
+        ReportId,
+        NetworkMessageId,
+        TeamsMessageId,
+        Url,
+        UrlDomain,
+        DomainUnicode,
+        Lookalikes,
+        Normalized,
+        Subject,
+        ThreatTypes,
+        DeliveryAction,
+        DeliveryLocation,
+        SenderDisplayName,
+        SenderEmailAddress,
+        SenderObjectId,
+        SenderType,
+        RecipientDetails,
+        GroupId,
+        GroupName,
+        ThreadId,
+        ThreadName,
+        ThreadType,
+        IsExternalThread,
+        MessageType,
+        MessageSubtype
+        //| where IsExternalThread == true // Use filter if only external threats are in scope
+        ;
+  union isfuzzy=true EmailFindings, TeamsFindings
+  | order by TimeGenerated desc
+version: 1.0.0
