@@ -6,5 +6,5 @@
 
 ## Version 0.0
 
-- (2022-06-13) Rebuild folder structure and update texts - [PR #5296](https://github.com/Azure/Azure-Sentinel/pull/5296)
+- (2021-07-01) First commit - take 2 - [PR #2553](https://github.com/Azure/Azure-Sentinel/pull/2553)
 

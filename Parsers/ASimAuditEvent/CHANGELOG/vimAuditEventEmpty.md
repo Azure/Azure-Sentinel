@@ -6,5 +6,5 @@
 
 ## Version 0.1
 
-- (2022-12-19) Initial - [PR #6928](https://github.com/Azure/Azure-Sentinel/pull/6928)
+- (2022-12-19) Asim/audit parsers - [PR #6928](https://github.com/Azure/Azure-Sentinel/pull/6928)
 

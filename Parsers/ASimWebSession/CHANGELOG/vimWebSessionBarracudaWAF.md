@@ -6,13 +6,9 @@
 
 ## Version 0.2.1
 
-- (2024-05-23) updated collector host name - [PR #10505](https://github.com/Azure/Azure-Sentinel/pull/10505)
-
-## Version 0.2
-
-- (2024-05-21) splitted parser for BaracudaWAF  and Baracude CEF for ASimWebSession - [PR #10505](https://github.com/Azure/Azure-Sentinel/pull/10505)
+- (2024-07-18) ASimWebSessionBarracudaWAF.yaml-57 - [PR #10505](https://github.com/Azure/Azure-Sentinel/pull/10505)
 
 ## Version 0.1
 
-- (2023-06-22) ASIM Web Session schema parser with its sample and test data for Barracuda WAF. - [PR #8335](https://github.com/Azure/Azure-Sentinel/pull/8335)
+- (2023-08-01) ASIM Web Session schema parser with its sample and test data for Barracuda WAF - [PR #8335](https://github.com/Azure/Azure-Sentinel/pull/8335)
 
