@@ -6,9 +6,9 @@
 
 ## Version 0.1.1
 
-- (2022-12-29) asim/network-project-away - [PR #6994](https://github.com/Azure/Azure-Sentinel/pull/6994)
+- (2022-12-29) Asim/network project away - [PR #6994](https://github.com/Azure/Azure-Sentinel/pull/6994)
 
 ## Version 0.1
 
-- (2022-06-20) Create vimNetworkSessionAppGateSDP.yaml - [PR #5396](https://github.com/Azure/Azure-Sentinel/pull/5396)
+- (2022-06-21) Asim/appgate ip access parser - [PR #5396](https://github.com/Azure/Azure-Sentinel/pull/5396)
 

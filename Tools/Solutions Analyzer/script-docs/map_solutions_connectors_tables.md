@@ -2,37 +2,76 @@
 
 **Script:** `map_solutions_connectors_tables.py`
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Running the Script](#running-the-script)
+- [Command Line Options](#command-line-options)
+- [Override System](#override-system)
+- [Output Files](#output-files)
+  - [connectors.csv](#1-connectorscsv-connector-details-with-collection-method)
+  - [solutions.csv](#2-solutionscsv-solution-details)
+  - [tables.csv](#3-tablescsv-table-metadata)
+  - [solutions_connectors_tables_mapping_simplified.csv](#4-solutions_connectors_tables_mapping_simplifiedcsv-simplified-mapping)
+  - [content_items.csv](#5-content_itemscsv-content-item-details)
+  - [content_tables_mapping.csv](#6-content_tables_mappingcsv-content-item-to-table-mapping)
+  - [parsers.csv](#7-parserscsv-parser-details)
+  - [asim_parsers.csv](#8-asim_parserscsv-asim-parser-details)
+  - [Issues Report](#9-solutions_connectors_tables_issues_and_exceptions_reportcsv-issues-report)
+  - [Backward Compatibility](#10-solutions_connectors_tables_mappingcsv-backward-compatibility)
+- [Azure Marketplace Availability](#azure-marketplace-availability)
+- [Detection Logic](#detection-logic)
+  - [Collection Method Detection](#collection-method-detection)
+  - [Filter Fields Detection](#filter-fields-detection)
+  - [Connector Association Algorithm](#connector-association-algorithm)
+  - [Parser Resolution](#parser-resolution)
+  - [Table Detection Methods](#table-detection-methods)
+  - [Context-Aware Table Detection](#context-aware-table-detection)
+- [Examples](#examples)
+- [Troubleshooting](#troubleshooting)
+
 ## Overview
 
-Scans the Azure-Sentinel repository to:
+The Solution Connector Tables Analyzer is a comprehensive tool that scans the Azure-Sentinel repository to extract, analyze, and document the relationships between Microsoft Sentinel solutions, data connectors, Log Analytics tables, content items, and parsers.
+
+### Key Capabilities
+
+**Data Connector Analysis**
 - Extract table references from connector JSON files (queries, sample queries, data types)
-- **Extract table references from content items** (analytics rules, hunting queries, playbooks, workbooks, watchlists, summary rules)
-- **Collect standalone content from top-level directories** (Detections, Hunting Queries, Workbooks, Playbooks, Summary rules, Watchlists)
-- Resolve parser function references to actual tables
+- Detect collection methods (AMA, MMA, Azure Diagnostics, CCF, Azure Functions, REST API, Native)
+- Extract filter fields (DeviceVendor, EventID, Facility, etc.) to identify data sources
+- Resolve parser function references to actual underlying tables
+- Check Azure Marketplace availability for each solution
+
+**Content Item Analysis**
+- Analyze analytics rules, hunting queries, playbooks, workbooks, watchlists, and summary rules
+- Extract table references and filter fields from KQL queries
+- Classify content by source: Solution, Standalone (community), or GitHub Only (legacy)
+- Associate standalone content with matching connectors based on tables and filters
+
+**Parser Analysis**
+- Collect parsers from solution directories and legacy `/Parsers/*` directories
+- Analyze ASIM parsers with full schema metadata
+- Associate parsers with connectors based on shared tables and filter fields
+- Support for union parsers and sub-parser resolution
+
+**Solution Metadata**
 - Flatten solution metadata from SolutionMetadata.json files
-- Generate a comprehensive mapping of connectors to tables with full metadata
-- **Include ALL solutions in the output**, even those without data connectors (e.g., solutions containing only analytics rules, workbooks, hunting queries, or playbooks)
-- **Classify content items by source**: Solution (from Solutions/), Standalone (with metadata), or GitHub Only (no metadata)
-- Report issues and exceptions for solutions with missing or incomplete definitions
+- Include ALL solutions, even those without data connectors
+- Track solution support tiers, authors, and categories
 
-### Content Item Analysis
+### Output
 
-The script analyzes KQL queries in both solution content items and standalone top-level content to extract table references:
+The script generates 10 CSV files providing different views of the data:
+- **Entity files**: `connectors.csv`, `solutions.csv`, `tables.csv`, `parsers.csv`, `asim_parsers.csv`
+- **Mapping files**: `content_items.csv`, `content_tables_mapping.csv`, `solutions_connectors_tables_mapping_simplified.csv`
+- **Reports**: `solutions_connectors_tables_issues_and_exceptions_report.csv`
+- **Backward compatibility**: `solutions_connectors_tables_mapping.csv`
 
-| Content Type | Solution Patterns | Standalone Patterns | Query Fields |
-|--------------|-------------------|---------------------|--------------|
-| **Analytics Rules** | `Analytic Rules/*.yaml` | `Detections/**/*.yaml` | `query`, `triggerOperator` |
-| **Hunting Queries** | `Hunting Queries/*.yaml` | `Hunting Queries/**/*.yaml` | `query` |
-| **Playbooks** | `Playbooks/**/*.json` | `Playbooks/*/azuredeploy.json` | Azure Monitor Logs query actions |
-| **Workbooks** | `Workbooks/*.json` | `Workbooks/*.json` | `query` fields in workbook steps |
-| **Watchlists** | `Watchlists/*.json` | `Watchlists/*/watchlist.json` | Table references in watchlist queries |
-| **Summary Rules** | `Summary Rules/*.json` | `Summary rules/**/*.yaml` | Query fields |
+### Scope
 
-For playbooks, the script tracks whether tables are **read from** (Azure Monitor query), **written to** (Send Data action), or both.
-
-**Note:** Solutions without data connectors are included in the CSV output with empty `connector_id`, `connector_title`, `connector_description`, `connector_publisher`, `connector_files`, and `Table` fields. This ensures complete solution coverage in the documentation while clearly indicating which solutions do not include data ingestion components.
-
-**Important:** This analysis covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. A small number of connectors (such as Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) are not managed via Solutions and are therefore not included in this output.
+This analysis covers connectors managed through Solutions in the Azure-Sentinel GitHub repository. A small number of connectors (such as Microsoft Dataverse, Microsoft Power Automate, Microsoft Power Platform Admin, and SAP connectors) are not managed via Solutions and are therefore not included.
 
 ## Prerequisites
 
@@ -109,6 +148,7 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--show-detection-methods` | `False` | Include table_detection_methods column showing how each table was detected |
 | `--skip-marketplace` | `False` | Skip Azure Marketplace availability checking |
 | `--refresh-marketplace` | `False` | Force refresh of marketplace cache (ignore cached results) |
+| `--force-refresh` | `""` | Force re-analysis of specified types, ignoring cached results. Comma-separated list of: `asim`, `parsers`, `solutions`, `standalone`, `marketplace`, `tables`. Use `all` to refresh everything, or `all-offline` to refresh all except network-dependent types. |
 
 ### Example Usage
 
@@ -124,16 +164,22 @@ python map_solutions_connectors_tables.py --output custom_output.csv --report cu
 
 # Run with custom overrides file
 python map_solutions_connectors_tables.py --overrides-csv my_overrides.csv
+
+# Force refresh ASIM and parser analysis
+python map_solutions_connectors_tables.py --force-refresh=asim,parsers
+
+# Force refresh table metadata from Microsoft docs
+python map_solutions_connectors_tables.py --force-refresh=tables
 ```
 
 ## Override System
 
-Both `map_solutions_connectors_tables.py` and `collect_table_info.py` support an override system that allows you to modify field values in the output based on pattern matching. This is useful for:
+The script supports an override system that allows you to modify field values in the output based on pattern matching. This is useful for:
 - Setting `collection_method` to AMA for specific tables (e.g., Syslog, CommonSecurityLog)
 - Assigning categories to tables based on naming patterns (e.g., all AWS* tables → AWS category)
 - Correcting or supplementing data that cannot be automatically detected
 
-Both scripts use the same override file (`solution_analyzer_overrides.csv`) by default, ensuring consistent categorization across all outputs.
+The default override file (`solution_analyzer_overrides.csv`) is also used by `collect_table_info.py` and `generate_connector_docs.py` for consistent categorization across all outputs.
 
 ### Override File Format
 
@@ -179,104 +225,58 @@ If no `--overrides-csv` argument is provided, the script looks for `solution_ana
 
 ## Output Files
 
-### 1. solutions_connectors_tables_mapping.csv (Primary Output)
-
-The main CSV file containing one row per unique combination of solution, connector, and table.
-
-**Note:** Newlines in the `connector_description` and `connector_permissions` fields are replaced with `<br>` tags to ensure proper rendering in GitHub's CSV viewer. The `connector_instruction_steps` field uses standard JSON encoding with `\n` for newlines as it contains JSON-formatted data.
-
-#### Column Descriptions
-
-| Column | Description |
-|--------|-------------|
-| `Table` | The table name (e.g., Syslog, CommonSecurityLog, CustomLog_CL). Empty for solutions without data connectors. |
-| `solution_name` | Solution folder name |
-| `solution_folder` | GitHub URL to the solution's folder |
-| `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
-| `solution_offer_id` | Offer ID from SolutionMetadata.json |
-| `solution_first_publish_date` | First publication date |
-| `solution_last_publish_date` | Last update date |
-| `solution_version` | Solution version number |
-| `solution_support_name` | Support provider name (e.g., Microsoft, Community) |
-| `solution_support_tier` | Support tier (e.g., Microsoft, Partner, Community) |
-| `solution_support_link` | Support link URL |
-| `solution_author_name` | Author name from metadata |
-| `solution_categories` | Comma-separated list of solution categories |
-| `connector_id` | Unique connector identifier. Empty for solutions without data connectors. |
-| `connector_publisher` | Connector publisher name. Empty for solutions without data connectors. |
-| `connector_title` | Connector display title. Empty for solutions without data connectors. |
-| `connector_description` | Connector description (newlines replaced with `<br>` for GitHub CSV rendering). Empty for solutions without data connectors. |
-| `connector_instruction_steps` | Setup and configuration instructions from connector UI definitions, stored as JSON-encoded string. Rendered in documentation using Microsoft Sentinel UI definitions. Empty for solutions without data connectors. |
-| `connector_permissions` | Required permissions and prerequisites from connector UI definitions, stored as JSON-encoded string. Rendered in documentation according to Microsoft Sentinel permissions schema (resourceProvider, customs, licenses, tenant). Empty for solutions without data connectors. |
-| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files. Empty for solutions without data connectors. |
-| `is_unique` | `true` if table appears in only one connector file, `false` otherwise |
-| `table_detection_methods` | (Optional, with --show-detection-methods) Semicolon-separated list of methods used to detect this table |
-
-#### GitHub Links
-
-All file references are converted to direct GitHub URLs pointing to the master branch:
-
-**solution_folder:**
-```
-https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}
-```
-
-**connector_files:**
-```
-https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/{solution_name}/Data Connectors/{file_path}
-```
-
-### 2. connectors.csv (Connector Details with Collection Method)
+### 1. connectors.csv (Connector Details with Collection Method)
 
 Contains one row per unique connector with all connector-specific fields and collection method analysis.
 
-| Column | Description |
-|--------|-------------|
-| `connector_id` | Unique connector identifier |
-| `connector_publisher` | Connector publisher name |
-| `connector_title` | Connector display title |
-| `connector_description` | Connector description |
-| `connector_instruction_steps` | Setup and configuration instructions (JSON) |
-| `connector_permissions` | Required permissions (JSON) |
-| `connector_id_generated` | `true` if connector ID was auto-generated from title |
-| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files |
-| `connector_readme_file` | Path to connector README file (if exists) |
-| `collection_method` | Data collection method (see Collection Method Detection) |
-| `collection_method_reason` | Explanation of how collection method was determined |
-| `event_vendor` | Semicolon-separated list of vendor values extracted from queries |
-| `event_product` | Semicolon-separated list of product values extracted from queries |
-| `event_vendor_product_by_table` | JSON mapping of tables to vendor/product pairs |
-| `filter_fields` | Filter fields extracted from queries (see Filter Fields Detection) |
-| `not_in_solution_json` | `true` if connector was found by file scanning but not listed in the Solution JSON |
-| `solution_name` | Name of the parent solution |
-| `is_deprecated` | `true` if connector title contains "[DEPRECATED]" or "[Deprecated]" |
-| `is_published` | `true` if parent solution is published on Azure Marketplace |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `connector_id` | Unique connector identifier | Connector JSON `id` field, or generated from title |
+| `connector_publisher` | Connector publisher name | Connector JSON `publisher` field |
+| `connector_title` | Connector display title | Connector JSON `title` field |
+| `connector_description` | Connector description | Connector JSON `descriptionMarkdown` field |
+| `connector_instruction_steps` | Setup and configuration instructions (JSON) | Connector JSON `instructionSteps` field |
+| `connector_permissions` | Required permissions (JSON) | Connector JSON `permissions` field |
+| `connector_id_generated` | `true` if connector ID was auto-generated from title | Computed: `true` when `id` contains `[variables(...)]` |
+| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files | File system scan of Data Connectors folders |
+| `connector_readme_file` | Path to connector README file (if exists) | File system scan for `.md` files |
+| `collection_method` | Data collection method (see [Collection Method Detection](#collection-method-detection)) | [Multi-pattern analysis](#collection-method-detection) of connector content |
+| `collection_method_reason` | Explanation of how collection method was determined | Computed: explains which patterns matched |
+| `event_vendor` | Semicolon-separated list of vendor values extracted from queries | [KQL query analysis](#filter-fields-detection) |
+| `event_product` | Semicolon-separated list of product values extracted from queries | [KQL query analysis](#filter-fields-detection) |
+| `event_vendor_product_by_table` | JSON mapping of tables to vendor/product pairs | [KQL query analysis](#filter-fields-detection) with table context |
+| `filter_fields` | Filter fields extracted from queries (see [Filter Fields Detection](#filter-fields-detection)) | [KQL query analysis](#filter-fields-detection) with operator extraction |
+| `not_in_solution_json` | `true` if connector was found by file scanning but not listed in the Solution JSON | Comparison: file scan vs Solution JSON content lists |
+| `solution_name` | Name of the parent solution | Parent solution folder name |
+| `is_deprecated` | `true` if connector title contains "[DEPRECATED]" or "[Deprecated]" | Pattern match on connector title |
+| `is_published` | `true` if parent solution is published on Azure Marketplace | Azure Marketplace API query |
 
-### 3. solutions.csv (Solution Details)
+### 2. solutions.csv (Solution Details)
 
 Contains one row per solution with all solution-specific metadata. Metadata is sourced from both `SolutionMetadata.json` and `Data/Solution_*.json` files.
 
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Official solution name from Solution JSON (or folder name if not available) |
-| `solution_folder` | GitHub URL to the solution's folder |
-| `solution_publisher_id` | Publisher ID from SolutionMetadata.json |
-| `solution_offer_id` | Offer ID from SolutionMetadata.json |
-| `solution_first_publish_date` | First publication date |
-| `solution_last_publish_date` | Last update date |
-| `solution_version` | Solution version from Solution JSON or SolutionMetadata.json |
-| `solution_support_name` | Support provider name |
-| `solution_support_tier` | Support tier (Microsoft, Partner, Community) |
-| `solution_support_link` | Support link URL |
-| `solution_author_name` | Author name from Solution JSON (e.g., "Microsoft - support@microsoft.com") |
-| `solution_categories` | Comma-separated list of solution categories (e.g., "Security - Others, domains") |
-| `solution_readme_file` | Path to solution README file (if exists) |
-| `solution_logo_url` | URL to solution logo image extracted from HTML img tag in Solution JSON Logo field |
-| `solution_description` | Full solution description with HTML/markdown formatting from Solution JSON |
-| `solution_dependencies` | Semicolon-separated list of dependent solution IDs from `dependentDomainSolutionIds` |
-| `has_connectors` | `true` if solution has data connectors, `false` otherwise |
-| `is_published` | `true` if solution is published on Azure Marketplace |
-| `marketplace_url` | URL to the solution's Azure Marketplace listing |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `solution_name` | Official solution name from Solution JSON (or folder name if not available) | Solution JSON `Name` field, fallback to folder name |
+| `solution_folder` | Solution folder name (matches directory name in Solutions/) | File system: Solutions/ directory listing |
+| `solution_github_url` | Full GitHub URL to the solution's folder | Computed from solution_folder |
+| `solution_publisher_id` | Publisher ID from SolutionMetadata.json | SolutionMetadata.json `publisherId` |
+| `solution_offer_id` | Offer ID from SolutionMetadata.json | SolutionMetadata.json `offerId` |
+| `solution_first_publish_date` | First publication date | SolutionMetadata.json `firstPublishDate` |
+| `solution_last_publish_date` | Last update date | SolutionMetadata.json `lastPublishDate` |
+| `solution_version` | Solution version from Solution JSON or SolutionMetadata.json | Solution JSON `Version` or SolutionMetadata.json `version` |
+| `solution_support_name` | Support provider name | SolutionMetadata.json `support.name` |
+| `solution_support_tier` | Support tier (Microsoft, Partner, Community) | SolutionMetadata.json `support.tier` |
+| `solution_support_link` | Support link URL | SolutionMetadata.json `support.link` |
+| `solution_author_name` | Author name from Solution JSON (e.g., "Microsoft") | Solution JSON `Author` field |
+| `solution_categories` | Comma-separated list of solution categories (e.g., "Security - Others, domains") | SolutionMetadata.json `categories` |
+| `solution_readme_file` | Path to solution README file (if exists) | File system scan for README.md |
+| `solution_logo_url` | URL to solution logo image extracted from HTML img tag in Solution JSON Logo field | Solution JSON `Logo` field (HTML img src extraction) |
+| `solution_description` | Full solution description with HTML/markdown formatting from Solution JSON | Solution JSON `Description` field |
+| `solution_dependencies` | Semicolon-separated list of dependent solution IDs from `dependentDomainSolutionIds` | Solution JSON `dependentDomainSolutionIds` |
+| `has_connectors` | `true` if solution has data connectors, `false` otherwise | Computed: checks for Data Connectors folder |
+| `is_published` | `true` if solution is published on Azure Marketplace | Azure Marketplace API query |
+| `marketplace_url` | URL to the solution's Azure Marketplace listing | Azure Marketplace API response |
 
 **Solution JSON File Selection:**
 
@@ -286,70 +286,74 @@ The script locates Solution JSON files using this algorithm:
 3. Parse the first matching JSON file to extract Name, Logo, Author, Version, and Description
 4. Logo URL is extracted from HTML img tags like `<img src="https://..." width="75px" height="75px">`
 
-### 4. tables.csv (Table Metadata)
+### 3. tables.csv (Table Metadata)
 
-Contains one row per unique table referenced by connectors, with metadata from Azure Monitor documentation.
+Contains one row per unique table referenced by connectors, with metadata from Azure Monitor documentation and Sentinel reference.
 
-| Column | Description |
-|--------|-------------|
-| `table_name` | Table name |
-| `description` | Table description from Azure Monitor documentation |
-| `category` | Table category (e.g., Security, Audit, Azure Resources) |
-| `support_tier` | Support tier derived from associated solutions |
-| `collection_method` | Data collection method (from tables_reference.csv or overrides) |
-| `resource_types` | Azure resource types that emit to this table |
-| `source_azure_monitor` | Whether table is in Azure Monitor reference |
-| `source_defender_xdr` | Whether table is in Defender XDR schema |
-| `azure_monitor_doc_link` | Link to Azure Monitor documentation |
-| `defender_xdr_doc_link` | Link to Defender XDR documentation |
-| `basic_logs_eligible` | Whether table supports Basic Logs plan |
-| `supports_transformations` | Whether ingestion-time transformations are supported |
-| `ingestion_api_supported` | Whether Data Collector API ingestion is supported |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `table_name` | Table name | All sources |
+| `description` | Table description from Azure Monitor documentation | `tables_reference.csv` (Azure Monitor pages) |
+| `category` | Table category (e.g., Security, Audit, Azure Resources) | `tables_reference.csv` (Azure Monitor tables-category) |
+| `support_tier` | Support tier derived from associated solutions. Shows "Various" if table is used by solutions with different tiers. | Derived from `solution_support_tier` of all solutions using this table |
+| `collection_method` | Data collection method (from tables_reference.csv or overrides) | `tables_reference.csv`, Override system |
+| `resource_types` | Azure resource types that emit to this table | `tables_reference.csv` (Azure Monitor pages) |
+| `source_azure_monitor` | Whether table is in Azure Monitor reference | `tables_reference.csv` |
+| `source_defender_xdr` | Whether table is in Defender XDR schema | `tables_reference.csv` |
+| `azure_monitor_doc_link` | Link to Azure Monitor documentation | `tables_reference.csv` |
+| `defender_xdr_doc_link` | Link to Defender XDR documentation | `tables_reference.csv` |
+| `basic_logs_eligible` | Whether table supports Basic Logs plan | `tables_reference.csv` (Azure Monitor pages) |
+| `supports_transformations` | Whether ingestion-time transformations are supported | `tables_reference.csv` (Tables feature support page, enriched with Sentinel tables/connectors) |
+| `ingestion_api_supported` | Whether Data Collector API ingestion is supported | `tables_reference.csv` (Logs Ingestion API page) |
+| `lake_only_supported` | Whether lake-only ingestion is supported | `tables_reference.csv` (Sentinel tables/connectors) |
 
 > **Note:** Metadata is sourced from `tables_reference.csv`. Tables not found in the reference file will have empty metadata fields. Run `collect_table_info.py` first to populate this data.
 
-### 5. solutions_connectors_tables_mapping_simplified.csv (Simplified Mapping)
+### 4. solutions_connectors_tables_mapping_simplified.csv (Simplified Mapping)
 
 A simplified mapping file containing only key fields for linking connectors, tables, and solutions.
 
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Solution folder name |
-| `connector_id` | Connector identifier |
-| `table_name` | Table name |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `solution_name` | Solution folder name | Parent solution folder |
+| `connector_id` | Connector identifier | Connector JSON `id` field |
+| `table_name` | Table name | Connector table detection |
 
-### 6. content_items.csv (Content Item Details)
+### 5. content_items.csv (Content Item Details)
 
 Contains one row per content item (analytics rule, hunting query, playbook, workbook, parser, watchlist, or summary rule) found in solutions or top-level directories.
 
-| Column | Description |
-|--------|-------------|
-| `content_id` | Unique identifier for the content item (GUID from YAML/JSON) |
-| `content_name` | Display name of the content item |
-| `content_type` | Type: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `parser`, `watchlist`, `summary_rule` |
-| `content_description` | Description of the content item |
-| `content_file` | Filename of the source file |
-| `content_readme_file` | Path to associated README file (if exists) |
-| `content_severity` | Severity level (for analytics rules): `High`, `Medium`, `Low`, `Informational` |
-| `content_status` | Status field from content item |
-| `content_kind` | Kind/type from content item |
-| `content_tactics` | MITRE ATT&CK tactics (comma-separated) |
-| `content_techniques` | MITRE ATT&CK techniques (comma-separated) |
-| `content_required_connectors` | Required data connectors (from requiredDataConnectors field) |
-| `content_query_status` | Query status: `has_query`, `no_query`, `query_error` |
-| `content_event_vendor` | Event vendor extracted from query filter fields |
-| `content_event_product` | Event product extracted from query filter fields |
-| `content_filter_fields` | Filter fields extracted from content query (see Filter Fields Detection) |
-| `content_github_url` | Direct GitHub URL to the content file (for standalone items only) |
-| `content_source` | Source location: `Solution` (from Solutions/), `Standalone` (top-level with metadata), `GitHub Only` (top-level without metadata) |
-| `metadata_source_kind` | Source kind from YAML metadata section: `Community`, `Solution`, `Standalone` |
-| `metadata_author` | Author name from YAML metadata section |
-| `metadata_support_tier` | Support tier from YAML metadata section: `Microsoft`, `Partner`, `Community` |
-| `metadata_categories` | Categories/domains from YAML metadata section (comma-separated) |
-| `not_in_solution_json` | `true` if item was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) |
-| `solution_name` | Solution name (empty for standalone content) |
-| `solution_folder` | Solution folder path (empty for standalone content) |
-| `is_published` | `true` if parent solution is published on Azure Marketplace (empty for standalone content) |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `content_id` | Unique identifier for the content item (GUID from YAML/JSON) | Content file `id` field |
+| `content_name` | Display name of the content item | Content file `name` field |
+| `content_type` | Type: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `parser`, `watchlist`, `summary_rule` | Inferred from file location/structure |
+| `content_description` | Description of the content item | Content file `description` field |
+| `content_file` | Filename of the source file | File system scan (for both solution and standalone content) |
+| `content_readme_file` | Path to associated README file (if exists) | File system scan |
+| `content_severity` | Severity level (for analytics rules): `High`, `Medium`, `Low`, `Informational` | Content file `severity` field |
+| `content_status` | Status field from content item | Content file `status` field |
+| `content_kind` | Kind/type from content item | Content file `kind` field |
+| `content_tactics` | MITRE ATT&CK tactics (comma-separated) | Content file `tactics` field |
+| `content_techniques` | MITRE ATT&CK techniques (comma-separated) | Content file `techniques` field |
+| `content_required_connectors` | Required data connectors (from requiredDataConnectors field) | Content file `requiredDataConnectors` field |
+| `content_query_status` | Query status: `has_query`, `no_query`, `query_error` | Computed: query extraction result |
+| `content_event_vendor` | Event vendor extracted from query filter fields | [KQL query analysis](#filter-fields-detection) |
+| `content_event_product` | Event product extracted from query filter fields | [KQL query analysis](#filter-fields-detection) |
+| `content_filter_fields` | Filter fields extracted from content query (see [Filter Fields Detection](#filter-fields-detection)) | [KQL query analysis](#filter-fields-detection) |
+| `associated_connectors` | Comma-separated list of connector IDs that provide data matching this content's tables and filter fields (for Standalone/GitHub Only items only) | [Connector Association Algorithm](#connector-association-algorithm) |
+| `associated_solutions` | Comma-separated list of solution names associated with the matching connectors (for Standalone/GitHub Only items only) | Derived from associated_connectors |
+| `content_github_url` | Direct GitHub URL to the content file (for standalone items only) | Computed from file path |
+| `content_source` | Source location: `Solution` (from Solutions/), `Standalone` (top-level with metadata), `GitHub Only` (top-level without metadata) | File location + metadata presence check |
+| `metadata_source_kind` | Source kind from YAML metadata section: `Community`, `Solution`, `Standalone` | YAML `metadata.source.kind` field |
+| `metadata_author` | Author name from YAML metadata section | YAML `metadata.author` field |
+| `metadata_support_tier` | Support tier from YAML metadata section: `Microsoft`, `Partner`, `Community` | YAML `metadata.support.tier` field |
+| `metadata_categories` | Categories/domains from YAML metadata section (comma-separated) | YAML `metadata.categories` field |
+| `not_in_solution_json` | `true` if item was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) | Comparison: file scan vs Solution JSON |
+| `solution_name` | Solution name (empty for standalone content) | Parent solution folder |
+| `solution_folder` | Solution folder name (empty for standalone content) | Parent solution folder |
+| `solution_github_url` | Full GitHub URL to the solution's folder (empty for standalone content) | Computed from solution_folder |
+| `is_published` | `true` if parent solution is published on Azure Marketplace (empty for standalone content) | Azure Marketplace API query |
 
 #### Content Source Classification
 
@@ -369,89 +373,94 @@ Standalone items are collected from these top-level directories:
 - `Summary rules/` - Summary rules (YAML)
 - `Watchlists/` - Watchlists (folders with watchlist.json)
 
-### 7. content_tables_mapping.csv (Content Item to Table Mapping)
+### 6. content_tables_mapping.csv (Content Item to Table Mapping)
 
 Contains one row per unique combination of solution, content item, and table. This maps tables found in KQL queries within analytics rules, hunting queries, playbooks, workbooks, watchlists, and summary rules.
 
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Solution folder name |
-| `solution_folder` | Solution folder path |
-| `content_type` | Type of content item: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `watchlist`, `summary_rule` |
-| `content_id` | Content item identifier |
-| `content_name` | Name or filename of the content item |
-| `content_file` | Source filename |
-| `table_name` | Table name extracted from the KQL query |
-| `table_usage` | Usage indicator for playbooks: `read`, `write`, or `read/write`. Empty for other content types (assumed read). |
-| `is_published` | `true` if parent solution is published on Azure Marketplace |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `solution_name` | Solution name (empty for standalone content) | Parent solution folder |
+| `solution_folder` | Solution folder name (empty for standalone content) | Parent solution folder |
+| `solution_github_url` | Full GitHub URL to the solution's folder (empty for standalone content) | Computed from solution_folder |
+| `content_type` | Type of content item: `analytic_rule`, `hunting_query`, `playbook`, `workbook`, `watchlist`, `summary_rule` | Inferred from file location/structure |
+| `content_id` | Content item identifier | Content file `id` field |
+| `content_name` | Name or filename of the content item | Content file `name` field or filename |
+| `content_file` | Source filename | File system |
+| `table_name` | Table name extracted from the KQL query | KQL query parsing with parser resolution |
+| `table_usage` | Usage indicator for playbooks: `read`, `write`, or `read/write`. Empty for other content types (assumed read). | Playbook action type analysis |
+| `is_published` | `true` if parent solution is published on Azure Marketplace | Azure Marketplace API query |
 
 > **Note:** For playbooks, `table_usage` tracks whether the playbook reads from a table (Azure Monitor query), writes to it (Send Data action), or both. Other content types are assumed to only read from tables.
 
-### 8. parsers.csv (Parser Details)
+### 7. parsers.csv (Parser Details)
 
 Contains one row per parser (both ASIM and non-ASIM) from solution directories and the legacy `/Parsers/*` directories.
 
-| Column | Description |
-|--------|-------------|
-| `parser_name` | Parser function name |
-| `parser_title` | Display title of the parser |
-| `parser_version` | Parser version number |
-| `parser_last_updated` | Last update date |
-| `parser_category` | Parser category/type |
-| `description` | Parser description |
-| `tables` | Semicolon-separated list of source tables used by the parser |
-| `source_file` | Relative path to the source file |
-| `github_url` | Full GitHub URL to the parser definition |
-| `solution_name` | Solution name (empty for legacy parsers) |
-| `solution_folder` | Solution folder path |
-| `location` | Location: `solution` (in Solutions directory) or `legacy` (in top-level /Parsers directory) |
-| `file_type` | File type: `yaml`, `kql`, or `txt` |
-| `discovered` | `true` if parser was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `parser_name` | Parser function name | YAML `FunctionName` or filename |
+| `parser_title` | Display title of the parser | YAML `displayName` or `Title` |
+| `parser_version` | Parser version number | YAML `version` or `Version` |
+| `parser_last_updated` | Last update date | YAML `lastUpdated` or `Last Updated` |
+| `parser_category` | Parser category/type | YAML `category` or `Category` |
+| `description` | Parser description | YAML `description` or `Description` |
+| `tables` | Semicolon-separated list of source tables used by the parser | [KQL query parsing](#table-detection-methods) of `FunctionQuery` field |
+| `source_file` | Relative path to the source file | File system |
+| `github_url` | Full GitHub URL to the parser definition | Computed from source_file |
+| `solution_name` | Solution name (empty for legacy parsers) | Parent solution folder |
+| `solution_folder` | Solution folder name (empty for legacy parsers) | Parent solution folder |
+| `solution_github_url` | Full GitHub URL to the solution's folder (empty for legacy parsers) | Computed from solution_folder |
+| `location` | Location: `solution` (in Solutions directory) or `legacy` (in top-level /Parsers directory) | File path analysis |
+| `file_type` | File type: `yaml`, `kql`, or `txt` | File extension |
+| `discovered` | `true` if parser was found by file scanning but not listed in Solution JSON (marked with ⚠️ in docs) | Comparison: file scan vs Solution JSON |
 
 > **Note:** Parsers are collected from both solution `Parsers/` directories and the legacy top-level `/Parsers/*` directories. Legacy parsers are pre-Solutions parsers stored as .txt, .kql, or .yaml files.
 
-### 9. asim_parsers.csv (ASIM Parser Details)
+### 8. asim_parsers.csv (ASIM Parser Details)
 
 Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. This includes all ASIM (Advanced Security Information Model) parsers with full metadata.
 
-| Column | Description |
-|--------|-------------|
-| `parser_name` | Parser function name (e.g., `ASimDnsAzureFirewall`) |
-| `equivalent_builtin` | Built-in parser alias (e.g., `_ASim_Dns_AzureFirewall`) |
-| `schema` | ASIM schema name (e.g., `Dns`, `NetworkSession`, `Authentication`) |
-| `schema_version` | Schema version number |
-| `parser_type` | Parser type: `union` (schema-level aggregator), `source` (product-specific), or `empty` (placeholder) |
-| `parser_title` | Display title of the parser |
-| `parser_version` | Parser version number |
-| `parser_last_updated` | Last update date |
-| `product_name` | Product/source name (e.g., `Azure Firewall`, `Palo Alto`) |
-| `description` | Parser description |
-| `tables` | Semicolon-separated list of source tables used by the parser |
-| `sub_parsers` | Semicolon-separated list of sub-parser references (for union parsers) |
-| `parser_params` | Parser parameters in format `name:type=default` |
-| `filter_fields` | Filter fields extracted from parser query (see Filter Fields Detection) |
-| `references` | Semicolon-separated list of reference links |
-| `source_file` | Relative path to the source YAML file |
-| `github_url` | Full GitHub URL to the parser definition |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `parser_name` | Parser function name (e.g., `ASimDnsAzureFirewall`) | YAML `ParserName` field |
+| `equivalent_builtin` | Built-in parser alias (e.g., `_ASim_Dns_AzureFirewall`) | YAML `EquivalentBuiltInParser` field |
+| `schema` | ASIM schema name (e.g., `Dns`, `NetworkSession`, `Authentication`) | Inferred from folder name (ASim{Schema}) |
+| `schema_version` | Schema version number | YAML `Normalization.Version` field |
+| `parser_type` | Parser type: `union` (schema-level aggregator), `source` (product-specific), or `empty` (placeholder) | Computed: sub_parsers presence check |
+| `parser_title` | Display title of the parser | YAML `Parser.Title` field |
+| `parser_version` | Parser version number | YAML `Parser.Version` field |
+| `parser_last_updated` | Last update date | YAML `Parser.LastUpdated` field |
+| `product_name` | Product/source name (e.g., `Azure Firewall`, `Palo Alto`) | YAML `Normalization.Product` field |
+| `description` | Parser description | YAML `Description` field |
+| `tables` | Semicolon-separated list of source tables used by the parser | [KQL query parsing](#table-detection-methods) of `ParserQuery` field |
+| `sub_parsers` | Semicolon-separated list of sub-parser references (for union parsers) | YAML `Parsers` array field |
+| `parser_params` | Parser parameters in format `name:type=default` | YAML `ParserParams` array field |
+| `filter_fields` | Filter fields extracted from parser query (see [Filter Fields Detection](#filter-fields-detection)) | [KQL query analysis](#filter-fields-detection) |
+| `associated_connectors` | Comma-separated list of connector IDs that provide data matching this parser's tables and filter fields | [Connector Association Algorithm](#connector-association-algorithm) |
+| `associated_solutions` | Comma-separated list of solution names associated with the matching connectors | Derived from associated_connectors |
+| `references` | Semicolon-separated list of reference links | YAML `References` array field |
+| `source_file` | Relative path to the source YAML file | File system |
+| `github_url` | Full GitHub URL to the parser definition | Computed from source_file |
 
 > **Note:** ASIM parsers are loaded from YAML files in the `/Parsers/ASim*/Parsers` directories. Union parsers aggregate multiple source parsers and typically have empty `tables` but populated `sub_parsers`. Source parsers reference actual Log Analytics tables. The `vim*` (vendor-independent model) parsers are skipped as they are wrappers around the corresponding `ASim*` parsers with identical filters.
 
-### 10. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 9. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 
 #### Column Descriptions
 
-| Column | Description |
-|--------|-------------|
-| `solution_name` | Solution name |
-| `solution_folder` | GitHub URL to the solution's folder |
-| `connector_id` | Connector ID (if applicable) |
-| `connector_title` | Connector title (if applicable) |
-| `connector_publisher` | Connector publisher (if applicable) |
-| `relevant_file` | GitHub URL to the relevant file (connector or content file depending on issue type) |
-| `issue_type` | Issue category (see Issue Types below) |
-| `issue` | Detailed description of the issue |
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `solution_name` | Solution name | Parent solution folder |
+| `solution_folder` | Solution folder name | Parent solution folder |
+| `solution_github_url` | Full GitHub URL to the solution's folder | Computed from solution_folder |
+| `connector_id` | Connector ID (if applicable) | Connector JSON `id` field |
+| `connector_title` | Connector title (if applicable) | Connector JSON `title` field |
+| `connector_publisher` | Connector publisher (if applicable) | Connector JSON `publisher` field |
+| `relevant_file` | GitHub URL to the relevant file (connector or content file depending on issue type) | Computed from file path |
+| `issue_type` | Issue category (see Issue Types below) | Analysis error classification |
+| `issue` | Detailed description of the issue | Analysis error details |
 
 #### Issue Types and Handling
 
@@ -464,6 +473,42 @@ Contains exceptions and issues encountered during analysis.
 | `table_detection_failed` | Tables detected but validation failed | Connector excluded |
 | `missing_connector_json` | Data Connectors folder exists but contains no valid JSON | Solution has no connector entries |
 | `missing_solution_metadata` | Solution has connectors but no SolutionMetadata.json | Solution appears with empty metadata fields |
+
+### 10. solutions_connectors_tables_mapping.csv (Backward Compatibility)
+
+This CSV file is maintained for backward compatibility with older scripts and workflows. It contains one row per unique combination of solution, connector, and table, with all metadata denormalized into a single wide table.
+
+> **Note:** For new integrations, prefer using the normalized CSV files (`connectors.csv`, `solutions.csv`, `tables.csv`) which provide cleaner data organization and smaller file sizes.
+
+**Newline handling:** Newlines in the `connector_description` and `connector_permissions` fields are replaced with `<br>` tags to ensure proper rendering in GitHub's CSV viewer. The `connector_instruction_steps` field uses standard JSON encoding with `\n` for newlines.
+
+#### Column Descriptions
+
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `Table` | The table name (e.g., Syslog, CommonSecurityLog, CustomLog_CL). Empty for solutions without data connectors. | Connector table detection |
+| `solution_name` | Solution folder name | Parent solution folder |
+| `solution_folder` | Solution folder name (matches directory name in Solutions/) | File system |
+| `solution_github_url` | Full GitHub URL to the solution's folder | Computed from solution_folder |
+| `solution_publisher_id` | Publisher ID from SolutionMetadata.json | SolutionMetadata.json |
+| `solution_offer_id` | Offer ID from SolutionMetadata.json | SolutionMetadata.json |
+| `solution_first_publish_date` | First publication date | SolutionMetadata.json |
+| `solution_last_publish_date` | Last update date | SolutionMetadata.json |
+| `solution_version` | Solution version number | Solution JSON or SolutionMetadata.json |
+| `solution_support_name` | Support provider name (e.g., Microsoft, Community) | SolutionMetadata.json |
+| `solution_support_tier` | Support tier (e.g., Microsoft, Partner, Community) | SolutionMetadata.json |
+| `solution_support_link` | Support link URL | SolutionMetadata.json |
+| `solution_author_name` | Author name from metadata | Solution JSON |
+| `solution_categories` | Comma-separated list of solution categories | SolutionMetadata.json |
+| `connector_id` | Unique connector identifier. Empty for solutions without data connectors. | Connector JSON |
+| `connector_publisher` | Connector publisher name. Empty for solutions without data connectors. | Connector JSON |
+| `connector_title` | Connector display title. Empty for solutions without data connectors. | Connector JSON |
+| `connector_description` | Connector description (newlines replaced with `<br>` for GitHub CSV rendering). Empty for solutions without data connectors. | Connector JSON |
+| `connector_instruction_steps` | Setup and configuration instructions from connector UI definitions (JSON-encoded). | Connector JSON |
+| `connector_permissions` | Required permissions and prerequisites (JSON-encoded). | Connector JSON |
+| `connector_files` | Semicolon-separated list of GitHub URLs to connector definition files. | File system scan |
+| `is_unique` | `true` if table appears in only one connector file, `false` otherwise | Computed: cross-connector comparison |
+| `table_detection_methods` | (Optional, with --show-detection-methods) Semicolon-separated list of methods used to detect this table | Analysis tracking |
 
 ## Azure Marketplace Availability
 
@@ -574,10 +619,13 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 |-------|----------------|-------------|
 | `DeviceVendor` | CommonSecurityLog | CEF vendor identifier |
 | `DeviceProduct` | CommonSecurityLog | CEF product identifier |
+| `DeviceEventClassID` | CommonSecurityLog | CEF event class identifier |
 | `EventVendor` | Multiple (ASIM) | ASIM normalized vendor |
 | `EventProduct` | Multiple (ASIM) | ASIM normalized product |
+| `EventType` | Multiple (ASIM) | ASIM normalized event type |
 | `ResourceType` | AzureDiagnostics | Azure resource type |
 | `Category` | AzureDiagnostics | Diagnostic category |
+| `ResourceProvider` | AzureActivity | Azure resource provider |
 | `EventID` | WindowsEvent/SecurityEvent/Event | Windows event ID |
 | `Source` | Event | Windows Event Log source |
 | `Provider` | WindowsEvent | Windows event provider |
@@ -585,27 +633,41 @@ The analyzer extracts filter field values from KQL queries to identify vendor/pr
 | `ProcessName` | Syslog | Syslog process name |
 | `ProcessID` | Syslog | Syslog process ID |
 | `SyslogMessage` | Syslog | Syslog message content |
+| `EventName` | AWSCloudTrail | AWS API event name |
+| `ActionType` | DeviceEvents/DeviceFileEvents/etc. | Microsoft Defender XDR action type |
+| `OperationName` | AuditLogs/AzureActivity/OfficeActivity/SigninLogs | Azure/M365 operation name |
+| `OfficeWorkload` | OfficeActivity | Office 365 workload type |
+| `RecordType` | OfficeActivity | Office 365 record type (numeric) |
 
 #### Supported Operators
 
 | Operator Category | Operators | Example |
 |-------------------|-----------|---------|
 | **Equality** | `==`, `=~`, `!=` | `DeviceVendor == "Fortinet"` |
-| **In operators** | `in`, `in~`, `!in` | `EventID in (4624, 4625)` |
+| **In operators** | `in`, `in~`, `!in`, `!in~` | `EventID in (4624, 4625)` |
 | **String operators** | `has`, `has_any`, `has_all`, `contains`, `startswith`, `endswith` | `SyslogMessage has "error"` |
+| **Negative string** | `!has`, `!contains`, `!startswith`, `!endswith` | `SyslogMessage !has "debug"` |
+| **Case-sensitive** | `has_cs`, `contains_cs`, `startswith_cs`, `endswith_cs` | `ProcessName has_cs "sshd"` |
 
-> **Note:** `EventID` and `ProcessID` fields only support equality and in operators, not string operators.
+> **Note:** `EventID`, `ProcessID`, and `RecordType` fields only support equality and in operators, not string operators.
 
 #### Detection Logic
 
 The filter field extraction follows these rules:
 
 1. **Table-aware mapping**: When tables in the query are known, fields are mapped to their canonical tables
-   - `DeviceVendor`/`DeviceProduct` → CommonSecurityLog
-   - `EventVendor`/`EventProduct` → Context-dependent (ASIM tables)
+   - `DeviceVendor`/`DeviceProduct`/`DeviceEventClassID` → CommonSecurityLog
+   - `EventVendor`/`EventProduct`/`EventType` → Context-dependent (ASIM tables)
    - `ResourceType`/`Category` → AzureDiagnostics
+   - `ResourceProvider` → AzureActivity
    - `EventID` → WindowsEvent, SecurityEvent, or Event (based on which is in query)
+   - `Source` → Event
+   - `Provider` → WindowsEvent
    - `Facility`/`ProcessName`/`ProcessID`/`SyslogMessage` → Syslog
+   - `EventName` → AWSCloudTrail
+   - `ActionType` → DeviceEvents, DeviceFileEvents, DeviceProcessEvents, etc. (MDE/XDR tables)
+   - `OperationName` → AuditLogs, AzureActivity, OfficeActivity, SigninLogs (context-dependent)
+   - `OfficeWorkload`/`RecordType` → OfficeActivity
 
 2. **ASIM vendor/product skipping**: When `skip_asim_vendor_product=True`, `EventVendor` and `EventProduct` are skipped because ASIM parsers SET these values (not filter by them)
 
@@ -619,19 +681,28 @@ The filter field extraction follows these rules:
    - String literals: `in ("value1", "value2")`
    - Integer literals: `in (4624, 4625, 4634)`
    - Case-insensitive: `in~` variant
+   - Variable resolution: `let EventList = dynamic([...])` then `EventName in~ (EventList)`
 
 5. **String operator patterns**: Match patterns like `field has "value"` or `field has_any ("val1", "val2")`
 
+6. **Operator folding**: Multiple equality operators for the same field are combined:
+   - Multiple `==` values → single `in` operator with comma-separated values
+   - Multiple `=~` values → single `in~` operator
+   - Case-insensitive values take precedence over case-sensitive for deduplication
+
 #### Output Format
 
-Filter fields are formatted as a semicolon-separated list with the structure:
+Filter fields are formatted as a pipe-separated (`|`) list with the structure:
 ```
-Table:Field=value1,value2;Table:Field=value3
+Table.Field operator "value" | Table.Field operator "value1,value2"
 ```
 
-Example:
+Examples:
 ```
-CommonSecurityLog:DeviceVendor=Fortinet;CommonSecurityLog:DeviceProduct=FortiGate
+CommonSecurityLog.DeviceVendor == "Fortinet" | CommonSecurityLog.DeviceProduct == "FortiGate"
+Syslog.Facility == "authpriv" | Syslog.SyslogMessage has "error"
+AzureDiagnostics.Category in "AzureFirewallNetworkRule,AzureFirewallApplicationRule"
+AWSCloudTrail.EventName in~ "CreateUser,DeleteUser,AttachUserPolicy"
 ```
 
 #### CSV Fields Affected
@@ -645,9 +716,44 @@ CommonSecurityLog:DeviceVendor=Fortinet;CommonSecurityLog:DeviceProduct=FortiGat
 | `content_items.csv` | `content_filter_fields` | Filter fields from content item queries |
 | `content_items.csv` | `content_event_vendor` | Extracted vendor values |
 | `content_items.csv` | `content_event_product` | Extracted product values |
+| `parsers.csv` | `filter_fields` | Filter fields from solution parser queries |
 | `asim_parsers.csv` | `filter_fields` | Filter fields from ASIM parser queries |
 
 > **Note:** For ASIM parsers, `EventVendor` and `EventProduct` fields are skipped because ASIM parsers SET these values (via `extend`) rather than filter by them. The extraction focuses on source-identifying fields like `DeviceVendor`, `Facility`, etc.
+
+### Connector Association Algorithm
+
+For standalone/GitHub Only content items and ASIM parsers, the analyzer automatically associates relevant connectors based on table and filter field matching. This populates the `associated_connectors` and `associated_solutions` fields.
+
+#### Matching Criteria
+
+A connector matches a target (content item or parser) if:
+
+1. **Shared Tables**: The connector and target share at least one table
+2. **Filter Subset**: For shared tables, the connector's filter values are a subset of (or equal to) the target's filter values
+
+#### Filter Subset Logic
+
+- A connector with **no filter fields** matches any target using the same table (it provides all data)
+- A connector filtering on `DeviceVendor == "Fortinet"` matches targets filtering on `Fortinet` or `Fortinet AND FortiGate`
+- A connector filtering on specific products does NOT match targets filtering on different products
+
+#### Example Matches
+
+| Connector Filters | Target Filters | Match? | Reason |
+|-------------------|----------------|--------|--------|
+| (none) | `DeviceVendor == "Fortinet"` | ✅ | Connector provides all data |
+| `DeviceVendor == "Fortinet"` | `DeviceVendor == "Fortinet"` | ✅ | Exact match |
+| `DeviceVendor == "Fortinet"` | `DeviceVendor in "Fortinet,PaloAlto"` | ✅ | Connector subset of target |
+| `DeviceVendor == "Fortinet"` | `DeviceVendor == "PaloAlto"` | ❌ | No overlap |
+| `DeviceProduct == "FortiGate"` | `DeviceVendor == "Fortinet"` | ❌ | Different field, can't confirm match |
+
+#### Exclusions
+
+The algorithm excludes:
+- **Deprecated connectors**: Connectors with `[DEPRECATED]` in title
+- **Content-only connectors**: Connectors that use data from other connectors (don't ingest data themselves)
+- **Excluded tables**: Tables that appear in connector documentation but aren't actually ingested
 
 ### Parser Resolution
 
