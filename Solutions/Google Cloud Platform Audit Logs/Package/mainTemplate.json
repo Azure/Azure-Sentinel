@@ -47,11 +47,11 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Google Cloud Platform Audit Logs",
-    "_solutionVersion": "3.0.2",
+    "_solutionVersion": "3.0.3",
     "solutionId": "azuresentinel.azure-sentinel-solution-gcpauditlogs-api",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "1.0.0",
+    "dataConnectorCCPVersion": "3.0.3",
     "_dataConnectorContentIdConnectorDefinition1": "GCPAuditLogsDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "GCPAuditLogsDefinitionConnections",
@@ -132,11 +132,7 @@
       "_huntingQuerycontentId5": "8f3e4a2b-6c7d-4e8f-9a0b-1c2d3e4f5a6b",
       "huntingQueryTemplateSpecName5": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('8f3e4a2b-6c7d-4e8f-9a0b-1c2d3e4f5a6b')))]"
     },
-    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
-    "ProjectId": "ProjectId",
-    "_ProjectId": "[variables('ProjectId')]",
-    "ZoneId": "ZoneId",
-    "_ZoneId": "[variables('ZoneId')]"
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
     {
@@ -312,9 +308,68 @@
                     ],
                     "destinations": [
                       "clv2ws1"
-                    ]
+                    ],
+                    "transformKql": "source\n| extend \n    // Determine log type based on payload structure\n    LogType = case(\n        isnotempty(protoPayload), \"DataAccess\",\n        isnotempty(jsonPayload), \"AccessTransparency\",\n        \"Unknown\"\n    ),\n    \n    // Parse Data Access logs (existing functionality)\n    ServiceName_DA = iff(LogType == \"DataAccess\", tostring(parse_json(protoPayload).serviceName), \"\"),\n    MethodName_DA = iff(LogType == \"DataAccess\", tostring(parse_json(protoPayload).methodName), \"\"),\n    AuthenticationInfo_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.authenticationInfo), \"\"),\n    AuthorizationInfo_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.authorizationInfo), \"\"),\n    RequestMetadata_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.requestMetadata), \"\"),\n    Request_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.request), \"\"),\n    Response_DA = iff(LogType == \"DataAccess\", tostring(protoPayload.response), \"\"),\n    Status_DA = iff(LogType == \"DataAccess\", tostring(parse_json(protoPayload).status), \"\"),\n    \n    // Parse Access Transparency logs (new functionality)\n    ServiceName_AT = iff(LogType == \"AccessTransparency\", \n        tostring(parse_json(jsonPayload).product[0]), \"\"),\n    MethodName_AT = iff(LogType == \"AccessTransparency\", \n        tostring(parse_json(jsonPayload).accesses[0].methodName), \"\"),\n    GCPResourceName_AT = iff(LogType == \"AccessTransparency\", \n        tostring(parse_json(jsonPayload).accesses[0].resourceName), \"\"),\n    \n    // Create structured AuthenticationInfo equivalent for AT logs\n    AuthenticationInfo_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"principalJobTitle\", tostring(parse_json(jsonPayload).principalJobTitle),\n            \"principalOfficeCountry\", tostring(parse_json(jsonPayload).location.principalOfficeCountry),\n            \"principalEmployingEntity\", tostring(parse_json(jsonPayload).location.principalEmployingEntity),\n            \"principalPhysicalLocationCountry\", tostring(parse_json(jsonPayload).location.principalPhysicalLocationCountry)\n        )), \n        \"\"),\n    \n    // Create structured AuthorizationInfo equivalent for AT logs\n    AuthorizationInfo_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"permissionType\", tostring(parse_json(jsonPayload).permissionDetails[0].permissionType),\n            \"reasonType\", tostring(parse_json(jsonPayload).reason[0].type),\n            \"reasonDetail\", tostring(parse_json(jsonPayload).reason[0].detail)\n        )), \n        \"\"),\n    \n    // Create Request equivalent for AT logs\n    Request_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"eventId\", tostring(parse_json(jsonPayload).eventId),\n            \"logMode\", tostring(parse_json(jsonPayload).logMode),\n            \"accesses\", tostring(parse_json(jsonPayload).accesses)\n        )), \n        \"\"),\n    \n    // Map additional AT-specific metadata\n    Metadata_AT = iff(LogType == \"AccessTransparency\", \n        tostring(bag_pack(\n            \"location\", tostring(parse_json(jsonPayload).location),\n            \"product\", tostring(parse_json(jsonPayload).product),\n            \"permissionDetails\", tostring(parse_json(jsonPayload).permissionDetails),\n            \"reason\", tostring(parse_json(jsonPayload).reason)\n        )), \n        \"\"),\n    \n    // Status equivalent for AT logs\n    Status_AT = iff(LogType == \"AccessTransparency\", \"NOTICE\", \"\"),\n    \n    // Calculate NumResponseItems for AT logs (count of accesses)\n    NumResponseItems_AT = iff(LogType == \"AccessTransparency\", \n        array_length(parse_json(jsonPayload).accesses), 0)\n\n// Coalesce fields to create unified schema\n| extend\n    ServiceName = coalesce(ServiceName_DA, ServiceName_AT),\n    MethodName = coalesce(MethodName_DA, MethodName_AT),\n    GCPResourceName = coalesce(ResourceName, GCPResourceName_AT),\n    AuthenticationInfo = coalesce(AuthenticationInfo_DA, AuthenticationInfo_AT),\n    AuthorizationInfo = coalesce(AuthorizationInfo_DA, AuthorizationInfo_AT),\n    RequestMetadata = coalesce(RequestMetadata_DA, \"\"),\n    Request = coalesce(Request_DA, Request_AT),\n    Response = coalesce(Response_DA, \"\"),\n    Status = coalesce(Status_DA, Status_AT),\n    Metadata = coalesce(\"\", Metadata_AT),\n    StatusMessage = coalesce(\"\", \"\"),\n    NumResponseItems = coalesce(0, NumResponseItems_AT)\n\n// Clean up temporary columns\n| project-away \n    ServiceName_DA, ServiceName_AT, MethodName_DA, MethodName_AT,\n    AuthenticationInfo_DA, AuthenticationInfo_AT, AuthorizationInfo_DA, AuthorizationInfo_AT,\n    RequestMetadata_DA, Request_DA, Request_AT, Response_DA, Status_DA, Status_AT,\n    GCPResourceName_AT, Metadata_AT, NumResponseItems_AT, LogType"
                   }
                 ],
+                "streamDeclarations": {
+                  "Microsoft-GCPAuditLogs": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ServiceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "MethodName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "GCPResourceName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AuthenticationInfo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AuthorizationInfo",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RequestMetadata",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Request",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Response",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Metadata",
+                        "type": "string"
+                      },
+                      {
+                        "name": "StatusMessage",
+                        "type": "string"
+                      },
+                      {
+                        "name": "NumResponseItems",
+                        "type": "int"
+                      }
+                    ]
+                  }
+                },
                 "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]"
               }
             }
@@ -605,7 +660,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPBulkVMSnapshotDeletion_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPBulkVMSnapshotDeletion_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -653,7 +708,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -667,27 +721,28 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
-                  "UserAgent": "UserAgent",
                   "DeletionTimeSpan": "DeletionTimeSpan",
-                  "ProjectId": "[variables('_ProjectId')]",
-                  "SnapshotList": "SnapshotList",
-                  "SnapshotCount": "SnapshotCount",
+                  "CallerIPs": "CallerIPs",
+                  "ProjectId": "ProjectId",
                   "LastDeletion": "LastDeletion",
-                  "FirstDeletion": "FirstDeletion",
-                  "CallerIPs": "CallerIPs"
+                  "UserAgent": "UserAgent",
+                  "SnapshotCount": "SnapshotCount",
+                  "SnapshotList": "SnapshotList",
+                  "FirstDeletion": "FirstDeletion"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "User {{PrincipalEmail}} deleted {{SnapshotCount}} VM snapshots in project {{ProjectId}} within a short time period. \nThis may indicate ransomware, data destruction, or defense evasion activity. Verify authorization, check remaining snapshots, review IP addresses, and investigate for compromise.",
@@ -746,7 +801,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDataAccessLoggingExemption_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPDataAccessLoggingExemption_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -794,7 +849,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -808,38 +862,39 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "CallerIpAddress",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       },
                       {
                         "columnName": "ResourceName",
                         "identifier": "InstanceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
-                  "ExemptedAccountName": "ExemptedAccountName",
-                  "UserAgent": "UserAgent",
-                  "ExemptedLogTypes": "ExemptedLogTypes",
                   "ExemptedServices": "ExemptedServices",
-                  "ProjectId": "[variables('_ProjectId')]",
-                  "ExemptedMember": "ExemptedMember"
+                  "ProjectId": "ProjectId",
+                  "ExemptedMember": "ExemptedMember",
+                  "UserAgent": "UserAgent",
+                  "ExemptedAccountName": "ExemptedAccountName",
+                  "ExemptedLogTypes": "ExemptedLogTypes"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "Principal {{ExemptedAccountName}} added as exception from Data Access logging in project {{ProjectId}} for Service {{ExemptedServices}}.\nThis action reduces audit visibility and may indicate an attempt to evade detection. Verify this change was authorized and investigate any suspicious activity performed by the exempted principal.",
@@ -898,7 +953,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPOpenFirewallRuleCreated_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPOpenFirewallRuleCreated_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -948,7 +1003,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -962,41 +1016,42 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "CallerIpAddress",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       },
                       {
                         "columnName": "ResourceName",
                         "identifier": "InstanceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
-                  "OperationType": "OperationType",
                   "ResourceName": "ResourceName",
                   "SourceRanges": "SourceRangesList",
-                  "ProjectId": "[variables('_ProjectId')]",
+                  "AllowedPorts": "AllowedPortsList",
                   "FirewallRuleName": "FirewallRuleName",
-                  "AllowedProtocols": "AllowedProtocols",
-                  "Direction": "Direction",
                   "Network": "Network",
-                  "AllowedPorts": "AllowedPortsList"
+                  "ProjectId": "ProjectId",
+                  "Direction": "Direction",
+                  "OperationType": "OperationType",
+                  "AllowedProtocols": "AllowedProtocols"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "User {{PrincipalEmail}} created/modified firewall rule {{FirewallRuleName}} in project {{ProjectId}} to allow traffic from unrestricted sources (0.0.0.0/0).\nThis configuration exposes resources to the internet and significantly increases attack surface. Investigate immediately to determine if this was authorized and assess potential security exposure. Consider restricting source ranges to specific trusted IP addresses or networks.",
@@ -1055,7 +1110,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPOrgPolicyDeletion_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPOrgPolicyDeletion_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -1100,7 +1155,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -1114,37 +1168,38 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "CallerIpAddress",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       },
                       {
                         "columnName": "ResourceName",
                         "identifier": "InstanceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
-                  "Permission": "Permission",
-                  "UserAgent": "UserAgent",
                   "MethodName": "MethodName",
                   "ResourceName": "ResourceName",
-                  "ProjectId": "[variables('_ProjectId')]",
+                  "Permission": "Permission",
+                  "ProjectId": "ProjectId",
+                  "UserAgent": "UserAgent",
                   "PolicyName": "PolicyName"
                 },
                 "alertDetailsOverride": {
@@ -1204,7 +1259,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPStorageBucketMadePublic_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPStorageBucketMadePublic_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -1254,7 +1309,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -1268,38 +1322,39 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "CallerIpAddress",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       },
                       {
                         "columnName": "ResourceName",
                         "identifier": "InstanceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
-                  "Permission": "Permission",
-                  "PublicAccessType": "PublicAccessType",
                   "ResourceName": "ResourceName",
-                  "ProjectId": "[variables('_ProjectId')]",
-                  "RoleGranted": "Role",
+                  "PublicAccessType": "PublicAccessType",
                   "UserAgent": "UserAgent",
+                  "Permission": "Permission",
+                  "RoleGranted": "Role",
+                  "ProjectId": "ProjectId",
                   "BucketName": "BucketName"
                 },
                 "alertDetailsOverride": {
@@ -1359,7 +1414,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPVpcFlowLogsDisabled_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPVpcFlowLogsDisabled_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -1404,7 +1459,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -1418,37 +1472,38 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "CallerIpAddress",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       },
                       {
                         "columnName": "ResourceName",
                         "identifier": "InstanceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
+                  "ProjectId": "ProjectId",
+                  "Action": "Action",
                   "ResourceName": "ResourceName",
-                  "Permission": "Permission",
-                  "ProjectId": "[variables('_ProjectId')]",
                   "FlowLogsConfigName": "FlowLogsConfigName",
-                  "Action": "Action"
+                  "Permission": "Permission"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "GCP VPC Flow Logs configuration {{FlowLogsConfigName}} {{Action}} in project {{ProjectId}}.\nThis action reduces network traffic visibility and may indicate an attempt to evade detection.    \nInvestigate immediately to determine if this action was authorized and assess the security implications.\nReview recent network activity before the logs were disabled for signs of malicious behavior.",
@@ -1507,7 +1562,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDNSSECDisabledForDNSZone_AnalyticalRules Analytics Rule with template version 3.0.2",
+        "description": "GCPDNSSECDisabledForDNSZone_AnalyticalRules Analytics Rule with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -1558,7 +1613,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "PrincipalEmail",
@@ -1572,46 +1626,47 @@
                         "columnName": "AccountUPNSuffix",
                         "identifier": "UPNSuffix"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "CallerIpAddress",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
-                        "columnName": "[variables('_ProjectId')]",
+                        "columnName": "ProjectId",
                         "identifier": "Name"
                       },
                       {
                         "columnName": "ResourceName",
                         "identifier": "InstanceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   },
                   {
-                    "entityType": "DNS",
                     "fieldMappings": [
                       {
                         "columnName": "DnsName",
                         "identifier": "DomainName"
                       }
-                    ]
+                    ],
+                    "entityType": "DNS"
                   }
                 ],
                 "customDetails": {
-                  "Visibility": "Visibility",
                   "ResourceName": "ResourceName",
-                  "ProjectId": "[variables('_ProjectId')]",
-                  "ZoneId": "[variables('_ZoneId')]",
+                  "Visibility": "Visibility",
+                  "ZoneId": "ZoneId",
                   "ManagedZoneName": "ManagedZoneName",
+                  "ProjectId": "ProjectId",
                   "DnsName": "DnsName"
                 },
                 "alertDetailsOverride": {
@@ -1671,7 +1726,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPDataAccessLoggingDisabled_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "GCPDataAccessLoggingDisabled_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -1756,7 +1811,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPFirewallOperationsByPrincipal_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "GCPFirewallOperationsByPrincipal_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
@@ -1841,7 +1896,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPOrgPolicyModificationsByPrincipal_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "GCPOrgPolicyModificationsByPrincipal_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
@@ -1926,7 +1981,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPVpnTunnelCreation_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "GCPVpnTunnelCreation_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
@@ -2011,7 +2066,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GCPVpnTunnelDeletion_HuntingQueries Hunting Query with template version 3.0.2",
+        "description": "GCPVpnTunnelDeletion_HuntingQueries Hunting Query with template version 3.0.3",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
@@ -2092,7 +2147,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.2",
+        "version": "3.0.3",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Google Cloud Platform Audit Logs",
