@@ -1,0 +1,500 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Data443 Risk Mitigation, Inc. - support@data443.com",
+    "comments": "Solution template for Cyren-CrowdStrike-ThreatIntelligence"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@data443.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Cyren-CrowdStrike-ThreatIntelligence",
+    "_solutionVersion": "3.0.1",
+    "solutionId": "data443riskmitigationinc1761580347231.azure-sentinel-solution-cyren-cs-ioc-automation",
+    "_solutionId": "[variables('solutionId')]",
+    "Playbooks": "Playbooks",
+    "_Playbooks": "[variables('Playbooks')]",
+    "blanks": "[replace('b', 'b', '')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Playbooks",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Playbooks Playbook with template version 3.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "logicAppName": {
+              "type": "string",
+              "defaultValue": "pb-cyren-to-crowdstrike"
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "Cyren_JwtToken": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Cyren CCF JWT Bearer token for authentication"
+              }
+            },
+            "Cyren_FeedId": {
+              "type": "string",
+              "defaultValue": "ip_reputation",
+              "metadata": {
+                "description": "Cyren CCF Feed ID (e.g. ip_reputation, malware_urls)"
+              }
+            },
+            "CrowdStrike_ClientId": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "CrowdStrike OAuth2 Client ID"
+              }
+            },
+            "CrowdStrike_ClientSecret": {
+              "type": "securestring",
+              "defaultValue": "",
+              "metadata": {
+                "description": "CrowdStrike OAuth2 Client Secret"
+              }
+            },
+            "CrowdStrike_BaseUrl": {
+              "type": "string",
+              "defaultValue": "https://api.crowdstrike.com",
+              "metadata": {
+                "description": "CrowdStrike API Base URL (e.g. https://api.crowdstrike.com or https://api.us-2.crowdstrike.com)"
+              }
+            }
+          },
+          "variables": {
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2019-05-01",
+              "name": "[[parameters('logicAppName')]",
+              "location": "[[parameters('location')]",
+              "properties": {
+                "state": "Enabled",
+                "parameters": {
+                  "Cyren_JwtToken": {
+                    "value": "[[parameters('Cyren_JwtToken')]"
+                  },
+                  "Cyren_FeedId": {
+                    "value": "[[parameters('Cyren_FeedId')]"
+                  },
+                  "CrowdStrike_ClientId": {
+                    "value": "[[parameters('CrowdStrike_ClientId')]"
+                  },
+                  "CrowdStrike_ClientSecret": {
+                    "value": "[[parameters('CrowdStrike_ClientSecret')]"
+                  },
+                  "CrowdStrike_BaseUrl": {
+                    "value": "[[parameters('CrowdStrike_BaseUrl')]"
+                  }
+                },
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "Cyren_BaseUrl": {
+                      "type": "string",
+                      "defaultValue": "https://api-feeds.cyren.com/v1/feed/data"
+                    },
+                    "Cyren_JwtToken": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    },
+                    "Cyren_FeedId": {
+                      "type": "string",
+                      "defaultValue": "ip_reputation"
+                    },
+                    "CrowdStrike_BaseUrl": {
+                      "type": "string",
+                      "defaultValue": "https://api.crowdstrike.com"
+                    },
+                    "CrowdStrike_ClientId": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    },
+                    "CrowdStrike_ClientSecret": {
+                      "type": "string",
+                      "defaultValue": "[variables('blanks')]"
+                    }
+                  },
+                  "triggers": {
+                    "Recurrence": {
+                      "type": "Recurrence",
+                      "recurrence": {
+                        "frequency": "Minute",
+                        "interval": 360,
+                        "timeZone": "UTC"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Initialize_PersistentToken": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "persistentToken",
+                            "type": "string",
+                            "value": "[variables('blanks')]"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_ContinuePolling": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "continuePolling",
+                            "type": "boolean",
+                            "value": true
+                          }
+                        ]
+                      },
+                      "runAfter": {
+                        "Initialize_PersistentToken": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Get_CrowdStrike_Token": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{concat(parameters('CrowdStrike_BaseUrl'), '/oauth2/token')}",
+                        "headers": {
+                          "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        "body": "client_id=@{parameters('CrowdStrike_ClientId')}&client_secret=@{parameters('CrowdStrike_ClientSecret')}"
+                      },
+                      "runAfter": {
+                        "Initialize_ContinuePolling": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Poll_Cyren_Feed": {
+                      "type": "Until",
+                      "expression": "@equals(variables('continuePolling'), false)",
+                      "limit": {
+                        "count": 10,
+                        "timeout": "PT1H"
+                      },
+                      "runAfter": {
+                        "Get_CrowdStrike_Token": [
+                          "Succeeded"
+                        ]
+                      },
+                      "actions": {
+                        "Get_Cyren_Indicators": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "GET",
+                            "uri": "@{concat(parameters('Cyren_BaseUrl'), '?feedId=', parameters('Cyren_FeedId'), '&count=1000&queryWindowInMin=360', if(equals(variables('persistentToken'), ''), '', concat('&token=', variables('persistentToken'))))}",
+                            "headers": {
+                              "Authorization": "@{concat('Bearer ', parameters('Cyren_JwtToken'))}",
+                              "Accept": "application/json"
+                            }
+                          }
+                        },
+                        "Check_Response_Has_Data": {
+                          "type": "If",
+                          "expression": {
+                            "and": [
+                              {
+                                "greater": [
+                                  "@length(body('Filter_Empty_Lines'))",
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          "runAfter": {
+                            "Filter_Empty_Lines": [
+                              "Succeeded"
+                            ]
+                          },
+                          "actions": {
+                            "For_Each_Indicator": {
+                              "type": "Foreach",
+                              "foreach": "@body('Filter_Empty_Lines')",
+                              "runtimeConfiguration": {
+                                "concurrency": {
+                                  "repetitions": 1
+                                }
+                              },
+                              "actions": {
+                                "Post_IOC_to_CrowdStrike": {
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "POST",
+                                    "uri": "@{concat(parameters('CrowdStrike_BaseUrl'), '/iocs/entities/indicators/v1?ignore_warnings=true')}",
+                                    "headers": {
+                                      "Content-Type": "application/json",
+                                      "Authorization": "@{concat('Bearer ', body('Get_CrowdStrike_Token')?['access_token'])}"
+                                    },
+                                    "body": {
+                                      "indicators": [
+                                        {
+                                          "type": "ipv4",
+                                          "value": "@{item()?['identifier']}",
+                                          "action": "detect",
+                                          "severity": "medium",
+                                          "source": "Cyren Threat Intelligence",
+                                          "description": "Cyren @{parameters('Cyren_FeedId')} | Risk: @{coalesce(item()?['detection']?['risk'], 'N/A')} | Last Seen: @{coalesce(item()?['last_seen'], 'N/A')}",
+                                          "expiration": "@{addDays(utcNow(), 30)}",
+                                          "platforms": [
+                                            "windows",
+                                            "mac",
+                                            "linux"
+                                          ],
+                                          "tags": [
+                                            "cyren",
+                                            "@{parameters('Cyren_FeedId')}"
+                                          ],
+                                          "applied_globally": true
+                                        }
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "No_Data_Stop_Polling": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                  "name": "continuePolling",
+                                  "value": false
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Check_Pagination_Token": {
+                          "type": "If",
+                          "expression": {
+                            "and": [
+                              {
+                                "less": [
+                                  "@length(body('Filter_Empty_Lines'))",
+                                  1000
+                                ]
+                              }
+                            ]
+                          },
+                          "runAfter": {
+                            "Check_Response_Has_Data": [
+                              "Succeeded"
+                            ]
+                          },
+                          "actions": {
+                            "Update_PersistentToken": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "persistentToken",
+                                "value": "@{outputs('Extract_Last_Offset')}"
+                              },
+                              "runAfter": {
+                                "Extract_Last_Offset": [
+                                  "Succeeded"
+                                ]
+                              }
+                            },
+                            "Extract_Last_Offset": {
+                              "type": "Compose",
+                              "inputs": "@string(json(last(body('Filter_Empty_Lines')))?['offset'])"
+                            }
+                          },
+                          "else": {
+                            "actions": {
+                              "Stop_Polling": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                  "name": "continuePolling",
+                                  "value": false
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "Split_NDJSON_Lines": {
+                          "type": "Compose",
+                          "inputs": "@split(trim(string(body('Get_Cyren_Indicators'))), decodeUriComponent('%0A'))",
+                          "runAfter": {
+                            "Get_Cyren_Indicators": [
+                              "Succeeded"
+                            ]
+                          }
+                        },
+                        "Filter_Empty_Lines": {
+                          "type": "Query",
+                          "inputs": {
+                            "from": "@outputs('Split_NDJSON_Lines')",
+                            "where": "@not(equals(trim(item()), ''))"
+                          },
+                          "runAfter": {
+                            "Split_NDJSON_Lines": [
+                              "Succeeded"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": {
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyren-CrowdStrike-ThreatIntelligence",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Data443 Risk Mitigation, Inc.",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Data443 Risk Mitigation, Inc.",
+                  "email": "support@data443.com",
+                  "tier": "Partner",
+                  "link": "https://www.data443.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "Playbook",
+        "displayName": "Playbooks",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Cyren-CrowdStrike-ThreatIntelligence",
+        "publisherDisplayName": "Data443 Risk Mitigation, Inc.",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyren-CrowdStrike-ThreatIntelligence/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cyren CrowdStrike Threat Intelligence solution polls Cyren CCF threat intelligence feeds (IP reputation, malware URLs) and pushes IOCs to CrowdStrike Falcon's Custom IOC API for detection and response.</p>\n<p><strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Workbooks/Images/Logos/cyren_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cyren-CrowdStrike-ThreatIntelligence",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Data443 Risk Mitigation, Inc.",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Data443 Risk Mitigation, Inc.",
+          "email": "support@data443.com",
+          "tier": "Partner",
+          "link": "https://www.data443.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Playbooks')]",
+              "version": "[variables('playbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-02-17",
+        "providers": [
+          "Data443 Risk Mitigation, Inc.",
+          "Cyren"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
