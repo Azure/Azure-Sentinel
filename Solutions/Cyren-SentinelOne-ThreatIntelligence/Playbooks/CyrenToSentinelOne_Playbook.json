@@ -1,0 +1,393 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "pb-cyren-to-sentinelone"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "Cyren_JwtToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Cyren CCF JWT Bearer Token for API authentication"
+      }
+    },
+    "Cyren_FeedId": {
+      "type": "string",
+      "defaultValue": "ip_reputation",
+      "metadata": {
+        "description": "Cyren CCF Feed ID (e.g. ip_reputation, malware_urls)"
+      }
+    },
+    "SentinelOne_ApiToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SentinelOne API Token"
+      }
+    },
+    "SentinelOne_BaseUrl": {
+      "type": "string",
+      "defaultValue": "https://usea1-001.sentinelone.net",
+      "metadata": {
+        "description": "SentinelOne Console URL (e.g. https://usea1-001.sentinelone.net)"
+      }
+    },
+    "SentinelOne_AccountId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SentinelOne Account ID"
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics"
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "hidden-SentinelTemplateName": "CyrenToSentinelOne",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "hidden-SentinelWorkspaceId": "[variables('workspaceResourceId')]"
+      },
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "Cyren_JwtToken": {
+            "value": "[parameters('Cyren_JwtToken')]"
+          },
+          "Cyren_FeedId": {
+            "value": "[parameters('Cyren_FeedId')]"
+          },
+          "SentinelOne_ApiToken": {
+            "value": "[parameters('SentinelOne_ApiToken')]"
+          },
+          "SentinelOne_BaseUrl": {
+            "value": "[parameters('SentinelOne_BaseUrl')]"
+          },
+          "SentinelOne_AccountId": {
+            "value": "[parameters('SentinelOne_AccountId')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "Cyren_ApiUrl": {
+              "type": "string",
+              "defaultValue": "https://api-feeds.cyren.com/v1/feed/data"
+            },
+            "Cyren_JwtToken": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "Cyren_FeedId": {
+              "type": "string",
+              "defaultValue": "ip_reputation"
+            },
+            "SentinelOne_BaseUrl": {
+              "type": "string",
+              "defaultValue": "https://usea1-001.sentinelone.net"
+            },
+            "SentinelOne_ApiToken": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "SentinelOne_AccountId": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Hour",
+                "interval": 6,
+                "timeZone": "UTC"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_PersistentToken": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "persistentToken",
+                    "type": "string",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            "Initialize_HasMoreData": {
+              "type": "InitializeVariable",
+              "runAfter": {
+                "Initialize_PersistentToken": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "hasMoreData",
+                    "type": "boolean",
+                    "value": true
+                  }
+                ]
+              }
+            },
+            "List_STAR_Rules": {
+              "type": "Http",
+              "runAfter": {
+                "Initialize_HasMoreData": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat(parameters('SentinelOne_BaseUrl'), '/web/api/v2.1/cloud-detection/rules?accountIds=', parameters('SentinelOne_AccountId'))}",
+                "headers": {
+                  "Content-Type": "application/json",
+                  "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                }
+              }
+            },
+            "Check_Rule_Exists": {
+              "type": "If",
+              "runAfter": {
+                "List_STAR_Rules": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@contains(string(body('List_STAR_Rules')), 'Cyren IOC Detection')",
+                      false
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Create_STAR_Rule": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{concat(parameters('SentinelOne_BaseUrl'), '/web/api/v2.1/cloud-detection/rules')}",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                    },
+                    "body": {
+                      "filter": {
+                        "accountIds": [
+                          "@{parameters('SentinelOne_AccountId')}"
+                        ]
+                      },
+                      "data": {
+                        "name": "Cyren IOC Detection",
+                        "s1ql": "IndicatorSource = \"Cyren\"",
+                        "queryType": "events",
+                        "severity": "High",
+                        "status": "Active",
+                        "expirationMode": "Permanent",
+                        "treatAsThreat": "Suspicious"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Paginate_Cyren_Feed": {
+              "type": "Until",
+              "runAfter": {
+                "Check_Rule_Exists": [
+                  "Succeeded"
+                ]
+              },
+              "expression": "@equals(variables('hasMoreData'), false)",
+              "limit": {
+                "count": 10,
+                "timeout": "PT1H"
+              },
+              "actions": {
+                "Get_Cyren_Feed_Page": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{concat(parameters('Cyren_ApiUrl'), '?feedId=', encodeUriComponent(parameters('Cyren_FeedId')), '&count=1000&queryWindowInMin=360', if(equals(variables('persistentToken'), ''), '', concat('&token=', encodeUriComponent(variables('persistentToken')))))}",
+                    "headers": {
+                      "Authorization": "@{concat('Bearer ', parameters('Cyren_JwtToken'))}",
+                      "Accept": "application/json",
+                      "User-Agent": "Microsoft-Sentinel-Cyren-SentinelOne/1.0"
+                    }
+                  }
+                },
+                "Check_Has_Data": {
+                  "type": "If",
+                  "runAfter": {
+                    "Filter_Empty_Lines": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@length(body('Filter_Empty_Lines'))",
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "For_Each_Indicator": {
+                      "type": "Foreach",
+                      "foreach": "@body('Filter_Empty_Lines')",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      },
+                      "actions": {
+                        "Post_IOC_to_SentinelOne": {
+                          "type": "Http",
+                          "inputs": {
+                            "method": "POST",
+                            "uri": "@{concat(parameters('SentinelOne_BaseUrl'), '/web/api/v2.1/threat-intelligence/iocs')}",
+                            "headers": {
+                              "Content-Type": "application/json",
+                              "Authorization": "@{concat('ApiToken ', parameters('SentinelOne_ApiToken'))}"
+                            },
+                            "body": {
+                              "filter": {
+                                "accountIds": [
+                                  "@{parameters('SentinelOne_AccountId')}"
+                                ]
+                              },
+                              "data": [
+                                {
+                                  "value": "@{item()?['identifier']}",
+                                  "type": "IPV4",
+                                  "source": "Cyren",
+                                  "method": "EQUALS",
+                                  "validUntil": "@{addDays(utcNow(), 90)}",
+                                  "externalId": "@{concat('cyren-', parameters('Cyren_FeedId'), '-', coalesce(item()?['identifier'], 'unknown'))}",
+                                  "description": "@{concat('Cyren ', parameters('Cyren_FeedId'), ': Risk=', coalesce(string(item()?['detection']?['risk']), 'N/A'), ' | Categories=', coalesce(string(item()?['detection']?['category']), 'N/A'), ' | Action=', coalesce(item()?['action'], 'N/A'), ' | First Seen=', coalesce(item()?['first_seen'], 'N/A'), ' | Last Seen=', coalesce(item()?['last_seen'], 'N/A'))}"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Update_PersistentToken": {
+                      "type": "SetVariable",
+                      "runAfter": {
+                        "Extract_Last_Offset": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "name": "persistentToken",
+                        "value": "@{outputs('Extract_Last_Offset')}"
+                      }
+                    },
+                    "Check_Token_Empty": {
+                      "type": "If",
+                      "runAfter": {
+                        "Update_PersistentToken": [
+                          "Succeeded"
+                        ]
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "less": [
+                              "@length(body('Filter_Empty_Lines'))",
+                              1000
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "End_Pagination": {
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "hasMoreData",
+                            "value": false
+                          }
+                        }
+                      }
+                    },
+                    "Extract_Last_Offset": {
+                      "type": "Compose",
+                      "inputs": "@string(json(last(body('Filter_Empty_Lines')))?['offset'])",
+                      "runAfter": {
+                        "For_Each_Indicator": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "No_More_Data": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "hasMoreData",
+                          "value": false
+                        }
+                      }
+                    }
+                  }
+                },
+                "Split_NDJSON_Lines": {
+                  "type": "Compose",
+                  "inputs": "@split(trim(string(body('Get_Cyren_Feed_Page'))), decodeUriComponent('%0A'))",
+                  "runAfter": {
+                    "Get_Cyren_Feed_Page": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Filter_Empty_Lines": {
+                  "type": "Query",
+                  "inputs": {
+                    "from": "@outputs('Split_NDJSON_Lines')",
+                    "where": "@not(equals(trim(item()), ''))"
+                  },
+                  "runAfter": {
+                    "Split_NDJSON_Lines": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}
