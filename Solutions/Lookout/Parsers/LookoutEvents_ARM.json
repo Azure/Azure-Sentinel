@@ -1,0 +1,86 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "3.1.0",
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics workspace where Microsoft Sentinel is enabled"
+            }
+        },
+        "workspaceLocation": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location of the Log Analytics workspace"
+            }
+        }
+    },
+    "variables": {
+        "parserName": "[concat(parameters('workspace'), '/LookoutEvents')]",
+        "parserId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'LookoutEvents')]",
+        "parserContentId": "37da203d-4edd-429e-83cd-fccf11e60c20",
+        "parserVersion": "3.1.0",
+        "parserQuery": "// Parser for Lookout MRA v2 Streaming API (/mra/stream/v2/events)\n// Supports: THREAT, DEVICE, SMISHING_ALERT, AUDIT event types\nlet LookoutEvents_view = view () { \n    LookoutMtdV2_CL\n    | extend \n        // Core Event Fields\n        EventVendor = \"Lookout\",\n        EventProduct = \"Lookout Mobile Risk API v2\",\n        EventType = log_type,\n        EventId = id,\n        EventTime = TimeGenerated,\n        ChangeType = change_type,\n        \n        // === THREAT EVENT FIELDS (from threat.* object) ===\n        ThreatId = tostring(threat.guid),\n        ThreatType = tostring(threat.type),\n        ThreatAction = tostring(threat.action),\n        ThreatSeverity = tostring(threat.severity),\n        ThreatClassification = tostring(threat.classification),\n        ThreatClassifications = tostring(threat.classifications),\n        ThreatRisk = tostring(threat.risk),\n        ThreatStatus = tostring(threat.status),\n        ThreatDescription = tostring(threat.description),\n        ThreatApplicationName = tostring(threat.application_name),\n        ThreatPackageName = tostring(threat.package_name),\n        ThreatPackageSha = tostring(threat.package_sha),\n        ThreatNetworkSSID = tostring(threat.details.network_ssid),\n        // Threat's device info (for THREAT events)\n        ThreatDeviceEmail = tostring(threat.device.email),\n        ThreatDevicePlatform = tostring(threat.device.platform),\n        ThreatDeviceGuid = tostring(threat.device.guid),\n        \n        // === DEVICE EVENT FIELDS (from device.* object) ===\n        // Supports BOTH: REST API (flat: device.email_address) AND Streaming API (nested: device.info.email)\n        DeviceGuid = coalesce(tostring(threat.device.guid), tostring(device.guid)),\n        DeviceEmailAddress = coalesce(tostring(threat.device.email), tostring(device.info.email), tostring(device.email_address)),\n        DevicePlatform = coalesce(tostring(threat.device.platform), tostring(device.platform)),\n        DeviceOSVersion = coalesce(tostring(threat.device.os_version), tostring(device.software.os_version), tostring(device.os_version)),\n        DeviceManufacturer = coalesce(tostring(threat.device.manufacturer), tostring(device.hardware.manufacturer), tostring(device.manufacturer)),\n        DeviceModel = coalesce(tostring(threat.device.model), tostring(device.hardware.model), tostring(device.model)),\n        DeviceActivationStatus = coalesce(tostring(threat.device.activation_status), tostring(device.status.activation_status), tostring(device.activation_status)),\n        DeviceSecurityStatus = coalesce(tostring(threat.device.security_status), tostring(device.security_status)),\n        DeviceProfileType = tostring(device.profile_type),\n        DeviceSDKVersion = coalesce(tostring(device.software.sdk_version), tostring(device.sdk_version)),\n        // Timestamps (REST API fields)\n        DeviceActivatedAt = todatetime(device.activated_at),\n        DeviceDeactivatedAt = todatetime(device.deactivated_at),\n        DeviceCheckinTime = todatetime(device.checkin_time),\n        DeviceGroupGuid = tostring(device.device_group_guid),\n        DeviceCustomerId = tostring(device.customer_device_id),\n        // MDM fields - support both REST API (device.details.*) and Streaming API (device.info.*)\n        MDMConnectorId = coalesce(toint(device.details.mdm_connector_id), toint(device.info.mdm_connector_id)),\n        MDMConnectorUuid = tostring(device.details.mdm_connector_uuid),\n        MDMExternalId = coalesce(tostring(device.details.external_id), tostring(device.info.external_id)),\n        // Client app fields (REST API)\n        ClientLookoutSDKVersion = tostring(device.client.lookout_sdk_version),\n        ClientOTAVersion = tostring(device.client.ota_version),\n        ClientPackageName = tostring(device.client.package_name),\n        ClientPackageVersion = tostring(device.client.package_version),\n        DeviceParentGuid = tostring(device.parent_status.parent_device_guid),\n        \n        // === SMISHING_ALERT EVENT FIELDS (from smishing_alert.* object) ===\n        SmishingAlertId = tostring(smishing_alert.id),\n        SmishingAlertType = tostring(smishing_alert.type),\n        SmishingAlertSeverity = tostring(smishing_alert.severity),\n        SmishingAlertDescription = tostring(smishing_alert.description),\n        SmishingAlertCategory = tostring(smishing_alert.category),\n        SmishingAlertURL = tostring(smishing_alert.url),\n        \n        // === AUDIT EVENT FIELDS (from audit.*, actor.*, target.* objects) ===\n        AuditType = tostring(audit.type),\n        AuditAttributeChanges = tostring(audit.attribute_changes),\n        ActorType = tostring(actor.type),\n        ActorGuid = tostring(actor.guid),\n        TargetType = tostring(target.type),\n        TargetGuid = tostring(target.guid),\n        TargetEmailAddress = tostring(target.email_address),\n        TargetPlatform = tostring(target.platform),\n        TargetOSVersion = tostring(target.os_version),\n        TargetManufacturer = tostring(target.manufacturer),\n        TargetModel = tostring(target.model)\n        \n    // Event Priority for alerting\n    | extend EventPriority = case(\n        log_type == \"THREAT\", 1,\n        log_type == \"SMISHING_ALERT\", 2,\n        log_type == \"DEVICE\", 3,\n        log_type == \"AUDIT\", 4,\n        5\n    )\n    \n    // Security Risk Level\n    | extend SecurityRiskLevel = case(\n        ThreatSeverity in (\"CRITICAL\", \"HIGH\") or SmishingAlertSeverity in (\"CRITICAL\", \"HIGH\"), \"High\",\n        ThreatSeverity == \"MEDIUM\" or SmishingAlertSeverity == \"MEDIUM\", \"Medium\",\n        ThreatSeverity == \"LOW\" or SmishingAlertSeverity == \"LOW\", \"Low\",\n        \"Unknown\"\n    )\n    \n    // Device Compliance Status\n    | extend DeviceComplianceStatus = case(\n        DeviceActivationStatus == \"ACTIVE\", \"Compliant\",\n        DeviceActivationStatus == \"PENDING\", \"Pending\",\n        DeviceActivationStatus == \"INACTIVE\", \"Non-Compliant\",\n        \"Unknown\"\n    )\n    \n    | project\n        TimeGenerated,\n        EventVendor,\n        EventProduct,\n        EventType,\n        EventId,\n        EventTime,\n        ChangeType,\n        EventPriority,\n        SecurityRiskLevel,\n        EnterpriseGuid = enterprise_guid,\n        \n        // Device fields\n        DeviceGuid,\n        DeviceEmailAddress,\n        DevicePlatform,\n        DeviceOSVersion,\n        DeviceManufacturer,\n        DeviceModel,\n        DeviceActivationStatus,\n        DeviceSecurityStatus,\n        DeviceComplianceStatus,\n        DeviceProfileType,\n        DeviceSDKVersion,\n        DeviceActivatedAt,\n        DeviceDeactivatedAt,\n        DeviceCheckinTime,\n        DeviceGroupGuid,\n        DeviceCustomerId,\n        \n        // MDM Integration\n        MDMConnectorId,\n        MDMConnectorUuid,\n        MDMExternalId,\n        \n        // Client Application\n        ClientLookoutSDKVersion,\n        ClientOTAVersion,\n        ClientPackageName,\n        ClientPackageVersion,\n        \n        // Threat fields\n        ThreatId,\n        ThreatType,\n        ThreatAction,\n        ThreatSeverity,\n        ThreatClassification,\n        ThreatClassifications,\n        ThreatRisk,\n        ThreatStatus,\n        ThreatDescription,\n        ThreatApplicationName,\n        ThreatPackageName,\n        ThreatPackageSha,\n        ThreatNetworkSSID,\n        \n        // Smishing fields\n        SmishingAlertId,\n        SmishingAlertType,\n        SmishingAlertSeverity,\n        SmishingAlertDescription,\n        SmishingAlertCategory,\n        SmishingAlertURL,\n        \n        // Audit fields\n        AuditType,\n        AuditAttributeChanges,\n        ActorType,\n        ActorGuid,\n        \n        // Target fields\n        TargetType,\n        TargetGuid,\n        TargetEmailAddress,\n        TargetPlatform,\n        TargetOSVersion,\n        TargetManufacturer,\n        TargetModel,\n        \n        // Raw objects for advanced analysis\n        device,\n        threat,\n        audit,\n        smishing_alert,\n        target,\n        actor\n};\nLookoutEvents_view"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2022-10-01",
+            "name": "[variables('parserName')]",
+            "location": "[parameters('workspaceLocation')]",
+            "properties": {
+                "eTag": "*",
+                "displayName": "Parser for LookoutEvents",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "LookoutEvents",
+                "query": "[variables('parserQuery')]",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                    {
+                        "name": "description",
+                        "value": "Parser for Lookout MRA v2 Streaming API - Supports THREAT, DEVICE, SMISHING_ALERT, AUDIT event types"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2022-01-01-preview",
+            "location": "[parameters('workspaceLocation')]",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', concat('Parser-', last(split(variables('parserId'), '/'))))]",
+            "dependsOn": [
+                "[variables('parserId')]"
+            ],
+            "properties": {
+                "parentId": "[variables('parserId')]",
+                "contentId": "[variables('parserContentId')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion')]",
+                "source": {
+                    "name": "Lookout",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "Lookout"
+                },
+                "support": {
+                    "name": "Lookout",
+                    "tier": "Partner",
+                    "link": "https://www.lookout.com/support"
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "parserId": {
+            "type": "string",
+            "value": "[variables('parserId')]"
+        },
+        "parserAlias": {
+            "type": "string",
+            "value": "LookoutEvents"
+        }
+    }
+}
