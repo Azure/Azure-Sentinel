@@ -48,14 +48,12 @@ query: |
     | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
   // Build a dynamic list of malicious URLs
   let URL_TI_list =
-    todynamic(
-      toscalar(
+    toscalar(
         URL_TI
         | summarize NIoCs = dcount(MaliciousUrl),
                     Urls = make_set(MaliciousUrl)
         | project Urls = iff(NIoCs > HAS_ANY_MAX, dynamic([]), Urls)
-      )
-    );
+      );
   // Match against ASIM Web Session events
   URL_TI
   | join kind=innerunique (
@@ -66,9 +64,10 @@ query: |
     ) on $left.MaliciousUrl == $right.RequestedUrl
   | where Event_TimeGenerated < ValidUntil
   | summarize Event_TimeGenerated = arg_max(Event_TimeGenerated, *) by IndicatorId, RequestedUrl
-  | extend Description = tostring(parse_json(Data).description)
-  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
-  | extend ThreatType = tostring(Data.indicator_types[0])
+  | extend ParsedData = parse_json(Data)
+  | extend Description = tostring(ParsedData.description)
+  | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(ParsedData.labels))
+  | extend ThreatType = tostring(ParsedData.indicator_types[0])
   | project
       Event_TimeGenerated,
       SrcIpAddr,
