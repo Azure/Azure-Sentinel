@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
+| 3.0.10      | 14-02-2026                     | Updated links to remove review.learn.                                 |
 | 3.0.9       | 06-02-2026                     | Updated the relevant techniques in the **hunting queries**.	       |
 | 3.0.8       | 23-09-2025                     | Removed duplicate and redundant query blocks that previously handled different eps ranges, reducing code complexity and improving maintainability.
 | 3.0.7       | 4-07-2025                      | Summary rules added and updated requiredDataConnectors.			       |
