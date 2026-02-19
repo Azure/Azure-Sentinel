@@ -2,25 +2,21 @@
 
 ## Version 0.4.0
 
-- (2025-06-20) updating version - [PR #12279](https://github.com/Azure/Azure-Sentinel/pull/12279)
-
-## Version 0.3.2
-
-- (2025-06-05) Updated squid proxy ASIM parser - [PR #12279](https://github.com/Azure/Azure-Sentinel/pull/12279)
+- (2025-06-20) Updated squid proxy ASIM parser - [PR #12279](https://github.com/Azure/Azure-Sentinel/pull/12279)
 
 ## Version 0.3.1
 
-- (2022-12-29) Version update - [PR #6996](https://github.com/Azure/Azure-Sentinel/pull/6996)
+- (2022-12-29) Asim/web project away - [PR #6996](https://github.com/Azure/Azure-Sentinel/pull/6996)
 
 ## Version 0.3
 
-- (2022-06-15) Update version numbers - [PR #5319](https://github.com/Azure/Azure-Sentinel/pull/5319)
+- (2022-06-15) Asim/fixing qaws errors - [PR #5319](https://github.com/Azure/Azure-Sentinel/pull/5319)
 
 ## Version 0.2
 
-- (2022-01-13) Update version numbers - [PR #3911](https://github.com/Azure/Azure-Sentinel/pull/3911)
+- (2022-01-16) Asim/fix web parsers - [PR #3911](https://github.com/Azure/Azure-Sentinel/pull/3911)
 
 ## Version 0.1
 
-- (2021-12-06) Squid ASIM parser - [PR #3701](https://github.com/Azure/Azure-Sentinel/pull/3701)
+- (2021-12-14) Dev/normalization/proxy parsers - [PR #3701](https://github.com/Azure/Azure-Sentinel/pull/3701)
 

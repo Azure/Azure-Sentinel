@@ -1,12 +1,8 @@
 # Changelog for ASimNetworkSessionMicrosoftSysmon.yaml
 
-## Version 0.2.1
-
-- (2024-06-05) ASimNetworkSessionMicrosoftSysmon.yaml - [PR #10590](https://github.com/Azure/Azure-Sentinel/pull/10590)
-
 ## Version 0.2.0
 
-- (2024-07-19) updated - [PR #10590](https://github.com/Azure/Azure-Sentinel/pull/10590)
+- (2024-07-19) ASimNetworkSessionMicrosoftSysmon.yaml-42 - [PR #10590](https://github.com/Azure/Azure-Sentinel/pull/10590)
 
 ## Version 0.1
 
@@ -14,5 +10,5 @@
 
 ## Version 0.0.2
 
-- (2023-01-09) Create ASimNetworkSessionMicrosoftSysmon.yaml - [PR #7066](https://github.com/Azure/Azure-Sentinel/pull/7066)
+- (2023-01-12) Create ASimNetworkSessionMicrosoftSysmon.yaml - [PR #7066](https://github.com/Azure/Azure-Sentinel/pull/7066)
 
