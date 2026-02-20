@@ -1,0 +1,114 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0",
+    "metadata": {
+        "title": "SOCRadar-Audit-Infrastructure",
+        "description": "Creates Log Analytics custom table and Data Collection Rule for SOCRadar audit logging",
+        "version": "1.0.0",
+        "author": "SOCRadar",
+        "lastUpdateTime": "2026-02-19T00:00:00.000Z"
+    },
+    "parameters": {
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": { "description": "Microsoft Sentinel Log Analytics Workspace Name" }
+        },
+        "WorkspaceLocation": {
+            "type": "string",
+            "metadata": { "description": "Location/region of the Log Analytics workspace (e.g., centralus, northeurope)" }
+        },
+        "TableRetentionDays": {
+            "type": "int",
+            "defaultValue": 30,
+            "minValue": 7,
+            "maxValue": 730,
+            "metadata": { "description": "Retention period for audit logs in days (7-730)" }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('WorkspaceName'), '/SOCRadarAuditLog_CL')]",
+            "properties": {
+                "schema": {
+                    "name": "SOCRadarAuditLog_CL",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Event timestamp" },
+                        { "name": "EventType", "type": "string", "description": "Type: AlarmImported, AlarmSynced, Error" },
+                        { "name": "AlarmId", "type": "string", "description": "SOCRadar alarm ID" },
+                        { "name": "IncidentId", "type": "string", "description": "Sentinel incident ID" },
+                        { "name": "AlarmType", "type": "string", "description": "Main alarm type" },
+                        { "name": "Status", "type": "string", "description": "Alarm status" },
+                        { "name": "Severity", "type": "string", "description": "Alarm severity" },
+                        { "name": "Message", "type": "string", "description": "Details or error message" },
+                        { "name": "FullAlarmJson", "type": "dynamic", "description": "Complete SOCRadar alarm object" }
+                    ]
+                },
+                "retentionInDays": "[parameters('TableRetentionDays')]",
+                "plan": "Analytics"
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2023-03-11",
+            "name": "SOCRadar-Audit-DCR",
+            "location": "[parameters('WorkspaceLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), 'SOCRadarAuditLog_CL')]"
+            ],
+            "kind": "Direct",
+            "properties": {
+                "description": "DCR for SOCRadar audit log ingestion",
+                "streamDeclarations": {
+                    "Custom-SOCRadarAuditLog_CL": {
+                        "columns": [
+                            { "name": "TimeGenerated", "type": "datetime" },
+                            { "name": "EventType", "type": "string" },
+                            { "name": "AlarmId", "type": "string" },
+                            { "name": "IncidentId", "type": "string" },
+                            { "name": "AlarmType", "type": "string" },
+                            { "name": "Status", "type": "string" },
+                            { "name": "Severity", "type": "string" },
+                            { "name": "Message", "type": "string" },
+                            { "name": "FullAlarmJson", "type": "dynamic" }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "workspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [ "Custom-SOCRadarAuditLog_CL" ],
+                        "destinations": [ "workspace" ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-SOCRadarAuditLog_CL"
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "tableName": { "type": "string", "value": "SOCRadarAuditLog_CL" },
+        "dcrName": { "type": "string", "value": "SOCRadar-Audit-DCR" },
+        "dcrId": { "type": "string", "value": "[resourceId('Microsoft.Insights/dataCollectionRules', 'SOCRadar-Audit-DCR')]" },
+        "streamName": { "type": "string", "value": "Custom-SOCRadarAuditLog_CL" },
+        "logsIngestionEndpoint": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'SOCRadar-Audit-DCR'), '2023-03-11').endpoints.logsIngestion]"
+        },
+        "dcrImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', 'SOCRadar-Audit-DCR'), '2023-03-11').immutableId]"
+        }
+    }
+}
