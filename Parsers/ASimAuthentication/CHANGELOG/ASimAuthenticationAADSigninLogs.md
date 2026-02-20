@@ -1,8 +1,16 @@
 # Changelog for ASimAuthenticationAADSigninLogs.yaml
 
+## Version 0.4.1
+
+- (2026-02-24) [ASIM] Authentication - EntraID enumeration changes - [PR #13571](https://github.com/Azure/Azure-Sentinel/pull/13571)
+- Enumeration change from `Entra ID` to `AAD` for EventProduct
+- Enumeration change from `EntraID` to `AADID` for TargetUserIdType
+- 
 ## Version 0.4.0
 
 - (2026-01-14) [ASIM] Authentication AADSigninLogs parser rewrite - [PR #13409](https://github.com/Azure/Azure-Sentinel/pull/13409)
+- Add the normalized columns: `LogonMethod`, `ActingAppName`, `TargetAppId`
+- Remove unnormalized columns
 
 ## Version 0.3.2
 
