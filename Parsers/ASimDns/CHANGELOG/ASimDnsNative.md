@@ -1,5 +1,9 @@
 # Changelog for ASimDnsNative.yaml
 
+## Version 0.8
+
+- (2026-02-20) Madatory missing column fixed - EventSchemaVersion 
+
 ## Version 0.7
 
 - (2023-03-01) Duplicate column error fixed - DvcScopeId - [PR #7462](https://github.com/Azure/Azure-Sentinel/pull/7462)
