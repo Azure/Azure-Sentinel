@@ -7461,6 +7461,13 @@ def main() -> None:
             'supports_transformations': ref.get('supports_transformations', ''),
             'ingestion_api_supported': ref.get('ingestion_api_supported', ''),
         })
+        # Apply _CL table rules: custom log tables always support Ingestion API,
+        # and those with lake-only support also support transformations
+        if table_name.endswith('_CL'):
+            entry = tables_data[-1]
+            entry['ingestion_api_supported'] = 'Yes'
+            if entry.get('lake_only_supported') == 'Yes' and not entry.get('supports_transformations'):
+                entry['supports_transformations'] = 'Yes'
     
     # Build simplified mapping (key fields only)
     mapping_data: List[Dict[str, str]] = []

@@ -160,6 +160,10 @@ See the script documentation for details:
 - New `Nested` capability: detects `stepType: Nested` in CCF config files
 - Improved `MvExpand` detection: now uses `nestedTransformName` containing `MvExpandTransformer` instead of text-based search
 
+**Custom Log Table Rules (collect_table_info.py):**
+- All `_CL` tables now correctly marked as supporting Ingestion API
+- `_CL` tables with lake-only support now also marked as supporting transformations
+
 **Bug Fixes:**
 - Fixed empty Product column in ASIM union parser pages (e.g., `imDns`): sub-parsers listed with `_Im_` prefix now correctly resolve product names and page links from `_ASim_` source parser data
 - Excluded empty parsers (e.g., `_Im_Dns_Empty`, `_Im_AlertEvent_Empty`) from the Products table on union parser pages
