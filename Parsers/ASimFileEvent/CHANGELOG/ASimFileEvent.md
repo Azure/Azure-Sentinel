@@ -1,5 +1,10 @@
 # Changelog for ASimFileEvent.yaml
 
+## Version 0.1.4
+
+- (2026-02-04) [ASIM] FileEvent - AWSCloudTrail (New Parser) [PR #13569](https://github.com/Azure/Azure-Sentinel/pull/13569)
+- Add ASimFileEventAWSCloudTrail parser
+
 ## Version 0.1.3
 
 - (2024-06-05) ASimFileEventMicrosoftWindowsEvents.yaml-28 - [PR #10594](https://github.com/Azure/Azure-Sentinel/pull/10594)
