@@ -1,0 +1,83 @@
+id: 347c6cb3-33d2-4753-b7f6-eab946a8cd51
+name: GSA - TI URL Entity
+description: |
+  This query identifies URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in GSA NetworkAccessTraffic.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - NetworkAccessTrafficLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let GSANetworkAccessTraffic_ = NetworkAccessTraffic
+  | where TimeGenerated >= ago(dt_lookBack)
+  | where TrafficType  == "internet"
+  | extend DestinationUrlToLower = tolower(DestinationUrl)
+  | project-rename GSANetworkAccessTraffic_TimeGenerated = TimeGenerated;
+  let GSANetworkAccessTrafficUrls =
+      GSANetworkAccessTraffic_
+      | where isnotempty(DestinationUrl)
+      | extend Url = tolower(DestinationUrl)
+      | distinct Url;
+  ThreatIntelIndicators
+    | extend IndicatorType = replace(@'\[|\]|"""', "", tostring(split(ObservableKey, ":", 0)))
+    | where IndicatorType == "url"
+    | extend Url = ObservableValue
+    | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | extend Url = tolower(Url)
+    | where Url in (GSANetworkAccessTrafficUrls)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+    | extend Description = tostring(parse_json(Data).description)
+    | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+    | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type
+    | join kind=innerunique (GSANetworkAccessTraffic_) on $left.Url == $right.DestinationUrlToLower
+    | where isempty(ValidUntil) or GSANetworkAccessTraffic_TimeGenerated < ValidUntil
+    | extend GSAThreatType = ThreatType
+  | summarize GSANetworkAccessTraffic_TimeGenerated = arg_max(GSANetworkAccessTraffic_TimeGenerated, *) by Id, DestinationUrl
+  | project-reorder *,
+      Tags,
+      Confidence,
+      TrafficLightProtocolLevel,
+      Type,
+      UserPrincipalName,
+      UserId,
+      DeviceId,
+      InitiatingProcessName,
+      GSAThreatType,
+      DestinationIp,
+      DestinationFqdn,
+      DestinationUrl,
+      DestinationPort,
+      SourceIp,
+      SourcePort,
+      HttpUserAgent
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: DestinationUrl
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessName
+kind: Scheduled
