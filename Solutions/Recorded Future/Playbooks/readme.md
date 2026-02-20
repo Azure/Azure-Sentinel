@@ -17,7 +17,7 @@
 > | **RecordedFuture-Sandbox_Outlook_Attachment** | Created incidents directly | Writes to `RecordedFutureSandboxResults_CL` log only |
 >
 > ## Incident Creation via Analytic Rules
-> Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents. See [Incident Creation](../readme.md#incident-creation) for more information.
+> Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents. See [Incident Creation](readme.md#incident-creation) for more information.
 
 ## Prerequisites
 
