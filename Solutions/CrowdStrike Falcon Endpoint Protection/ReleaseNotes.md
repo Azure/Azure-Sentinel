@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.3.1       | 19-02-2026                     | Push **CrowdStrike API Data Connector** to General Availability  |
 | 3.3.0       | 26-01-2026                     | Refresh *CrowdStrike API Data Connector* with Cases data type and multiple improvements |
 | 3.2.0       | 07-01-2026                     | Updated *CrowdStrike Falcon Adversary Data Connector* Change table name to be "ThreatIntelIndicators" instead of "ThreatIntelligenceIndicator" |
 | 3.1.9       | 17-12-2025                     | Updated *CrowdStrike API Data Connector* Enhance API configuration instructions with link |
