@@ -2767,6 +2767,7 @@ def find_ccf_config_file(connector_json_path: Path) -> Optional[Path]:
     skip_patterns = [
         "connectordefinition", "definitions.json", "_table.", "_dcr.",
         "function.json", "host.json", "proxies.json",
+        "azuredeploy", "maintemplate",
     ]
     
     def _is_skip_file(name_lower: str) -> bool:

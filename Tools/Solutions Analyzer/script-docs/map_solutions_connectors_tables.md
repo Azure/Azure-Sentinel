@@ -630,6 +630,8 @@ The analyzer searches the connector's directory (and sibling `*_ccp/` directorie
 - `*_dataConnector*.json` (excluding `*connectorDefinition*`) — Push connector configs
 - Sibling `*_ccp/` directories — some connectors (e.g., GCP) store configs in a sibling directory with `_ccp` suffix
 
+Files matching skip patterns are excluded: `azuredeploy*`, `mainTemplate*`, `*connectorDefinition*`, `definitions.json`, `*_table.*`, `*_dcr.*`, and common non-config files.
+
 If no separate config file is found but `pollingConfig` exists in the primary connector JSON, the connector is reclassified as **CCF (Legacy)** and capabilities are extracted from the embedded config.
 
 #### CCF Capabilities Extracted
