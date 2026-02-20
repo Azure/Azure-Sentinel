@@ -148,6 +148,19 @@ See the script documentation for details:
 
 ## Version History
 
+### v7.9.1 - CCF Push and CCF Capabilities
+
+**CCF Push Collection Method:**
+- New collection method `CCF Push` for connectors using CCF in push mode (partner pushes data via DCR/DCE)
+- `DeployPushConnectorButton` + `HasDataConnectors` pattern now classified as "CCF Push" instead of "CCF"
+- Separate documentation page and metadata for CCF Push in generated docs
+
+**CCF Configuration and Capabilities:**
+- New `ccf_config_file` column in `connectors.csv`: GitHub URL to the CCF configuration file (polling/poller/push config)
+- New `ccf_capabilities` column in `connectors.csv`: semicolon-separated capabilities extracted from the config JSON
+- Capabilities include: connector kind (GCP, Push, etc.), auth type (APIKey, OAuth2, Basic, JwtToken), Paging, POST, MvExpand
+- Connector detail pages in generated docs now display **CCF Configuration** link and **CCF Capabilities** for CCF/CCF Push connectors
+
 ### v7.9 - Kusto Uploader
 
 **New Tool: `upload_to_kusto.py`**

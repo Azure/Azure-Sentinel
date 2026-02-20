@@ -127,6 +127,15 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
             ("📖 Connector definition reference", "https://learn.microsoft.com/azure/sentinel/data-connector-ui-definitions-reference"),
         ],
     },
+    "CCF Push": {
+        "name": "Codeless Connector Framework - Push Mode (CCF Push)",
+        "description": "CCF Push connectors use the Codeless Connector Framework in push mode, where the data source pushes events to Microsoft Sentinel via a DCR/DCE (Data Collection Rule / Data Collection Endpoint) pipeline. Unlike polling-based CCF connectors, CCF Push connectors do not actively pull data — the partner or data source sends data to the ingestion endpoint.",
+        "links": [
+            ("📖 Create a codeless connector", "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"),
+            ("📖 Codeless Connector Platform reference", "https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference"),
+            ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
+        ],
+    },
     "Native": {
         "name": "Native Microsoft Integration",
         "description": "Native connectors provide built-in integration with Microsoft services and are typically enabled directly in the Microsoft Sentinel portal or through Azure Policy. These connectors offer the most seamless experience for Microsoft-to-Microsoft data ingestion.",
@@ -4760,6 +4769,19 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                 if files:
                     files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in files])
                     f.write(f"| **Connector Definition Files** | {files_list} |\n")
+            
+            # CCF config file (for CCF and CCF Push connectors)
+            ccf_config_file = connector_ref.get('ccf_config_file', '')
+            if ccf_config_file:
+                ccf_config_name = ccf_config_file.split('/')[-1]
+                f.write(f"| **CCF Configuration** | [{ccf_config_name}]({ccf_config_file}) |\n")
+            
+            # CCF capabilities
+            ccf_capabilities = connector_ref.get('ccf_capabilities', '')
+            if ccf_capabilities:
+                caps = [c.strip() for c in ccf_capabilities.split(';') if c.strip()]
+                caps_display = ', '.join(f"`{c}`" for c in caps)
+                f.write(f"| **CCF Capabilities** | {caps_display} |\n")
             
             f.write("\n")
             

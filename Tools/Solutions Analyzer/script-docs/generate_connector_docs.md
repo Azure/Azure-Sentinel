@@ -125,6 +125,7 @@ connector-docs/
 │   ├── mma.md                   # Log Analytics Agent (legacy) connectors
 │   ├── azure-diagnostics.md    # Azure Diagnostics connectors
 │   ├── ccf.md                   # Codeless Connector Framework connectors
+│   ├── ccf-push.md              # CCF Push mode connectors
 │   ├── azure-function.md       # Azure Function-based connectors
 │   ├── native.md                # Native Microsoft integrations
 │   ├── rest-api.md              # REST API/webhook connectors
@@ -179,7 +180,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, and connector definition files
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors)
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria
