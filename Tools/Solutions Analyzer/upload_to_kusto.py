@@ -207,6 +207,7 @@ def upload_csv_to_kusto(
         table=table_name,
         data_format=DataFormat.CSV,
         ingestion_mapping_reference=mapping_name,
+        ignore_first_record=True,
     )
     
     print(f"  Uploading data...")
@@ -258,6 +259,7 @@ def upload_csv_content_to_kusto(
             table=table_name,
             data_format=DataFormat.CSV,
             ingestion_mapping_reference=mapping_name,
+            ignore_first_record=True,
         )
         
         print(f"  Uploading data...")
