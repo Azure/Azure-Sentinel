@@ -882,6 +882,15 @@ def merge_table_info(tables: Dict[str, TableInfo],
                     lake_only_supported=info_dict.get('lake_only_supported', '')
                 )
     
+    # Apply rules for custom log tables (_CL suffix):
+    # - All _CL tables support Ingestion API (they are custom tables created via DCR/ingestion)
+    # - _CL tables that support lake-only also support transformations
+    for table_name, info in merged.items():
+        if table_name.endswith('_CL'):
+            info.ingestion_api_supported = True
+            if info.lake_only_supported == 'Yes' and not info.supports_transformations:
+                info.supports_transformations = 'Yes'
+    
     return merged
 
 
