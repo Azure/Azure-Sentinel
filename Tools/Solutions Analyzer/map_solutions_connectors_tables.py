@@ -2762,6 +2762,7 @@ def find_ccf_config_file(connector_json_path: Path) -> Optional[Path]:
         Path to the CCF config file if found, None otherwise
     """
     parent_dir = connector_json_path.parent
+    connector_resolved = connector_json_path.resolve()
     
     # Files to skip when searching for config files
     skip_patterns = [
@@ -2770,26 +2771,31 @@ def find_ccf_config_file(connector_json_path: Path) -> Optional[Path]:
         "azuredeploy", "maintemplate",
     ]
     
-    def _is_skip_file(name_lower: str) -> bool:
-        return any(skip in name_lower for skip in skip_patterns)
+    def _is_skip_file(file_path: Path, name_lower: str) -> bool:
+        if any(skip in name_lower for skip in skip_patterns):
+            return True
+        # Skip the connector JSON file itself to avoid self-referencing
+        if file_path.resolve() == connector_resolved:
+            return True
+        return False
     
     def _search_dir_for_config(search_dir: Path) -> Optional[Path]:
         """Search a directory for CCF config files."""
         for file_path in search_dir.glob("*.json"):
             name_lower = file_path.name.lower()
-            if _is_skip_file(name_lower):
+            if _is_skip_file(file_path, name_lower):
                 continue
             # Check named patterns
             if any(pattern in name_lower for pattern in CCF_CONFIG_PATTERNS):
                 return file_path
         # Fallback: connectors.json (used by some modern CCF connectors like Bitwarden)
         connectors_json = search_dir / "connectors.json"
-        if connectors_json.exists():
+        if connectors_json.exists() and connectors_json.resolve() != connector_resolved:
             return connectors_json
         # Fallback: *_dataConnector.json files (Push connectors use this pattern)
         for file_path in search_dir.glob("*.json"):
             name_lower = file_path.name.lower()
-            if _is_skip_file(name_lower):
+            if _is_skip_file(file_path, name_lower):
                 continue
             if "dataconnector" in name_lower:
                 return file_path
@@ -2800,7 +2806,15 @@ def find_ccf_config_file(connector_json_path: Path) -> Optional[Path]:
     if result:
         return result
     
-    # Search sibling directories with _ccp suffix (e.g., GCPAuditLogs_ccp/)
+    # Search child and sibling directories with _ccp suffix
+    # Child dirs (e.g., CortexXDR_ccp/ inside Data Connectors/)
+    for child_dir in parent_dir.iterdir():
+        if child_dir.is_dir() and child_dir.name.lower().endswith('_ccp'):
+            result = _search_dir_for_config(child_dir)
+            if result:
+                return result
+    
+    # Sibling dirs (e.g., GCPAuditLogs_ccp/ next to GCPAuditLogs/)
     for sibling_dir in parent_dir.parent.iterdir():
         if sibling_dir.is_dir() and sibling_dir.name.lower().endswith('_ccp'):
             result = _search_dir_for_config(sibling_dir)
