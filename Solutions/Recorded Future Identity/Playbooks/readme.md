@@ -2,6 +2,19 @@
 
 Link to [Recorded Future Identity main readme](../readme.md)
 
+> [!IMPORTANT]
+> ## Microsoft Defender Platform Migration - Breaking Changes
+>
+> **The `RFI-Playbook-Alert-Importer-LAW-Sentinel` playbook is deprecated**. Incidents created via the Azure Sentinel Logic Apps connector do not appear in the unified Microsoft Defender portal.
+>
+> ### Migration Path
+> 1. Use **`RFI-Playbook-Alert-Importer-LAW`** to write identity exposure data to Log Analytics
+> 2. Deploy **Analytics Rule** to create incidents from the `RecordedFutureIdentity_PlaybookAlertResults_CL` table
+>
+>## Incident Creation via Analytic Rules
+> Instead of relying on incident creation via Logic Apps, we provide templates for Analytic Rules that will create Alerts via Analytic Rules, grouping them by common denominator and then creating incidents. See [Incident Creation](readme.md#incident-creation) for more information.
+
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -13,7 +26,7 @@ Link to [Recorded Future Identity main readme](../readme.md)
    1. ["Alert" playbooks](#alert_playbooks)
       1. [RFI-playbook-alert-importer](#RFI-playbook-alert-importer)
       1. [RFI-playbook-alert-importer-law](#RFI-playbook-alert-importer-law)
-      1. [RFI-playbook-alert-importer-law-sentinel](#RFI-playbook-alert-importer-law-sentinel)
+      1. [RFI-playbook-alert-importer-law-sentinel (DEPRECATED)](#RFI-playbook-alert-importer-law-sentinel)
 1. [How to configure playbooks](#configuration)
    1. [How to find the playbooks (Logic Apps) after deployment](#find_playbooks_after_deployment)
    1. [Configuring Playbooks Connections](#configuration_connections)
@@ -55,8 +68,8 @@ These are the main playbooks
 | Playbook Name | Description |
 |-|-|
 | **RFI-playbook-alert-importer** | Search new exposures for Workforce users. Choose this one if only Entra ID is available |
-| **RFI-playbook-alert-importer-law** | Search new exposures for Workforce users. Choose this one if Entra ID  and Log Analytics Workspace (LAW) is available |
-| **RFI-playbook-alert-importer-law-sentinel** | Search new exposures for Workforce users. Choose this one if Entra ID, Log Analytics Workspace (LAW) and Microsoft Sentinel is available  |
+| **RFI-playbook-alert-importer-law** | Search new exposures for Workforce users. Choose this one if Entra ID and Log Analytics Workspace (LAW) is available. **Recommended for Microsoft Defender Portal.** |
+| **RFI-playbook-alert-importer-law-sentinel** | **DEPRECATED** - Use RFI-playbook-alert-importer-law with a Scheduled Analytics Rule instead, eee [Incident Creation](readme.md#incident-creation) for more information.|
 </details>
 
 ## Deployment
@@ -68,7 +81,7 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 - A Microsoft Entra ID Tenant and subscription.
 - A Microsoft Entra ID security group to which you want to assign any users who have leaked credentials.
 - The user who installs the Logic Apps requires the permissions Azure Subscription Owner or Contributor. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
-- If a user authorizes the Entra ID connectors, they must have the Entra role `Directory Writers`. If a service principal (e.g., managed identity of app registration) authorizes the Entra ID connectors, they must have the permissions `Group.ReadWrite.All User.ReadWrite.All and Directory.ReadWrite.All`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>
+- If a user authorizes the Entra ID connectors, they must have the Entra role `Directory Writers`. For more information read <a href="https://learn.microsoft.com/en-us/connectors/azuread/" target="_blank"> ***here*** </a>
 - If a user authorizes the Entra Identity Protection connector, they must have the Entra role `Security Administrator`. If a service principal (e.g., managed identity of app registration) authorizes the Entra ID connectors, they must have the permission `IdentityRiskyUser.ReadWrite.All`
 - In Consumption Logic Apps, before you can create or manage Logic Apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 
@@ -76,7 +89,7 @@ Recorded Future recommend deploying playbooks in this solution from this README,
 - Configure `Recorded Future Identity Exposure Playbook Alerts` for your use case within the Recorded Future portal. For detailed instructions, see <a href="https://support.recordedfuture.com/hc/en-us/articles/21314816259859-Identity-Exposure-Playbook-Alert-Configuration" target="_blank">this guide</a> (requires Recorded Future login).
 
 #### Optional prerequisites
-These prerequisites is required for the **RFI-playbook-alert-importer-law** and **RFI-playbook-alert-importer-law-sentinel** playbooks:
+These prerequisites is required for the **RFI-playbook-alert-importer-law** playbooks:
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these Logic Apps will be created automatically if they don’t already exist. Note the name of the Log Analytic Workspace, it will be used at a later stage of the deployment.
 - The user who installs the Logic Apps require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level.
 
@@ -136,9 +149,7 @@ Search the Recorded Future Identity Intelligence Module for compromised identiti
 Depending on your use case, deploy **one** of the following playbooks:
 
 - `RFI-playbook-alert-importer` contains the base use case, ingesting novel identity exposures and remediation of those exposures trough Entra ID.
-- `RFI-playbook-alert-importer-law` does all of the above and saves detailed information to a Log Analytics Workspace (LAW).
-- `RFI-playbook-alert-importer-law-sentinel` does all of the above and creates a **Microsoft Sentinel** incident, for easier investigation and follow up.
-
+- `RFI-playbook-alert-importer-law` does all of the above and saves detailed information to a Log Analytics Workspace (LAW). Can create incidents via Analytic Rules, See [Incident Creation](readme.md#incident-creation) for more information.
 <a id="RFI-playbook-alert-importer"></a>
 ### Deployment RFI-playbook-alert-importer
 
@@ -186,7 +197,12 @@ Depending on your use case, deploy **one** of the following playbooks:
 <hr/>
 
 <a id="RFI-playbook-alert-importer-law-sentinel"></a>
-### Deployment RFI-playbook-alert-importer-law-sentinel
+### Deployment RFI-playbook-alert-importer-law-sentinel (DEPRECATED)
+
+> [!WARNING]
+> **This playbook is deprecated.** Incidents created via the Azure Sentinel Logic Apps connector do not appear in the unified Microsoft Defender portal.
+>
+> **Recommended alternative:** Use `RFI-Playbook-Alert-Importer-LAW` and create  Analytics Rule to generate incidents from the `RecordedFutureIdentity_PlaybookAlertResults_CL` table, see [Incident Creation](readme.md#incident-creation) for more information..
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-Playbook-Alert-Importer-LAW-Sentinel%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -203,8 +219,8 @@ Depending on your use case, deploy **one** of the following playbooks:
 | **Save_to_log_analytics_workspace**              |Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
 | **Entra_id_security_group_id** | (Optional) ID of the the group in which to place risky users. If left empty, a user will **not** be placed in a Entra ID security group.                                                                                                                  |
 |**Confirm_user_as_risky**| Boolean parameter to determine if a user should be confirmed as risky. Requires Microsoft Entra ID P1 or P2 license.  |
-| **Create_incident**                              |Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
-| **Sentinel_workspace_name**                      |Workspace name in which to create Microsoft Sentinel incidents|
+| **Create_incident**                              |**DEPRECATED** - Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel. **Incidents created this way will not appear in Microsoft Defender portal.**|
+| **Sentinel_workspace_name**                      |**DEPRECATED** - Workspace name in which to create Microsoft Sentinel incidents|
 | **Entra_id_domain**                              | (Optional) If domains does not match between external and Entra ID domains specify the domain used in Entra ID. Example: john.smith@acme -> john.smith@onmicrosoft.com |
 | **Playbook_alert_log_analytics_custom_log_name** |Name of the custom log in Log Analytics Workspace, defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`|
 | **RFI Custom Connector**                         | Name of the custom connector which to connect to Recorded Future with, should typically not deviate from `RFI-CustomConnector-0-2-0`|
@@ -353,7 +369,7 @@ The playbook parameters can be found and set in the Logic App designer:
 |**Confirm_user_as_risky**| Boolean parameter to determine if a user should be confirmed as risky. **Requires** Microsoft Entra ID P1 or P2 license to function properly. For more information about the Azure AD Identity Protection, click <a href="https://learn.microsoft.com/en-us/connectors/azureadip/" target="_blank">here</a> |
 | **entra_id_domain** | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com), your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `entra_id_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the entra_id_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 | **save_to_log_analytics_workspace** |(Optional, requires Log Analytics Workspace) - Boolean parameter to determine if the playbook should save the detailed Playbook Alert information to Log Analytics Workspace (LAW)|
-| **create_incident** | (Optional, requires Microsoft Sentinel) - Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
+| **create_incident** | **DEPRECATED** - (Optional, requires Microsoft Sentinel) - Boolean parameter to determine if the playbook should create a incident in Microsoft Sentinel|
 |**playbook_alert_log_analytics_custom_log_name**| (Optional, requires Log Analytics Workspace) - Name of custom log where detailed Playbook Alert lookup information will be stored. Defaults to `RecordedFutureIdentity_PlaybookAlertResults_CL`|
 
 
@@ -402,6 +418,20 @@ By default the Playbook Alert Update steps have been configured with `added_acti
 To change/add actions, modify the items under `added_actions_taken` parameter in the Playbook Alerts Update step:
 
 ![Changing the Added actions taken parameter](images/added_actions_taken.png)
+
+### Incident creation
+
+Following changes made by Microsoft, removing the possibility to create incidents via Logic Apps, we now provide the following analytic rules. For these to work out of the box, it's important that the `Custom Log Names` in the corresponding Logic Apps are used.
+
+There is a general limitation of ***3*** fields in the alert description. More information is available in Log Analytics Workspace.
+
+|Use Case|Analytic Rule|Custom Log Name
+|-|-|-|
+|Identity|RecordedFutureIdentityExposure|RecordedFutureIdentity_PlaybookAlertResults_CL
+
+These analytic are be available under `Microsoft Sentinel -> Configuration -> Analytics -> Rule Templates`.
+
+There are importable versions provided under the `Recorded Future Identity\Analytic Rules\IncidentCreation` folder, to import, navigate to to `Microsoft Sentinel -> Configuration -> Analytics` then press the `Import` button.
 
 <a id="known_issues"></a>
 ## Known Issues
