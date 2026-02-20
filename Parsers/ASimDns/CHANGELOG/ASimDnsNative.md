@@ -1,8 +1,8 @@
 # Changelog for ASimDnsNative.yaml
 
-## Version 0.8
+## Version 0.8.0
 
-- (2026-02-20) Madatory missing column fixed - EventSchemaVersion 
+- (2026-02-20) Mandatory missing column fixed - EventSchemaVersion 
 
 ## Version 0.7
 
