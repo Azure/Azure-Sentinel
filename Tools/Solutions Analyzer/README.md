@@ -148,6 +148,23 @@ See the script documentation for details:
 
 ## Version History
 
+### v7.9.2 - CCF Legacy, Capabilities Statistics, and ASIM Parser Fixes
+
+**CCF (Legacy) Collection Method:**
+- New `CCF (Legacy)` collection method for connectors with embedded `pollingConfig` in their primary ARM template and no separate CCF config file
+- Capabilities (auth type, paging, POST) extracted from embedded `pollingConfig` for legacy CCF connectors
+- Improved `find_ccf_config_file()` detection: now finds `connectors.json` (Bitwarden-style) and searches sibling `*_ccp/` subdirectories (GCP-style)
+
+**CCF Capabilities Statistics:**
+- New **CCF Capabilities** subsection on the statistics page with breakdown of connector kind, authentication methods, and request features across all CCF/CCF Push/CCF Legacy connectors
+- New `Nested` capability: detects `stepType: Nested` in CCF config files
+- Improved `MvExpand` detection: now uses `nestedTransformName` containing `MvExpandTransformer` instead of text-based search
+
+**Bug Fixes:**
+- Fixed empty Product column in ASIM union parser pages (e.g., `imDns`): sub-parsers listed with `_Im_` prefix now correctly resolve product names and page links from `_ASim_` source parser data
+- Excluded empty parsers (e.g., `_Im_Dns_Empty`, `_Im_AlertEvent_Empty`) from the Products table on union parser pages
+- Fixed broken links to sub-parser pages on union parser pages: `_Im_` prefixed sub-parsers now correctly link to their `_ASim_` parser page files
+
 ### v7.9.1 - CCF Push and CCF Capabilities
 
 **CCF Push Collection Method:**

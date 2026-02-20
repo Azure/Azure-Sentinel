@@ -136,6 +136,14 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
             ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
         ],
     },
+    "CCF (Legacy)": {
+        "name": "Codeless Connector Framework - Legacy (CCF Legacy)",
+        "description": "Legacy CCF connectors embed their polling configuration directly in the connector's ARM template (`pollingConfig`) rather than using a separate CCF configuration file. These connectors predate the modern CCF architecture and typically use the `Microsoft.OperationalInsights/workspaces/providers/dataConnectors` resource type.",
+        "links": [
+            ("📖 Create a codeless connector", "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"),
+            ("📖 Codeless Connector Platform reference", "https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference"),
+        ],
+    },
     "Native": {
         "name": "Native Microsoft Integration",
         "description": "Native connectors provide built-in integration with Microsoft services and are typically enabled directly in the Microsoft Sentinel portal or through Azure Policy. These connectors offer the most seamless experience for Microsoft-to-Microsoft data ingestion.",
@@ -496,6 +504,16 @@ def load_asim_parser_names(asim_parsers_path: Path) -> None:
                     # Map equivalent_builtin to product
                     if product_name:
                         ASIM_PARSER_TO_PRODUCT[equivalent_builtin] = product_name
+                    # Also register _Im_ variant for _ASim_ parsers.
+                    # Union parsers reference sub-parsers using _Im_ prefix (e.g., _Im_Dns_AzureFirewall),
+                    # but source parsers only have _ASim_ equivalent_builtin (e.g., _ASim_Dns_AzureFirewall).
+                    if equivalent_builtin.startswith('_ASim_'):
+                        im_variant = '_Im_' + equivalent_builtin[6:]  # Replace _ASim_ with _Im_
+                        ASIM_PARSER_NAMES.add(im_variant)
+                        if parser_name:
+                            ASIM_PARSER_TO_FILENAME[im_variant] = sanitize_filename(parser_name)
+                        if product_name:
+                            ASIM_PARSER_TO_PRODUCT[im_variant] = product_name
                 
                 # For union parsers, store the sub-parsers mapping
                 sub_parsers = row.get('sub_parsers', '').strip()
@@ -5557,6 +5575,9 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
             for sub in sorted(sub_parsers.split(';')):
                 sub = sub.strip()
                 if sub:
+                    # Skip empty parsers (e.g., _Im_Dns_Empty) - they have no pages or products
+                    if sub.lower().endswith('_empty'):
+                        continue
                     # Get product name from mapping, use sub-parser name if not found
                     product = parser_product_map.get(sub, '')
                     # Use get_asim_parser_filename to get correct filename from mapping
@@ -6295,6 +6316,10 @@ def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path,
         product = parser.get('product_name', '')
         if equiv and product:
             parser_product_map[equiv] = product
+            # Also register _Im_ variant for _ASim_ parsers (union sub-parser lists may use _Im_ prefix)
+            if equiv.startswith('_ASim_'):
+                im_variant = '_Im_' + equiv[6:]
+                parser_product_map[im_variant] = product
         
         if parser.get('parser_type') == 'union':
             union_name = parser.get('parser_name', '')
@@ -6667,6 +6692,96 @@ def generate_statistics_page(
                 f.write(f" {stats['active']} / {stats['deprecated']} / {stats['unpublished']} / **{stats['total']}** |")
             f.write("\n")
             f.write("\n")
+        
+        # ===================== CCF CAPABILITIES STATISTICS =====================
+        # Gather CCF/CCF Push/CCF (Legacy) connectors and their capabilities
+        ccf_connectors = {
+            cid: info for cid, info in connectors_map.items()
+            if info.get('collection_method', '') in ('CCF', 'CCF Push', 'CCF (Legacy)')
+        }
+        
+        if ccf_connectors:
+            ccf_active = {cid for cid in ccf_connectors if cid not in deprecated_connectors and cid not in unpub_active}
+            ccf_deprecated_set = {cid for cid in ccf_connectors if cid in deprecated_connectors}
+            ccf_unpub = {cid for cid in ccf_connectors if cid in unpub_active}
+            ccf_with_config = {cid for cid, info in ccf_connectors.items() if info.get('ccf_config_file', '')}
+            ccf_with_caps = {cid for cid, info in ccf_connectors.items() if info.get('ccf_capabilities', '')}
+            
+            # Count by CCF variant
+            ccf_poll_count = sum(1 for info in ccf_connectors.values() if info.get('collection_method') == 'CCF')
+            ccf_push_count = sum(1 for info in ccf_connectors.values() if info.get('collection_method') == 'CCF Push')
+            ccf_legacy_count = sum(1 for info in ccf_connectors.values() if info.get('collection_method') == 'CCF (Legacy)')
+            
+            f.write("### CCF Capabilities\n\n")
+            
+            # Overview table
+            f.write("| Metric | Count |\n")
+            f.write("|:-------|------:|\n")
+            f.write(f"| CCF Connectors (polling) | {ccf_poll_count} |\n")
+            f.write(f"| CCF Push Connectors | {ccf_push_count} |\n")
+            f.write(f"| CCF Legacy Connectors | {ccf_legacy_count} |\n")
+            f.write(f"| **Total CCF** | **{len(ccf_connectors)}** |\n")
+            f.write(f"| With config file | {len(ccf_with_config)} |\n")
+            f.write(f"| With capabilities detected | {len(ccf_with_caps)} |\n")
+            f.write("\n")
+            
+            # Parse all capabilities and categorize them
+            # Categories: Kind (connector kind), Auth (authentication type), Features (paging, POST, etc.)
+            kind_counts: Dict[str, int] = defaultdict(int)
+            auth_counts: Dict[str, int] = defaultdict(int)
+            feature_counts: Dict[str, int] = defaultdict(int)
+            
+            KNOWN_AUTH_TYPES = {'APIKey', 'OAuth2', 'Basic', 'JwtToken', 'ServicePrincipal', 'Session'}
+            KNOWN_FEATURES = {'Paging', 'POST', 'MvExpand', 'Nested'}
+            
+            for cid, info in ccf_connectors.items():
+                caps_str = info.get('ccf_capabilities', '')
+                if not caps_str:
+                    continue
+                for cap in caps_str.split(';'):
+                    cap = cap.strip()
+                    if not cap:
+                        continue
+                    if cap in KNOWN_AUTH_TYPES:
+                        auth_counts[cap] += 1
+                    elif cap in KNOWN_FEATURES:
+                        feature_counts[cap] += 1
+                    else:
+                        kind_counts[cap] += 1
+            
+            # Connector Kind table
+            if kind_counts:
+                # RestApiPoller is implicit/default and not listed, so all listed kinds are non-default
+                f.write("**Connector Kind** (non-default kinds; REST API polling is the default):\n\n")
+                f.write("| Kind | Count |\n")
+                f.write("|:-----|------:|\n")
+                rest_api_count = len(ccf_with_caps) - sum(kind_counts.values())
+                if rest_api_count > 0:
+                    f.write(f"| REST API Polling *(default)* | {rest_api_count} |\n")
+                for kind, count in sorted(kind_counts.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {kind} | {count} |\n")
+                f.write("\n")
+            
+            # Authentication table
+            if auth_counts:
+                f.write("**Authentication Methods:**\n\n")
+                f.write("| Auth Type | Count |\n")
+                f.write("|:----------|------:|\n")
+                for auth, count in sorted(auth_counts.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {auth} | {count} |\n")
+                no_auth = len(ccf_with_caps) - sum(auth_counts.values())
+                if no_auth > 0:
+                    f.write(f"| *(none detected)* | {no_auth} |\n")
+                f.write("\n")
+            
+            # Features table
+            if feature_counts:
+                f.write("**Request Features:**\n\n")
+                f.write("| Feature | Count |\n")
+                f.write("|:--------|------:|\n")
+                for feat, count in sorted(feature_counts.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {feat} | {count} |\n")
+                f.write("\n")
         
         # ===================== TABLES STATISTICS =====================
         f.write("## Tables\n\n")
@@ -7538,6 +7653,8 @@ def main() -> None:
             row['filter_fields'] = connectors_reference[connector_id].get('filter_fields', '')
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
+            row['ccf_capabilities'] = connectors_reference[connector_id].get('ccf_capabilities', '')
+            row['ccf_config_file'] = connectors_reference[connector_id].get('ccf_config_file', '')
     
     # Enrich rows with logo/description/author/version/dependencies from solutions CSV
     for row in rows:
@@ -7757,6 +7874,8 @@ def main() -> None:
                 'is_deprecated': conn.get('is_deprecated', 'false'),
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
                 'support_tier': conn.get('solution_support_tier', ''),
+                'ccf_capabilities': conn.get('ccf_capabilities', ''),
+                'ccf_config_file': conn.get('ccf_config_file', ''),
             }
     
     # Generate the unified statistics page

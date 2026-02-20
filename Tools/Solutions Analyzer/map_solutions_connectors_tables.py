@@ -2747,11 +2747,12 @@ CCF_CONFIG_PATTERNS: List[str] = [
 def find_ccf_config_file(connector_json_path: Path) -> Optional[Path]:
     """
     Find the CCF configuration file (polling/poller config) in the same directory
-    as a connector definition JSON file.
+    as a connector definition JSON file, or in sibling *_ccp directories.
     
     CCF config files contain the actual polling/push configuration and are typically
     named with patterns like *_PollingConfig.json, *_PollerConfig.json,
-    *_DataConnectorPoller.json, dataPoller.json, or *_poller*.json.
+    *_DataConnectorPoller.json, dataPoller.json, *_poller*.json, or connectors.json.
+    Some connectors store their config in a sibling directory with a _ccp suffix.
     
     Args:
         connector_json_path: Path to the connector JSON file (usually the
@@ -2762,25 +2763,130 @@ def find_ccf_config_file(connector_json_path: Path) -> Optional[Path]:
     """
     parent_dir = connector_json_path.parent
     
-    for file_path in parent_dir.glob("*.json"):
-        name_lower = file_path.name.lower()
-        # Skip non-config files
-        if any(skip in name_lower for skip in [
-            "connectordefinition", "_table.", "_dcr.", 
-            "function.json", "host.json", "proxies.json",
-        ]):
-            continue
-        # Check if it matches any CCF config pattern
-        if any(pattern in name_lower for pattern in CCF_CONFIG_PATTERNS):
-            return file_path
+    # Files to skip when searching for config files
+    skip_patterns = [
+        "connectordefinition", "definitions.json", "_table.", "_dcr.",
+        "function.json", "host.json", "proxies.json",
+    ]
     
-    # Fallback: look for *_dataConnector.json files (Push connectors use this pattern)
-    for file_path in parent_dir.glob("*.json"):
-        name_lower = file_path.name.lower()
-        if "dataconnector" in name_lower and "connectordefinition" not in name_lower:
-            return file_path
+    def _is_skip_file(name_lower: str) -> bool:
+        return any(skip in name_lower for skip in skip_patterns)
+    
+    def _search_dir_for_config(search_dir: Path) -> Optional[Path]:
+        """Search a directory for CCF config files."""
+        for file_path in search_dir.glob("*.json"):
+            name_lower = file_path.name.lower()
+            if _is_skip_file(name_lower):
+                continue
+            # Check named patterns
+            if any(pattern in name_lower for pattern in CCF_CONFIG_PATTERNS):
+                return file_path
+        # Fallback: connectors.json (used by some modern CCF connectors like Bitwarden)
+        connectors_json = search_dir / "connectors.json"
+        if connectors_json.exists():
+            return connectors_json
+        # Fallback: *_dataConnector.json files (Push connectors use this pattern)
+        for file_path in search_dir.glob("*.json"):
+            name_lower = file_path.name.lower()
+            if _is_skip_file(name_lower):
+                continue
+            if "dataconnector" in name_lower:
+                return file_path
+        return None
+    
+    # First search in the same directory
+    result = _search_dir_for_config(parent_dir)
+    if result:
+        return result
+    
+    # Search sibling directories with _ccp suffix (e.g., GCPAuditLogs_ccp/)
+    for sibling_dir in parent_dir.parent.iterdir():
+        if sibling_dir.is_dir() and sibling_dir.name.lower().endswith('_ccp'):
+            result = _search_dir_for_config(sibling_dir)
+            if result:
+                return result
     
     return None
+
+
+def _find_field_values(obj: Any, field_name: str) -> List[Any]:
+    """Recursively find all values for a given field name in a nested JSON structure."""
+    results: List[Any] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == field_name:
+                results.append(v)
+            results.extend(_find_field_values(v, field_name))
+    elif isinstance(obj, list):
+        for item in obj:
+            results.extend(_find_field_values(item, field_name))
+    return results
+
+
+def extract_legacy_ccf_capabilities(json_content: str) -> List[str]:
+    """
+    Extract CCF capabilities from embedded pollingConfig in a connector's primary JSON.
+    
+    Legacy CCF connectors have their polling configuration embedded directly in the
+    ARM template under properties.pollingConfig, rather than in a separate config file.
+    
+    Analyzes the pollingConfig to identify:
+    - Authentication method (APIKey, OAuth2, Basic, JwtToken, etc.)
+    - Whether paging is configured
+    - HTTP method if POST (GET is default/implied)
+    
+    Args:
+        json_content: Full JSON text of the connector's primary ARM template
+    
+    Returns:
+        List of capability strings (e.g., ["OAuth2", "Paging", "POST"])
+    """
+    try:
+        data = json.loads(json_content)
+    except Exception:
+        return []
+    
+    # Find pollingConfig in ARM template resources
+    polling_configs = _find_field_values(data, 'pollingConfig')
+    if not polling_configs:
+        return []
+    
+    capabilities: List[str] = []
+    auth_types_seen: Set[str] = set()
+    has_paging = False
+    has_post = False
+    
+    for pc in polling_configs:
+        if not isinstance(pc, dict):
+            continue
+        
+        # Auth section
+        auth = pc.get('auth', {})
+        if isinstance(auth, dict):
+            auth_type = auth.get('authType', '') or auth.get('type', '')
+            if auth_type:
+                auth_types_seen.add(auth_type)
+        
+        # Request section - may have paging and HTTP method
+        request = pc.get('request', {})
+        if isinstance(request, dict):
+            http_method = request.get('httpMethod', '').upper()
+            if http_method == 'POST':
+                has_post = True
+        
+        # Paging section
+        paging = pc.get('paging', {})
+        if paging and isinstance(paging, dict) and len(paging) > 0:
+            has_paging = True
+    
+    for auth_type in sorted(auth_types_seen):
+        capabilities.append(auth_type)
+    if has_paging:
+        capabilities.append('Paging')
+    if has_post:
+        capabilities.append('POST')
+    
+    return capabilities
 
 
 def extract_ccf_capabilities(config_path: Path) -> List[str]:
@@ -2792,7 +2898,8 @@ def extract_ccf_capabilities(config_path: Path) -> List[str]:
     - Authentication method (APIKey, OAuth2, Basic, JwtToken, Push, Session, etc.)
     - Whether paging is configured
     - HTTP method if POST (GET is default/implied)
-    - Whether MvExpand transform is used
+    - Whether MvExpand transform is used (nestedTransformName contains MvExpandTransformer)
+    - Whether nested steps are used (stepType: Nested)
     
     Args:
         config_path: Path to the CCF config JSON file
@@ -2811,6 +2918,7 @@ def extract_ccf_capabilities(config_path: Path) -> List[str]:
     has_paging = False
     has_post = False
     has_mvexpand = False
+    has_nested = False
     
     # Handle both single object and array of objects
     items = data if isinstance(data, list) else [data]
@@ -2849,12 +2957,18 @@ def extract_ccf_capabilities(config_path: Path) -> List[str]:
             http_method = request.get('httpMethod', '').upper()
             if http_method == 'POST':
                 has_post = True
-        
-        # Check for MvExpand in response
-        response = props.get('response', {})
-        if isinstance(response, dict):
-            if 'convertChildPropertiesToArray' in response or 'mvExpand' in json.dumps(response).lower():
-                has_mvexpand = True
+    
+    # Deep search for MvExpand: nestedTransformName containing "MvExpandTransformer"
+    for val in _find_field_values(data, 'nestedTransformName'):
+        if isinstance(val, str) and 'MvExpandTransformer' in val:
+            has_mvexpand = True
+            break
+    
+    # Deep search for Nested steps: stepType == "Nested"
+    for val in _find_field_values(data, 'stepType'):
+        if val == 'Nested':
+            has_nested = True
+            break
     
     # Build ordered capability list
     # 1. Kind (if not RestApiPoller, which is the default/common kind)
@@ -2875,6 +2989,8 @@ def extract_ccf_capabilities(config_path: Path) -> List[str]:
         capabilities.append('POST')
     if has_mvexpand:
         capabilities.append('MvExpand')
+    if has_nested:
+        capabilities.append('Nested')
     
     return capabilities
 
@@ -6955,6 +7071,12 @@ def main() -> None:
             if ccf_info:
                 ccf_config_url, ccf_config_path = ccf_info
                 capabilities = extract_ccf_capabilities(ccf_config_path)
+                ccf_capabilities_str = ';'.join(capabilities) if capabilities else ''
+            elif 'pollingConfig' in json_content:
+                # Legacy CCF: pollingConfig embedded in primary connector JSON, no separate config
+                collection_method = 'CCF (Legacy)'
+                detection_reason = 'CCF with embedded pollingConfig (no separate config file)'
+                capabilities = extract_legacy_ccf_capabilities(json_content)
                 ccf_capabilities_str = ';'.join(capabilities) if capabilities else ''
         
         connectors_data.append({

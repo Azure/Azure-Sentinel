@@ -235,7 +235,8 @@ connector-docs/
 **Statistics Page** includes:
 - **Terminology** section with definitions for key concepts (Published, Deprecated, Discovered, Standalone, GitHub Only, etc.)
 - **Solutions** section with statistics by publication status, support tier, and content
-- **Connectors** section with statistics by collection method and deprecation status
+- **Connectors** section with statistics by collection method, deprecation status, and support tier cross-tabulation
+- **CCF Capabilities** subsection with connector kind distribution, authentication methods, and request features for CCF/CCF Push/CCF Legacy connectors
 - **Tables** section with statistics by source, category, and usage
 - **Content Items** section with statistics by type and source classification
 - **ASIM Parsers** section with statistics by schema and type
