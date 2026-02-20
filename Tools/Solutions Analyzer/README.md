@@ -1,6 +1,6 @@
 # Azure Sentinel Solutions Analyzer
 
-This directory contains four complementary tools for analyzing Microsoft Sentinel Solutions:
+This directory contains five complementary tools for analyzing Microsoft Sentinel Solutions:
 
 | Script | Purpose | Key Output |
 |--------|---------|------------|
@@ -8,6 +8,7 @@ This directory contains four complementary tools for analyzing Microsoft Sentine
 | [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv` |
 | [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory (including `asim/` and `parsers/` subdirectories) |
 | [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
+| [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
 
 ## Prerequisites
 
@@ -34,6 +35,11 @@ git pull origin master
 **Quick install for all scripts:**
 ```bash
 pip install requests json5 pyyaml
+```
+
+**Additional packages for Kusto upload:**
+```bash
+pip install azure-kusto-data azure-kusto-ingest azure-identity
 ```
 
 ## Quick Start
@@ -141,6 +147,17 @@ See the script documentation for details:
 ---
 
 ## Version History
+
+### v7.9 - Kusto Uploader
+
+**New Tool: `upload_to_kusto.py`**
+- Upload CSV files to Azure Data Explorer (Kusto) clusters
+- **Solution Analyzer mode** (`--solution-analyzer`): uploads all 10 Solution Analyzer CSVs with predefined table names
+- **Custom CSV mode**: upload any CSV files with automatic schema detection
+- **Local source directory** (`--source-dir`): read Solution Analyzer CSVs from a local folder instead of downloading from GitHub
+- **Dry run mode** (`--dry-run`): preview operations before executing
+- Uses Azure CLI authentication and Kusto queued ingestion
+- All columns created as `string` type with automatic CSV mapping
 
 ### v7.8 - Lake-Only Ingestion, Collection Methods Index, and Enhanced Documentation
 
