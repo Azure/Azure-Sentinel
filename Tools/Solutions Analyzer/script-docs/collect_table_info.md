@@ -90,6 +90,13 @@ The `supports_transformations` field is populated from two sources:
 
 When both sources have data for a table, the script validates consistency and generates a `transformation_support_mismatch_report.md` file if any discrepancies are found.
 
+## Custom Log Table Rules
+
+Custom log tables (tables with a `_CL` suffix) are not listed in Microsoft's standard reference documentation, so their capabilities cannot be determined from the parsed sources. The following rules are applied after merging all sources:
+
+- **Ingestion API**: All `_CL` tables are marked as supporting the Ingestion API (`ingestion_api_supported = Yes`), since custom log tables are created via DCR-based ingestion.
+- **Transformations**: `_CL` tables that support lake-only ingestion are also marked as supporting transformations, since lake-only ingestion requires DCR pipeline support which includes transformations.
+
 ## Override System
 
 The script supports the same override system as `map_solutions_connectors_tables.py`. Overrides can be used to:
