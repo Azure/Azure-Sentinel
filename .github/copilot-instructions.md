@@ -37,7 +37,7 @@ cd "Tools/Solutions Analyzer"
 python map_solutions_connectors_tables.py
 ```
 
-**Note:** Do NOT truncate or filter the output. Check the log file in `.logs/` for persistent output.
+**Note:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). The script prints timestamped progress messages to the console that the user needs to see. Run with `isBackground: false` and `timeout: 0` so the full output is visible.
 
 #### Documentation Generator
 ```powershell
@@ -45,6 +45,8 @@ python generate_connector_docs.py --output-dir "C:\Users\ofshezaf\GitHub\sentine
 ```
 
 **IMPORTANT:** Never run without `--output-dir` flag.
+
+**IMPORTANT:** Do NOT truncate or filter the output (e.g., do not pipe through `Select-Object`). Run with `isBackground: false` and `timeout: 0` so the full output is visible to the user.
 
 **IMPORTANT:** Always use `--skip-input-generation` unless you specifically need to regenerate the input CSVs (mapper + collect_table_info). Without this flag, the doc generator will re-run those scripts automatically, which is slow and unnecessary if the CSVs are already up-to-date.
 

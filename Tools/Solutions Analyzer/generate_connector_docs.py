@@ -205,8 +205,8 @@ def get_collection_method_link(method: str, relative_path: str = "") -> str:
     Returns:
         Markdown link to the collection method page
     """
-    if not method or method == '—':
-        return '—'
+    if not method or method == '?':
+        return '?'
     filename = get_collection_method_filename(method)
     return f"[{method}]({relative_path}methods/{filename}.md)"
 
@@ -1331,19 +1331,19 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
         # Transformations
         if include_transforms:
             supports_transforms = table_ref.get('supports_transformations', '')
-            transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
+            transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "?"
             row.append(transforms_cell)
         
         # Ingestion API
         if include_ingestion_api:
             ingestion_api = table_ref.get('ingestion_api_supported', '')
-            ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
+            ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "?"
             row.append(ingestion_cell)
         
         # Lake-Only
         if include_lake_only:
             lake_only = table_ref.get('lake_only_supported', '')
-            lake_only_cell = "✓" if lake_only.lower() == 'yes' else "✗" if lake_only.lower() == 'no' else "—"
+            lake_only_cell = "✓" if lake_only.lower() == 'yes' else "✗" if lake_only.lower() == 'no' else "?"
             row.append(lake_only_cell)
         
         f.write("| " + " | ".join(row) + " |\n")
@@ -3488,7 +3488,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
-                collection_method = info.get('collection_method', '') or '—'
+                collection_method = info.get('collection_method', '') or '?'
                 collection_method_cell = get_collection_method_link(collection_method, "")
                 solution_folder = info.get('solution_folder', '')
                 
@@ -3511,7 +3511,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 
                 connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
@@ -3530,7 +3530,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
-                collection_method = info.get('collection_method', '') or '—'
+                collection_method = info.get('collection_method', '') or '?'
                 collection_method_cell = get_collection_method_link(collection_method, "")
                 
                 # Get solution logo
@@ -3552,7 +3552,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 
                 connector_link = f"{DEPRECATED_ICON} [{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
@@ -3762,7 +3762,7 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                 publisher = info.get('publisher', '')
                 solution_name = info.get('solution_name', '')
                 tables = info.get('tables', [])
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 # Status icons
                 status_suffix = ""
@@ -3774,7 +3774,7 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                     status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 connector_link = f"[{title}](../connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
-                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
                 
                 f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
             
@@ -3791,10 +3791,10 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                 publisher = info.get('publisher', '')
                 solution_name = info.get('solution_name', '')
                 tables = info.get('tables', [])
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 connector_link = f"{DEPRECATED_ICON} [{title}](../connectors/{sanitize_filename(connector_id)}.md)"
-                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
                 
                 f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
             
@@ -5805,7 +5805,7 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
                     solution_filename = sanitize_filename(solution_name)
                     source_display = f"📦 [{solution_name}](../solutions/{solution_filename}.md)"
                 else:
-                    source_display = "—"
+                    source_display = "?"
                 
                 # Format tables (limit display)
                 tables_list = [t.strip() for t in tables.split(',') if t.strip()][:2]
@@ -5813,7 +5813,7 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
                 if len(tables.split(',')) > 2:
                     tables_display += ', ...'
                 if not tables_display:
-                    tables_display = "—"
+                    tables_display = "?"
                 
                 f.write(f"| {parser_link} | {source_display} | {tables_display} |\n")
             
