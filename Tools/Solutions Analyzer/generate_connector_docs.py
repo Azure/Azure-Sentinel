@@ -4890,7 +4890,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                           solutions_dir: Path = None, content_items: List[Dict[str, str]] = None,
                           content_tables_mapping: Dict[str, List[str]] = None,
                           solution_table_content_types: Dict[str, Dict[str, Set[str]]] = None,
-                          dependency_id_to_solution: Dict[str, str] = None) -> None:
+                          dependency_id_to_solution: Dict[str, str] = None,
+                          solution_deps: List[Dict[str, str]] = None,
+                          all_solutions_connectors: Dict[str, List[Dict[str, str]]] = None) -> None:
     """Generate individual solution documentation page.
     
     Args:
@@ -4902,6 +4904,8 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         content_tables_mapping: Dictionary mapping content_id to list of tables used
         solution_table_content_types: Dictionary mapping table_name to content types and usage for this solution
         dependency_id_to_solution: Dictionary mapping publisher_id.offer_id to solution_name for dependency resolution
+        solution_deps: List of dependency records for this solution (from solution_dependencies.csv)
+        all_solutions_connectors: Dictionary mapping all solution names to their connector entries (for resolving dependency connectors)
     """
     if content_items is None:
         content_items = []
@@ -4911,6 +4915,10 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         solution_table_content_types = {}
     if dependency_id_to_solution is None:
         dependency_id_to_solution = {}
+    if solution_deps is None:
+        solution_deps = []
+    if all_solutions_connectors is None:
+        all_solutions_connectors = {}
     
     solution_dir = output_dir / "solutions"
     solution_dir.mkdir(parents=True, exist_ok=True)
@@ -5055,6 +5063,67 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
             f.write("## Additional Information\n\n")
             f.write(f"{format_additional_info(additional_info)}\n\n")
         
+        # Build dependency information for use in Dependencies section and connectors/tables sections
+        dep_solutions: Dict[str, Dict[str, str]] = {}  # dep_solution_name -> {type, schemas, id}
+        dep_connectors: List[Dict[str, str]] = []  # connector entries from dependency solutions
+        dep_connector_tables: Set[str] = set()  # tables from dependency connectors
+        if solution_deps:
+            # Resolve dependency records into unique dependency solutions
+            for dep in solution_deps:
+                dep_sol = dep.get('dependency_solution_name', '')
+                dep_type = dep.get('dependency_type', '')
+                dep_id = dep.get('dependency_solution_id', '')
+                dep_schema = dep.get('asim_schema', '')
+                if not dep_sol:
+                    # Try to resolve from dep_id
+                    if dep_id and dep_id in dependency_id_to_solution:
+                        dep_sol = dependency_id_to_solution[dep_id]
+                    else:
+                        continue
+                if dep_sol not in dep_solutions:
+                    dep_solutions[dep_sol] = {'type': dep_type, 'schemas': set(), 'id': dep_id}
+                else:
+                    # Merge: explicit + ASIM -> both
+                    if dep_solutions[dep_sol]['type'] != dep_type:
+                        dep_solutions[dep_sol]['type'] = 'explicit, ASIM'
+                    if dep_id and not dep_solutions[dep_sol].get('id'):
+                        dep_solutions[dep_sol]['id'] = dep_id
+                if dep_schema:
+                    dep_solutions[dep_sol].setdefault('schemas', set())
+                    dep_solutions[dep_sol]['schemas'].add(dep_schema)
+            
+            # Collect connectors and tables from dependency solutions
+            for dep_sol_name in dep_solutions:
+                dep_sol_connectors = all_solutions_connectors.get(dep_sol_name, [])
+                for conn in dep_sol_connectors:
+                    connector_id = conn.get('connector_id', '').strip()
+                    if connector_id:
+                        dep_connectors.append(conn)
+                        table = conn.get('Table', '').strip()
+                        if table:
+                            dep_connector_tables.add(table)
+        
+        # Dependencies section
+        if dep_solutions:
+            f.write("## Dependencies\n\n")
+            f.write(f"This solution depends on **{len(dep_solutions)} other solution(s)**:\n\n")
+            f.write("| Solution | Dependency Type | Details |\n")
+            f.write("|:---------|:----------------|:--------|\n")
+            for dep_sol_name in sorted(dep_solutions.keys()):
+                dep_info = dep_solutions[dep_sol_name]
+                dep_filename = sanitize_filename(dep_sol_name)
+                dep_link = f"[{dep_sol_name}]({dep_filename}.md)"
+                dep_type = dep_info['type']
+                schemas = dep_info.get('schemas', set())
+                if schemas:
+                    details = f"ASIM schemas: {', '.join(sorted(schemas))}"
+                elif dep_info.get('id'):
+                    details = f"ID: {dep_info['id']}"
+                else:
+                    details = "-"
+                f.write(f"| {dep_link} | {dep_type} | {details} |\n")
+            f.write("\n")
+        
         # Load README content for later use (added at the end like connector docs)
         readme_content = None
         readme_github_url = None
@@ -5076,8 +5145,28 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         # Only include connectors section if solution has any connectors
         if not has_any_connectors:
             f.write("## Data Connectors\n\n")
-            f.write("**This solution does not include data connectors.**\n\n")
-            f.write("This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.\n\n")
+            if dep_connectors:
+                f.write("**This solution does not include its own data connectors** but uses connectors from dependency solutions:\n\n")
+                # Group dependency connectors by connector_id
+                dep_by_connector: Dict[str, str] = {}
+                for conn in dep_connectors:
+                    cid = conn.get('connector_id', '').strip()
+                    if cid:
+                        sol = conn.get('solution_name', '')
+                        dep_by_connector[cid] = sol
+                for cid in sorted(dep_by_connector.keys()):
+                    dep_sol_name = dep_by_connector[cid]
+                    dep_conn_title = cid
+                    for conn in dep_connectors:
+                        if conn.get('connector_id', '').strip() == cid:
+                            dep_conn_title = conn.get('connector_title', cid)
+                            break
+                    connector_link = f"[{dep_conn_title}](../connectors/{sanitize_filename(cid)}.md)"
+                    f.write(f"- {connector_link} *(dependency on [{dep_sol_name}]({sanitize_filename(dep_sol_name)}.md))*\n")
+                f.write("\n")
+            else:
+                f.write("**This solution does not include data connectors.**\n\n")
+                f.write("This solution may contain other components such as analytics rules, workbooks, hunting queries, or playbooks.\n\n")
             
             # For solutions without connectors, show content item tables if any
             content_item_tables = set(solution_table_content_types.keys())
@@ -5169,16 +5258,38 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 warning = " ⚠️" if not_in_json == 'true' else ""
                 f.write(f"- {connector_link}{warning}\n")
             
+            # Add dependency connectors (from dependency solutions)
+            if dep_connectors:
+                # Group dependency connectors by connector_id, tracking which dependency solution they come from
+                dep_by_connector: Dict[str, str] = {}  # connector_id -> dep_solution_name
+                for conn in dep_connectors:
+                    cid = conn.get('connector_id', '').strip()
+                    if cid and cid not in by_connector:  # Skip if already listed as own connector
+                        sol = conn.get('solution_name', '')
+                        dep_by_connector[cid] = sol
+                if dep_by_connector:
+                    for cid in sorted(dep_by_connector.keys()):
+                        dep_sol_name = dep_by_connector[cid]
+                        # Get connector title from the dependency connector entries
+                        dep_conn_title = cid
+                        for conn in dep_connectors:
+                            if conn.get('connector_id', '').strip() == cid:
+                                dep_conn_title = conn.get('connector_title', cid)
+                                break
+                        connector_link = f"[{dep_conn_title}](../connectors/{sanitize_filename(cid)}.md)"
+                        f.write(f"- {connector_link} *(dependency on [{dep_sol_name}]({sanitize_filename(dep_sol_name)}.md))*\n")
+            
             # Add footnote if there are any discovered connectors
             if discovered_connector_count > 0:
                 f.write(f"\n*⚠️ Discovered connector - found in solution folder but not listed in Solution JSON definition.*\n")
             
             f.write("\n")
         
-            # Tables summary section - combine connector tables and content item tables
+            # Tables summary section - combine connector tables, content item tables, and dependency tables
             connector_tables = set(conn['Table'] for conn in connectors if conn.get('Table', '').strip())
             content_item_tables = set(solution_table_content_types.keys())
-            all_tables = sorted(connector_tables | content_item_tables)
+            # Add dep_connector_tables that are not already present
+            all_tables = sorted(connector_tables | content_item_tables | dep_connector_tables)
             
             if all_tables:
                 # Separate ASIM parsers, regular tables, and internal tables
@@ -5203,15 +5314,28 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                     f.write("| Table | Used By Connectors | Used By Content |\n")
                     f.write("|-------|-------------------|----------------|\n")
                     for table in tables:
-                        # Get connector info
+                        # Get connector info from this solution's own connectors
                         table_connectors = []
                         for conn in connectors:
                             if conn.get('Table') == table:
                                 connector_id = conn.get('connector_id', '')
                                 connector_title = conn.get('connector_title', connector_id)
-                                table_connectors.append((connector_id, connector_title))
+                                table_connectors.append((connector_id, connector_title, False))
+                        # Add dependency connectors for tables that come from dependencies
+                        own_connector_ids = set(cid for cid, _, _ in table_connectors)
+                        for conn in dep_connectors:
+                            if conn.get('Table') == table:
+                                connector_id = conn.get('connector_id', '').strip()
+                                if connector_id and connector_id not in own_connector_ids:
+                                    connector_title = conn.get('connector_title', connector_id)
+                                    table_connectors.append((connector_id, connector_title, True))
                         unique_connectors = sorted(set(table_connectors), key=lambda x: x[1])
-                        connector_links = [f"[{title}](../connectors/{sanitize_anchor(cid)}.md)" for cid, title in unique_connectors]
+                        connector_links = []
+                        for cid, title, is_dep in unique_connectors:
+                            link = f"[{title}](../connectors/{sanitize_anchor(cid)}.md)"
+                            if is_dep:
+                                link += " (dependency)"
+                            connector_links.append(link)
                         connector_list = ", ".join(connector_links) if connector_links else "-"
                         # Get content types
                         table_info = solution_table_content_types.get(table, {'types': set(), 'usage': set()})
@@ -7358,6 +7482,12 @@ def main() -> None:
         help="Path to non-ASIM parsers CSV file (default: parsers.csv)",
     )
     parser.add_argument(
+        "--solution-dependencies-csv",
+        type=Path,
+        default=Path(__file__).parent / "solution_dependencies.csv",
+        help="Path to solution dependencies CSV file (default: solution_dependencies.csv)",
+    )
+    parser.add_argument(
         "--skip-input-generation",
         action="store_true",
         help="Skip running input CSV generation scripts",
@@ -7484,6 +7614,22 @@ def main() -> None:
         print(f"Loaded {len(connectors_reference)} connectors from connectors CSV")
     else:
         print(f"Warning: Connectors CSV not found: {args.connectors_csv}")
+    
+    # Load solution dependencies CSV
+    # Structure: solution_name -> list of dependency dicts
+    solution_dependencies: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    if args.solution_dependencies_csv.exists():
+        print(f"Reading {args.solution_dependencies_csv}...")
+        with args.solution_dependencies_csv.open("r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                sol_name = row.get('solution_name', '')
+                if sol_name:
+                    solution_dependencies[sol_name].append(row)
+        total_deps = sum(len(deps) for deps in solution_dependencies.values())
+        print(f"Loaded {total_deps} dependency records for {len(solution_dependencies)} solutions")
+    else:
+        print(f"Warning: Solution dependencies CSV not found: {args.solution_dependencies_csv}")
     
     # Load content items CSV
     content_items_by_solution: Dict[str, List[Dict[str, str]]] = defaultdict(list)
@@ -7713,7 +7859,8 @@ def main() -> None:
     for solution_name, connectors in sorted(by_solution.items()):
         solution_content = content_items_by_solution.get(solution_name, [])
         solution_table_types = solution_table_content_types.get(solution_name, {})
-        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution)
+        sol_deps = solution_dependencies.get(solution_name, [])
+        generate_solution_page(solution_name, connectors, args.output_dir, solutions_dir, solution_content, content_tables_mapping, solution_table_types, dependency_id_to_solution, sol_deps, by_solution)
     
     # Generate individual table pages with content item references
     # Build parser-to-table mappings for table pages

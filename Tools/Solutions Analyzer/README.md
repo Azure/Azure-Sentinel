@@ -5,7 +5,7 @@ This directory contains five complementary tools for analyzing Microsoft Sentine
 | Script | Purpose | Key Output |
 |--------|---------|------------|
 | [`collect_table_info.py`](script-docs/collect_table_info.md) | Fetch table metadata from Azure Monitor docs | `tables_reference.csv` |
-| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv` |
+| [`map_solutions_connectors_tables.py`](script-docs/map_solutions_connectors_tables.md) | Map connectors and content items to tables | `connectors.csv`, `tables.csv`, `solutions.csv`, `content_items.csv`, `content_tables_mapping.csv`, `parsers.csv`, `asim_parsers.csv`, `solution_dependencies.csv` |
 | [`generate_connector_docs.py`](script-docs/generate_connector_docs.md) | Generate markdown documentation | `connector-docs/` directory (including `asim/` and `parsers/` subdirectories) |
 | [`generate_solutions_with_connectors_report.py`](script-docs/generate_solutions_with_connectors_report.md) | Generate solutions summary report | `solutions_with_connectors_report.md`, `solutions_with_connectors.csv` |
 | [`upload_to_kusto.py`](script-docs/upload_to_kusto.md) | Upload CSV files to Azure Data Explorer (Kusto) | *(uploads to Kusto cluster)* |
@@ -55,6 +55,7 @@ pip install azure-kusto-data azure-kusto-ingest azure-identity
   - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor and Sentinel documentation
 - Relationships:
   - [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
+  - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and ASIM-based)
   - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
 - The rest:
   - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
@@ -148,7 +149,16 @@ See the script documentation for details:
 
 ## Version History
 
-### v7.9.2 - CCF Legacy, Capabilities Statistics, and ASIM Parser Fixes
+### v7.9.2 - Solution Dependencies, CCF Legacy, and Capabilities Statistics
+
+**Solution Dependencies:**
+- New `solution_dependencies.csv` mapping file tracking both explicit and ASIM-based dependencies between solutions
+- Explicit dependencies extracted from `dependentDomainSolutionIds` in solution definitions
+- ASIM-based dependencies: solutions using ASIM parsers automatically depend on all solutions whose connectors feed those parsers
+- Doc generator: new **Dependencies** section on solution pages listing dependency solutions with type and details
+- Doc generator: dependency connectors appended to the connectors list with "(dependency on solution X)" suffix
+- Doc generator: dependency tables included in the tables section with "(dependency)" suffix on connector names
+- Uploader: new CSV included in `--solution-analyzer` mode
 
 **CCF (Legacy) Collection Method:**
 - New `CCF (Legacy)` collection method for connectors with embedded `pollingConfig` in their primary ARM template and no separate CCF config file

@@ -18,8 +18,9 @@
   - [content_tables_mapping.csv](#6-content_tables_mappingcsv-content-item-to-table-mapping)
   - [parsers.csv](#7-parserscsv-parser-details)
   - [asim_parsers.csv](#8-asim_parserscsv-asim-parser-details)
-  - [Issues Report](#9-solutions_connectors_tables_issues_and_exceptions_reportcsv-issues-report)
-  - [Backward Compatibility](#10-solutions_connectors_tables_mappingcsv-backward-compatibility)
+  - [solution_dependencies.csv](#9-solution_dependenciescsv-solution-dependency-mapping)
+  - [Issues Report](#10-solutions_connectors_tables_issues_and_exceptions_reportcsv-issues-report)
+  - [Backward Compatibility](#11-solutions_connectors_tables_mappingcsv-backward-compatibility)
 - [Azure Marketplace Availability](#azure-marketplace-availability)
 - [Detection Logic](#detection-logic)
   - [Collection Method Detection](#collection-method-detection)
@@ -63,9 +64,9 @@ The Solution Connector Tables Analyzer is a comprehensive tool that scans the Az
 
 ### Output
 
-The script generates 10 CSV files providing different views of the data:
+The script generates 11 CSV files providing different views of the data:
 - **Entity files**: `connectors.csv`, `solutions.csv`, `tables.csv`, `parsers.csv`, `asim_parsers.csv`
-- **Mapping files**: `content_items.csv`, `content_tables_mapping.csv`, `solutions_connectors_tables_mapping_simplified.csv`
+- **Mapping files**: `content_items.csv`, `content_tables_mapping.csv`, `solution_dependencies.csv`, `solutions_connectors_tables_mapping_simplified.csv`
 - **Reports**: `solutions_connectors_tables_issues_and_exceptions_report.csv`
 - **Backward compatibility**: `solutions_connectors_tables_mapping.csv`
 
@@ -142,6 +143,7 @@ python "Tools/Solutions Analyzer/map_solutions_connectors_tables.py" --solutions
 | `--content-tables-mapping-csv` | `content_tables_mapping.csv` | Path for the content-to-tables mapping CSV file |
 | `--asim-parsers-csv` | `asim_parsers.csv` | Path for the ASIM parsers CSV file |
 | `--parsers-csv` | `parsers.csv` | Path for the non-ASIM parsers CSV file |
+| `--solution-dependencies-csv` | `solution_dependencies.csv` | Path for the solution dependencies CSV file |
 | `--tables-reference-csv` | `tables_reference.csv` | Path to tables_reference.csv for table metadata |
 | `--mapping-csv` | `solutions_connectors_tables_mapping_simplified.csv` | Path for the simplified mapping CSV file |
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for field value overrides |
@@ -446,7 +448,24 @@ Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. 
 
 > **Note:** ASIM parsers are loaded from YAML files in the `/Parsers/ASim*/Parsers` directories. Union parsers aggregate multiple source parsers and typically have empty `tables` but populated `sub_parsers`. Source parsers reference actual Log Analytics tables. The `vim*` (vendor-independent model) parsers are skipped as they are wrappers around the corresponding `ASim*` parsers with identical filters.
 
-### 9. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
+### 9. solution_dependencies.csv (Solution Dependency Mapping)
+
+Contains one row per dependency relationship between solutions. A solution can appear multiple times if it has multiple dependencies. Dependencies are identified from two sources:
+
+1. **Explicit dependencies**: From the `dependentDomainSolutionIds` array in the solution's `SolutionMetadata.json`, which lists `publisherId.offerId` identifiers
+2. **ASIM-based dependencies**: When a solution's content items reference ASIM parsers, all solutions whose connectors provide data to those parsers are identified as implicit dependencies
+
+| Column | Description | Data Source |
+|--------|-------------|-------------|
+| `solution_name` | Solution that has the dependency | Parent solution folder |
+| `dependency_solution_name` | Solution that is depended upon (resolved from ID for explicit deps) | Resolved from `publisherId.offerId` lookup or ASIM parser associations |
+| `dependency_solution_id` | The `publisherId.offerId` identifier (explicit deps only) | `dependentDomainSolutionIds` array |
+| `dependency_type` | Type of dependency: `explicit` or `ASIM` | Computed |
+| `asim_schema` | ASIM schema name (ASIM deps only, e.g., `NetworkSession`, `Dns`) | Derived from content item table references → ASIM parser schema |
+
+> **Note:** ASIM dependencies can generate many rows since a solution using a single ASIM parser (e.g., `_Im_NetworkSession`) will depend on every solution that provides a connector mapped to that ASIM schema. Self-dependencies (where a solution depends on itself) are excluded.
+
+### 10. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 
 Contains exceptions and issues encountered during analysis.
 
@@ -476,7 +495,7 @@ Contains exceptions and issues encountered during analysis.
 | `missing_connector_json` | Data Connectors folder exists but contains no valid JSON | Solution has no connector entries |
 | `missing_solution_metadata` | Solution has connectors but no SolutionMetadata.json | Solution appears with empty metadata fields |
 
-### 10. solutions_connectors_tables_mapping.csv (Backward Compatibility)
+### 11. solutions_connectors_tables_mapping.csv (Backward Compatibility)
 
 This CSV file is maintained for backward compatibility with older scripts and workflows. It contains one row per unique combination of solution, connector, and table, with all metadata denormalized into a single wide table.
 

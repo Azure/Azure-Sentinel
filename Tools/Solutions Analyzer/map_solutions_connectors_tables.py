@@ -6219,6 +6219,12 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         help="Path for the non-ASIM parsers CSV file (default: %(default)s)",
     )
     parser.add_argument(
+        "--solution-dependencies-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "solution_dependencies.csv",
+        help="Path for the solution dependencies CSV file (default: %(default)s)",
+    )
+    parser.add_argument(
         "--force-refresh",
         type=str,
         default="",
@@ -7540,6 +7546,127 @@ def main() -> None:
                 table_entry['category'] = 'Internal'
         log_print(f"Identified {len(internal_tables)} internal use tables (custom tables written by playbooks AND used by non-playbook content)")
 
+    # =========================================================================
+    # Build solution dependencies (explicit + ASIM-based)
+    # =========================================================================
+    log_print("\nBuilding solution dependencies...")
+
+    # Build publisherId.offerId -> solution_name lookup
+    dep_id_to_solution: Dict[str, str] = {}
+    for sol_name, info in all_solutions_info.items():
+        publisher_id = info.get('solution_publisher_id', '')
+        offer_id = info.get('solution_offer_id', '')
+        if publisher_id and offer_id:
+            dep_id = f"{publisher_id}.{offer_id}"
+            dep_id_to_solution[dep_id] = sol_name
+
+    # Build ASIM schema -> set of (solution_name, connector_id) from parser records
+    # Source-level parsers have associated_connectors and associated_solutions
+    asim_schema_to_solutions: Dict[str, Set[str]] = defaultdict(set)
+    asim_schema_to_connectors: Dict[str, Dict[str, str]] = defaultdict(dict)  # schema -> {connector_id: solution_name}
+    for parser in asim_parser_records:
+        schema = parser.get('schema', '')
+        if not schema:
+            continue
+        associated_solutions_str = parser.get('associated_solutions', '')
+        associated_connectors_str = parser.get('associated_connectors', '')
+        if not associated_solutions_str:
+            continue
+        sol_list = [s.strip() for s in associated_solutions_str.split(',') if s.strip()]
+        conn_list = [c.strip() for c in associated_connectors_str.split(',') if c.strip()] if associated_connectors_str else []
+        for sol in sol_list:
+            asim_schema_to_solutions[schema].add(sol)
+        # Map connectors to their solutions
+        for i, conn in enumerate(conn_list):
+            # Pair connector with solution (zip if same count, else use first solution)
+            sol = sol_list[i] if i < len(sol_list) else sol_list[-1] if sol_list else ''
+            if sol:
+                asim_schema_to_connectors[schema][conn] = sol
+
+    # Build ASIM parser name -> schema lookup (all name variants)
+    asim_name_to_schema: Dict[str, str] = {}
+    for parser in asim_parser_records:
+        schema = parser.get('schema', '')
+        if not schema:
+            continue
+        parser_name = parser.get('parser_name', '')
+        equiv_builtin = parser.get('equivalent_builtin', '')
+        if parser_name:
+            asim_name_to_schema[parser_name.lower()] = schema
+        if equiv_builtin:
+            asim_name_to_schema[equiv_builtin.lower()] = schema
+
+    # Build solution -> set of ASIM schemas used (from content table mappings)
+    solution_asim_schemas: Dict[str, Set[str]] = defaultdict(set)
+    for mapping in content_table_mappings:
+        solution_name = mapping.get('solution_name', '')
+        table_name = mapping.get('table_name', '')
+        if not solution_name or not table_name:
+            continue
+        # Check if this table is an ASIM parser reference
+        lowered = table_name.lower()
+        if lowered.startswith('_im_') or lowered.startswith('_asim_') or lowered.startswith('im') or lowered.startswith('asim'):
+            # Try direct lookup
+            schema = asim_name_to_schema.get(lowered)
+            if not schema:
+                # Try extracting schema from name pattern
+                if lowered.startswith('_im_'):
+                    candidate = table_name[4:]
+                elif lowered.startswith('_asim_'):
+                    candidate = table_name[6:]
+                elif lowered.startswith('im'):
+                    candidate = table_name[2:]
+                elif lowered.startswith('asim'):
+                    candidate = table_name[4:]
+                else:
+                    candidate = ''
+                # Check if candidate matches a known schema
+                if candidate and candidate in asim_schema_to_solutions:
+                    schema = candidate
+            if schema:
+                solution_asim_schemas[solution_name].add(schema)
+
+    # Generate solution dependency records
+    solution_dependencies_data: List[Dict[str, str]] = []
+
+    for sol_name, info in sorted(all_solutions_info.items()):
+        # 1. Explicit dependencies from dependentDomainSolutionIds
+        deps_str = info.get('solution_dependencies', '')
+        if deps_str:
+            for dep_id in deps_str.split(';'):
+                dep_id = dep_id.strip()
+                if not dep_id:
+                    continue
+                dep_sol = dep_id_to_solution.get(dep_id, '')
+                solution_dependencies_data.append({
+                    'solution_name': sol_name,
+                    'dependency_solution_name': dep_sol,
+                    'dependency_solution_id': dep_id,
+                    'dependency_type': 'explicit',
+                    'asim_schema': '',
+                })
+
+        # 2. ASIM-based dependencies
+        schemas = solution_asim_schemas.get(sol_name, set())
+        for schema in sorted(schemas):
+            dep_solutions = asim_schema_to_solutions.get(schema, set())
+            for dep_sol in sorted(dep_solutions):
+                if dep_sol == sol_name:
+                    continue  # Don't depend on yourself
+                solution_dependencies_data.append({
+                    'solution_name': sol_name,
+                    'dependency_solution_name': dep_sol,
+                    'dependency_solution_id': '',
+                    'dependency_type': 'ASIM',
+                    'asim_schema': schema,
+                })
+
+    # Count stats
+    explicit_deps = sum(1 for d in solution_dependencies_data if d['dependency_type'] == 'explicit')
+    asim_deps = sum(1 for d in solution_dependencies_data if d['dependency_type'] == 'ASIM')
+    solutions_with_deps = len(set(d['solution_name'] for d in solution_dependencies_data))
+    log_print(f"  Found {len(solution_dependencies_data)} dependency records ({explicit_deps} explicit, {asim_deps} ASIM) across {solutions_with_deps} solutions")
+
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
         "Table",
@@ -7634,6 +7761,20 @@ def main() -> None:
         writer = csv.DictWriter(csvfile, fieldnames=solutions_fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(solutions_data)
+    
+    # Write solution_dependencies.csv
+    solution_deps_fieldnames = [
+        'solution_name',
+        'dependency_solution_name',
+        'dependency_solution_id',
+        'dependency_type',
+        'asim_schema',
+    ]
+    solution_deps_path = args.solution_dependencies_csv.resolve()
+    with solution_deps_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=solution_deps_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(solution_dependencies_data)
     
     # Write tables.csv
     tables_fieldnames = [
@@ -8014,6 +8155,7 @@ def main() -> None:
     log_print(f"\nWrote {len(rows)} rows to {safe_relative(output_path, repo_root)}")
     log_print(f"Wrote {len(connectors_data)} connectors to {safe_relative(connectors_path, repo_root)}")
     log_print(f"Wrote {len(solutions_data)} solutions to {safe_relative(solutions_path, repo_root)}")
+    log_print(f"Wrote {len(solution_dependencies_data)} solution dependencies to {safe_relative(solution_deps_path, repo_root)}")
     log_print(f"Wrote {len(tables_data)} tables to {safe_relative(tables_path, repo_root)}")
     log_print(f"Wrote {len(mapping_data)} mappings to {safe_relative(mapping_path, repo_root)}")
     log_print(f"Wrote {len(all_content_items)} content items to {safe_relative(content_items_path, repo_root)}")

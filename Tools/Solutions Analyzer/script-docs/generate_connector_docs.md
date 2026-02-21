@@ -106,6 +106,7 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for additional_information and other doc-only fields |
 | `--asim-parsers-csv` | `asim_parsers.csv` | Path to ASIM parsers CSV file |
 | `--parsers-csv` | `parsers.csv` | Path to parsers CSV file |
+| `--solution-dependencies-csv` | `solution_dependencies.csv` | Path to solution dependencies CSV file |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
 ## Output Structure
@@ -170,9 +171,10 @@ connector-docs/
 - **Rich description** extracted from `createUiDefinition.json`
 - **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, dependencies)
 - **Additional Information** section (from overrides, if configured)
+- **Dependencies** section listing explicit and ASIM-based dependency solutions (from `solution_dependencies.csv`)
 - **Supported Products** section for solutions using ASIM parsers
-- **Data Connectors** section with connector details, setup instructions, permissions, and tables ingested
-- **Tables Used** section showing tables from content items (with ASIM parsers separated)
+- **Data Connectors** section with connector details, plus dependency connectors marked with "(dependency on solution X)"
+- **Tables Used** section showing tables from content items and dependency connectors (with ASIM parsers separated, dependency connectors marked with "(dependency)")
 - **Content Items** section organized by type (analytics rules, hunting queries, workbooks, playbooks, parsers, watchlists, summary rules) with ⚠️ indicators for items not in Solution JSON
 - **Additional Documentation** from README.md files in the solution directory
 - **Release Notes** from `ReleaseNotes.md` (if present in solution directory)
