@@ -55,7 +55,7 @@ pip install azure-kusto-data azure-kusto-ingest azure-identity
   - [`tables_reference.csv`](tables_reference.csv) - Comprehensive table metadata from Azure Monitor and Sentinel documentation
 - Relationships:
   - [`content_tables_mapping.csv`](content_tables_mapping.csv) - Mapping of content items (analytics rules, playbooks, etc.) to tables with read/write indicators
-  - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and ASIM-based)
+  - [`solution_dependencies.csv`](solution_dependencies.csv) - Mapping of solutions to their dependencies (explicit and optional ASIM-based)
   - [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.csv) - Simplified mapping with key fields only
 - The rest:
   - [`solutions_connectors_tables_issues_and_exceptions_report.csv`](solutions_connectors_tables_issues_and_exceptions_report.csv) - Issues and exceptions report
@@ -149,12 +149,12 @@ See the script documentation for details:
 
 ## Version History
 
-### v7.9.2 - Solution Dependencies, CCF Legacy, and Capabilities Statistics
+### v8.0 - Solution Dependencies, CCF Legacy, and Capabilities Statistics
 
 **Solution Dependencies:**
 - New `solution_dependencies.csv` mapping file tracking both explicit and ASIM-based dependencies between solutions
 - Explicit dependencies extracted from `dependentDomainSolutionIds` in solution definitions
-- ASIM-based dependencies: solutions using ASIM parsers automatically depend on all solutions whose connectors feed those parsers
+- ASIM-based dependencies (optional): solutions using ASIM parsers list all solutions whose connectors can feed those parsers as potential dependencies
 - Doc generator: new **Dependencies** section on solution pages listing dependency solutions with type and details
 - Doc generator: dependency connectors appended to the connectors list with "(dependency on solution X)" suffix
 - Doc generator: dependency tables included in the tables section with "(dependency)" suffix on connector names

@@ -5105,8 +5105,16 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         
         # Dependencies section
         if dep_solutions:
+            # Count explicit vs ASIM-only dependencies
+            explicit_deps = [d for d in dep_solutions.values() if 'explicit' in d['type']]
+            asim_only_deps = [d for d in dep_solutions.values() if d['type'] == 'ASIM']
             f.write("## Dependencies\n\n")
-            f.write(f"This solution depends on **{len(dep_solutions)} other solution(s)**:\n\n")
+            if explicit_deps and asim_only_deps:
+                f.write(f"This solution has **{len(explicit_deps)} required** and **{len(asim_only_deps)} optional** (ASIM-based) dependencies on other solutions:\n\n")
+            elif asim_only_deps:
+                f.write(f"This solution has **{len(asim_only_deps)} optional** (ASIM-based) dependencies on other solutions that can provide data through ASIM parsers:\n\n")
+            else:
+                f.write(f"This solution depends on **{len(explicit_deps)} other solution(s)**:\n\n")
             f.write("| Solution | Dependency Type | Details |\n")
             f.write("|:---------|:----------------|:--------|\n")
             for dep_sol_name in sorted(dep_solutions.keys()):
@@ -5114,14 +5122,17 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
                 dep_filename = sanitize_filename(dep_sol_name)
                 dep_link = f"[{dep_sol_name}]({dep_filename}.md)"
                 dep_type = dep_info['type']
+                dep_type_display = dep_type
+                if dep_type == 'ASIM':
+                    dep_type_display = 'ASIM (optional)'
+                elif dep_type == 'explicit, ASIM':
+                    dep_type_display = 'explicit, ASIM (optional)'
                 schemas = dep_info.get('schemas', set())
                 if schemas:
                     details = f"ASIM schemas: {', '.join(sorted(schemas))}"
-                elif dep_info.get('id'):
-                    details = f"ID: {dep_info['id']}"
                 else:
                     details = "-"
-                f.write(f"| {dep_link} | {dep_type} | {details} |\n")
+                f.write(f"| {dep_link} | {dep_type_display} | {details} |\n")
             f.write("\n")
         
         # Load README content for later use (added at the end like connector docs)

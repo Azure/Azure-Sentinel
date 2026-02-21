@@ -453,17 +453,17 @@ Contains one row per ASIM parser from the `/Parsers/ASim*/Parsers` directories. 
 Contains one row per dependency relationship between solutions. A solution can appear multiple times if it has multiple dependencies. Dependencies are identified from two sources:
 
 1. **Explicit dependencies**: From the `dependentDomainSolutionIds` array in the solution's `SolutionMetadata.json`, which lists `publisherId.offerId` identifiers
-2. **ASIM-based dependencies**: When a solution's content items reference ASIM parsers, all solutions whose connectors provide data to those parsers are identified as implicit dependencies
+2. **ASIM-based dependencies** (optional): When a solution's content items reference ASIM parsers, all solutions whose connectors provide data to those parsers are identified as potential dependencies. These are optional — they represent solutions that *can* provide data through ASIM parsers, not solutions that *must* be installed
 
 | Column | Description | Data Source |
 |--------|-------------|-------------|
 | `solution_name` | Solution that has the dependency | Parent solution folder |
 | `dependency_solution_name` | Solution that is depended upon (resolved from ID for explicit deps) | Resolved from `publisherId.offerId` lookup or ASIM parser associations |
 | `dependency_solution_id` | The `publisherId.offerId` identifier (explicit deps only) | `dependentDomainSolutionIds` array |
-| `dependency_type` | Type of dependency: `explicit` or `ASIM` | Computed |
+| `dependency_type` | Type of dependency: `explicit` (required) or `ASIM` (optional — indicates a solution that can provide data through ASIM parsers) | Computed |
 | `asim_schema` | ASIM schema name (ASIM deps only, e.g., `NetworkSession`, `Dns`) | Derived from content item table references → ASIM parser schema |
 
-> **Note:** ASIM dependencies can generate many rows since a solution using a single ASIM parser (e.g., `_Im_NetworkSession`) will depend on every solution that provides a connector mapped to that ASIM schema. Self-dependencies (where a solution depends on itself) are excluded.
+> **Note:** ASIM dependencies are optional — they indicate which solutions *can* provide data, not which *must* be installed. They can generate many rows since a solution using a single ASIM parser (e.g., `_Im_NetworkSession`) will list every solution that provides a connector mapped to that ASIM schema as a potential dependency. Self-dependencies (where a solution depends on itself) are excluded.
 
 ### 10. solutions_connectors_tables_issues_and_exceptions_report.csv (Issues Report)
 

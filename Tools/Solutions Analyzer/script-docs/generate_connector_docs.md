@@ -171,7 +171,7 @@ connector-docs/
 - **Rich description** extracted from `createUiDefinition.json`
 - **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, dependencies)
 - **Additional Information** section (from overrides, if configured)
-- **Dependencies** section listing explicit and ASIM-based dependency solutions (from `solution_dependencies.csv`)
+- **Dependencies** section listing explicit (required) and ASIM-based (optional) dependency solutions (from `solution_dependencies.csv`)
 - **Supported Products** section for solutions using ASIM parsers
 - **Data Connectors** section with connector details, plus dependency connectors marked with "(dependency on solution X)"
 - **Tables Used** section showing tables from content items and dependency connectors (with ASIM parsers separated, dependency connectors marked with "(dependency)")
