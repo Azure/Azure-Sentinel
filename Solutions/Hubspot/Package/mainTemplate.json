@@ -1,0 +1,896 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Tom Plant - tom.plant@devicie.com",
+    "comments": "Solution template for Hubspot"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "tom.plant@devicie.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Hubspot",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-hubspot",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "HubspotDefinition",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "HubspotDefinitionConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Hubspot (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "HubspotDefinition",
+                  "title": "Hubspot (via Codeless Connector Framework)",
+                  "publisher": "Community",
+                  "descriptionMarkdown": "The community [HubSpot](https://www.hubspot.com/) solution provides the capability to ingest [Hubspot account activity](https://developers.hubspot.com/docs/api-reference/account-audit-logs-v3/guide) into Microsoft Sentinel.",
+                  "graphQueriesTableName": "HubspotAuditLogs_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Audit events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    },
+                    {
+                      "metricName": "Total events received",
+                      "legend": "Security events",
+                      "baseQuery": "HubspotSecurityActivity_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample Events",
+                      "query": "{{graphQueriesTableName}}\n | take 10"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "HubspotSecurityActivity_CL",
+                      "lastDataReceivedQuery": "HubspotSecurityActivity_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Hubspot account-info.security.read API scope",
+                        "description": "https://developers.hubspot.com/docs/api-reference/account-audit-logs-v3/guide#scope-requirements"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Connect using Hubspot Private App. Learn more: https://developers.hubspot.com/docs/apps/legacy-apps/private-apps/overview#create-a-private-app",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Access token",
+                            "placeholder": "Enter access token",
+                            "type": "password",
+                            "name": "apikey",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "name": "Connect"
+                          }
+                        }
+                      ],
+                      "title": "Connect Hubspot to Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Tom Plant",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "HubspotDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-HubspotAuditLogs_CL": {
+                    "columns": [
+                      {
+                        "name": "actingUser",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "occurredAt",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "subCategory",
+                        "type": "string"
+                      },
+                      {
+                        "name": "targetObjectId",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "Custom-HubspotSecurityActivity_CL": {
+                    "columns": [
+                      {
+                        "name": "actingUser",
+                        "type": "string"
+                      },
+                      {
+                        "name": "countryCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "createdAt",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "infoUrl",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ipAddress",
+                        "type": "string"
+                      },
+                      {
+                        "name": "location",
+                        "type": "string"
+                      },
+                      {
+                        "name": "objectId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "regionCode",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "userId",
+                        "type": "int"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-HubspotAuditLogs_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project-rename ActingUser=actingUser, Action=action, Category=category, Id=id, TimeGenerated=occurredAt, SubCategory=subCategory, TargetObjectId=targetObjectId",
+                    "outputStream": "Custom-HubspotAuditLogs_CL"
+                  },
+                  {
+                    "streams": [
+                      "Custom-HubspotSecurityActivity_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source | project-rename ActingUser=actingUser, CountryCode=countryCode, TimeGenerated=createdAt, Id=id, InfoUrl=infoUrl, IpAddress=ipAddress, Location=location, ObjectId=objectId, RegionCode=regionCode, EventType=type, UserId=userId",
+                    "outputStream": "Custom-HubspotSecurityActivity_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "HubspotAuditLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 90,
+                "schema": {
+                  "name": "HubspotAuditLogs_CL",
+                  "description": "Activity history for user actions related to approvals, content updates, CRM object updates, security activity, and more.",
+                  "columns": [
+                    {
+                      "name": "ActingUser",
+                      "description": "An object containing the user's ID and email address.",
+                      "type": "dynamic"
+                    },
+                    {
+                      "name": "Action",
+                      "description": "The action performed.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Category",
+                      "description": "The type of user action.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Id",
+                      "description": "The unique ID of the action event.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "description": "The timestamp of when the action was performed.",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "SubCategory",
+                      "description": "The subcategory of user action.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TargetObjectId",
+                      "description": "The ID of the object that the user performed the action on.",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "HubspotSecurityActivity_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 90,
+                "schema": {
+                  "name": "HubspotSecurityActivity_CL",
+                  "description": "Logs of user actions related to security activity.",
+                  "columns": [
+                    {
+                      "name": "ActingUser",
+                      "description": "The email address of the user associated with the activity.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "CountryCode",
+                      "description": "The country code of the location where the login was attempted.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "description": "The timestamp of when activity occurred.",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "Id",
+                      "description": "The unique ID of the login event.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "InfoUrl",
+                      "description": "The URL of the page where the activity occurred.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "IpAddress",
+                      "description": "The IP address used for the login attempt.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "Location",
+                      "description": "The location where the login was attempted.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ObjectId",
+                      "description": "The ID of the object that the activity was performed on.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "RegionCode",
+                      "description": "The region code of the location where the login was attempted.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "EventType",
+                      "description": "The type of activity.",
+                      "type": "string"
+                    },
+                    {
+                      "name": "UserId",
+                      "description": "The ID of the user associated with the activity.",
+                      "type": "int"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "HubspotDefinition",
+          "title": "Hubspot (via Codeless Connector Framework)",
+          "publisher": "Community",
+          "descriptionMarkdown": "The community [HubSpot](https://www.hubspot.com/) solution provides the capability to ingest [Hubspot account activity](https://developers.hubspot.com/docs/api-reference/account-audit-logs-v3/guide) into Microsoft Sentinel.",
+          "graphQueriesTableName": "HubspotAuditLogs_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "Audit events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            },
+            {
+              "metricName": "Total events received",
+              "legend": "Security events",
+              "baseQuery": "HubspotSecurityActivity_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample Events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            },
+            {
+              "name": "HubspotSecurityActivity_CL",
+              "lastDataReceivedQuery": "HubspotSecurityActivity_CL\n | where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Hubspot account-info.security.read API scope",
+                "description": "https://developers.hubspot.com/docs/api-reference/account-audit-logs-v3/guide#scope-requirements"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Connect using Hubspot Private App. Learn more: https://developers.hubspot.com/docs/apps/legacy-apps/private-apps/overview#create-a-private-app",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Access token",
+                    "placeholder": "Enter access token",
+                    "type": "password",
+                    "name": "apikey",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "name": "Connect"
+                  }
+                }
+              ],
+              "title": "Connect Hubspot to Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Tom Plant",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Hubspot (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Hubspot (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apikey": {
+              "defaultValue": "apikey",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Tom Plant",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Community",
+                  "tier": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'HubspotAuditLogsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "HubspotDefinition",
+                "dataType": "HubspotAuditLogs_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-HubspotAuditLogs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "httpMethod": "GET",
+                  "apiEndpoint": "https://api.hubapi.com/account-info/v3/activity/audit-logs",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestampInMills",
+                  "startTimeAttributeName": "occurredAfter",
+                  "endTimeAttributeName": "occurredBefore",
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  },
+                  "queryParameters": {
+                    "limit": "100"
+                  },
+                  "rateLimitConfig": {
+                    "evaluation": {
+                      "checkMode": "OnlyWhen429"
+                    },
+                    "extraction": {
+                      "source": "CustomHeaders",
+                      "headers": {
+                        "limit": {
+                          "name": "X-HubSpot-RateLimit-Max",
+                          "format": "Integer"
+                        },
+                        "remaining": {
+                          "name": "X-HubSpot-RateLimit-Remaining",
+                          "format": "Integer"
+                        },
+                        "reset": {
+                          "name": "X-HubSpot-RateLimit-Interval-Milliseconds",
+                          "format": "UnixTimeMilliseconds"
+                        }
+                      }
+                    },
+                    "retryStrategy": {
+                      "useResetOrRetryAfterHeaders": true
+                    }
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.results"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "pageSize": 100,
+                  "nextPageParaName": "after",
+                  "nextPageTokenJsonPath": "$.paging.next.after"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'HubspotSecurityActivity', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "HubspotDefinition",
+                "dataType": "HubspotSecurityActivity_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-HubspotSecurityActivity_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "httpMethod": "GET",
+                  "apiEndpoint": "https://api.hubapi.com/account-info/v3/activity/security",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestampInMills",
+                  "startTimeAttributeName": "fromTimestamp",
+                  "endTimeAttributeName": "toTimestamp",
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba"
+                  },
+                  "queryParameters": {
+                    "limit": "200"
+                  },
+                  "rateLimitConfig": {
+                    "evaluation": {
+                      "checkMode": "OnlyWhen429"
+                    },
+                    "extraction": {
+                      "source": "CustomHeaders",
+                      "headers": {
+                        "limit": {
+                          "name": "X-HubSpot-RateLimit-Max",
+                          "format": "Integer"
+                        },
+                        "remaining": {
+                          "name": "X-HubSpot-RateLimit-Remaining",
+                          "format": "Integer"
+                        },
+                        "reset": {
+                          "name": "X-HubSpot-RateLimit-Interval-Milliseconds",
+                          "format": "UnixTimeMilliseconds"
+                        }
+                      }
+                    },
+                    "retryStrategy": {
+                      "useResetOrRetryAfterHeaders": true
+                    }
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.results"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "pageSize": 200,
+                  "nextPageParaName": "after",
+                  "nextPageTokenJsonPath": "$.paging.next.after"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Hubspot",
+        "publisherDisplayName": "Community",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Hubspot/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The unofficial <a href=\"https://www.hubspot.com/\">HubSpot</a> solution provides the capability to ingest <a href=\"https://developers.hubspot.com/docs/api-reference/account-audit-logs-v3/guide\">Hubspot account activity</a> into Microsoft Sentinel.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in Preview state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><a href=\"https://learn.microsoft.com/en-us/azure/sentinel/create-custom-connector\">Codeless Connector Framework (CCF)</a></li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Hubspot.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Hubspot",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Tom Plant",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2025-12-15",
+        "lastPublishDate": "2025-12-15",
+        "categories": {
+          "domains": [
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
