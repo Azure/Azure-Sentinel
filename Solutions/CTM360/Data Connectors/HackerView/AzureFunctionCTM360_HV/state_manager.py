@@ -19,4 +19,10 @@ class StateManager:
         try:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
+            # Create share if it doesn't exist, to ensure subsequent operations work
+            try:
+                self.share_cli.create_share()
+            except Exception:
+                # Share might already exist or other error; proceed anyway
+                pass
             return None
