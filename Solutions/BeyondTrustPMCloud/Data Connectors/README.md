@@ -368,7 +368,7 @@ Estimated monthly costs depend on data volume and polling frequency. Monitor usa
 
 ## Version History
 
-- **v1.0**: Initial release with Activity Audits and Client Events support
+- **v3.0**: Initial release with Activity Audits and Client Events support
 - OAuth 2.0 authentication with automatic token refresh
 - Rate limiting and state management
 - Configurable polling intervals
