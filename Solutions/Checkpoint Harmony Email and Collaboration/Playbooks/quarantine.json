@@ -1,0 +1,185 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "playbookName": {
+      "type": "String",
+      "defaultValue": "Quarantine-Email"
+    },
+    "location": {
+      "type": "String",
+      "metadata": {
+        "description": "Location for the Logic App deployment"
+      }
+    },
+    "functionAppResourceId": {
+      "type": "String",
+      "metadata": {
+        "description": "Resource ID of the Azure Function App (Microsoft.Web/sites/...) that contains the Quarantine function."
+      }
+    },
+    "sentinelConnectionResourceId": {
+      "type": "String",
+      "metadata": {
+        "description": "Resource ID of the Microsoft Sentinel (azuresentinel) API connection in this resource group."
+      }
+    },
+    "Host": { "type": "String" },
+    "ClientID": { "type": "String" },
+    "ClientSecret": {
+      "type": "String",
+      "metadata": {
+        "description": "Prefer using Key Vault instead of passing secrets via parameters."
+      }
+    },
+    "Brand": { "type": "String", "defaultValue": "checkpoint" }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('playbookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "Host": { "type": "String" },
+            "ClientID": { "type": "String" },
+            "ClientSecret": { "type": "String" },
+            "Brand": { "type": "String" },
+            "$connections": { "type": "Object", "defaultValue": {} }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@listCallbackUrl()"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_processedEmailIds": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "processedEmailIds",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            },
+            "For_each_alert": {
+              "type": "Foreach",
+              "foreach": "@coalesce(triggerBody()?['object']?['properties']?['Alerts'], createArray())",
+              "runAfter": {
+                "Initialize_processedEmailIds": [
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "Parse_Custom_Details": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each_alert')?['properties']?['additionalData']?['Custom Details']",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "EmailID": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "For_each_emailId": {
+                  "type": "Foreach",
+                  "foreach": "@coalesce(outputs('Parse_Custom_Details')?['body']?['EmailID'], createArray())",
+                  "runAfter": {
+                    "Parse_Custom_Details": [
+                      "Succeeded"
+                    ]
+                  },
+                  "runtimeConfiguration": {
+                    "concurrency": { "repetitions": 20 }
+                  },
+                  "actions": {
+                    "Call_Quarantine_Function": {
+                      "type": "Function",
+                      "inputs": {
+                        "body": {
+                          "brand": "@parameters('Brand')",
+                          "host": "@parameters('Host')",
+                          "clientId": "@parameters('ClientID')",
+                          "clientSecret": "@parameters('ClientSecret')",
+                          "action": "eventQuarantine",
+                          "entityIds": [
+                            "@items('For_each_emailId')"
+                          ]
+                        },
+                        "function": {
+                          "id": "[concat(parameters('functionAppResourceId'), '/functions/Quarantine')]"
+                        }
+                      }
+                    },
+                    "Append_to_processedEmailIds": {
+                      "type": "AppendToArrayVariable",
+                      "runAfter": {
+                        "Call_Quarantine_Function": [
+                          "Succeeded"
+                        ]
+                      },
+                      "inputs": {
+                        "name": "processedEmailIds",
+                        "value": "@items('For_each_emailId')"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "Host": { "value": "[parameters('Host')]" },
+          "ClientID": { "value": "[parameters('ClientID')]" },
+          "ClientSecret": { "value": "[parameters('ClientSecret')]" },
+          "Brand": { "value": "[parameters('Brand')]" },
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azuresentinel')]",
+                "connectionId": "[parameters('sentinelConnectionResourceId')]",
+                "connectionName": "[concat('azuresentinel-', parameters('playbookName'))]",
+                "connectionProperties": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "playbookResourceId": {
+      "type": "String",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+    }
+  }
+}
