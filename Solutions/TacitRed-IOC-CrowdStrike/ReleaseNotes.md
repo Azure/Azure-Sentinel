@@ -1,4 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |-------------|--------------------------------|--------------------|
+| 3.0.2       | 23-02-2026                     | Fixed certification failure: corrected solutionId to `data443riskmitigationinc1761580347231.azure-sentinel-solution-tacitred-cs-ioc-automation` (previous package had incorrect SentinelOne offer ID). Package now matches GitHub source and Partner Center offer configuration. |
 | 3.0.1       | 17-02-2026                     | Fixed `InvalidResourceLocation` error: removed non-standard `location` parameter from inner template. Added missing `hidden-SentinelTemplateName` and `hidden-SentinelTemplateVersion` tags so playbook template appears in Sentinel Automation. Removed `TacitRed_Domain` filter — playbook now fetches all findings. |
 | 3.0.0       | 23-01-2026                     | Initial Solution Release - **Playbook** for automated IOC synchronization between TacitRed and CrowdStrike Falcon. Supports Domain and SHA256 IOC types. |
