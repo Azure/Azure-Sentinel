@@ -15,7 +15,6 @@ The TacitRed SentinelOne IOC Automation solution provides playbooks that demonst
 - Microsoft Sentinel workspace
 - TacitRed API Key
 - SentinelOne console access with API token
-- SentinelOne Account ID
 - Appropriate RBAC permissions to deploy Logic Apps
 
 ## Deployment
@@ -26,8 +25,7 @@ The TacitRed SentinelOne IOC Automation solution provides playbooks that demonst
 4. Provide the following parameters:
    - **TacitRed API Key**: Your TacitRed API credentials
    - **SentinelOne API Token**: Your SentinelOne API token
-   - **SentinelOne Base URL**: Your SentinelOne console URL (e.g., https://usea1-001.sentinelone.net)
-   - **SentinelOne Account ID**: Your SentinelOne account identifier
+   - **SentinelOne Base URL**: Your SentinelOne management console URL — copy it directly from your browser address bar when logged into SentinelOne (e.g., `https://usea1-021.sentinelone.net`). This is unique to your SentinelOne deployment; do not use a placeholder value.
 
 ## How It Works
 
