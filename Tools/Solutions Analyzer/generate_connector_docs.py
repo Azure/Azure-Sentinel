@@ -127,6 +127,23 @@ COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
             ("📖 Connector definition reference", "https://learn.microsoft.com/azure/sentinel/data-connector-ui-definitions-reference"),
         ],
     },
+    "CCF Push": {
+        "name": "Codeless Connector Framework - Push Mode (CCF Push)",
+        "description": "CCF Push connectors use the Codeless Connector Framework in push mode, where the data source pushes events to Microsoft Sentinel via a DCR/DCE (Data Collection Rule / Data Collection Endpoint) pipeline. Unlike polling-based CCF connectors, CCF Push connectors do not actively pull data — the partner or data source sends data to the ingestion endpoint.",
+        "links": [
+            ("📖 Create a codeless connector", "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"),
+            ("📖 Codeless Connector Platform reference", "https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference"),
+            ("📖 Logs Ingestion API overview", "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"),
+        ],
+    },
+    "CCF (Legacy)": {
+        "name": "Codeless Connector Framework - Legacy (CCF Legacy)",
+        "description": "Legacy CCF connectors embed their polling configuration directly in the connector's ARM template (`pollingConfig`) rather than using a separate CCF configuration file. These connectors predate the modern CCF architecture and typically use the `Microsoft.OperationalInsights/workspaces/providers/dataConnectors` resource type.",
+        "links": [
+            ("📖 Create a codeless connector", "https://learn.microsoft.com/azure/sentinel/create-codeless-connector"),
+            ("📖 Codeless Connector Platform reference", "https://learn.microsoft.com/azure/sentinel/data-connector-connection-rules-reference"),
+        ],
+    },
     "Native": {
         "name": "Native Microsoft Integration",
         "description": "Native connectors provide built-in integration with Microsoft services and are typically enabled directly in the Microsoft Sentinel portal or through Azure Policy. These connectors offer the most seamless experience for Microsoft-to-Microsoft data ingestion.",
@@ -188,8 +205,8 @@ def get_collection_method_link(method: str, relative_path: str = "") -> str:
     Returns:
         Markdown link to the collection method page
     """
-    if not method or method == '—':
-        return '—'
+    if not method or method == '?':
+        return '?'
     filename = get_collection_method_filename(method)
     return f"[{method}]({relative_path}methods/{filename}.md)"
 
@@ -487,6 +504,16 @@ def load_asim_parser_names(asim_parsers_path: Path) -> None:
                     # Map equivalent_builtin to product
                     if product_name:
                         ASIM_PARSER_TO_PRODUCT[equivalent_builtin] = product_name
+                    # Also register _Im_ variant for _ASim_ parsers.
+                    # Union parsers reference sub-parsers using _Im_ prefix (e.g., _Im_Dns_AzureFirewall),
+                    # but source parsers only have _ASim_ equivalent_builtin (e.g., _ASim_Dns_AzureFirewall).
+                    if equivalent_builtin.startswith('_ASim_'):
+                        im_variant = '_Im_' + equivalent_builtin[6:]  # Replace _ASim_ with _Im_
+                        ASIM_PARSER_NAMES.add(im_variant)
+                        if parser_name:
+                            ASIM_PARSER_TO_FILENAME[im_variant] = sanitize_filename(parser_name)
+                        if product_name:
+                            ASIM_PARSER_TO_PRODUCT[im_variant] = product_name
                 
                 # For union parsers, store the sub-parsers mapping
                 sub_parsers = row.get('sub_parsers', '').strip()
@@ -1304,19 +1331,19 @@ def write_tables_table(f, tables: List[str], tables_reference: Dict[str, Dict[st
         # Transformations
         if include_transforms:
             supports_transforms = table_ref.get('supports_transformations', '')
-            transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "—"
+            transforms_cell = "✓" if supports_transforms.lower() == 'yes' else "✗" if supports_transforms.lower() == 'no' else "?"
             row.append(transforms_cell)
         
         # Ingestion API
         if include_ingestion_api:
             ingestion_api = table_ref.get('ingestion_api_supported', '')
-            ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "—"
+            ingestion_cell = "✓" if ingestion_api.lower() == 'yes' else "✗" if ingestion_api.lower() == 'no' else "?"
             row.append(ingestion_cell)
         
         # Lake-Only
         if include_lake_only:
             lake_only = table_ref.get('lake_only_supported', '')
-            lake_only_cell = "✓" if lake_only.lower() == 'yes' else "✗" if lake_only.lower() == 'no' else "—"
+            lake_only_cell = "✓" if lake_only.lower() == 'yes' else "✗" if lake_only.lower() == 'no' else "?"
             row.append(lake_only_cell)
         
         f.write("| " + " | ".join(row) + " |\n")
@@ -3461,7 +3488,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
-                collection_method = info.get('collection_method', '') or '—'
+                collection_method = info.get('collection_method', '') or '?'
                 collection_method_cell = get_collection_method_link(collection_method, "")
                 solution_folder = info.get('solution_folder', '')
                 
@@ -3484,7 +3511,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 
                 connector_link = f"[{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
@@ -3503,7 +3530,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 publisher = info['publisher']
                 solution_name = info['solution_name']
                 tables = sorted(info['tables'])
-                collection_method = info.get('collection_method', '') or '—'
+                collection_method = info.get('collection_method', '') or '?'
                 collection_method_cell = get_collection_method_link(collection_method, "")
                 
                 # Get solution logo
@@ -3525,7 +3552,7 @@ def generate_connectors_index(solutions: Dict[str, List[Dict[str, str]]], output
                 
                 connector_link = f"{DEPRECATED_ICON} [{title}](connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
                 solution_link = f"[{solution_name}](solutions/{sanitize_filename(solution_name)}.md)"
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 f.write(f"| {logo_cell} | {connector_link} | {publisher} | {collection_method_cell} | {tables_count} | {solution_link} |\n")
             
@@ -3735,7 +3762,7 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                 publisher = info.get('publisher', '')
                 solution_name = info.get('solution_name', '')
                 tables = info.get('tables', [])
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 # Status icons
                 status_suffix = ""
@@ -3747,7 +3774,7 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                     status_suffix += f" {ADDITIONAL_INFO_ICON}"
                 
                 connector_link = f"[{title}](../connectors/{sanitize_filename(connector_id)}.md){status_suffix}"
-                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
                 
                 f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
             
@@ -3764,10 +3791,10 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
                 publisher = info.get('publisher', '')
                 solution_name = info.get('solution_name', '')
                 tables = info.get('tables', [])
-                tables_count = str(len(tables)) if tables else '—'
+                tables_count = str(len(tables)) if tables else '?'
                 
                 connector_link = f"{DEPRECATED_ICON} [{title}](../connectors/{sanitize_filename(connector_id)}.md)"
-                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '—'
+                solution_link = f"[{solution_name}](../solutions/{sanitize_filename(solution_name)}.md)" if solution_name else '?'
                 
                 f.write(f"| {connector_link} | {publisher} | {tables_count} | {solution_link} |\n")
             
@@ -4761,6 +4788,19 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
                     files_list = ", ".join([f"[{file_url.split('/')[-1]}]({file_url})" for file_url in files])
                     f.write(f"| **Connector Definition Files** | {files_list} |\n")
             
+            # CCF config file (for CCF and CCF Push connectors)
+            ccf_config_file = connector_ref.get('ccf_config_file', '')
+            if ccf_config_file:
+                ccf_config_name = ccf_config_file.split('/')[-1]
+                f.write(f"| **CCF Configuration** | [{ccf_config_name}]({ccf_config_file}) |\n")
+            
+            # CCF capabilities
+            ccf_capabilities = connector_ref.get('ccf_capabilities', '')
+            if ccf_capabilities:
+                caps = [c.strip() for c in ccf_capabilities.split(';') if c.strip()]
+                caps_display = ', '.join(f"`{c}`" for c in caps)
+                f.write(f"| **CCF Capabilities** | {caps_display} |\n")
+            
             f.write("\n")
             
             # Description
@@ -5535,6 +5575,9 @@ def generate_asim_parser_page(parser: Dict[str, str], output_dir: Path, sub_to_u
             for sub in sorted(sub_parsers.split(';')):
                 sub = sub.strip()
                 if sub:
+                    # Skip empty parsers (e.g., _Im_Dns_Empty) - they have no pages or products
+                    if sub.lower().endswith('_empty'):
+                        continue
                     # Get product name from mapping, use sub-parser name if not found
                     product = parser_product_map.get(sub, '')
                     # Use get_asim_parser_filename to get correct filename from mapping
@@ -5762,7 +5805,7 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
                     solution_filename = sanitize_filename(solution_name)
                     source_display = f"📦 [{solution_name}](../solutions/{solution_filename}.md)"
                 else:
-                    source_display = "—"
+                    source_display = "?"
                 
                 # Format tables (limit display)
                 tables_list = [t.strip() for t in tables.split(',') if t.strip()][:2]
@@ -5770,7 +5813,7 @@ def generate_parsers_index(parsers: List[Dict[str, str]], output_dir: Path, solu
                 if len(tables.split(',')) > 2:
                     tables_display += ', ...'
                 if not tables_display:
-                    tables_display = "—"
+                    tables_display = "?"
                 
                 f.write(f"| {parser_link} | {source_display} | {tables_display} |\n")
             
@@ -6273,6 +6316,10 @@ def generate_asim_parser_pages(parsers: List[Dict[str, str]], output_dir: Path,
         product = parser.get('product_name', '')
         if equiv and product:
             parser_product_map[equiv] = product
+            # Also register _Im_ variant for _ASim_ parsers (union sub-parser lists may use _Im_ prefix)
+            if equiv.startswith('_ASim_'):
+                im_variant = '_Im_' + equiv[6:]
+                parser_product_map[im_variant] = product
         
         if parser.get('parser_type') == 'union':
             union_name = parser.get('parser_name', '')
@@ -6645,6 +6692,96 @@ def generate_statistics_page(
                 f.write(f" {stats['active']} / {stats['deprecated']} / {stats['unpublished']} / **{stats['total']}** |")
             f.write("\n")
             f.write("\n")
+        
+        # ===================== CCF CAPABILITIES STATISTICS =====================
+        # Gather CCF/CCF Push/CCF (Legacy) connectors and their capabilities
+        ccf_connectors = {
+            cid: info for cid, info in connectors_map.items()
+            if info.get('collection_method', '') in ('CCF', 'CCF Push', 'CCF (Legacy)')
+        }
+        
+        if ccf_connectors:
+            ccf_active = {cid for cid in ccf_connectors if cid not in deprecated_connectors and cid not in unpub_active}
+            ccf_deprecated_set = {cid for cid in ccf_connectors if cid in deprecated_connectors}
+            ccf_unpub = {cid for cid in ccf_connectors if cid in unpub_active}
+            ccf_with_config = {cid for cid, info in ccf_connectors.items() if info.get('ccf_config_file', '')}
+            ccf_with_caps = {cid for cid, info in ccf_connectors.items() if info.get('ccf_capabilities', '')}
+            
+            # Count by CCF variant
+            ccf_poll_count = sum(1 for info in ccf_connectors.values() if info.get('collection_method') == 'CCF')
+            ccf_push_count = sum(1 for info in ccf_connectors.values() if info.get('collection_method') == 'CCF Push')
+            ccf_legacy_count = sum(1 for info in ccf_connectors.values() if info.get('collection_method') == 'CCF (Legacy)')
+            
+            f.write("### CCF Capabilities\n\n")
+            
+            # Overview table
+            f.write("| Metric | Count |\n")
+            f.write("|:-------|------:|\n")
+            f.write(f"| CCF Connectors (polling) | {ccf_poll_count} |\n")
+            f.write(f"| CCF Push Connectors | {ccf_push_count} |\n")
+            f.write(f"| CCF Legacy Connectors | {ccf_legacy_count} |\n")
+            f.write(f"| **Total CCF** | **{len(ccf_connectors)}** |\n")
+            f.write(f"| With config file | {len(ccf_with_config)} |\n")
+            f.write(f"| With capabilities detected | {len(ccf_with_caps)} |\n")
+            f.write("\n")
+            
+            # Parse all capabilities and categorize them
+            # Categories: Kind (connector kind), Auth (authentication type), Features (paging, POST, etc.)
+            kind_counts: Dict[str, int] = defaultdict(int)
+            auth_counts: Dict[str, int] = defaultdict(int)
+            feature_counts: Dict[str, int] = defaultdict(int)
+            
+            KNOWN_AUTH_TYPES = {'APIKey', 'OAuth2', 'Basic', 'JwtToken', 'ServicePrincipal', 'Session'}
+            KNOWN_FEATURES = {'Paging', 'POST', 'MvExpand', 'Nested'}
+            
+            for cid, info in ccf_connectors.items():
+                caps_str = info.get('ccf_capabilities', '')
+                if not caps_str:
+                    continue
+                for cap in caps_str.split(';'):
+                    cap = cap.strip()
+                    if not cap:
+                        continue
+                    if cap in KNOWN_AUTH_TYPES:
+                        auth_counts[cap] += 1
+                    elif cap in KNOWN_FEATURES:
+                        feature_counts[cap] += 1
+                    else:
+                        kind_counts[cap] += 1
+            
+            # Connector Kind table
+            if kind_counts:
+                # RestApiPoller is implicit/default and not listed, so all listed kinds are non-default
+                f.write("**Connector Kind** (non-default kinds; REST API polling is the default):\n\n")
+                f.write("| Kind | Count |\n")
+                f.write("|:-----|------:|\n")
+                rest_api_count = len(ccf_with_caps) - sum(kind_counts.values())
+                if rest_api_count > 0:
+                    f.write(f"| REST API Polling *(default)* | {rest_api_count} |\n")
+                for kind, count in sorted(kind_counts.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {kind} | {count} |\n")
+                f.write("\n")
+            
+            # Authentication table
+            if auth_counts:
+                f.write("**Authentication Methods:**\n\n")
+                f.write("| Auth Type | Count |\n")
+                f.write("|:----------|------:|\n")
+                for auth, count in sorted(auth_counts.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {auth} | {count} |\n")
+                no_auth = len(ccf_with_caps) - sum(auth_counts.values())
+                if no_auth > 0:
+                    f.write(f"| *(none detected)* | {no_auth} |\n")
+                f.write("\n")
+            
+            # Features table
+            if feature_counts:
+                f.write("**Request Features:**\n\n")
+                f.write("| Feature | Count |\n")
+                f.write("|:--------|------:|\n")
+                for feat, count in sorted(feature_counts.items(), key=lambda x: x[1], reverse=True):
+                    f.write(f"| {feat} | {count} |\n")
+                f.write("\n")
         
         # ===================== TABLES STATISTICS =====================
         f.write("## Tables\n\n")
@@ -7516,6 +7653,8 @@ def main() -> None:
             row['filter_fields'] = connectors_reference[connector_id].get('filter_fields', '')
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
+            row['ccf_capabilities'] = connectors_reference[connector_id].get('ccf_capabilities', '')
+            row['ccf_config_file'] = connectors_reference[connector_id].get('ccf_config_file', '')
     
     # Enrich rows with logo/description/author/version/dependencies from solutions CSV
     for row in rows:
@@ -7735,6 +7874,8 @@ def main() -> None:
                 'is_deprecated': conn.get('is_deprecated', 'false'),
                 'not_in_solution_json': conn.get('not_in_solution_json', 'false'),
                 'support_tier': conn.get('solution_support_tier', ''),
+                'ccf_capabilities': conn.get('ccf_capabilities', ''),
+                'ccf_config_file': conn.get('ccf_config_file', ''),
             }
     
     # Generate the unified statistics page
