@@ -125,6 +125,7 @@ connector-docs/
 │   ├── mma.md                   # Log Analytics Agent (legacy) connectors
 │   ├── azure-diagnostics.md    # Azure Diagnostics connectors
 │   ├── ccf.md                   # Codeless Connector Framework connectors
+│   ├── ccf-push.md              # CCF Push mode connectors
 │   ├── azure-function.md       # Azure Function-based connectors
 │   ├── native.md                # Native Microsoft integrations
 │   ├── rest-api.md              # REST API/webhook connectors
@@ -179,7 +180,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, and connector definition files
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors)
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria
@@ -234,7 +235,8 @@ connector-docs/
 **Statistics Page** includes:
 - **Terminology** section with definitions for key concepts (Published, Deprecated, Discovered, Standalone, GitHub Only, etc.)
 - **Solutions** section with statistics by publication status, support tier, and content
-- **Connectors** section with statistics by collection method and deprecation status
+- **Connectors** section with statistics by collection method, deprecation status, and support tier cross-tabulation
+- **CCF Capabilities** subsection with connector kind distribution, authentication methods, and request features for CCF/CCF Push/CCF Legacy connectors
 - **Tables** section with statistics by source, category, and usage
 - **Content Items** section with statistics by type and source classification
 - **ASIM Parsers** section with statistics by schema and type

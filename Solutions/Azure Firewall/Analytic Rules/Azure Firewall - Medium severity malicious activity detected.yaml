@@ -1,0 +1,79 @@
+id: dfbe3963-42fb-4ebe-a00c-1cc44e2aa9f0
+name: Medium severity malicious activity detected
+description: |
+  Identifies medium severity malicious activity in Azure Firewall IDPS logs.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AZFWIdpsSignature
+queryFrequency: 1h
+queryPeriod: 24h     
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - InitialAccess
+  - Execution
+  - DefenseEvasion
+  - Impact
+relevantTechniques:
+  - T1496
+  - T1204
+  - T1036
+query: |
+  let TimeWindow   = 90d;    
+  let HitThreshold = 10;
+  let MinSeverity  = 2;
+  let EnableCategoryFilter    = true;
+  let EnableDescriptionFilter = false;
+  let EnableActionFilter      = false;
+  let CategoriesOfInterest = dynamic([
+      "Possibly Unwanted Program Detected",
+      "Possible Social Engineering Attempted",
+      "Crypto Currency Mining Activity Detected",
+      "A suspicious filename was detected",
+      "A system call was detected"
+  ]);
+  let DescriptionsOfInterest = dynamic([
+      "pup-activity",
+      "social-engineering",
+      "coin-mining",
+      "suspicious-filename-detect",
+      "system-call-detect"
+  ]);
+  let MatchActions = dynamic(["Deny", "alert"]);
+  AZFWIdpsSignature
+  | where TimeGenerated >= ago(TimeWindow)
+  | where Severity >= MinSeverity
+  | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))
+  | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))
+  | where (EnableActionFilter == false) or (Action in~ (MatchActions))
+  | summarize
+      StartTime   = min(TimeGenerated),
+      EndTime     = max(TimeGenerated),
+      TotalHits   = count(),
+      MaxSeverity = max(Severity),
+      Actions     = make_set(Action, 5),
+      Signatures  = make_set(SignatureId, 20),
+      Description = make_set(substring(tostring(Description), 0, 120), 3)
+      by SourceIp, ThreatCategory = Category
+  | where TotalHits >= HitThreshold
+  | project
+      StartTime,
+      EndTime,
+      SourceIp,
+      ThreatCategory,
+      TotalHits,
+      MaxSeverity,
+      Actions,
+      Signatures,
+      Description
+  | order by MaxSeverity desc, TotalHits desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0
+kind: Scheduled
