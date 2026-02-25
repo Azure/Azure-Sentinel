@@ -39,7 +39,7 @@ The Solution Connector Tables Analyzer is a comprehensive tool that scans the Az
 
 **Data Connector Analysis**
 - Extract table references from connector JSON files (queries, sample queries, data types)
-- Detect collection methods (AMA, MMA, Azure Diagnostics, CCF, Azure Functions, REST API, Native)
+- Detect collection methods (AMA, MMA, Azure Diagnostics, CCF, CCF Push, CCF Legacy, Azure Functions, REST API, Native)
 - Extract filter fields (DeviceVendor, EventID, Facility, etc.) to identify data sources
 - Resolve parser function references to actual underlying tables
 - Check Azure Marketplace availability for each solution
@@ -250,6 +250,8 @@ Contains one row per unique connector with all connector-specific fields and col
 | `solution_name` | Name of the parent solution | Parent solution folder name |
 | `is_deprecated` | `true` if connector title contains "[DEPRECATED]" or "[Deprecated]" | Pattern match on connector title |
 | `is_published` | `true` if parent solution is published on Azure Marketplace | Azure Marketplace API query |
+| `ccf_config_file` | GitHub URL to the CCF configuration file (for CCF and CCF Push connectors) | File system scan for polling/poller config files |
+| `ccf_capabilities` | Semicolon-separated CCF capabilities (auth type, paging, POST, etc.) | Parsed from CCF config JSON |
 
 ### 2. solutions.csv (Solution Details)
 
@@ -565,7 +567,9 @@ The analyzer determines the data collection method used by each connector throug
 | **Log Analytics Agent (MMA)** | Legacy Microsoft Monitoring Agent (deprecated) | Title mentions "Legacy Agent", "omsagent" references, "cef_installer.py" scripts, workspace ID/key patterns, `OmsSolutions` patterns, `InstallAgentOnVirtualMachine`/`InstallAgentOnNonAzure`/`InstallAgentOnLinuxNonAzure` patterns. Special case: connector ID `WindowsFirewall` (without Ama suffix) |
 | **Azure Diagnostics** | Azure resource diagnostic settings | "AzureDiagnostics" references in content, "diagnostic settings" in description, `Microsoft.Insights/diagnosticSettings` resource, Azure Policy diagnostics (`policyDefinitionGuid` + `PolicyAssignment`), table category "Azure Resources" |
 | **Native** | Built-in Sentinel integrations | `SentinelKinds` property present, Microsoft Defender/365/Entra ID connectors, known native connector IDs (`AzureActivity`, `AzureActiveDirectory`, `Office365`, `MicrosoftDefender`) - skipped if CCF content patterns detected |
-| **Codeless Connector Framework (CCF)** | Microsoft's codeless connector platform (CCP/CCF) | `pollingConfig` present, `dcrConfig` with `RestApiPoller`, `GCPAuthConfig`, `dataConnectorDefinitions` (except AMA title connectors), ID contains "CCP"/"CCF"/"Codeless", ID contains "Polling", **CCF Push variant**: `DeployPushConnectorButton` + `HasDataConnectors` (DCR/DCE-based push ingestion) |
+| **Codeless Connector Framework (CCF)** | Microsoft's codeless connector platform (CCP/CCF) | `pollingConfig` present, `dcrConfig` with `RestApiPoller`, `GCPAuthConfig`, `dataConnectorDefinitions` (except AMA title connectors), ID contains "CCP"/"CCF"/"Codeless", ID contains "Polling" |
+| **CCF Push** | CCF Push mode (partner pushes data via DCR/DCE) | `DeployPushConnectorButton` in connector definition (DCR/DCE-based push ingestion) |
+| **CCF (Legacy)** | Legacy CCF with embedded pollingConfig | Initially detected as CCF, but reclassified when `pollingConfig` is found in the primary connector JSON and no separate CCF config file exists |
 | **Azure Function** | Azure Functions-based data collection | Filename contains "FunctionApp"/"function_app"/"_api_function", description mentions "Azure Functions", ID contains "AzureFunction"/"FunctionApp", "Deploy to Azure" + "Function App" patterns, "Azure Function App" in content, Azure Functions pricing references |
 | **REST API** | Direct API push/webhook collection | "REST API" in title/description, "push" in title/ID, webhook patterns, HTTP endpoint/trigger references |
 | **Unknown (Custom Log)** | Method could not be determined | Only custom log table (`_CL`) references found, no other patterns matched |
@@ -578,7 +582,7 @@ The detection algorithm uses a tiered priority system with 11 levels. When a con
 |----------|-------------------|-------------------|
 | **1** | **Explicit AMA/MMA in title** (highest) | Title contains "AMA", "via AMA", ID ends with "ama", title contains "Legacy Agent" or "via Legacy Agent". Special: `WindowsFirewall` connector is MMA. |
 | **2** | **Azure Function filename** | Filename contains "FunctionApp"/"function_app"/"_api_function", ID contains "AzureFunction"/"FunctionApp" |
-| **3** | **CCF content patterns** | `pollingConfig`, `dcrConfig` with `RestApiPoller`, `GCPAuthConfig`, `dataConnectorDefinitions` (unless AMA title), CCF Push (`DeployPushConnectorButton` + `HasDataConnectors`) |
+| **3** | **CCF content patterns** | `pollingConfig`, `dcrConfig` with `RestApiPoller`, `GCPAuthConfig`, `dataConnectorDefinitions` (unless AMA title). **CCF Push**: `DeployPushConnectorButton` (separately classified as "CCF Push") |
 | **4** | **Azure Diagnostics** | "AzureDiagnostics" in content, "diagnostic settings" in description, `Microsoft.Insights/diagnosticSettings`, Azure Policy diagnostics. Skipped if Azure Function filename detected. |
 | **5** | **CCF name patterns** | ID contains "CCP"/"CCF"/"Codeless", ID contains "Polling". Skipped if Azure Diagnostics patterns found. |
 | **6** | **Azure Function content** | "Azure Functions" in description, "Deploy to Azure" + "Function App", Azure Functions pricing. Skipped if CCF content detected. |
@@ -593,7 +597,8 @@ The detection algorithm uses a tiered priority system with 11 levels. When a con
 After all patterns are detected, the final method is selected using this priority order:
 1. If title explicitly indicates AMA → select AMA
 2. If title explicitly indicates MMA → select MMA
-3. Otherwise: Azure Diagnostics > CCF > Azure Function > Native > MMA > AMA > REST API > Unknown
+3. Otherwise: Azure Diagnostics > CCF Push > CCF > Azure Function > Native > MMA > AMA > REST API > Unknown
+4. Post-processing: CCF connectors with `pollingConfig` in primary JSON and no separate config file are reclassified as **CCF (Legacy)**
 
 #### CSV Fields Affected
 
@@ -601,6 +606,8 @@ After all patterns are detected, the final method is selected using this priorit
 |-------|-------------|
 | `collection_method` | The detected collection method (in `connectors.csv`) |
 | `collection_method_reason` | Explanation of why this method was selected |
+| `ccf_config_file` | GitHub URL to the CCF configuration file (populated for CCF and CCF Push connectors; empty for CCF Legacy) |
+| `ccf_capabilities` | Semicolon-separated list of CCF capabilities extracted from the config file or embedded pollingConfig (e.g., `APIKey;Paging;POST`) |
 
 > **Key Design Decisions:**
 > - **Azure Diagnostics > CCF name**: Connectors with `_CCP` suffix that reference "AzureDiagnostics" are Azure Diagnostics (the CCP suffix indicates the connector was built using the CCF framework, but it still collects via Azure Diagnostics)
@@ -608,6 +615,35 @@ After all patterns are detected, the final method is selected using this priorit
 > - **Azure Function filename is strong**: Connectors with "FunctionApp" in the filename are Azure Functions regardless of content patterns
 > - **Title-based AMA/MMA is strongest**: When a connector title explicitly includes "AMA" or "Legacy Agent", it overrides all other patterns
 > - **MMA content patterns override AMA metadata**: MMA-era patterns like `OmsSolutions` and `InstallAgent*` take precedence over AMA detection from table metadata
+
+### CCF Configuration and Capabilities
+
+For connectors detected as **CCF** or **CCF Push**, the analyzer locates the CCF configuration file and extracts capabilities from it. For **CCF (Legacy)** connectors, capabilities are extracted from the embedded `pollingConfig`.
+
+#### CCF Config File Discovery
+
+The analyzer searches the connector's directory (and sibling `*_ccp/` directories) for files matching these patterns (in order):
+- `*PollingConfig*.json`, `*PollerConfig*.json` — standard CCF poller configs
+- `*DataConnectorPoller*.json`, `*dataPoller*.json` — alternative naming
+- `*_poller*.json` — older naming convention
+- `connectors.json` — modern CCF naming (e.g., Bitwarden)
+- `*_dataConnector*.json` (excluding `*connectorDefinition*`) — Push connector configs
+- Sibling `*_ccp/` directories — some connectors (e.g., GCP) store configs in a sibling directory with `_ccp` suffix
+
+Files matching skip patterns are excluded: `azuredeploy*`, `mainTemplate*`, `*connectorDefinition*`, `definitions.json`, `*_table.*`, `*_dcr.*`, and common non-config files.
+
+If no separate config file is found but `pollingConfig` exists in the primary connector JSON, the connector is reclassified as **CCF (Legacy)** and capabilities are extracted from the embedded config.
+
+#### CCF Capabilities Extracted
+
+| Capability | Description |
+|-----------|-------------|
+| **Connector Kind** | Non-default kinds: `GCP`, `AmazonWebServicesS3`, `Push`, `StorageAccountBlobContainer`, `WebSocket`, `OCI`, etc. (`RestApiPoller` is omitted as it's the default) |
+| **Auth Type** | Authentication method: `APIKey`, `OAuth2`, `Basic`, `JwtToken`, `Push`, `ServicePrincipal`, `Session`, etc. |
+| `Paging` | Whether the connector uses paging to retrieve results |
+| `POST` | Whether the connector uses HTTP POST (GET is the default) |
+| `MvExpand` | Whether the config uses the MvExpand transformer (`nestedTransformName` containing `MvExpandTransformer`) |
+| `Nested` | Whether the config uses nested steps (`stepType: Nested`) |
 
 ### Filter Fields Detection
 
