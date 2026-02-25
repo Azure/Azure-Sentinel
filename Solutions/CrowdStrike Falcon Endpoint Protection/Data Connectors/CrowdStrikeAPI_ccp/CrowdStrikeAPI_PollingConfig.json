@@ -2,89 +2,6 @@
   {
     "type": "Microsoft.SecurityInsights/dataConnectors",
     "apiVersion": "2024-09-01",
-    "name": "CrowdStrikeVulnerabilitiesPoller",
-    "location": "[parameters('workspace-location')]",
-    "kind": "RestApiPoller",
-    "properties": {
-      "auth": {
-        "type": "OAuth2",
-        "ClientId": "[[parameters('clientId')]",
-        "ClientSecret": "[[parameters('clientSecret')]",
-        "GrantType": "client_credentials",
-        "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
-        "TokenEndpointHeaders": {
-          "Accept": "application/json",
-          "Content-Type": "application/x-www-form-urlencoded"
-        }
-      },
-      "request": {
-        "apiEndpoint": "[[concat(parameters('apiUrl'),'/spotlight/combined/vulnerabilities/v1')]",
-        "httpMethod": "GET",
-        "rateLimitQPS": 1,
-        "rateLimitConfig": {
-          "evaluation": {
-            "checkMode": "OnlyWhen429"
-          },
-          "extraction": {
-            "source": "CustomHeaders",
-            "headers": {
-              "limit": {
-                "name": "X-RateLimit-Limit",
-                "format": "Integer"
-              },
-              "remaining": {
-                "name": "X-RateLimit-Remaining",
-                "format": "Integer"
-              },
-              "reset": {
-                "name": "X-RateLimit-RetryAfter",
-                "format": "UnixTimeSeconds"
-              }
-            }
-          },
-          "retryStrategy": {
-            "useResetOrRetryAfterHeaders": true
-          }
-        },
-        "queryWindowInMin": 15,
-        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
-        "retryCount": 5,
-        "timeoutInSeconds": 90,
-        "headers": {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "User-Agent": "Scuba"
-        },
-        "queryParameters": {
-          "filter": "updated_timestamp:>'{_QueryWindowStartTime}'+updated_timestamp:<='{_QueryWindowEndTime}'",
-          "sort": "updated_timestamp.asc"
-        }
-      },
-      "response": {
-        "eventsJsonPaths": [
-          "$.resources"
-        ],
-        "format": "json"
-      },
-      "paging": {
-        "pagingType": "NextPageToken",
-        "nextPageTokenJsonPath": "$.meta.pagination.after",
-        "NextPageParaName": "after",
-        "pageSize": 500,
-        "pageSizeParameterName": "limit"
-      },
-      "connectorDefinitionName": "CrowdStrikeAPICCPDefinition",
-      "dataType": "CrowdStrikeVulnerabilities",
-      "dcrConfig": {
-        "streamName": "SENTINEL_CROWDSTRIKEVULNERABILITIES",
-        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
-        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
-      }
-    }
-  },
-  {
-    "type": "Microsoft.SecurityInsights/dataConnectors",
-    "apiVersion": "2024-09-01",
     "name": "CrowdStrikeAlertsPoller",
     "location": "[parameters('workspace-location')]",
     "kind": "RestApiPoller",
@@ -153,7 +70,7 @@
         "nextPageParaName": "after",
         "pageSize": 500
       },
-      "connectorDefinitionName": "CrowdStrikeAPICCPDefinition",
+      "connectorDefinitionName": "CrowdStrikeAPIConnector",
       "dataType": "CrowdStrikeAlerts",
       "dcrConfig": {
         "streamName": "SENTINEL_CROWDSTRIKEALERTS",
@@ -165,7 +82,7 @@
   {
     "type": "Microsoft.SecurityInsights/dataConnectors",
     "apiVersion": "2024-09-01",
-    "name": "CrowdStrikeIncidentsPoller",
+    "name": "CrowdStrikeCasesPoller",
     "location": "[parameters('workspace-location')]",
     "kind": "RestApiPoller",
     "properties": {
@@ -181,7 +98,7 @@
         }
       },
       "request": {
-        "apiEndpoint": "[[concat(parameters('apiUrl'),'/incidents/queries/incidents/v1')]",
+        "apiEndpoint": "[[concat(parameters('apiUrl'),'/cases/queries/cases/v1')]",
         "httpMethod": "GET",
         "rateLimitQPS": 1,
         "rateLimitConfig": {
@@ -219,8 +136,8 @@
           "User-Agent": "Scuba"
         },
         "queryParameters": {
-          "filter": "modified_timestamp:>'{_QueryWindowStartTime}'+modified_timestamp:<='{_QueryWindowEndTime}'",
-          "sort": "modified_timestamp.asc"
+          "filter": "updated_timestamp:>'{_QueryWindowStartTime}'+updated_timestamp:<='{_QueryWindowEndTime}'",
+          "sort": "updated_timestamp.asc"
         }
       },
       "response": {
@@ -239,16 +156,16 @@
         "stepType": "Nested",
         "nextSteps": [
           {
-            "stepId": "incidents_details",
+            "stepId": "case_details",
             "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project resources = res['resources'] | mvexpand resources | project Url_PlaceHolder = resources"
           }
         ]
       },
       "stepCollectorConfigs": {
-        "incidents_details": {
+        "case_details": {
           "shouldJoinNestedData": false,
           "request": {
-            "apiEndpoint": "[[concat(parameters('apiUrl'),'/incidents/entities/incidents/GET/v1')]",
+            "apiEndpoint": "[[concat(parameters('apiUrl'),'/cases/entities/cases/v2')]",
             "httpMethod": "POST",
             "rateLimitQPS": 1,
             "queryWindowInMin": 5,
@@ -271,10 +188,10 @@
           }
         }
       },
-      "connectorDefinitionName": "CrowdStrikeAPICCPDefinition",
-      "dataType": "CrowdStrikeIncidents",
+      "connectorDefinitionName": "CrowdStrikeAPIConnector",
+      "dataType": "CrowdStrikeCases",
       "dcrConfig": {
-        "streamName": "SENTINEL_CROWDSTRIKEINCIDENTS",
+        "streamName": "SENTINEL_CROWDSTRIKECASES",
         "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
         "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
       }
@@ -337,7 +254,7 @@
           "Accept": "application/json",
           "User-Agent": "Scuba"
         },
-        "queryParametersTemplate": "{\r\n                    \"filter\": \"product:'epp'+created_timestamp:>'{_QueryWindowStartTime}'+created_timestamp:<='{_QueryWindowEndTime}'+type:'ldt'\",\r\n                    \"sort\": \"created_timestamp.asc\"\r\n                }"
+        "queryParametersTemplate": "{\r\n                    \"filter\": \"(product:'epp'+type:'ldt'),(product:'mobile'),(product:'idp'),(product:'xdr')+created_timestamp:>'{_QueryWindowStartTime}'+created_timestamp:<='{_QueryWindowEndTime}'\",\r\n                    \"sort\": \"created_timestamp.asc\"\r\n                }"
       },
       "response": {
         "eventsJsonPaths": [
@@ -351,7 +268,7 @@
         "nextPageParaName": "after",
         "pageSize": 500
       },
-      "connectorDefinitionName": "CrowdStrikeAPICCPDefinition",
+      "connectorDefinitionName": "CrowdStrikeAPIConnector",
       "dataType": "CrowdStrikeDetections",
       "dcrConfig": {
         "streamName": "SENTINEL_CROWDSTRIKEDETECTIONS",
@@ -434,10 +351,93 @@
         "pageSize": 500,
         "pageSizeParameterName": "limit"
       },
-      "connectorDefinitionName": "CrowdStrikeAPICCPDefinition",
+      "connectorDefinitionName": "CrowdStrikeAPIConnector",
       "dataType": "CrowdStrikeHosts",
       "dcrConfig": {
         "streamName": "SENTINEL_CROWDSTRIKEHOSTS",
+        "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+        "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+      }
+    }
+  },
+  {
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "apiVersion": "2024-09-01",
+    "name": "CrowdStrikeVulnerabilitiesPoller",
+    "location": "[parameters('workspace-location')]",
+    "kind": "RestApiPoller",
+    "properties": {
+      "auth": {
+        "type": "OAuth2",
+        "ClientId": "[[parameters('clientId')]",
+        "ClientSecret": "[[parameters('clientSecret')]",
+        "GrantType": "client_credentials",
+        "TokenEndpoint": "[[concat(parameters('apiUrl'),'/oauth2/token')]",
+        "TokenEndpointHeaders": {
+          "Accept": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('apiUrl'),'/spotlight/combined/vulnerabilities/v1')]",
+        "httpMethod": "GET",
+        "rateLimitQPS": 1,
+        "rateLimitConfig": {
+          "evaluation": {
+            "checkMode": "OnlyWhen429"
+          },
+          "extraction": {
+            "source": "CustomHeaders",
+            "headers": {
+              "limit": {
+                "name": "X-RateLimit-Limit",
+                "format": "Integer"
+              },
+              "remaining": {
+                "name": "X-RateLimit-Remaining",
+                "format": "Integer"
+              },
+              "reset": {
+                "name": "X-RateLimit-RetryAfter",
+                "format": "UnixTimeSeconds"
+              }
+            }
+          },
+          "retryStrategy": {
+            "useResetOrRetryAfterHeaders": true
+          }
+        },
+        "queryWindowInMin": 15,
+        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+        "retryCount": 5,
+        "timeoutInSeconds": 90,
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": "Scuba"
+        },
+        "queryParameters": {
+          "filter": "updated_timestamp:>'{_QueryWindowStartTime}'+updated_timestamp:<='{_QueryWindowEndTime}'",
+          "sort": "updated_timestamp.asc"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.resources"
+        ],
+        "format": "json"
+      },
+      "paging": {
+        "pagingType": "NextPageToken",
+        "nextPageTokenJsonPath": "$.meta.pagination.after",
+        "NextPageParaName": "after",
+        "pageSize": 500,
+        "pageSizeParameterName": "limit"
+      },
+      "connectorDefinitionName": "CrowdStrikeAPIConnector",
+      "dataType": "CrowdStrikeVulnerabilities",
+      "dcrConfig": {
+        "streamName": "SENTINEL_CROWDSTRIKEVULNERABILITIES",
         "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
         "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
       }

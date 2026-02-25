@@ -50,7 +50,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0
-      
+
       - name: Check if PR needs approval
         id: check-approval
         run: |
@@ -107,17 +107,27 @@ jobs:
 
       - name: Prevent fork modifications to test infrastructure
         if: github.event.pull_request.head.repo.fork == true
+        shell: bash
         run: |
+          set -euo pipefail
+
           log_info() { echo "ℹ️  $1"; }
           log_error() { echo "❌ $1"; }
           log_success() { echo "✅ $1"; }
-          
+
           log_info "Checking for modifications to asimParsersTest folder in fork PR..."
-          
-          # Get the list of modified files
-          modified_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }})
-          
-          # Check if any files in .script/tests/asimParsersTest/ have been modified
+
+          # We are currently checked out at the fork's HEAD SHA (actions/checkout did that).
+          # Add the base repo as a remote and fetch the base branch, so we can diff reliably.
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream "https://github.com/${{ github.repository }}.git"
+
+          log_info "Fetching base branch ${{ github.event.pull_request.base.ref }} from upstream..."
+          git fetch --no-tags --prune upstream "${{ github.event.pull_request.base.ref }}"
+
+          # Diff base branch (FETCH_HEAD) -> current HEAD (fork head)
+          modified_files="$(git diff --name-only "FETCH_HEAD...HEAD")"
+
           if echo "$modified_files" | grep -E "\.script/tests/asimParsersTest/" > /dev/null; then
             log_error "Fork PRs cannot modify the asimParsersTest test infrastructure folder"
             log_error "Modified test files detected:"
@@ -126,11 +136,11 @@ jobs:
           fi
           
           log_success "No modifications to asimParsersTest folder detected"
-      
+
       - name: Comment on fork PR for approval guidance
         if: |
           always() && 
-          github.event.pull_request.head.repo.fork == false && 
+          github.event.pull_request.head.repo.fork == true && 
           steps.check-approval.outputs.comment_needed == 'true'
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
         with:
