@@ -28,6 +28,8 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
    - All tables ingested by connectors
    - All tables referenced by content items
    - **All tables from Azure Monitor reference** (`tables_reference.csv`), even if not used by any solution.
+   - "Discovered Via" column showing discovery sources (Connector, Content, Azure Monitor, Defender XDR, Sentinel API, Schema)
+   - 📖 icon for tables with schema information
 - **[Content Index](../connector-docs/content/content-index.md)** - All content items organized by type
 - **[Parsers Index](../connector-docs/parsers/parsers-index.md)** - All non-ASIM parsers organized by solution
 - **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema
@@ -107,6 +109,7 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--asim-parsers-csv` | `asim_parsers.csv` | Path to ASIM parsers CSV file |
 | `--parsers-csv` | `parsers.csv` | Path to parsers CSV file |
 | `--solution-dependencies-csv` | `solution_dependencies.csv` | Path to solution dependencies CSV file |
+| `--table-schemas-csv` | `table_schemas.csv` | Path to table schemas CSV file with column definitions |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
 ## Output Structure
@@ -193,6 +196,7 @@ connector-docs/
 **Table Pages** include:
 - **Table description** from Azure Monitor documentation
 - **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, and documentation links
+- **Schema** section with column definitions (name, type, description, source) from `table_schemas.csv`. Columns are deduplicated across sources; Description and Source columns are shown only when relevant data exists. Source attribution with links is shown at the top of the section
 - **Additional Information** section (from overrides, if configured)
 - **Solutions** section listing all solutions using this table
 - **Connectors** section listing connectors ingesting this table with selection criteria
@@ -243,6 +247,7 @@ connector-docs/
 - **Content Items** section with statistics by type and source classification
 - **ASIM Parsers** section with statistics by schema and type
 - **Non-ASIM Parsers** section with statistics by location
+- **Dependencies** section with dependency counts by type (explicit/ASIM), ASIM dependencies per schema, and most depended-upon solutions
 
 **Index Pages** provide:
 - "Browse by" navigation between all index pages (solutions, connectors, tables, content, parsers, ASIM, collection methods, statistics)

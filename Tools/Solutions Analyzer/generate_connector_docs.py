@@ -61,12 +61,14 @@ UNPUBLISHED_ICON = "⚠️"  # Warning icon for unpublished solutions/connectors
 DEPRECATED_ICON = "🚫"   # Deprecated/no-entry icon for deprecated connectors
 DISCOVERED_ICON = "🔍"   # Magnifying glass for discovered items not in solution JSON
 ADDITIONAL_INFO_ICON = "➕"  # Plus icon for items with additional documentation/info
+SCHEMA_ICON = "📖"  # Book icon for tables with schema information
 
 # Footnotes for icons
 UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace or not installed in Content Hub."
 DEPRECATED_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This connector has been deprecated and may be removed in future versions."
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
 ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
+SCHEMA_FOOTNOTE = f"> {SCHEMA_ICON} **Schema:** Column schema information is available for this table."
 
 # Collection method metadata: descriptions and documentation links
 COLLECTION_METHODS_METADATA: Dict[str, Dict[str, str]] = {
@@ -1076,7 +1078,7 @@ def get_asim_parser_filename(parser_identifier: str) -> str:
     return sanitize_filename(parser_identifier)
 
 
-def format_table_link(table_name: str, relative_path: str = "../tables/", asim_path: str = None) -> str:
+def format_table_link(table_name: str, relative_path: str = "../tables/", asim_path: str = None, backticks: bool = True) -> str:
     """
     Format a table name (or ASIM parser) as a markdown link to its documentation page.
     
@@ -1087,10 +1089,11 @@ def format_table_link(table_name: str, relative_path: str = "../tables/", asim_p
         table_name: The name of the table or ASIM parser
         relative_path: Relative path to tables directory (default: ../tables/)
         asim_path: Relative path to ASIM directory (default: derived from relative_path)
+        backticks: Whether to wrap the table name in backticks (default: True)
     
     Returns:
         Markdown formatted link like [`TableName`](../tables/tablename.md) or
-        [`_Im_Dns`](../asim/imdns.md) for ASIM parsers
+        [TableName](../tables/tablename.md) (when backticks=False)
     """
     # Determine ASIM path based on tables path if not explicitly provided
     if asim_path is None:
@@ -1100,13 +1103,15 @@ def format_table_link(table_name: str, relative_path: str = "../tables/", asim_p
         else:
             asim_path = relative_path.replace('/tables/', '/asim/')
     
+    fmt_name = f"`{table_name}`" if backticks else table_name
+    
     # Check if this is an ASIM parser
     if is_asim_parser(table_name):
         parser_filename = get_asim_parser_filename(table_name) + ".md"
-        return f"[`{table_name}`]({asim_path}{parser_filename})"
+        return f"[{fmt_name}]({asim_path}{parser_filename})"
     
     table_filename = sanitize_filename(table_name) + ".md"
-    return f"[`{table_name}`]({relative_path}{table_filename})"
+    return f"[{fmt_name}]({relative_path}{table_filename})"
 
 
 def format_tables_with_links(tables: List[str], relative_path: str = "../tables/") -> str:
@@ -3813,7 +3818,8 @@ def generate_collection_method_page(method: str, stats: Dict[str, any], methods_
 
 
 def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir: Path, tables_reference: Dict[str, Dict[str, str]],
-                          content_table_info: Dict[str, Dict[str, Dict[str, Set[str]]]] = None) -> Dict[str, Dict[str, any]]:
+                          content_table_info: Dict[str, Dict[str, Dict[str, Set[str]]]] = None,
+                          tables_with_schemas: Set[str] = None) -> Dict[str, Dict[str, any]]:
     """Generate tables index page organized alphabetically.
     
     Args:
@@ -3821,9 +3827,12 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         output_dir: Output directory for documentation
         tables_reference: Dictionary of table metadata from reference CSV
         content_table_info: Dictionary of solution -> table -> {types, usage} from content items
+        tables_with_schemas: Set of table names that have schema information available
     """
     if content_table_info is None:
         content_table_info = {}
+    if tables_with_schemas is None:
+        tables_with_schemas = set()
     
     index_path = output_dir / "tables-index.md"
     
@@ -3875,12 +3884,18 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
     for solution_name, tables_info in content_table_info.items():
         for table_name, info in tables_info.items():
             if table_name and not is_asim_parser_table(table_name) and is_valid_table_name(table_name):  # Skip empty, ASIM parser, and invalid tables
-                tables_map[table_name]['solutions'].add(solution_name)
+                if solution_name:  # Don't add empty solution names to the solutions set
+                    tables_map[table_name]['solutions'].add(solution_name)
                 tables_map[table_name]['content_types'].update(info.get('types', set()))
     
     # Add tables from tables_reference that aren't already in the map
     # These are reference tables that may not be actively used by solutions
     for table_name in tables_reference.keys():
+        if table_name and table_name not in tables_map and not is_asim_parser_table(table_name) and is_valid_table_name(table_name):
+            tables_map[table_name]  # Initialize with defaults from defaultdict
+    
+    # Add schema-only tables that aren't already in the map
+    for table_name in tables_with_schemas:
         if table_name and table_name not in tables_map and not is_asim_parser_table(table_name) and is_valid_table_name(table_name):
             tables_map[table_name]  # Initialize with defaults from defaultdict
     
@@ -3914,6 +3929,14 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         f.write(f"**{len(tables_map)} tables** documented ({tables_with_connectors} ingested by connectors, {tables_with_content} referenced by content only). ")
         f.write(f"See [📊 Statistics](statistics.md) for detailed breakdowns.\n\n")
         
+        # Discovery source explanation
+        f.write("The **Discovered Via** column shows how each table was identified. ")
+        f.write("When a table appears in multiple sources, the highest-priority source is shown:\n\n")
+        f.write("1. **Connector** — the table is ingested by a data connector\n")
+        f.write("2. **Content** — the table is referenced by content items (analytics rules, hunting queries, workbooks, or playbooks)\n")
+        f.write("3. **Docs** — the table appears in Microsoft documentation (Azure Monitor, Defender XDR, Sentinel, or feature support references)\n")
+        f.write("4. **Schema** — the table was identified from schema definitions (DCR files, Azure Monitor docs, or KQL validation)\n\n")
+        
         f.write("---\n\n")
         
         f.write(f"Browse tables alphabetically:\n\n")
@@ -3938,11 +3961,16 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
         if has_additional_info:
             f.write(ADDITIONAL_INFO_FOOTNOTE + "\n\n")
         
+        # Check if any tables have schema information and add footnote
+        has_schemas = bool(tables_with_schemas & set(tables_map.keys()))
+        if has_schemas:
+            f.write(SCHEMA_FOOTNOTE + "\n\n")
+        
         # Generate sections by letter - compact format with counts linking to table pages
         for letter in letters:
             f.write(f"## {letter}\n\n")
-            f.write("| Table | Solutions | Connectors | Content |\n")
-            f.write("|-------|:---------:|:----------:|:--------|\n")
+            f.write("| Table | Discovered Via | Solutions | Connectors | Content |\n")
+            f.write("|-------|:---------------|:---------:|:----------:|:--------|\n")
             
             for table in sorted(by_letter[letter]):
                 info = tables_map[table]
@@ -3951,11 +3979,34 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                 content_types = info.get('content_types', set())
                 
                 # All tables get individual pages now - use format_table_link for proper ASIM handling
-                table_cell = format_table_link(table, "tables/", "asim/")
+                table_cell = format_table_link(table, "tables/", "asim/", backticks=False)
+                
+                # Add schema icon if table has schema information
+                if table in tables_with_schemas:
+                    table_cell += " 📖"
                 
                 # Add ADDITIONAL_INFO_ICON if table has additional_information
                 if get_doc_override('table', table, 'additional_information'):
                     table_cell += f" {ADDITIONAL_INFO_ICON}"
+                
+                # Determine primary discovery source by priority:
+                # Connector > Content > Docs > Schema
+                ref_data = tables_reference.get(table, {})
+                has_docs = (ref_data.get('source_azure_monitor', '').lower() == 'yes'
+                            or ref_data.get('source_defender_xdr', '').lower() == 'yes'
+                            or ref_data.get('source_sentinel_tables', '').lower() == 'yes'
+                            or ref_data.get('source_feature_support', '').lower() == 'yes'
+                            or ref_data.get('source_ingestion_api', '').lower() == 'yes')
+                if info['connectors']:
+                    discovery_cell = "Connector"
+                elif info.get('content_types'):
+                    discovery_cell = "Content"
+                elif has_docs:
+                    discovery_cell = "Docs"
+                elif table in tables_with_schemas:
+                    discovery_cell = "Schema"
+                else:
+                    discovery_cell = "-"
                 
                 # Get the link target for this table
                 if is_asim_parser(table):
@@ -4011,7 +4062,7 @@ def generate_tables_index(solutions: Dict[str, List[Dict[str, str]]], output_dir
                             type_parts.append(ctype)
                     content_cell = ", ".join(type_parts)
                 
-                f.write(f"| {table_cell} | {solutions_cell} | {connectors_cell} | {content_cell} |\n")
+                f.write(f"| {table_cell} | {discovery_cell} | {solutions_cell} | {connectors_cell} | {content_cell} |\n")
             
             f.write("\n")
         
@@ -4031,7 +4082,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                          parsers_by_table: Dict[str, List[Dict[str, str]]] = None,
                          asim_parsers_by_table: Dict[str, List[Dict[str, str]]] = None,
                          content_filter_fields_lookup: Dict[str, str] = None,
-                         content_source_lookup: Dict[str, str] = None) -> None:
+                         content_source_lookup: Dict[str, str] = None,
+                         table_schemas_by_table: Dict[str, List[Dict[str, str]]] = None) -> None:
     """Generate individual table documentation pages for ALL tables.
     
     Args:
@@ -4044,6 +4096,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         asim_parsers_by_table: Dictionary mapping table name to list of ASIM parsers using that table
         content_filter_fields_lookup: Dictionary of content_id to content_filter_fields string
         content_source_lookup: Dictionary of content_key to content_source ('Solution', 'Standalone', 'GitHub Only')
+        table_schemas_by_table: Dictionary mapping table name to list of column schema rows
     """
     if content_tables_by_table is None:
         content_tables_by_table = {}
@@ -4057,6 +4110,8 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
         content_filter_fields_lookup = {}
     if content_source_lookup is None:
         content_source_lookup = {}
+    if table_schemas_by_table is None:
+        table_schemas_by_table = {}
     
     table_dir = output_dir / "tables"
     table_dir.mkdir(parents=True, exist_ok=True)
@@ -4153,7 +4208,7 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             if plan:
                 attributes.append(('Plan', plan))
             
-            # Documentation links
+            # Documentation references - show all doc sources with links
             azure_monitor_link = table_ref.get('azure_monitor_doc_link', '')
             defender_xdr_link = table_ref.get('defender_xdr_doc_link', '')
             
@@ -4161,11 +4216,21 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
             if not azure_monitor_link and table_ref.get('source_azure_monitor', '').lower() == 'yes':
                 azure_monitor_link = f"https://learn.microsoft.com/azure/azure-monitor/reference/tables/{table.lower()}"
             
+            doc_refs = []
             if azure_monitor_link:
-                attributes.append(('Azure Monitor Docs', f"[View Documentation]({azure_monitor_link})"))
-            
+                doc_refs.append(('Azure Monitor Tables Reference', azure_monitor_link))
             if defender_xdr_link:
-                attributes.append(('Defender XDR Docs', f"[View Documentation]({defender_xdr_link})"))
+                doc_refs.append(('Defender XDR Advanced Hunting Schema', defender_xdr_link))
+            if table_ref.get('source_sentinel_tables', '').lower() == 'yes':
+                doc_refs.append(('Sentinel Tables and Connectors Reference', 'https://learn.microsoft.com/azure/sentinel/data-connectors-reference'))
+            if table_ref.get('source_feature_support', '').lower() == 'yes':
+                doc_refs.append(('Azure Monitor Tables Feature Support', 'https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support'))
+            if table_ref.get('source_ingestion_api', '').lower() == 'yes':
+                doc_refs.append(('Azure Monitor Logs Ingestion API', 'https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview'))
+            
+            if doc_refs:
+                for doc_name, doc_url in doc_refs:
+                    attributes.append((doc_name, f"[View Documentation]({doc_url})"))
             
             # Only write attribute table if there are attributes
             if attributes:
@@ -4173,6 +4238,101 @@ def generate_table_pages(tables_map: Dict[str, Dict[str, any]], output_dir: Path
                 f.write("|:----------|:------|\n")
                 for attr_name, attr_value in attributes:
                     f.write(f"| **{attr_name}** | {attr_value} |\n")
+                f.write("\n")
+            
+            # Schema section - show column definitions if available
+            schema_columns = table_schemas_by_table.get(table, [])
+            if schema_columns:
+                # Deduplicate columns: if same column appears from multiple sources, keep all but show source
+                # Sort by column name for readability
+                sorted_columns = sorted(schema_columns, key=lambda c: c.get('column_name', '').lower())
+                
+                # Check if we need Description and Source columns
+                has_descriptions = any(c.get('description', '').strip() for c in sorted_columns)
+                sources = set(c.get('source', '').strip() for c in sorted_columns if c.get('source', '').strip())
+                has_multiple_sources = len(sources) > 1
+                
+                # Collect unique source URLs per source type for the header
+                source_urls: Dict[str, Set[str]] = defaultdict(set)
+                for col in sorted_columns:
+                    col_source = col.get('source', '').strip()
+                    col_url = col.get('source_url', '').strip()
+                    if col_source and col_url:
+                        source_urls[col_source].add(col_url)
+                
+                # Deduplicate: keep unique (column_name, column_type) pairs
+                # If same column appears from multiple sources, merge them
+                seen = {}
+                for col in sorted_columns:
+                    col_name = col.get('column_name', '').strip()
+                    col_type = col.get('column_type', '').strip()
+                    col_desc = col.get('description', '').strip()
+                    col_source = col.get('source', '').strip()
+                    key = col_name.lower()
+                    if key not in seen:
+                        seen[key] = {
+                            'name': col_name,
+                            'type': col_type,
+                            'description': col_desc,
+                            'sources': [col_source] if col_source else [],
+                        }
+                    else:
+                        # Merge: prefer non-empty description, collect sources
+                        if col_desc and not seen[key]['description']:
+                            seen[key]['description'] = col_desc
+                        if col_source and col_source not in seen[key]['sources']:
+                            seen[key]['sources'].append(col_source)
+                        # Prefer non-empty type
+                        if col_type and not seen[key]['type']:
+                            seen[key]['type'] = col_type
+                
+                unique_columns = sorted(seen.values(), key=lambda c: c['name'].lower())
+                
+                f.write(f"## Schema ({len(unique_columns)} columns)\n\n")
+                
+                # Source attribution with links
+                source_labels = {
+                    'Azure Monitor docs': 'Azure Monitor documentation',
+                    'DCR': 'Data Collection Rule definition',
+                    'KQL validation': 'KQL validation test schema',
+                }
+                source_parts = []
+                for src in sorted(source_urls.keys()):
+                    label = source_labels.get(src, src)
+                    urls = sorted(source_urls[src])
+                    if len(urls) == 1:
+                        source_parts.append(f"[{label}]({urls[0]})")
+                    else:
+                        # Multiple URLs for same source type - link to first, note count
+                        links = ', '.join(f"[{i+1}]({u})" for i, u in enumerate(urls))
+                        source_parts.append(f"{label} ({links})")
+                if source_parts:
+                    f.write(f"**Source:** {' · '.join(source_parts)}\n\n")
+                
+                # Build header based on available data
+                if has_descriptions and has_multiple_sources:
+                    f.write("| Column Name | Type | Description | Source |\n")
+                    f.write("|:------------|:-----|:------------|:-------|\n")
+                    for col in unique_columns:
+                        source_display = ', '.join(col['sources']) if col['sources'] else ''
+                        f.write(f"| {col['name']} | {col['type']} | {col['description']} | {source_display} |\n")
+                elif has_descriptions:
+                    f.write("| Column Name | Type | Description |\n")
+                    f.write("|:------------|:-----|:------------|\n")
+                    for col in unique_columns:
+                        f.write(f"| {col['name']} | {col['type']} | {col['description']} |\n")
+                elif has_multiple_sources:
+                    f.write("| Column Name | Type | Source |\n")
+                    f.write("|:------------|:-----|:-------|\n")
+                    for col in unique_columns:
+                        source_display = ', '.join(col['sources']) if col['sources'] else ''
+                        f.write(f"| {col['name']} | {col['type']} | {source_display} |\n")
+                else:
+                    f.write("| Column Name | Type |\n")
+                    f.write("|:------------|:-----|\n")
+                    for col in unique_columns:
+                        f.write(f"| {col['name']} | {col['type']} |\n")
+                
                 f.write("\n")
             
             # Additional Information section from overrides
@@ -6480,6 +6640,9 @@ def generate_statistics_page(
     asim_parsers: List[Dict[str, str]],
     non_asim_parsers: List[Dict[str, str]],
     tables_reference: Dict[str, Dict[str, str]] = None,
+    solution_dependencies: Dict[str, List[Dict[str, str]]] = None,
+    tables_with_schemas: Set[str] = None,
+    table_schemas_by_table: Dict[str, List[Dict[str, str]]] = None,
 ) -> None:
     """
     Generate a unified statistics page that consolidates statistics from all index pages.
@@ -6488,6 +6651,10 @@ def generate_statistics_page(
     
     if tables_reference is None:
         tables_reference = {}
+    if tables_with_schemas is None:
+        tables_with_schemas = set()
+    if table_schemas_by_table is None:
+        table_schemas_by_table = {}
     
     stats_path = output_dir / "statistics.md"
     
@@ -6499,6 +6666,19 @@ def generate_statistics_page(
         # Navigation
         write_browse_section(f, 'statistics', "")
         f.write("---\n\n")
+        
+        # Table of Contents
+        f.write("## Table of Contents\n\n")
+        f.write("- [Terminology](#terminology)\n")
+        f.write("- [Solutions](#solutions)\n")
+        f.write("- [Connectors](#connectors)\n")
+        f.write("- [Tables](#tables)\n")
+        f.write("- [Content](#content)\n")
+        f.write("- [Parsers](#parsers)\n")
+        f.write("- [ASIM Parsers](#asim-parsers)\n")
+        f.write("- [ASIM Products](#asim-products)\n")
+        f.write("- [Dependencies](#dependencies)\n")
+        f.write("\n")
         
         # ===================== TERMINOLOGY DEFINITIONS =====================
         f.write("## Terminology\n\n")
@@ -6921,26 +7101,97 @@ def generate_statistics_page(
         # ===================== TABLES STATISTICS =====================
         f.write("## Tables\n\n")
         
-        tables_with_connectors = sum(1 for info in tables_map.values() if info.get('connectors'))
-        tables_with_content = sum(1 for info in tables_map.values() if info.get('content_types') and not info.get('connectors'))
-        reference_only_tables = sum(1 for t, info in tables_map.items() if t in tables_reference and not info.get('connectors') and not info.get('content_types') and not info.get('solutions'))
-        reference_tables = sum(1 for t in tables_map.keys() if t in tables_reference)
-        xdr_only_tables = sum(1 for t in tables_map.keys() 
-                             if t in tables_reference 
-                             and tables_reference.get(t, {}).get('source_azure_monitor', '').lower() == 'no'
+        # Primary discovery source by priority: Connector > Content > Docs > Schema
+        primary_connector = 0
+        primary_content = 0
+        primary_docs = 0
+        primary_schema = 0
+        primary_none = 0
+        for table, info in tables_map.items():
+            ref_data = tables_reference.get(table, {})
+            has_docs = (ref_data.get('source_azure_monitor', '').lower() == 'yes'
+                        or ref_data.get('source_defender_xdr', '').lower() == 'yes'
+                        or ref_data.get('source_sentinel_tables', '').lower() == 'yes'
+                        or ref_data.get('source_feature_support', '').lower() == 'yes'
+                        or ref_data.get('source_ingestion_api', '').lower() == 'yes')
+            if info.get('connectors'):
+                primary_connector += 1
+            elif info.get('content_types'):
+                primary_content += 1
+            elif has_docs:
+                primary_docs += 1
+            elif table in tables_with_schemas:
+                primary_schema += 1
+            else:
+                primary_none += 1
+        
+        # Doc sub-source counts (a table may appear in multiple doc sources)
+        tables_via_azure_monitor = sum(1 for t in tables_map.keys()
+                                       if tables_reference.get(t, {}).get('source_azure_monitor', '').lower() == 'yes')
+        tables_via_defender_xdr = sum(1 for t in tables_map.keys()
+                                      if tables_reference.get(t, {}).get('source_defender_xdr', '').lower() == 'yes')
+        tables_via_sentinel_tables = sum(1 for t in tables_map.keys()
+                                         if tables_reference.get(t, {}).get('source_sentinel_tables', '').lower() == 'yes')
+        tables_via_feature_support = sum(1 for t in tables_map.keys()
+                                         if tables_reference.get(t, {}).get('source_feature_support', '').lower() == 'yes')
+        tables_via_ingestion_api = sum(1 for t in tables_map.keys()
+                                       if tables_reference.get(t, {}).get('source_ingestion_api', '').lower() == 'yes')
+        
+        # Schema sub-source counts (from table_schemas.csv source column)
+        schema_source_counts: Dict[str, int] = defaultdict(int)
+        for table in tables_map.keys():
+            if table in table_schemas_by_table:
+                sources_for_table = set(row.get('source', '').strip() for row in table_schemas_by_table[table] if row.get('source', '').strip())
+                for src in sources_for_table:
+                    schema_source_counts[src] += 1
+        
+        # XDR-only tables (available in Defender XDR but not in Azure Monitor Log Analytics)
+        xdr_only_tables = sum(1 for t in tables_map.keys()
+                             if tables_reference.get(t, {}).get('source_azure_monitor', '').lower() == 'no'
                              and tables_reference.get(t, {}).get('source_defender_xdr', '').lower() == 'yes')
         
-        f.write("| Metric | Count |\n")
-        f.write("|:-------|------:|\n")
-        f.write(f"| **Total Tables Documented** | **{len(tables_map)}** |\n")
-        f.write(f"| Tables Ingested by Connectors | {tables_with_connectors} |\n")
-        f.write(f"| Tables Referenced by Content Only | {tables_with_content} |\n")
-        if reference_only_tables > 0:
-            f.write(f"| Standalone Reference Tables | {reference_only_tables} |\n")
+        f.write("### Overview\n\n")
+        f.write(f"**{len(tables_map)} tables** documented across all discovery sources.\n\n")
+        
+        f.write("### Primary Discovery Source\n\n")
+        f.write("Each table is assigned a single primary discovery source by priority: Connector > Content > Docs > Schema.\n\n")
+        f.write("| Primary Source | Tables |\n")
+        f.write("|:---------------|-------:|\n")
+        f.write(f"| Connector | {primary_connector} |\n")
+        f.write(f"| Content | {primary_content} |\n")
+        f.write(f"| Docs | {primary_docs} |\n")
+        f.write(f"| Schema | {primary_schema} |\n")
+        if primary_none > 0:
+            f.write(f"| None | {primary_none} |\n")
+        f.write(f"| **Total** | **{len(tables_map)}** |\n")
+        f.write("\n")
+        
+        f.write("### Doc Sources\n\n")
+        f.write("Tables found in documentation references. A single table may appear in multiple doc sources.\n\n")
+        f.write("| Doc Source | Tables |\n")
+        f.write("|:-----------|-------:|\n")
+        f.write(f"| Azure Monitor | {tables_via_azure_monitor} |\n")
+        f.write(f"| Defender XDR | {tables_via_defender_xdr} |\n")
+        f.write(f"| Sentinel Tables Doc | {tables_via_sentinel_tables} |\n")
+        f.write(f"| Feature Support Doc | {tables_via_feature_support} |\n")
+        f.write(f"| Ingestion API Doc | {tables_via_ingestion_api} |\n")
         if xdr_only_tables > 0:
-            f.write(f"| Defender XDR Only Tables | {xdr_only_tables} |\n")
-        if reference_tables > 0 and reference_tables < len(tables_map):
-            f.write(f"| Tables in Azure Monitor Reference | {reference_tables} |\n")
+            f.write(f"| *Defender XDR only (not in Azure Monitor)* | *{xdr_only_tables}* |\n")
+        f.write("\n")
+        
+        f.write("### Schema Sources\n\n")
+        f.write("Tables with schema information, by schema source. A single table may have schemas from multiple sources.\n\n")
+        f.write("| Schema Source | Tables |\n")
+        f.write("|:-------------|-------:|\n")
+        schema_source_order = ['Azure Monitor docs', 'DCR', 'KQL validation']
+        for src in schema_source_order:
+            if src in schema_source_counts:
+                f.write(f"| {src} | {schema_source_counts[src]} |\n")
+        # Any other sources not in the predefined order
+        for src in sorted(schema_source_counts.keys()):
+            if src not in schema_source_order:
+                f.write(f"| {src} | {schema_source_counts[src]} |\n")
+        f.write(f"| **Total unique tables with schema** | **{len(tables_with_schemas)}** |\n")
         f.write("\n")
         
         # ===================== CONTENT STATISTICS =====================
@@ -7116,6 +7367,97 @@ def generate_statistics_page(
         
         f.write(f"| **Total** | **{len(by_product)}** |\n")
         f.write("\n")
+        
+        # ===================== DEPENDENCIES STATISTICS =====================
+        f.write("## Dependencies\n\n")
+        
+        if solution_dependencies:
+            total_dep_records = sum(len(deps) for deps in solution_dependencies.values())
+            solutions_with_deps = len(solution_dependencies)
+            
+            # Count by type
+            explicit_records = 0
+            asim_records = 0
+            explicit_solutions = set()
+            asim_solutions = set()
+            unique_dep_targets = set()
+            unique_dep_targets_explicit = set()
+            unique_dep_targets_asim = set()
+            asim_schemas_used = set()
+            
+            for sol_name, deps in solution_dependencies.items():
+                for dep in deps:
+                    dep_type = dep.get('dependency_type', '')
+                    dep_target = dep.get('dependency_solution_name', '')
+                    if dep_target:
+                        unique_dep_targets.add(dep_target)
+                    if dep_type == 'explicit':
+                        explicit_records += 1
+                        explicit_solutions.add(sol_name)
+                        if dep_target:
+                            unique_dep_targets_explicit.add(dep_target)
+                    elif dep_type == 'ASIM':
+                        asim_records += 1
+                        asim_solutions.add(sol_name)
+                        if dep_target:
+                            unique_dep_targets_asim.add(dep_target)
+                        schema = dep.get('asim_schema', '')
+                        if schema:
+                            asim_schemas_used.add(schema)
+            
+            # Overview table
+            f.write("### Overview\n\n")
+            f.write("| Metric | Total | Explicit (required) | ASIM (optional) |\n")
+            f.write("|:-------|------:|--------------------:|----------------:|\n")
+            f.write(f"| Dependency records | **{total_dep_records}** | {explicit_records} | {asim_records} |\n")
+            f.write(f"| Solutions with dependencies | **{solutions_with_deps}** | {len(explicit_solutions)} | {len(asim_solutions)} |\n")
+            f.write(f"| Unique dependency targets | **{len(unique_dep_targets)}** | {len(unique_dep_targets_explicit)} | {len(unique_dep_targets_asim)} |\n")
+            f.write("\n")
+            
+            # ASIM dependency details
+            if asim_schemas_used:
+                f.write("### ASIM Dependencies by Schema\n\n")
+                
+                # Count solutions per schema
+                schema_to_sources: Dict[str, Set[str]] = defaultdict(set)  # schema -> solutions that USE the parser
+                schema_to_targets: Dict[str, Set[str]] = defaultdict(set)  # schema -> solutions that PROVIDE data
+                
+                for sol_name, deps in solution_dependencies.items():
+                    for dep in deps:
+                        if dep.get('dependency_type') == 'ASIM':
+                            schema = dep.get('asim_schema', '')
+                            dep_target = dep.get('dependency_solution_name', '')
+                            if schema:
+                                schema_to_sources[schema].add(sol_name)
+                                if dep_target:
+                                    schema_to_targets[schema].add(dep_target)
+                
+                f.write("| ASIM Schema | Solutions Using | Solutions Providing Data |\n")
+                f.write("|:------------|----------------:|------------------------:|\n")
+                for schema in sorted(schema_to_sources.keys()):
+                    f.write(f"| {schema} | {len(schema_to_sources[schema])} | {len(schema_to_targets[schema])} |\n")
+                f.write(f"| **Total unique** | **{len(asim_solutions)}** | **{len(unique_dep_targets_asim)}** |\n")
+                f.write("\n")
+            
+            # Top dependency targets
+            target_counts: Dict[str, int] = defaultdict(int)
+            for deps in solution_dependencies.values():
+                for dep in deps:
+                    dep_target = dep.get('dependency_solution_name', '')
+                    if dep_target:
+                        target_counts[dep_target] += 1
+            
+            if target_counts:
+                f.write("### Most Depended-Upon Solutions\n\n")
+                f.write("| Solution | Depended On By |\n")
+                f.write("|:---------|---------------:|\n")
+                top_targets = sorted(target_counts.items(), key=lambda x: x[1], reverse=True)[:15]
+                for target, count in top_targets:
+                    target_link = f"[{target}](solutions/{sanitize_filename(target)}.md)"
+                    f.write(f"| {target_link} | {count} |\n")
+                f.write("\n")
+        else:
+            f.write("No solution dependency data available.\n\n")
         
         # Footer
         f.write("---\n\n")
@@ -7499,6 +7841,12 @@ def main() -> None:
         help="Path to solution dependencies CSV file (default: solution_dependencies.csv)",
     )
     parser.add_argument(
+        "--table-schemas-csv",
+        type=Path,
+        default=Path(__file__).parent / "table_schemas.csv",
+        help="Path to table schemas CSV file with column definitions (default: table_schemas.csv)",
+    )
+    parser.add_argument(
         "--skip-input-generation",
         action="store_true",
         help="Skip running input CSV generation scripts",
@@ -7708,7 +8056,8 @@ def main() -> None:
                     if source_parser and table_name not in content_table_parser_mapping[content_key]:
                         content_table_parser_mapping[content_key][table_name] = source_parser
                 # Track which content types use each table in each solution
-                if solution_name and table_name:
+                # Use empty string for standalone content (no solution) so tables still get content_types
+                if table_name:
                     solution_table_content_types[solution_name][table_name]['types'].add(content_type)
                     solution_table_content_types[solution_name][table_name]['usage'].add(table_usage)
         
@@ -7853,7 +8202,22 @@ def main() -> None:
     # Generate index pages - generate tables_index first to get accurate count
     generate_connectors_index(by_solution, args.output_dir)
     generate_collection_methods_index(by_solution, args.output_dir)
-    tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference, solution_table_content_types)
+    
+    # Load table schemas CSV and group by table name (before tables index, for icon display)
+    table_schemas_by_table: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    if args.table_schemas_csv.exists():
+        with open(args.table_schemas_csv, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                table_name = row.get('table_name', '').strip()
+                if table_name:
+                    table_schemas_by_table[table_name].append(row)
+        print(f"Loaded table schemas: {sum(len(v) for v in table_schemas_by_table.values())} columns across {len(table_schemas_by_table)} tables")
+    else:
+        print(f"Warning: Table schemas CSV not found: {args.table_schemas_csv}")
+    
+    tables_with_schemas = set(table_schemas_by_table.keys())
+    tables_map = generate_tables_index(by_solution, args.output_dir, tables_reference, solution_table_content_types, tables_with_schemas)
     
     # Count tables that are linked to solutions via connectors (vs all documented tables)
     tables_in_solutions = sum(1 for info in tables_map.values() if info['connectors'])
@@ -7941,7 +8305,7 @@ def main() -> None:
             if content_key:
                 content_source_lookup[content_key] = content_source
     
-    generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table, content_filter_fields_lookup, content_source_lookup)
+    generate_table_pages(tables_map, args.output_dir, tables_reference, content_tables_by_table, connectors_reference, parsers_by_table, asim_parsers_by_table, content_filter_fields_lookup, content_source_lookup, table_schemas_by_table)
     
     # Generate individual content item pages (pass solutions_dir for GitHub URL folder detection)
     content_pages_count = generate_content_item_pages(content_items_by_solution, content_tables_mapping, args.output_dir, solutions_dir, tables_reference, content_table_parser_mapping, parser_filter_fields, connectors_reference)
@@ -8046,6 +8410,9 @@ def main() -> None:
         asim_parsers=asim_parsers,
         non_asim_parsers=parsers,
         tables_reference=tables_reference,
+        solution_dependencies=solution_dependencies,
+        tables_with_schemas=tables_with_schemas,
+        table_schemas_by_table=table_schemas_by_table,
     )
     
     # Generate the README.md for the docs folder

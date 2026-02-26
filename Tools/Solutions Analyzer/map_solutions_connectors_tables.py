@@ -2707,6 +2707,211 @@ def extract_tables_from_dcr_json(dcr_json_path: Path) -> Dict[str, Dict[str, Any
     return tables
 
 
+def extract_schema_from_dcr_json(dcr_json_path: Path) -> List[Dict[str, str]]:
+    """
+    Extract table schema information from *_DCR.json files (Data Collection Rule definitions).
+    
+    DCR files contain:
+    - streamDeclarations: stream names mapped to column definitions (name and type)
+    - dataFlows: mapping from input streams to output tables, with optional transformKql
+    
+    This function produces one row per column per output table, including the stream name,
+    transform KQL, and source DCR file path.
+    
+    Args:
+        dcr_json_path: Path to the *_DCR.json file
+        
+    Returns:
+        List of dicts with keys: table_name, column_name, column_type, stream_name,
+        dcr_file, transform_kql
+    """
+    schema_rows: List[Dict[str, str]] = []
+    
+    data = read_json(dcr_json_path)
+    if data is None:
+        return schema_rows
+    
+    def process_dcr_object(obj: Any) -> List[Dict[str, str]]:
+        """Process a single DCR object and extract schema rows."""
+        rows: List[Dict[str, str]] = []
+        if not isinstance(obj, dict):
+            return rows
+        
+        # Get streamDeclarations - may be at top level or under properties
+        stream_decls = obj.get("streamDeclarations") or obj.get("properties", {}).get("streamDeclarations")
+        if not isinstance(stream_decls, dict):
+            return rows
+        
+        # Get dataFlows - may be at top level or under properties
+        data_flows = obj.get("dataFlows") or obj.get("properties", {}).get("dataFlows")
+        if not isinstance(data_flows, list):
+            return rows
+        
+        # Build mapping: stream_name -> list of (table_name, transform_kql)
+        stream_to_outputs: Dict[str, List[Tuple[str, str]]] = {}
+        for flow in data_flows:
+            if not isinstance(flow, dict):
+                continue
+            output_stream = flow.get("outputStream", "")
+            if not isinstance(output_stream, str) or not output_stream.strip():
+                continue
+            
+            # Strip "Microsoft-" or "Custom-" prefix to get table name
+            table_name = output_stream.strip()
+            if table_name.startswith("Microsoft-"):
+                table_name = table_name[len("Microsoft-"):]
+            elif table_name.startswith("Custom-"):
+                table_name = table_name[len("Custom-"):]
+            
+            # Skip expressions/placeholders
+            if not table_name or table_name.startswith("[") or table_name.startswith("{{"):
+                continue
+            
+            transform_kql = flow.get("transformKql", "")
+            if not isinstance(transform_kql, str):
+                transform_kql = ""
+            
+            streams = flow.get("streams", [])
+            if isinstance(streams, list):
+                for stream in streams:
+                    if isinstance(stream, str) and stream.strip():
+                        if stream not in stream_to_outputs:
+                            stream_to_outputs[stream] = []
+                        stream_to_outputs[stream].append((table_name, transform_kql))
+        
+        # For each stream declaration, emit columns mapped to output tables
+        for stream_name, stream_def in stream_decls.items():
+            if not isinstance(stream_def, dict):
+                continue
+            columns = stream_def.get("columns")
+            if not isinstance(columns, list):
+                continue
+            
+            # Find which output tables this stream maps to
+            outputs = stream_to_outputs.get(stream_name, [])
+            if not outputs:
+                # Stream declared but not referenced in dataFlows - skip
+                continue
+            
+            for table_name, transform_kql in outputs:
+                for col in columns:
+                    if not isinstance(col, dict):
+                        continue
+                    col_name = col.get("name", "")
+                    col_type = col.get("type", "")
+                    if not col_name:
+                        continue
+                    rows.append({
+                        "table_name": table_name,
+                        "column_name": col_name,
+                        "column_type": col_type,
+                        "stream_name": stream_name,
+                        "dcr_file": "",  # Will be set by caller
+                        "transform_kql": transform_kql,
+                    })
+        
+        return rows
+    
+    # Handle both single object and array formats
+    if isinstance(data, list):
+        for item in data:
+            schema_rows.extend(process_dcr_object(item))
+    else:
+        schema_rows.extend(process_dcr_object(data))
+    
+    return schema_rows
+
+
+def extract_schema_from_custom_tables_dir(custom_tables_dir: Path) -> Dict[str, List[Dict[str, str]]]:
+    """
+    Extract table column schemas from .script/tests/KqlvalidationsTests/CustomTables JSON files.
+    
+    Each JSON file has the format:
+        {"name": "TableName", "Properties": [{"Name": "ColName", "Type": "String"}, ...]}
+    
+    Type values are normalized to lowercase KQL types (string, datetime, dynamic, int, long, 
+    real, bool, guid).
+    
+    Args:
+        custom_tables_dir: Path to the CustomTables directory
+        
+    Returns:
+        Dict mapping table_name -> list of column dicts with keys: column_name, column_type
+    """
+    # Normalize type strings to standard KQL types
+    TYPE_MAP = {
+        "string": "string",
+        "datetime": "datetime",
+        "date/time": "datetime",
+        "system.datetime": "datetime",
+        "timestamp": "datetime",
+        "timetamp": "datetime",
+        "dynamic": "dynamic",
+        "object": "dynamic",
+        "system.object": "dynamic",
+        "real": "real",
+        "double": "real",
+        "system.double": "real",
+        "int": "int",
+        "int32": "int",
+        "integer": "int",
+        "long": "long",
+        "int64": "long",
+        "bigint": "long",
+        "bool": "bool",
+        "boolean": "bool",
+        "guid": "guid",
+        "sbyte": "int",
+        "system.sbyte": "int",
+        "system.string": "string",
+    }
+    
+    result: Dict[str, List[Dict[str, str]]] = {}
+    
+    if not custom_tables_dir.is_dir():
+        return result
+    
+    for json_file in sorted(custom_tables_dir.glob("*.json")):
+        try:
+            raw = json_file.read_text(encoding="utf-8-sig")
+            # Handle trailing commas (some files have them)
+            raw = re.sub(r',\s*([}\]])', r'\1', raw)
+            data = json.loads(raw)
+        except Exception:
+            continue
+        
+        if not isinstance(data, dict):
+            continue
+        
+        # Table name: "name" or "Name"
+        table_name = data.get("name") or data.get("Name") or ""
+        if not table_name:
+            continue
+        
+        properties = data.get("Properties") or data.get("properties") or []
+        if not isinstance(properties, list):
+            continue
+        
+        columns: List[Dict[str, str]] = []
+        for prop in properties:
+            if not isinstance(prop, dict):
+                continue
+            col_name = (prop.get("Name") or prop.get("name") or "").strip()
+            col_type_raw = (prop.get("Type") or prop.get("type") or "").strip().rstrip(",")
+            if not col_name:
+                continue
+            col_type = TYPE_MAP.get(col_type_raw.lower(), col_type_raw.lower())
+            columns.append({"column_name": col_name, "column_type": col_type})
+        
+        if columns:
+            # Add source file name for URL construction
+            for col in columns:
+                col['source_file'] = json_file.name
+            result[table_name] = columns
+    
+    return result
+
+
 def find_companion_table_files(connector_json_path: Path) -> Tuple[List[Path], List[Path]]:
     """
     Find *_Table.json and *_DCR.json files in the same directory as a connector JSON.
@@ -6177,6 +6382,18 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         help="Path to tables_reference.csv for table metadata (default: %(default)s)",
     )
     parser.add_argument(
+        "--la-table-schemas-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "la_table_schemas.csv",
+        help="Path to la_table_schemas.csv for table column schemas from Azure Monitor docs (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--custom-tables-dir",
+        type=Path,
+        default=default_repo_root / ".script" / "tests" / "KqlvalidationsTests" / "CustomTables",
+        help="Path to CustomTables directory for KQL validation table schemas (default: %(default)s)",
+    )
+    parser.add_argument(
         "--mapping-csv",
         type=Path,
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "solutions_connectors_tables_mapping_simplified.csv",
@@ -6223,6 +6440,12 @@ def parse_args(default_repo_root: Path) -> argparse.Namespace:
         type=Path,
         default=default_repo_root / "Tools" / "Solutions Analyzer" / "solution_dependencies.csv",
         help="Path for the solution dependencies CSV file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--table-schemas-csv",
+        type=Path,
+        default=default_repo_root / "Tools" / "Solutions Analyzer" / "table_schemas.csv",
+        help="Path for the table schemas CSV file extracted from DCR definitions (default: %(default)s)",
     )
     parser.add_argument(
         "--force-refresh",
@@ -6327,6 +6550,9 @@ def main() -> None:
     # Content items tracking
     all_content_items: List[Dict[str, Any]] = []
     content_table_mappings: List[Dict[str, str]] = []
+    
+    # Table schemas from DCR files
+    table_schemas_data: List[Dict[str, str]] = []
     
     # Track connector documentation status (filename -> not_in_solution_json)
     connector_not_in_solution_json: Dict[str, str] = {}
@@ -6499,8 +6725,8 @@ def main() -> None:
                     # Log JSON parsing failure as an issue
                     relative_path = safe_relative(json_path, data_connectors_dir)
                     issues.append({
-                        "solution_name": solution_info["name"],
-                        "solution_folder": solution_info["folder"],
+                        "solution_name": solution_info["solution_name"],
+                        "solution_folder": solution_info["solution_folder"],
                         "connector_id": "",
                         "connector_title": "",
                         "connector_publisher": "",
@@ -6543,6 +6769,7 @@ def main() -> None:
                 
                 # Priority 2: Extract from *_DCR.json files
                 # Trust tables from companion files - they are explicitly defined
+                dcr_schema_rows_for_file: List[Dict[str, str]] = []
                 for dcr_json_path in dcr_json_files:
                     dcr_tables = extract_tables_from_dcr_json(dcr_json_path)
                     for tbl_name, tbl_info in dcr_tables.items():
@@ -6556,6 +6783,17 @@ def main() -> None:
                                 existing_sources = table_map[tbl_name].get("sources", set())
                                 if isinstance(existing_sources, set):
                                     existing_sources.update(tbl_info.get("sources", set()))
+                    # Extract schema information from this DCR file
+                    dcr_relative = safe_relative(dcr_json_path, repo_root)
+                    dcr_github_url = f"{GITHUB_REPO_URL}/{quote(str(dcr_relative).replace(chr(92), '/'))}"
+                    schema_rows = extract_schema_from_dcr_json(dcr_json_path)
+                    for row in schema_rows:
+                        row["dcr_file"] = str(dcr_relative)
+                        row["solution_name"] = solution_info["solution_name"]
+                        row["source"] = "DCR"
+                        row["source_url"] = dcr_github_url
+                        row["description"] = ""
+                    dcr_schema_rows_for_file.extend(schema_rows)
                 
                 # Priority 3: Query analysis from connector JSON
                 query_tables = {k: v for k, v in extract_tables(data).items() if k.lower() != "let"}
@@ -6748,6 +6986,13 @@ def main() -> None:
                             reason="parser_tables_resolved",
                             details="Parser functions expanded to tables -> " + "; ".join(expansion_messages),
                         )
+
+                    # Associate DCR schema rows with this connector entry
+                    for schema_row in dcr_schema_rows_for_file:
+                        table_schemas_data.append({
+                            **schema_row,
+                            "connector_id": connector_id,
+                        })
 
                     if produced_rows == 0:
                         if not had_table_definitions:
@@ -7667,6 +7912,75 @@ def main() -> None:
     solutions_with_deps = len(set(d['solution_name'] for d in solution_dependencies_data))
     log_print(f"  Found {len(solution_dependencies_data)} dependency records ({explicit_deps} explicit, {asim_deps} ASIM) across {solutions_with_deps} solutions")
 
+    # Load la_table_schemas.csv (from Azure Monitor/XDR documentation)
+    la_schemas_path = args.la_table_schemas_csv.resolve()
+    la_schema_count = 0
+    if la_schemas_path.exists():
+        try:
+            with la_schemas_path.open("r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    la_table_name = row.get("table_name", "")
+                    la_doc_url = f"https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/{la_table_name.lower()}" if la_table_name else ""
+                    table_schemas_data.append({
+                        "table_name": la_table_name,
+                        "column_name": row.get("column_name", ""),
+                        "column_type": row.get("column_type", ""),
+                        "description": row.get("description", ""),
+                        "source": "Azure Monitor docs",
+                        "source_url": la_doc_url,
+                        "stream_name": "",
+                        "connector_id": "",
+                        "solution_name": "",
+                        "dcr_file": "",
+                        "transform_kql": "",
+                    })
+                    la_schema_count += 1
+            log_print(f"  Loaded {la_schema_count} column schemas from {safe_relative(la_schemas_path, repo_root)}")
+        except Exception as e:
+            log_print(f"  Warning: Could not load la_table_schemas.csv: {e}")
+    else:
+        log_print(f"  Note: {safe_relative(la_schemas_path, repo_root)} not found - run collect_table_info.py to generate it")
+
+    # Load schemas from CustomTables directory (only for tables not already covered)
+    custom_tables_dir = args.custom_tables_dir.resolve()
+    custom_tables_count = 0
+    if custom_tables_dir.is_dir():
+        existing_tables = set(row['table_name'] for row in table_schemas_data)
+        custom_schemas = extract_schema_from_custom_tables_dir(custom_tables_dir)
+        for table_name, columns in custom_schemas.items():
+            if table_name in existing_tables:
+                continue
+            for col in columns:
+                ct_source_file = col.get('source_file', '')
+                ct_source_url = f"{GITHUB_REPO_URL}/.script/tests/KqlvalidationsTests/CustomTables/{quote(ct_source_file)}" if ct_source_file else ""
+                table_schemas_data.append({
+                    "table_name": table_name,
+                    "column_name": col["column_name"],
+                    "column_type": col["column_type"],
+                    "description": "",
+                    "source": "KQL validation",
+                    "source_url": ct_source_url,
+                    "stream_name": "",
+                    "connector_id": "",
+                    "solution_name": "",
+                    "dcr_file": "",
+                    "transform_kql": "",
+                })
+                custom_tables_count += 1
+        ct_tables = len(custom_schemas) - len(existing_tables & set(custom_schemas.keys()))
+        log_print(f"  Loaded {custom_tables_count} column schemas across {ct_tables} new tables from {safe_relative(custom_tables_dir, repo_root)} (skipped {len(existing_tables & set(custom_schemas.keys()))} already-covered tables)")
+    else:
+        log_print(f"  Note: {safe_relative(custom_tables_dir, repo_root)} not found")
+
+    # Table schemas stats
+    dcr_rows = sum(1 for row in table_schemas_data if row.get('source') == 'DCR')
+    doc_rows = sum(1 for row in table_schemas_data if row.get('source') == 'Azure Monitor docs')
+    ct_rows = sum(1 for row in table_schemas_data if row.get('source') == 'KQL validation')
+    unique_schema_tables = len(set(row['table_name'] for row in table_schemas_data)) if table_schemas_data else 0
+    unique_schema_connectors = len(set(row['connector_id'] for row in table_schemas_data if row['connector_id'])) if table_schemas_data else 0
+    log_print(f"  Total {len(table_schemas_data)} schema columns across {unique_schema_tables} tables ({dcr_rows} from DCR, {doc_rows} from docs, {ct_rows} from KQL validation)")
+
     # Write main CSV (without collection_method to match master branch format)
     fieldnames = [
         "Table",
@@ -7775,6 +8089,26 @@ def main() -> None:
         writer = csv.DictWriter(csvfile, fieldnames=solution_deps_fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
         writer.writerows(solution_dependencies_data)
+    
+    # Write table_schemas.csv
+    table_schemas_fieldnames = [
+        'table_name',
+        'column_name',
+        'column_type',
+        'description',
+        'source',
+        'source_url',
+        'stream_name',
+        'connector_id',
+        'solution_name',
+        'dcr_file',
+        'transform_kql',
+    ]
+    table_schemas_path = args.table_schemas_csv.resolve()
+    with table_schemas_path.open("w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=table_schemas_fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(table_schemas_data)
     
     # Write tables.csv
     tables_fieldnames = [
@@ -8156,6 +8490,7 @@ def main() -> None:
     log_print(f"Wrote {len(connectors_data)} connectors to {safe_relative(connectors_path, repo_root)}")
     log_print(f"Wrote {len(solutions_data)} solutions to {safe_relative(solutions_path, repo_root)}")
     log_print(f"Wrote {len(solution_dependencies_data)} solution dependencies to {safe_relative(solution_deps_path, repo_root)}")
+    log_print(f"Wrote {len(table_schemas_data)} table schema columns to {safe_relative(table_schemas_path, repo_root)}")
     log_print(f"Wrote {len(tables_data)} tables to {safe_relative(tables_path, repo_root)}")
     log_print(f"Wrote {len(mapping_data)} mappings to {safe_relative(mapping_path, repo_root)}")
     log_print(f"Wrote {len(all_content_items)} content items to {safe_relative(content_items_path, repo_root)}")
