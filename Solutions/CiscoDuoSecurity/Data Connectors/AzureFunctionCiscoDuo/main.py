@@ -510,7 +510,7 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int, limit
             'api_version': 2,
             'mintime': mintime,
             'maxtime': maxtime,
-            'limit': str(limit),
+            'limit': limit,
             'sort': 'ts:asc'
         }
         if next_offset:
