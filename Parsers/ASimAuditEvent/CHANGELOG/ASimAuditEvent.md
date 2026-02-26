@@ -1,5 +1,9 @@
 # Changelog for ASimAuditEvent.yaml
 
+## Version 0.1.5
+- (2026-02-17) [ASIM] AuditEvent - AWS Cloud Trail (New Parser) - [PR #13428](https://github.com/Azure/Azure-Sentinel/pull/13428)
+- Add AWSCloudTrail parser to ASimAuditEvent
+
 ## Version 0.1.3
 
 - (2024-12-13) Audit Native Parser - [PR #11561](https://github.com/Azure/Azure-Sentinel/pull/11561)
