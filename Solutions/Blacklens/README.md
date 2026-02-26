@@ -34,7 +34,7 @@ Before installing this solution, ensure that:
 2. Navigate to **Content hub**.
 3. Search for **blacklens.io**.
 4. Select the solution and click **Install**.
-5. Choose the subscription, resource group, where you want to place the resources (probably the same resource group, where Sentinel's Log Analytics workspace is located) and the target Log Analytics workspace Resource ID.
+5. Choose the subscription, resource group, and target Log Analytics workspace. Use the same resource group where your Microsoft Sentinel workspace resides.
 6. Complete the installation.
 
 After the installation finishes, continue with the post-deployment configuration steps below.
@@ -49,7 +49,15 @@ After deployment, a webhook endpoint is created that must be configured in black
 
 1. Open the **deployment details** of the installed solution.
 2. Navigate to the **Outputs** tab.
-3. Copy the webhook
-4. Integrate it into blacklens.io
-5. After some minutes a informational test incident should appear in the Microsoft Sentinel
+3. Copy the **webhookUrl** value.
+
+### Step 2: Configure blacklens.io
+
+1. Log in to the [blacklens.io portal](https://blacklens.io).
+2. Navigate to the webhook integration settings.
+3. Paste the webhook URL copied in Step 1.
+4. Save the configuration.
+5. Link the webhook integration to at least one **notification policy** so that alerts are sent to the webhook.
+
+After a few minutes, an informational test incident should appear in Microsoft Sentinel.
 
