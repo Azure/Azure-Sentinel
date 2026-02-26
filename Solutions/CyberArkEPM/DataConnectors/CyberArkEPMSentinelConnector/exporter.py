@@ -5,44 +5,22 @@ from azure.identity import DefaultAzureCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
 
-def _transform_schema(audit_events: list) -> list:
-    dcr_events = [
-        {
-            'CyberArkTenantId': audit['tenantId'],
-            'accountName': audit.get('accountName') or '',
-            'accessMethod': audit.get('accessMethod') or '',
-            'action': audit.get('action') or '',
-            'actionType': audit.get('actionType') or '',
-            'applicationCode': audit.get('applicationCode') or '',
-            'auditCode': audit.get('auditCode') or '',
-            'auditType': audit.get('auditType') or '',
-            'correlationId': audit.get('correlationId') or '',
-            'cloudAssets': audit.get('cloudAssets') or '',
-            'cloudIdentities': audit.get('cloudIdentities') or '',
-            'cloudProvider': audit.get('cloudProvider') or '',
-            'cloudWorkspacesAndRoles': json.dumps(audit.get('cloudWorkspacesAndRoles', {})),
-            'command': audit.get('command') or '',
-            'component': audit.get('component') or '',
-            'customData': json.dumps(audit.get('customData', {})),
-            'identityType': audit.get('identityType') or '',
-            'message': audit.get('message') or '',
-            'target': audit.get('target') or '',
-            'timestamp': int(audit.get('timestamp', 0)),
-            'targetPlatform': audit.get('targetPlatform') or '',
-            'targetAccount': audit.get('targetAccount') or '',
-            'safe': audit.get('safe') or '',
-            'sessionId': audit.get('sessionId') or '',
-            'serviceName': audit.get('serviceName') or '',
-            'source': audit.get('source') or '',
-            'userId': audit.get('userId') or '',
-            'username': audit.get('username') or '',
-            'uuid': audit.get('uuid') or ''
-        }
-        for audit in audit_events]
+def _transform_schema(epm_events):
+    dcr_events = []
+    for event in epm_events:
+        if not isinstance(event, dict):
+            continue
+        sanitized = {}
+        for k, v in event.items():
+            if isinstance(v, (dict, list)):
+                sanitized[k] = json.dumps(v)
+            else:
+                sanitized[k] = v
+        dcr_events.append(sanitized)
     return dcr_events
 
 
-def send_dcr_data(data: list):
+def send_dcr_data(data):
     endpoint = os.environ.get('DATA_COLLECTION_ENDPOINT')
     rule_id = os.environ.get('LOGS_DCR_RULE_ID')
     try:

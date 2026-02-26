@@ -1,10 +1,14 @@
-"""
-Author: Steven Steiner <steven.steiner@cyberark.com>
-Version: 0.0.1
-Date Created: 6/10/2019 16:19
-"""
-import json, requests, urllib3, urllib
-from lxml import html
+import json, requests, urllib3
+
+def _build_auth_headers(epm_token, auth_type):
+    hdr = {'Content-Type': 'application/json'}
+    if auth_type == 'EPM':
+        hdr['Authorization'] = 'basic ' + epm_token
+    elif auth_type == 'OAUTH':
+        hdr['Authorization'] = 'Bearer ' + epm_token
+    else:
+        hdr['VFUser'] = epm_token
+    return hdr
 
 def epmAuth(dispatcher, username, password):
     """
@@ -39,89 +43,6 @@ def epmAuth(dispatcher, username, password):
 
     return requests.post(myURL, headers=hdr, data=logonBody)
 
-def samlAuth(dispatcher, username, password, identityTenantID, identityTenantURL, identityAppKey):
-
-    #StartAuth
-    url = identityTenantURL + "/Security/StartAuthentication"
-
-    payload = "{\r\n    \"TenantId\": \"" + identityTenantID + "\",\r\n    \"User\": \"" + username + "\",\r\n    \"Version\": \"1.0\"        \r\n}\r\n\r\n"
-    headers = {
-    'X-CENTRIFY-NATIVE-CLIENT': 'true',
-    'Content-Type': 'application/json'
-    }
-
-    urllib3.disable_warnings()
-    session = requests.Session()
-
-    # response = requests.request("POST", url, headers=headers, data = payload, verify = False)
-    response = session.post(url, headers=headers, data = payload)
-
-    json_data = json.loads(response.text)
-    session_id = json_data.get("Result").get("SessionId")
-    mechanism_id = json_data.get("Result").get("Challenges")[0].get("Mechanisms")[0].get("MechanismId")
-
-    #AdvanceAuthentication
-    url = identityTenantURL + "/Security/AdvanceAuthentication?X-CENTRIFY-NATIVE-CLIENT=true&"
-
-    payload = "{\r\n    \"TenantId\": \"" + identityTenantID + "\",\r\n    \"SessionId\": \"" + session_id + "\",\r\n    \"MechanismId\": \"" + mechanism_id + "\",\r\n    \"Action\": \"Answer\",\r\n    \"Answer\": \"" + password + "\"\r\n}"
-    headers = {
-    'Content-Type': 'application/json',
-    'X-CENTRIFY-NATIVE-CLIENT': 'true'
-    }
-
-    session.post(url, headers=headers, data = payload)
-
-    #AppClick
-
-    url = identityTenantURL + "/uprest/HandleAppClick?appkey=" + identityAppKey + "&markAppVisited=true"
-
-    payload={}
-    headers = {
-    'X-CENTRIFY-NATIVE-CLIENT': 'true',
-    'Authorization': 'bearer AuthorizationToken'
-    }
-    response = session.get(url, headers=headers, data = payload)
-
-
-    tree = html.fromstring(response.content)
-    samlresponse = tree.xpath('//input[@name="SAMLResponse"]/@value[last()]')[0]
-
-    #SAML Logon
-    url = dispatcher + "/SAML/Logon"
-
-    payload='SAMLResponse=' + urllib.parse.quote(samlresponse)
-
-    headers = {
-    'Content-Type': 'application/x-www-form-urlencoded'
-    }
-    return session.post(url, headers=headers, data=payload)
-
-def winAuth(epmsrv, username, password, version=None):
-    """
-        Windows Authentication
-        This method authenticates the user to EPM by Windows authentication and returns
-        a token that can be used in subsequent Rest API calls.
-        After the configured timeout expires, users have to logon again using their
-        username and password.
-        ***** Not for EPM SaaS use *****
-    """
-    # build the body of the request containing the credentials
-    body = {}
-    body['ApplicationID'] = 'Irrelevent'
-    logonBody = json.dumps(body)
-
-    # build the header and url
-    if version == None:
-        myURL = epmsrv + "/EPM/API/Auth/Windows/Logon"
-    else:
-        myURL = epmsrv + "/EPM/API/" + version + "/Auth/Windows/Logon"
-    hdr = {'Content-Type': 'application/json'}
-
-    # make the Rest API call
-    urllib3.disable_warnings()
-    return requests.post(myURL, headers=hdr, data=logonBody)
-
-
 def getVersion(dispatcher, version=None):
     """
         Get EPM version
@@ -150,16 +71,8 @@ def getSetsList(epmserver, epmToken, authType, version=None):
         myURL = epmserver + "/EPM/API/" + version + "/Sets"
 
     # build the header
-    hdr = {
-        'Content-Type': 'application/json',
-        'x-cybr-telemetry': 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
-    }
-    if authType == 'EPM':
-        authToken = 'basic ' + epmToken
-        hdr['Authorization'] = authToken
-    else:
-        authToken = epmToken
-        hdr['VFUser'] = authToken
+    hdr = _build_auth_headers(epmToken, authType)
+    hdr['x-cybr-telemetry'] = 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
 
     # make the Rest API call
     urllib3.disable_warnings()
@@ -181,14 +94,7 @@ def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor=
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/events/aggregations/search?limit=" + str(limit)
 
     # build the header
-    hdr = {}
-    hdr['Content-Type'] = 'application/json'
-    if authType == 'EPM':
-        authToken = 'basic ' + epmToken
-        hdr['Authorization'] = authToken
-    else:
-        authToken = epmToken
-        hdr['VFUser'] = authToken
+    hdr = _build_auth_headers(epmToken, authType)
 
     # make the Rest API call
     urllib3.disable_warnings()
@@ -216,14 +122,7 @@ def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/Events/Search?limit=" + str(limit)
 
     # build the header
-    hdr = {}
-    hdr['Content-Type'] = 'application/json'
-    if authType == 'EPM':
-        authToken = 'basic ' + epmToken
-        hdr['Authorization'] = authToken
-    else:
-        authToken = epmToken
-        hdr['VFUser'] = authToken
+    hdr = _build_auth_headers(epmToken, authType)
 
     # make the Rest API call
     urllib3.disable_warnings()
@@ -251,14 +150,7 @@ def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_c
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/aggregations/search?limit=" + str(limit)
 
     # build the header
-    hdr = {}
-    hdr['Content-Type'] = 'application/json'
-    if authType == 'EPM':
-        authToken = 'basic ' + epmToken
-        hdr['Authorization'] = authToken
-    else:
-        authToken = epmToken
-        hdr['VFUser'] = authToken
+    hdr = _build_auth_headers(epmToken, authType)
 
     # make the Rest API call
     urllib3.disable_warnings()
@@ -287,14 +179,7 @@ def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, ne
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/search?limit=" + str(limit)
 
     # build the header
-    hdr = {}
-    hdr['Content-Type'] = 'application/json'
-    if authType == 'EPM':
-        authToken = 'basic ' + epmToken
-        hdr['Authorization'] = authToken
-    else:
-        authToken = epmToken
-        hdr['VFUser'] = authToken
+    hdr = _build_auth_headers(epmToken, authType)
 
     # make the Rest API call
     urllib3.disable_warnings()
@@ -314,14 +199,7 @@ def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_ti
         to a range of time (between start_time and end_time)
     """
     # build the header
-    hdr = {}
-    hdr['Content-Type'] = 'application/json'
-    if authType == 'EPM':
-        authToken = 'basic ' + epmToken
-        hdr['Authorization'] = authToken
-    else:
-        authToken = epmToken
-        hdr['VFUser'] = authToken
+    hdr = _build_auth_headers(epmToken, authType)
 
     # make the Rest API call
     urllib3.disable_warnings()

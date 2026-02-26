@@ -1,210 +1,202 @@
-import base64
-from datetime import datetime, timedelta
-import json
 import logging
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-import time
 import os
+import time
+from datetime import datetime, timedelta
+
+from typing import Optional
+
+import requests
+
+from .pyepm import (
+    getAggregatedEvents,
+    getAdminAuditEvents,
+    getAggregatedPolicyAudits,
+    getDetailedRawEvents,
+    getPolicyAuditRawEventDetails,
+    getSetsList,
+)
 from .storage import AzureBlobStorage, LocalStorage
 
-client_id = os.environ.get('OAuthUsername')
-client_secret = os.environ.get('OAuthPassword')
-identity_endpoint = os.environ.get('IdentityEndpoint')
-api_base_url = os.environ.get('ApiBaseUrl')
-webapp_id = os.environ.get('WebAppID')
-fetch_interval = int(os.environ.get('FetchInterval', '60'))
 
-storage = LocalStorage() if os.environ.get('Storage') == 'LocalStorage' else AzureBlobStorage()
+def _get_env(*names: str, default=None):
+    for name in names:
+        value = os.environ.get(name)
+        if value is not None and value != '':
+            return value
+    return default
+
+
+client_id = _get_env('OAUTH_USERNAME', 'OAuthUsername')
+client_secret = _get_env('OAUTH_PASSWORD', 'OAuthPassword')
+identity_endpoint = _get_env('IDENTITY_ENDPOINT', 'IdentityEndpoint')
+webapp_id = _get_env('WEBAPP_ID', 'WebAppID')
+scope = _get_env('OAUTH_SCOPE', 'OAuthScope', default=None)
+
+dispatcher_url = _get_env('CYBERARK_EPM_SERVER_URL', 'CyberArkEPMServerURL')
+fetch_interval_minutes = int(_get_env('FETCH_INTERVAL', 'FetchInterval', default='60'))
+
+storage = LocalStorage() if _get_env('STORAGE', 'Storage') == 'LocalStorage' else AzureBlobStorage()
 
 TOKEN_FILE_NAME = 'token.json'
 TIME_FRAME_FILE_NAME = 'time_frame.json'
 
 
-def _is_token_expired(token: dict):
-    timestamp = int(token['timestamp'])
-    expiration = int(token['expiration'])
+def _is_token_expired(token: dict) -> bool:
+    timestamp = int(token.get('timestamp', 0))
+    expiration = int(token.get('expiration', 0))
     return timestamp + expiration <= int(time.time())
 
 
-def _get_oauth_token() -> str:
-    token = None
-    header = {
-        'Content-Type': 'application/x-www-form-urlencoded',
+def _get_oauth_token() -> Optional[str]:
+    if not (client_id and client_secret and identity_endpoint and webapp_id):
+        logging.error('Missing OAuth2 configuration environment variables')
+        return None
+
+    url = f'{identity_endpoint}/oauth2/token/{webapp_id}'
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
     }
     body = {
         'grant_type': 'client_credentials',
+        'client_id': client_id,
+        'client_secret': client_secret
     }
-    url = f'{identity_endpoint}/oauth2/token/{webapp_id}'
+    if scope:
+        body['scope'] = scope
+
+    token_data = storage.load(file_name=TOKEN_FILE_NAME)
+    if token_data and not _is_token_expired(token_data):
+        return token_data.get('token')
+    if token_data:
+        logging.warning('Stored token expired')
+
     try:
-        token_data = storage.load(file_name=TOKEN_FILE_NAME)
-        if token_data:
-            if not _is_token_expired(token_data):
-                return token_data['token']
-            else:
-                logging.warning(f'Stored token expired')
         logging.info('Creating new token')
-        response = requests.post(url=url, headers=header, data=body, auth=(client_id, client_secret))
+        response = requests.post(url=url, headers=headers, data=body)
         res_content = response.json()
         if 200 <= response.status_code <= 299:
             expiration = res_content['expires_in']
-            logging.info(f"Access Token obtained successfully. Valid for {expiration} sec")
             token = res_content['access_token']
-            storage.save(data={'token': token, 'expiration': expiration, 'timestamp': int(time.time())}, file_name=TOKEN_FILE_NAME)
-        elif response.status_code == 400:
-            logging.error(f"{res_content['error']} {res_content['error_description']}")
+            storage.save(
+                data={'token': token, 'expiration': expiration, 'timestamp': int(time.time())},
+                file_name=TOKEN_FILE_NAME,
+            )
+            return token
+        if response.status_code == 400:
+            logging.error(f"{res_content.get('error')} {res_content.get('error_description')}")
         else:
-            logging.error(f'error during access token negotiation: {response.status_code}')
+            logging.error(f'error during access token negotiation: {response.status_code} {response.text}')
     except Exception as err:
-        logging.error(f"Something went wrong. Exception error text: {err}")
-    return token
+        logging.error(f'Something went wrong. Exception error text: {err}')
+    return None
 
 
-def _call_epm_api(route: str, body: dict) -> dict:
-    res_content = None
-    token = _get_oauth_token()
-    header = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {token}',
-        # TODO: 'x-cybr-telemetry': '---'
-    }
-    url = f'{api_base_url}/EPM/API/{route}'
-    session = requests.Session()
-    retry = Retry(total=3,
-                  backoff_factor=10,
-                  status_forcelist=(403, 429),
-                  allowed_methods=frozenset(['POST', 'GET']),
-                  respect_retry_after_header=True)
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('https://', adapter)
-    
-    try:
-        response = session.post(url=url, headers=header, data=json.dumps(body))
-        if 200 <= response.status_code <= 299:
-            res_content = response.json()
-        elif response.status_code in [400, 401, 403]:
-            logging.error(f'Error {response.status_code} {response.text}')
-        else:
-            logging.error(f'Error HTTP {response.status_code} when calling {url}')
-    except Exception as err:
-        logging.error(f'Something went wrong {err}')
-    return res_content
-
-def _generate_date():
-    """
-    Determine the time window to fetch events for this run and persist the end time for the next run.
-    - Default window is 60 minutes, configurable via env FetchInterval (minutes).
-    - We store the last end time in storage to use as the next run's start time.
-    - We also apply a 10 minute delay buffer to account for ingestion delays.
-    Returns tuple (start_time_iso, end_time_iso).
-    """
-    # End time is "now" minus a safety buffer
+def _get_time_window() -> tuple[str, str]:
     current_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=10)
-    current_time_str = current_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    current_time_str = current_time.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    # Load previously saved end time
     saved = storage.load(file_name=TIME_FRAME_FILE_NAME) or {}
     last_end_str = saved.get('last_end_time')
 
     if last_end_str:
         try:
-            # Use the last end time as the new start time
-            past_time_dt = datetime.strptime(last_end_str, "%Y-%m-%dT%H:%M:%SZ")
+            start_time_dt = datetime.strptime(last_end_str, '%Y-%m-%dT%H:%M:%SZ')
         except Exception:
-            logging.warning("Invalid last_end_time in storage. Falling back to configured fetch interval.")
-            past_time_dt = current_time - timedelta(minutes=fetch_interval)
-        logging.info(f"Using last recorded end time as start: {past_time_dt.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+            logging.warning('Invalid last_end_time in storage. Falling back to configured fetch interval.')
+            start_time_dt = current_time - timedelta(minutes=fetch_interval_minutes)
     else:
-        logging.info(f"No recorded time frame. Using configured fetch interval of {fetch_interval} minutes.")
-        past_time_dt = current_time - timedelta(minutes=fetch_interval)
+        start_time_dt = current_time - timedelta(minutes=fetch_interval_minutes)
 
-    past_time_str = past_time_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-    storage.save(data={"last_end_time": current_time_str}, file_name=TIME_FRAME_FILE_NAME)
-
-    return past_time_str, current_time_str
+    start_time_str = start_time_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    storage.save(data={'last_end_time': current_time_str}, file_name=TIME_FRAME_FILE_NAME)
+    return start_time_str, current_time_str
 
 
+def _fetch_set_events(fetch_func, token: str, filter_date: str, set_id: dict, next_cursor: str = 'start') -> list:
+    response_json = fetch_func(
+        epmserver=dispatcher_url,
+        epmToken=token,
+        authType='OAUTH',
+        setid=set_id['Id'],
+        data=filter_date,
+        next_cursor=next_cursor,
+    ).json()
 
-def get_query_data() -> dict:
-    start_time, end_time = _generate_date()
-    logging.info('Data processing. Period(UTC): {} - {}'.format(start_time, end_time))
+    if isinstance(response_json, list):
+        return []
+
+    events = response_json.get('events') or []
+    cursor = response_json.get('nextCursor')
+    if cursor:
+        events += _fetch_set_events(fetch_func, token=token, filter_date=filter_date, set_id=set_id, next_cursor=cursor)
+    for event in events:
+        if isinstance(event, dict):
+            event['set_name'] = set_id.get('Name')
+    return events
 
 
-    cursor_data = storage.load(file_name=QUERY_FILE_NAME)
-    if cursor_data:
-        currentPosition='unknown'
+def collect_events() -> list:
+    if not dispatcher_url:
+        logging.error('CyberArkEPMServerURL is missing')
+        return []
+
+    token = _get_oauth_token()
+    if not token:
+        logging.error('Failed to obtain OAuth token')
+        return []
+
+    start_time, end_time = _get_time_window()
+    logging.info(f'Data processing. Period(UTC): {start_time} - {end_time}')
+
+    filter_date = '{"filter": "arrivalTime GE ' + str(start_time) + ' AND arrivalTime LE ' + end_time + '"}'
+
+    try:
+        sets_list = getSetsList(epmserver=dispatcher_url, epmToken=token, authType='OAUTH')
+        sets = sets_list.json().get('Sets') or []
+    except Exception:
+        logging.error('CyberArkEPMServerURL is invalid')
+        return []
+
+    all_events: list = []
+    for set_id in sets:
+        logging.info(f"Collecting aggregated events from {set_id.get('Name')}")
+        for e in _fetch_set_events(getAggregatedEvents, token=token, filter_date=filter_date, set_id=set_id):
+            if isinstance(e, dict):
+                e['event_type'] = 'aggregated_events'
+            all_events.append(e)
+
+        logging.info(f"Collecting raw events from {set_id.get('Name')}")
+        for e in _fetch_set_events(getDetailedRawEvents, token=token, filter_date=filter_date, set_id=set_id):
+            if isinstance(e, dict):
+                e['event_type'] = 'raw_event'
+            all_events.append(e)
+
+        logging.info(f"Collecting aggregated policy audits from {set_id.get('Name')}")
+        for e in _fetch_set_events(getAggregatedPolicyAudits, token=token, filter_date=filter_date, set_id=set_id):
+            if isinstance(e, dict):
+                e['event_type'] = 'aggregated_policy_audits'
+            all_events.append(e)
+
+        logging.info(f"Collecting policy audit raw event details from {set_id.get('Name')}")
+        for e in _fetch_set_events(getPolicyAuditRawEventDetails, token=token, filter_date=filter_date, set_id=set_id):
+            if isinstance(e, dict):
+                e['event_type'] = 'policy_audit_raw_event_details'
+            all_events.append(e)
+
+        logging.info(f"Collecting Admin Audit Data from {set_id.get('Name')}")
         try:
-            cursorRef = json.loads(base64.b64decode(cursor_data['cursorRef']))
-            currentPosition=cursorRef['currentPosition'][0]
+            admin_events = getAdminAuditEvents(
+                epmserver=dispatcher_url,
+                epmToken=token,
+                authType='OAUTH',
+                setid=set_id['Id'],
+                start_time=start_time,
+                end_time=end_time,
+                limit=100,
+            )
+            for e in admin_events:
+                all_events.append(e)
         except Exception as err:
-            logging.warning(f'Failed to decode cursorRef: {err}')
-        logging.info(f"Fetched stored cursor cursorRef: {cursor_data['cursorRef']}, currentPosition: {currentPosition}")
-        return cursor_data
-    if os.environ.get('cursorRef'):
-        cursor_data['cursor'] = os.environ.get('cursorRef')
-        logging.info(f"Using local cursorRef: {cursor_data['cursorRef']}")
-        return cursor_data
-    body = {
-        "query": {
-            "pageSize": 500,
-            "selectedFields": [
-                "tenant_id",
-                "custom_data",
-                "arrival_timestamp",
-                "checksum",
-                "application_code",
-                "audit_code",
-                "timestamp",
-                "user_id",
-                "session_id",
-                "source",
-                "action_type",
-                "audit_type",
-                "component",
-                "target",
-                "command",
-                "message",
-                "username",
-                "action",
-                "uuid",
-                "icon",
-                "service_name",
-                "cloud_roles",
-                "cloud_workspaces",
-                "cloud_workspaces_and_roles",
-                "cloud_assets",
-                "cloud_identities",
-                "vaulted_accounts",
-                "cloud_provider",
-                "account_name",
-                "target_platform",
-                "safe",
-                "target_account",
-                "identity_type",
-                "access_method",
-                "account_id",
-                "correlation_id"
-            ],
-        }
-    }
-    body = _add_filters(body)
-    logging.info(f'Creating a new query {body}')
-    query_data = _call_audit_api(route='createQuery', body=body)
-    if query_data:
-        storage.save(data=query_data, file_name=QUERY_FILE_NAME)
-        logging.info(f"Saved new cursorRef: {query_data['cursorRef']}")
-        return query_data
-    return cursor_data
+            logging.warning(f'Failed fetching Admin Audit Data: {err}')
 
-
-def get_cursor_results(query_data: dict) -> list:
-    body = {
-        'cursorRef': query_data['cursorRef']
-    }
-    res_content = _call_audit_api(route='results', body=body)
-    if res_content:
-        query_data['cursorRef'] = res_content['paging']['cursor']['cursorRef']
-        storage.save(data=query_data, file_name=QUERY_FILE_NAME)
-        return res_content['data']
-    return []
+    return [e for e in all_events if isinstance(e, dict)]
