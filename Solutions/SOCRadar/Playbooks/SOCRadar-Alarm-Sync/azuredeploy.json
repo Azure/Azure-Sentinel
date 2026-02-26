@@ -14,9 +14,9 @@
             "defaultValue": "SOCRadar-Alarm-Sync",
             "metadata": { "description": "Name of the Logic App" }
         },
-        "SocradarApiKey": {
+        "SOCRadarAPIKey": {
             "type": "securestring",
-            "metadata": { "description": "SOCRadar Platform API Key" }
+            "metadata": { "description": "SOCRadar API Key" }
         },
         "CompanyId": {
             "type": "string",
@@ -37,11 +37,25 @@
             "type": "string",
             "defaultValue": "[dateTimeAdd(utcNow(), 'PT3M')]",
             "metadata": { "description": "Trigger start time (3 min delay for role propagation)" }
+        },
+        "WorkspaceResourceGroup": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().name]",
+            "metadata": { "description": "Resource group of existing Sentinel workspace. Leave default if workspace is in same RG." }
+        },
+        "SentinelRoleLevel": {
+            "type": "string",
+            "defaultValue": "Responder",
+            "allowedValues": ["Contributor", "Responder"],
+            "metadata": { "description": "Sentinel role for Logic App. Responder sufficient for incident ops (least-privilege)." }
         }
     },
     "variables": {
         "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-        "SentinelContributorRoleId": "ab8e14d6-4a74-4a29-9ba8-549422addade"
+        "SentinelContributorRoleId": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+        "SentinelResponderRoleId": "3e150937-b8fe-4cfb-8069-0eaf05ecd056",
+        "sentinelRoleDefinitionId": "[if(equals(parameters('SentinelRoleLevel'), 'Responder'), variables('SentinelResponderRoleId'), variables('SentinelContributorRoleId'))]",
+        "workspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
     },
     "resources": [
         {
@@ -74,7 +88,7 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": { "defaultValue": {}, "type": "Object" },
-                        "SocradarApiKey": { "type": "SecureString" },
+                        "SOCRadarAPIKey": { "type": "SecureString" },
                         "CompanyId": { "type": "String" },
                         "WorkspaceName": { "type": "String" },
                         "PollingIntervalMinutes": { "type": "Int" }
@@ -102,7 +116,7 @@
                         },
                         "Initialize_Closed_NextLink": {
                             "type": "InitializeVariable",
-                            "inputs": { "variables": [{ "name": "closed_next_link", "type": "string", "value": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1000&$filter=properties/labels/any(label: label/labelName eq ''SOCRadar'') and properties/status eq ''Closed'' and properties/lastModifiedTimeUtc ge @{outputs(''Calculate_Lookback_Time'')}')]" }] },
+                            "inputs": { "variables": [{ "name": "closed_next_link", "type": "string", "value": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1000&$filter=properties/labels/any(label: label/labelName eq ''SOCRadar'') and properties/status eq ''Closed'' and properties/lastModifiedTimeUtc ge @{outputs(''Calculate_Lookback_Time'')}')]" }] },
                             "runAfter": { "Initialize_Closed_Incidents": ["Succeeded"] }
                         },
                         "Pagination_Loop_Closed": {
@@ -174,7 +188,7 @@
                                                 "method": "POST",
                                                 "uri": "https://platform.socradar.com/api/company/@{parameters('CompanyId')}/alarms/status/change",
                                                 "headers": {
-                                                    "API-Key": "@{parameters('SocradarApiKey')}",
+                                                    "API-Key": "@{parameters('SOCRadarAPIKey')}",
                                                     "Content-Type": "application/json"
                                                 },
                                                 "body": {
@@ -198,7 +212,7 @@
                                                     "method": "POST",
                                                     "uri": "https://platform.socradar.com/api/company/@{parameters('CompanyId')}/alarm/severity",
                                                     "headers": {
-                                                        "API-Key": "@{parameters('SocradarApiKey')}",
+                                                        "API-Key": "@{parameters('SOCRadarAPIKey')}",
                                                         "Content-Type": "application/json"
                                                     },
                                                     "body": {
@@ -214,7 +228,7 @@
                                                 "type": "Http",
                                                 "inputs": {
                                                     "method": "PUT",
-                                                    "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents/@{items(''For_Each_Incident'')?[''name'']}?api-version=2023-11-01')]",
+                                                    "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents/@{items(''For_Each_Incident'')?[''name'']}?api-version=2023-11-01')]",
                                                     "authentication": { "type": "ManagedServiceIdentity" },
                                                     "headers": { "Content-Type": "application/json" },
                                                     "body": {
@@ -257,7 +271,7 @@
                             }
                         }
                     },
-                    "SocradarApiKey": { "value": "[parameters('SocradarApiKey')]" },
+                    "SOCRadarAPIKey": { "value": "[parameters('SOCRadarAPIKey')]" },
                     "CompanyId": { "value": "[parameters('CompanyId')]" },
                     "WorkspaceName": { "value": "[parameters('WorkspaceName')]" },
                     "PollingIntervalMinutes": { "value": "[parameters('PollingIntervalMinutes')]" }
@@ -267,10 +281,11 @@
         {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[guid(resourceGroup().id, parameters('PlaybookName'), variables('SentinelContributorRoleId'))]",
+            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('sentinelRoleDefinitionId'), deployment().name)]",
+            "scope": "[variables('workspaceResourceId')]",
             "dependsOn": [ "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]" ],
             "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('SentinelContributorRoleId'))]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('sentinelRoleDefinitionId'))]",
                 "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
             }

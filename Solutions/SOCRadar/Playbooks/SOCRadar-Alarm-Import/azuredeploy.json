@@ -14,9 +14,9 @@
             "defaultValue": "SOCRadar-Alarm-Import",
             "metadata": { "description": "Name of the Logic App" }
         },
-        "SocradarApiKey": {
+        "SOCRadarAPIKey": {
             "type": "securestring",
-            "metadata": { "description": "SOCRadar Platform API Key" }
+            "metadata": { "description": "SOCRadar API Key" }
         },
         "CompanyId": {
             "type": "string",
@@ -84,13 +84,27 @@
             "type": "string",
             "defaultValue": "[dateTimeAdd(utcNow(), 'PT3M')]",
             "metadata": { "description": "Trigger start time (3 min delay for role propagation)" }
+        },
+        "WorkspaceResourceGroup": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().name]",
+            "metadata": { "description": "Resource group of existing Sentinel workspace. Leave default if workspace is in same RG." }
+        },
+        "SentinelRoleLevel": {
+            "type": "string",
+            "defaultValue": "Responder",
+            "allowedValues": ["Contributor", "Responder"],
+            "metadata": { "description": "Sentinel role for Logic App. Responder sufficient for incident ops (least-privilege)." }
         }
     },
     "variables": {
         "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
         "SentinelContributorRoleId": "ab8e14d6-4a74-4a29-9ba8-549422addade",
+        "SentinelResponderRoleId": "3e150937-b8fe-4cfb-8069-0eaf05ecd056",
+        "sentinelRoleDefinitionId": "[if(equals(parameters('SentinelRoleLevel'), 'Responder'), variables('SentinelResponderRoleId'), variables('SentinelContributorRoleId'))]",
         "LogAnalyticsReaderRoleId": "73c42c96-874c-492b-b04d-ab87d138a893",
         "MonitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+        "workspaceResourceId": "[resourceId(parameters('WorkspaceResourceGroup'), 'Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
         "AuditStreamName": "Custom-SOCRadarAuditLog_CL"
     },
     "resources": [
@@ -124,7 +138,7 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": { "defaultValue": {}, "type": "Object" },
-                        "SocradarApiKey": { "type": "SecureString" },
+                        "SOCRadarAPIKey": { "type": "SecureString" },
                         "EnableAuditLogging": { "type": "Bool", "defaultValue": false },
                         "AuditDcrEndpoint": { "type": "String", "defaultValue": "" },
                         "AuditDcrImmutableId": { "type": "String", "defaultValue": "" },
@@ -157,7 +171,7 @@
                             "type": "Http",
                             "inputs": {
                                 "method": "GET",
-                                "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1&$filter=startswith(properties/title, ''[SOCRadar]'')')]",
+                                "uri": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1&$filter=startswith(properties/title, ''[SOCRadar]'')')]",
                                 "authentication": { "type": "ManagedServiceIdentity" },
                                 "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S", "maximumInterval": "PT1H" }
                             },
@@ -219,7 +233,7 @@
                                     "inputs": {
                                         "method": "GET",
                                         "uri": "https://platform.socradar.com/api/company/@{parameters('CompanyId')}/incidents/v4",
-                                        "headers": { "API-Key": "@{parameters('SocradarApiKey')}" },
+                                        "headers": { "API-Key": "@{parameters('SOCRadarAPIKey')}" },
                                         "queries": {
                                             "page": "@{variables('page')}",
                                             "limit": "100",
@@ -300,7 +314,7 @@
                         },
                         "Initialize_Incidents_NextLink": {
                             "type": "InitializeVariable",
-                            "inputs": { "variables": [{ "name": "incidents_next_link", "type": "string", "value": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1000&$filter=startswith(properties/title, ''[SOCRadar]'')')]" }] },
+                            "inputs": { "variables": [{ "name": "incidents_next_link", "type": "string", "value": "[concat('https://management.azure.com/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'), '/providers/Microsoft.SecurityInsights/incidents?api-version=2023-11-01&$top=1000&$filter=startswith(properties/title, ''[SOCRadar]'')')]" }] },
                             "runAfter": { "Initialize_Existing_Incidents": ["Succeeded"] }
                         },
                         "Pagination_Loop_Incidents": {
@@ -384,7 +398,7 @@
                                                                 "inputs": {
                                                                     "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
                                                                     "method": "put",
-                                                                    "path": "[concat('/Incidents/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/workspaces/', parameters('WorkspaceName'))]",
+                                                                    "path": "[concat('/Incidents/subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('WorkspaceResourceGroup'), '/workspaces/', parameters('WorkspaceName'))]",
                                                                     "body": {
                                                                         "title": "[SOCRadar] #@{items('For_Each_Alarm')?['alarm_id']} - @{if(greater(length(coalesce(items('For_Each_Alarm')?['alarm_type_details']?['alarm_generic_title'], '')), 200), concat(substring(items('For_Each_Alarm')?['alarm_type_details']?['alarm_generic_title'], 0, 197), '...'), coalesce(items('For_Each_Alarm')?['alarm_type_details']?['alarm_generic_title'], 'N/A'))}",
                                                                         "description": "@{concat('SOCRadar Alarm', decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Alarm ID: ', string(items('For_Each_Alarm')?['alarm_id']), decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Main Type: ', coalesce(items('For_Each_Alarm')?['alarm_type_details']?['alarm_main_type'], 'N/A'), decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Sub Type: ', coalesce(items('For_Each_Alarm')?['alarm_type_details']?['alarm_sub_type'], 'N/A'), decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Severity: ', items('For_Each_Alarm')?['alarm_risk_level'], decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Status: ', coalesce(items('For_Each_Alarm')?['status'], 'OPEN'), decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Created: ', items('For_Each_Alarm')?['date'], decodeUriComponent('%0A'), decodeUriComponent('%0A'), 'Details:', decodeUriComponent('%0A'), if(greater(length(coalesce(items('For_Each_Alarm')?['alarm_text'], '')), 1500), concat(substring(items('For_Each_Alarm')?['alarm_text'], 0, 1500), '...'), coalesce(items('For_Each_Alarm')?['alarm_text'], 'No details')), decodeUriComponent('%0A'), decodeUriComponent('%0A'), if(not(empty(items('For_Each_Alarm')?['content'])), concat('Content:', decodeUriComponent('%0A'), replace(replace(replace(replace(if(greater(length(string(items('For_Each_Alarm')?['content'])), 2000), concat(substring(string(items('For_Each_Alarm')?['content']), 0, 2000), '... [truncated]'), string(items('For_Each_Alarm')?['content'])), '\"', ''), '{', ''), '}', ''), ',', ' -*- '), decodeUriComponent('%0A'), decodeUriComponent('%0A')), ''), 'View in SOCRadar: https://platform.socradar.com/company/', items('For_Each_Alarm')?['company_id'], '/alarm/', items('For_Each_Alarm')?['alarm_id'])}",
@@ -524,7 +538,7 @@
                             }
                         }
                     },
-                    "SocradarApiKey": { "value": "[parameters('SocradarApiKey')]" },
+                    "SOCRadarAPIKey": { "value": "[parameters('SOCRadarAPIKey')]" },
                     "CompanyId": { "value": "[parameters('CompanyId')]" },
                     "WorkspaceName": { "value": "[parameters('WorkspaceName')]" },
                     "PollingIntervalMinutes": { "value": "[parameters('PollingIntervalMinutes')]" },
@@ -539,17 +553,18 @@
                     "AlarmsDcrImmutableId": { "value": "[parameters('AlarmsDcrImmutableId')]" },
                     "AlarmsStreamName": { "value": "[parameters('AlarmsStreamName')]" },
                     "SubscriptionId": { "value": "[subscription().subscriptionId]" },
-                    "ResourceGroupName": { "value": "[resourceGroup().name]" }
+                    "ResourceGroupName": { "value": "[parameters('WorkspaceResourceGroup')]" }
                 }
             }
         },
         {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[guid(resourceGroup().id, parameters('PlaybookName'), variables('SentinelContributorRoleId'))]",
+            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('sentinelRoleDefinitionId'), deployment().name)]",
+            "scope": "[variables('workspaceResourceId')]",
             "dependsOn": [ "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]" ],
             "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('SentinelContributorRoleId'))]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('sentinelRoleDefinitionId'))]",
                 "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
                 "principalType": "ServicePrincipal"
             }
@@ -557,8 +572,8 @@
         {
             "type": "Microsoft.Authorization/roleAssignments",
             "apiVersion": "2022-04-01",
-            "name": "[guid(resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName')), parameters('PlaybookName'), variables('LogAnalyticsReaderRoleId'))]",
-            "scope": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+            "name": "[guid(variables('workspaceResourceId'), parameters('PlaybookName'), variables('LogAnalyticsReaderRoleId'), deployment().name)]",
+            "scope": "[variables('workspaceResourceId')]",
             "dependsOn": [ "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]" ],
             "properties": {
                 "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('LogAnalyticsReaderRoleId'))]",

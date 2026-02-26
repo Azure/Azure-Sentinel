@@ -16,7 +16,7 @@ Imports SOCRadar XTI platform alarms into Microsoft Sentinel as incidents.
 
 - SOCRadar XTI Platform API Key
 - Microsoft Sentinel workspace
-- Managed Identity with Sentinel Contributor role
+- Managed Identity with Sentinel Responder role (default, Contributor optional)
 
 ## Deployment
 

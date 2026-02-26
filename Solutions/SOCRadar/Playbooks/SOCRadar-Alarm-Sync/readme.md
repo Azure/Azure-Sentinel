@@ -28,4 +28,4 @@ You can also install this playbook via **Microsoft Sentinel Content Hub**.
 
 - SOCRadar XTI Platform API Key
 - Microsoft Sentinel workspace with SOCRadar incidents
-- Managed Identity with Sentinel Contributor role
+- Managed Identity with Sentinel Responder role (default, Contributor optional)
