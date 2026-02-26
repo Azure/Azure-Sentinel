@@ -1,0 +1,69 @@
+id: 2a1dc4c2-a8d6-4a0e-8539-9b971c851195
+name: Bitsadmin Activity
+description: |
+  Background Intelligent Transfer Service (BITS) is a way to reliably download files from webservers or SMB servers. 
+  This service is commonly used for legitimate purposes, but can also be used as part of a malware downloader. 
+  Additionally, bitsadmin can be used to upload files and therefore can be used for data exfiltration. This
+  query will identify use of bitsadmin.exe for either purpose and will identify directionality file transfer
+  directionality.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics: 
+  - Persistence
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1197
+  - T1105
+  - T1048
+query: |
+  DeviceProcessEvents
+  | where 
+      (FileName =~ "bitsadmin.exe" or column_ifexists('ProcessVersionInfoOriginalFileName','ColumnNotAvailable') =~ 'bitsadmin.exe')
+      and ProcessCommandLine has_any ('/Transfer','/AddFile', '/AddFileSet','/AddFileWithRanges')
+  | extend 
+      ParsedCommandLine = parse_command_line(ProcessCommandLine,'windows')
+  | extend     
+      RemoteUrl = tostring(ParsedCommandLine[-2]),
+      LocalFile= tostring(ParsedCommandLine[-1]),
+      Direction = iff(ProcessCommandLine has "/Upload", 'Upload', 'Download')
+  | project-reorder 
+      TimeGenerated,
+      DeviceId,
+      DeviceName,
+      Direction,
+      RemoteUrl,
+      LocalFile,
+      InitiatingProcessFolderPath,
+      InitiatingProcessAccountDomain,
+      InitiatingProcessAccountName,
+      InitiatingProcessSHA256,
+      ProcessId,
+      ProcessCommandLine
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessId
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

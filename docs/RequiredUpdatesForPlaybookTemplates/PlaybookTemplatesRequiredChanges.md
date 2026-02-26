@@ -42,7 +42,7 @@ Below are details about the recent changes and links to relevant documentation f
 
 ## Required changes in existing playbook templates - extended information
 
-### Trigger change: playbook are reccomended be triggered with “When Azure Sentinel incident creation rule was triggered”
+### Trigger change: playbook are recommended be triggered with “When Azure Sentinel incident creation rule was triggered”
 
 **Required change:** Playbooks which start with alert trigger (“When a response to an Azure Sentinel alert is triggered”) 
 are highly recommended to use the Incident trigger (“When Azure Sentinel incident creation rule was triggered”). 
@@ -105,7 +105,7 @@ None
 
 
 **Additional value to consider when making the change:** 
-* Incident trigger recieves as an input:
+* Incident trigger receives as an input:
     * Incident properties
     * Alerts and their properties 
     * Entities

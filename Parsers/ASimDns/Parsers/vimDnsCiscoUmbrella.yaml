@@ -1,0 +1,108 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Cisco Umbrella
+  Version: '0.3'
+  LastUpdated: Jan 17 2022
+Product:
+  Name: Cisco
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Cisco Umbrella DNS logs to the ASIM Dns normalized schema.
+ParserName: vimDnsCiscoUmbrella
+EquivalentBuiltInParser: _Im_Dns_CiscoUmbrella
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let DNSQuery_CiscoUmbrella=(
+      starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+      , srcipaddr:string='*'
+      , domain_has_any:dynamic=dynamic([]) 
+      , responsecodename:string='*'
+      , response_has_ipv4:string='*' , response_has_any_prefix:dynamic=dynamic([])
+      , eventtype:string='Query'
+      , disabled:bool=false
+      ){
+        Cisco_Umbrella_dns_CL | where not(disabled)
+        // ******************************************************************
+        //  Pre-parsing filterring:
+          | where
+          // Return empty list if response IPs are passed
+            (eventtype in~ ('lookup','Query'))
+            and (response_has_ipv4=='*')
+            and (array_length(response_has_any_prefix) ==0) 
+            and (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime) 
+            and (srcipaddr=='*' or InternalIp_s==srcipaddr)
+            and (array_length(domain_has_any) ==0 or Domain_s has_any (domain_has_any))
+            and (responsecodename=='*' or ResponseCode_s=~responsecodename)
+        // *****************************************************************
+        | parse QueryType_s with DnsQueryType:int " ("DnsQueryTypeName:string ")"
+        //
+        | project 
+        //
+        // ******************* Mandatory
+          EventCount=int(1),
+          EventStartTime=todatetime(column_ifexists('Timestamp_t',column_ifexists('Timestamp_s',''))),
+          EventProduct="Umbrella",
+          EventVendor="Cisco",
+          EventSchema="Dns",
+          EventSchemaVersion="0.1.3",
+          Dvc="CiscoUmbrella" ,
+          EventType="Query",
+          EventResult=iff(ResponseCode_s=~'NOERROR','Success','Failure'),
+          EventResultDetails=ResponseCode_s,  // => ResponseCodeNames
+          //
+          TimeGenerated, // not handled by schema, but we need to preserve it
+          SrcIpAddr=column_ifexists('InternalIp_s', ''),
+          EventSubType='response',
+      // ********** Renamed columns
+          UrlCategory=column_ifexists('Categories_s', ''),
+          DnsQuery=trim_end(@'\.',column_ifexists('Domain_s', '')) , 
+          ThreatCategory=column_ifexists('Blocked_Categories_s', ''),
+          SrcNatIpAddr=column_ifexists('ExternalIp_s', ''),
+          DvcAction=column_ifexists('Action_s', ''),
+          EventEndTime=todatetime(column_ifexists('Timestamp_t',  column_ifexists('Timestamp_s',"")  )),
+      //
+      // *************** keep Parsed data
+          DnsQueryType, DnsQueryTypeName
+      // **************Aliases
+      | extend 
+          DnsResponseCodeName=EventResultDetails, 
+          DomainCategory=UrlCategory,
+          Domain=DnsQuery,
+          IpAddr=SrcIpAddr,
+          Src=SrcIpAddr
+      };
+    DNSQuery_CiscoUmbrella( starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)

@@ -1,0 +1,325 @@
+{
+   "$schema":"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+   "contentVersion":"1.0.0.0",
+    "metadata":{
+        "title": "URLhaus-CheckURLAndEnrichIncident", 
+        "description": "Once a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. [Gets Information](https://urlhaus-api.abuse.ch/#payloadinfo) from URLhaus by hashes, provided in the alert custom entities. \n 2. Enriches the incident with the obtained info.",
+        "prerequisites": [
+            "1. URLhausAPI Custom Connector has to be deployed prior to the deployment of this playbook under the same subscription."
+        ],
+	    "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection..",
+            "1.  Open playbook which has been deployed",
+            "2.  Click API connection on left side blade",
+            "3.  Click the Microsoft Sentinel connection resource",
+            "4.  Click edit API connection",
+	     	"5.  Click Authorize",
+            "6.  Sign in",
+            "7.  Click Save",
+            "8.  Repeat steps for URLhausAPI connector API Connection",
+            "**b. Configurations in Sentinel**",
+            "1.  In Microsoft Sentinel, analytical rules should be configured to trigger an incident.",
+            "2.  Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-11T12:00:00.000Z", 
+        "entities": [],
+        "tags": ["Incident management"], 
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        },
+		 "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "URLhaus-CheckURLAndEnrichIncident",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+   "parameters":{
+      "PlaybookName":{
+         "defaultValue":"URLhaus-CheckURLAndEnrichIncident",
+         "type":"String"
+      },
+	"customApis_URLhaus": {
+      "defaultValue": "URLhausAPI",
+      "type": "string",
+      "metadata": {
+        "description": "Name of the URLhaus Connector"
+      }
+	}
+   },
+   "variables":{
+      "AzureSentinelConnectionName":"[concat('azuresentinel-', parameters('PlaybookName'))]",
+      "URLhausAPIConnectionName":"[concat('urlhaus-connection-', parameters('PlaybookName'))]"
+   },
+   "resources":[
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('AzureSentinelConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "properties":{
+            "displayName":"[variables('AzureSentinelConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Web/connections",
+         "apiVersion":"2016-06-01",
+         "name":"[variables('URLhausAPIConnectionName')]",
+         "location":"[resourceGroup().location]",
+         "kind":"V1",
+         "properties":{
+            "displayName":"[variables('URLhausAPIConnectionName')]",
+            "customParameterValues":{
+               
+            },
+            "api":{
+               "id":"[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_URLhaus'))]"
+            }
+         }
+      },
+      {
+         "type":"Microsoft.Logic/workflows",
+         "apiVersion":"2017-07-01",
+         "name":"[parameters('PlaybookName')]",
+         "location":"[resourceGroup().location]",
+         "dependsOn":[
+            "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+            "[resourceId('Microsoft.Web/connections', variables('URLhausAPIConnectionName'))]"
+         ],
+         "properties":{
+            "state":"Enabled",
+            "definition":{
+               "$schema":"https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+               "contentVersion":"1.0.0.0",
+               "parameters":{
+                  "$connections":{
+                     "defaultValue":{
+                        
+                     },
+                     "type":"Object"
+                  }
+               },
+               "triggers":{
+                  "Microsoft_Sentinel_incident":{
+                     "type":"ApiConnectionWebhook",
+                     "inputs":{
+                        "body":{
+                           "callback_url":"@{listCallbackUrl()}"
+                        },
+                        "host":{
+                           "connection":{
+                              "name":"@parameters('$connections')['azuresentinel']['connectionId']"
+                           }
+                        },
+                        "path":"/incident-creation"
+                     }
+                  }
+               },
+               "actions":{
+                  "Check_Results_Length":{
+                     "actions":{
+                        "Add_comment_to_incident_(V3)":{
+                           "runAfter":{
+                              "Compose":[
+                                 "Succeeded"
+                              ]
+                           },
+                           "type":"ApiConnection",
+                           "inputs":{
+                              "body":{
+                                 "incidentArmId":"@triggerBody()?['object']?['id']",
+                                 "message":"<p><span style=\"font-size: 14px\"><strong>URLhaus URL Checking Results:<br>\n</strong></span><span style=\"font-size: 14px\"><strong>@{outputs('Compose')}</strong></span><span style=\"font-size: 14px\"><strong></strong></span></p>"
+                              },
+                              "host":{
+                                 "connection":{
+                                    "name":"@parameters('$connections')['azuresentinel']['connectionId']"
+                                 }
+                              },
+                              "method":"post",
+                              "path":"/Incidents/Comment"
+                           }
+                        },
+                        "Compose":{
+                           "runAfter":{
+                              "Create_HTML_table":[
+                                 "Succeeded"
+                              ]
+                           },
+                           "type":"Compose",
+                           "inputs":"@body('Create_HTML_table')"
+                        },
+                        "Create_HTML_table":{
+                           "runAfter":{
+                              
+                           },
+                           "type":"Table",
+                           "inputs":{
+                              "format":"HTML",
+                              "from":"@variables('Result List')"
+                           }
+                        }
+                     },
+                     "runAfter":{
+                        "Check_each_URL_in_URLhaus":[
+                           "Succeeded"
+                        ]
+                     },
+                     "expression":{
+                        "and":[
+                           {
+                              "greater":[
+                                 "@length(variables('Result List'))",
+                                 0
+                              ]
+                           }
+                        ]
+                     },
+                     "type":"If"
+                  },
+                  "Check_each_URL_in_URLhaus":{
+                     "foreach":"@body('Entities_-_Get_URLs')?['URLs']",
+                     "actions":{
+                        "Check_Query_Status":{
+                           "actions":{
+                              "Append_to_array_variable":{
+                                 "runAfter":{
+                                    
+                                 },
+                                 "type":"AppendToArrayVariable",
+                                 "inputs":{
+                                    "name":"Result List",
+                                    "value":{
+                                       "blacklists":"@replace(replace(replace(string(body('Query_URL_information')?['blacklists']),'{',''),'}',''),'\"','')",
+                                       "date_added":"@body('Query_URL_information')?['date_added']",
+                                       "host":"@body('Query_URL_information')?['host']",
+                                       "id":"@body('Query_URL_information')?['id']",
+                                       "last_online":"@body('Query_URL_information')?['last_online']",
+                                       "reporter":"@body('Query_URL_information')?['reporter']",
+                                       "tags":"@replace(replace(string(body('Query_URL_information')?['tags']),'[',''),']','')",
+                                       "threat":"@body('Query_URL_information')?['threat']",
+                                       "url":"@body('Query_URL_information')?['url']",
+                                       "url_status":"@body('Query_URL_information')?['url_status']",
+                                       "urlhaus_reference":"@body('Query_URL_information')?['urlhaus_reference']"
+                                    }
+                                 }
+                              }
+                           },
+                           "runAfter":{
+                              "Query_URL_information":[
+                                 "Succeeded"
+                              ]
+                           },
+                           "expression":{
+                              "and":[
+                                 {
+                                    "equals":[
+                                       "@body('Query_URL_information')?['query_status']",
+                                       "ok"
+                                    ]
+                                 }
+                              ]
+                           },
+                           "type":"If"
+                        },
+                        "Query_URL_information":{
+                           "runAfter":{
+                              
+                           },
+                           "type":"ApiConnection",
+                           "inputs":{
+                              "body":{
+                                 "$content-type":"multipart/form-data",
+                                 "$multipart":[
+                                    {
+                                       "body":"@items('Check_each_URL_in_URLhaus')?['Url']",
+                                       "headers":{
+                                          "Content-Disposition":"form-data; name=\"url\""
+                                       }
+                                    }
+                                 ]
+                              },
+                              "host":{
+                                 "connection":{
+                                    "name":"@parameters('$connections')['URLhausAPI']['connectionId']"
+                                 }
+                              },
+                              "method":"post",
+                              "path":"/url/"
+                           }
+                        }
+                     },
+                     "runAfter":{
+                        "Initialize_Results_List":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"Foreach"
+                  },
+                  "Entities_-_Get_URLs":{
+                     "runAfter":{
+                        
+                     },
+                     "type":"ApiConnection",
+                     "inputs":{
+                        "body":"@triggerBody()?['object']?['properties']?['relatedEntities']",
+                        "host":{
+                           "connection":{
+                              "name":"@parameters('$connections')['azuresentinel']['connectionId']"
+                           }
+                        },
+                        "method":"post",
+                        "path":"/entities/url"
+                     }
+                  },
+                  "Initialize_Results_List":{
+                     "runAfter":{
+                        "Entities_-_Get_URLs":[
+                           "Succeeded"
+                        ]
+                     },
+                     "type":"InitializeVariable",
+                     "inputs":{
+                        "variables":[
+                           {
+                              "name":"Result List",
+                              "type":"array"
+                           }
+                        ]
+                     }
+                  }
+               },
+               "outputs":{
+                  
+               }
+            },
+            "parameters":{
+               "$connections":{
+                  "value":{
+                     "azuresentinel":{
+                        "connectionName":"[variables('AzureSentinelConnectionName')]",
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                        "id":"[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                     },
+                     "URLhausAPI":{
+                        "connectionId":"[resourceId('Microsoft.Web/connections', variables('URLhausAPIConnectionName'))]",
+                        "connectionName":"[variables('URLhausAPIConnectionName')]",
+                        "id":"[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_URLhaus'))]"
+                     }
+                  }
+               }
+            }
+         }
+      }
+   ]
+}

@@ -1,12 +1,12 @@
 import fs from "fs";
-import { runCheckOverChangedFiles } from "./utils/changedFilesValidator";
-import { ExitCode } from "./utils/exitCode";
-import { isValidSchema } from "./utils/jsonSchemaChecker";
-import * as logger from "./utils/logger";
-import { doDefinedLogoImageFilesExist, doDefinedPreviewImageFilesExist } from "./utils/workbookCheckers/imageExistChecker";
-import { isVersionIncrementedOnModification } from "./utils/workbookCheckers/isVersionIncrementedOnModification";
-import { isValidPreviewImageFileNames } from "./utils/workbookCheckers/previewImageChecker";
-import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker";
+import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
+import { ExitCode } from "./utils/exitCode.js";
+import { isValidSchema } from "./utils/jsonSchemaChecker.js";
+import * as logger from "./utils/logger.js";
+import { doDefinedLogoImageFilesExist, doDefinedPreviewImageFilesExist } from "./utils/workbookCheckers/imageExistChecker.js";
+import { isVersionIncrementedOnModification } from "./utils/workbookCheckers/isVersionIncrementedOnModification.js";
+import { isValidPreviewImageFileNames } from "./utils/workbookCheckers/previewImageChecker.js";
+import { isUniqueKeys } from "./utils/workbookCheckers/uniqueWorkbookKeyChecker.js";
 
 export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCode> {
   let workbooksMetadata = JSON.parse(fs.readFileSync(filePath, "utf8"));

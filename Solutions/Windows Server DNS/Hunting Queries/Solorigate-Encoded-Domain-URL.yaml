@@ -1,0 +1,68 @@
+id: 29a1815a-3ada-4182-a178-e52c483d2f95
+name: Solorigate Encoded Domain in URL
+description: |
+  'Looks for a logon domain seen in Azure AD logs appearing in a DNS query encoded with the DGA encoding used in the Solorigate incident.
+  Reference: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/'
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let dictionary = dynamic(["r","q","3","g","s","a","l","t","6","u","1","i","y","f","z","o","p","5","7","2","d","4","9","b","n","x","8","c","v","m","k","e","w","h","j"]);
+  let regex_bad_domains = SigninLogs
+  //Collect domains from tenant from signin logs
+  | extend domain = tostring(split(UserPrincipalName, "@", 1)[0])
+  | where domain != ""
+  | summarize by domain
+  | extend split_domain = split(domain, ".")
+  //This cuts back on domains such as na.contoso.com by electing not to match on the "na" portion
+  | extend target_string = iff(strlen(split_domain[0]) <= 2, split_domain[1], split_domain[0])
+  | extend target_string = split(target_string, "-")
+  | mv-expand target_string
+  //Rip all of the alphanumeric out of the domain name
+  | extend string_chars = extract_all(@"([a-z0-9])", tostring(target_string))
+  //Guid for tracking our data
+  | extend guid = new_guid()
+  //Expand to get all of the individual chars from the domain
+  | mv-expand string_chars
+  | extend chars = tostring(string_chars)
+  //Conduct computation to encode the domain as per actor spec
+  | extend computed_char = array_index_of(dictionary, chars)
+  | extend computed_char = dictionary[(computed_char + 4) % array_length(dictionary)]
+  | summarize make_list(computed_char,250) by guid, domain
+  | extend target_encoded = tostring(strcat_array(list_computed_char, ""))
+  //These are probably too small, but can be edited (expect FP's when going too small)
+  | where strlen(target_encoded) > 5
+  | distinct target_encoded
+  | summarize make_set(target_encoded,250)
+  //Key to join to DNS
+  | extend key = 1;
+  DnsEvents
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Name
+  | extend key = 1
+  //For each DNS query join the malicious domain list
+  | join kind=inner ( 
+      regex_bad_domains
+  ) on key
+  | project-away key
+  //Expand each malicious key for each DNS query observed
+  | mv-expand set_target_encoded
+  //IndexOf allows us to fuzzy match on the substring
+  | extend match = indexof(Name, set_target_encoded)
+  | where match > -1
+  | extend DNS_0_DomainName = Name
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Name

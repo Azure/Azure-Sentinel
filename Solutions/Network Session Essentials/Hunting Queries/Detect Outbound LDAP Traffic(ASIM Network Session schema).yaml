@@ -1,0 +1,26 @@
+id: 5dca6047-24ed-4eb7-b44e-ec7f1bf42621
+name: Detect Outbound LDAP Traffic(ASIM Network Session schema)
+description: |
+  'Malicious actors often abuse misconfigured LDAP servers or applications that use the LDAP servers in organizations. Outbound LDAP traffic should not be allowed outbound through your perimeter firewall.'
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors: []
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1071
+  - T1059
+query: |
+  _Im_NetworkSession(starttime=ago(1d))
+  | where EventResult=="Failure" and ipv4_is_private(SrcIpAddr) and not(ipv4_is_private(DstIpAddr)) and SrcIpAddr != DstIpAddr
+  | where tostring(DstPortNumber) has_any ("389", "636")
+  | summarize Starttime= min(TimeGenerated),EndTime= max(TimeGenerated),Eventscount=sum(EventCount), EventVendors=make_set(EventVendor,10) by SrcIpAddr,DstIpAddr,DstPortNumber,NetworkProtocol,EventResult
+  | extend IP_0_Address = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0

@@ -1,0 +1,1534 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SlashNext Security Events for Microsoft Sentinel - Get customer incidents and log",
+        "description": "The playbook will run after every 3 mintues to get list of events occured to a customer in that time and log them in Log Analytic Workspace.",
+        "prerequisites": [
+            "1.**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key.",
+            "To acquire SlashNext API key, please contact us at [support@slashnext.com](mailto:support@slashnext.com) or visit [SlashNext.com](www.slashnext.com)",
+            "2. Prior to the deployment of this playbook, Azure log analytic workspace needs to be deployed under the same subscription.",
+            "3. Prior to the deployment of this playbook, Azure storage account needs to be deployed under the same subscription.",
+            "4. Prior to the deployment of this playbook, Inside storage account create a container named as offset."
+        ],
+        "postDeployment": [
+            "1. Authorize each connection.",
+            "2. Authorize SlashNext custom connector using SlashNext customer key.",
+            "3. Check readme.md for detailed instructions."
+        ],
+        "lastUpdateTime": "2023-06-16T12:00:00.000Z",
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "SlashNext"
+        },
+        "entities": [],
+        "tags": [],
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "SlashNext Security Events for Microsoft Sentinel",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "CustomConnectorName": {
+            "defaultValue": "SlashNext-CMS",
+            "type": "String"
+        },
+        "PlaybookName": {
+            "defaultValue": "SlashNextSecurityEventsforMicrosoftSentinel",
+            "type": "String"
+        },
+        "Storage Account Name": {
+            "type": "String",
+            "metadata": {
+                "description": "Name of Storage account to be created."
+            }
+        },
+        "Storage Key": {
+            "type": "String",
+            "metadata": {
+                "description": "Primary or secondary key of storage account"
+            }
+        },
+        "Process x weeks Data": {
+            "metadata": {
+                "description": "Previous week from which scanning should start."
+            },
+            "type": "String",
+            "defaultValue": 5
+        },
+        "Workspace ID": {
+            "type": "String",
+            "metadata": {
+                "description": "Log analytic workspace ID"
+            }
+        },
+        "Workspace Key": {
+            "type": "String",
+            "metadata": {
+                "description": "Primary or secondary key of storage account"
+            }
+        },
+        "Enable Email Incident": {
+            "type": "String",
+            "metadata": {
+                "description": "Enable email incidents logging."
+            },
+            "defaultValue": "true"
+        },
+        "Enable Web Incident": {
+            "type": "String",
+            "metadata": {
+                "description": "Enable web incidents logging."
+            },
+            "defaultValue": "true"
+        },
+        "Enable SMS Incident": {
+            "type": "String",
+            "metadata": {
+                "description": "Enable sms/mobile incidents logging."
+            },
+            "defaultValue": "true"
+        }
+    },
+    "variables": {
+        "storage_path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('slashnextstorage'))}/files/@{encodeURIComponent(encodeURIComponent('JTJmb2Zmc2V0JTJmb2Zmc2V0LnR4dA=='))}/content",
+        "CustomConnectorName": "[parameters('CustomConnectorName')]",
+        "blob_connection_name": "[concat('SNX-Storage-', substring(toLower(uniqueString(resourceGroup().id, concat('[resourceGroup().locatio', 'n]'))),0,5))]",
+        "workspace_connection_name": "[concat('SNX-Workspace-', substring(toLower(uniqueString(resourceGroup().id, concat('[resourceGroup().locatio', 'n]'))),0,5))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CustomConnectorName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "Slashnext-CMS-Original",
+                "parameterValues": {
+                    "api_key": "1234"
+                },
+                "customParameterValues": {},
+                "nonSecretParameterValues": {},
+                "api": {
+                    "name": "SlashNext-CMS",
+                    "displayName": "SlashNext-CMS",
+                    "description": "SlashNext-CMS is the integration API for Azure, it provide insight of the events occured on endpoint of a customer",
+                    "iconUri": "https://content.powerapps.com/resource/makerx/static/media/default-connection-icon.00d06b6e.svg",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]",
+                    "type": "Microsoft.Web/customApis"
+                },
+                "testLinks": []
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('workspace_connection_name')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('workspace_connection_name')]",
+                "parameterValues": {
+                    "username": "[parameters('Workspace ID')]",
+                    "password": "[parameters('Workspace Key')]"
+                },
+                "api": {
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis',resourceGroup().location, 'azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('blob_connection_name')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('blob_connection_name')]",
+                "parameterValues": {
+                    "accountName": "[parameters('Storage Account Name')]",
+                    "accessKey": "[parameters('Storage Key')]"
+                },
+                "api": {
+                    "name": "azureblob",
+                    "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis',resourceGroup().location, 'azureblob')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('blob_connection_name'))]",
+                "[resourceId('Microsoft.Web/connections', variables('workspace_connection_name'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CustomConnectorName'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 3
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": 3
+                            },
+                            "type": "Recurrence",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "runs": 1
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Current_time": {
+                            "runAfter": {},
+                            "type": "Expression",
+                            "kind": "CurrentTime",
+                            "inputs": {}
+                        },
+                        "Email_vector_var": {
+                            "runAfter": {
+                                "is_SMS": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "email-vector",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "If_Web_Threats": {
+                            "actions": {
+                                "Set_Web_Vector": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "web-vector",
+                                        "value": "browser"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "if_Email_Threats": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('is_web')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_min_offset": {
+                            "runAfter": {
+                                "Current_time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "min_offset",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Iteration_Flag": {
+                            "runAfter": {
+                                "max_offset": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "iteration_flag",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        },
+                        "SMS_vector_var": {
+                            "runAfter": {
+                                "Web_vector_var": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SMS-vector",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Save_offset_condition": {
+                            "actions": {
+                                "create_file": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "{\"offset\":\"@{variables('offset_max')}\"}",
+                                        "headers": {
+                                            "ReadFileMetadataFromServer": true
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                                        "queries": {
+                                            "folderPath": "/offset",
+                                            "name": "offset.txt",
+                                            "queryParametersSingleEncoded": true
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Traverse_each_item": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('offset_save')",
+                                            1
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Scope": {
+                            "actions": {
+                                "Get_content": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "[replace(variables('storage_path'),'slashnextstorage',parameters('Storage Account Name'))]",
+                                        "queries": {
+                                            "inferContentType": true
+                                        }
+                                    }
+                                },
+                                "Parse_data": {
+                                    "runAfter": {
+                                        "Get_content": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_content')",
+                                        "schema": {
+                                            "properties": {
+                                                "offset": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Past_Time": {
+                                    "runAfter": {
+                                        "Get_content": [
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Expression",
+                                    "kind": "GetPastTime",
+                                    "inputs": {
+                                        "interval": "[parameters('Process x weeks Data')]",
+                                        "timeUnit": "Week"
+                                    }
+                                },
+                                "date_updated": {
+                                    "runAfter": {
+                                        "Past_Time": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "min_offset",
+                                        "value": "@{formatDateTime(body('Past_Time'),'yyyy-MM-dd HH:mm:ss')}"
+                                    }
+                                },
+                                "minimum_offset": {
+                                    "runAfter": {
+                                        "Parse_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "min_offset",
+                                        "value": "@body('Parse_data')?['offset']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_min_offset": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Terminate": {
+                            "runAfter": {
+                                "Save_offset_condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            }
+                        },
+                        "Traverse_each_item": {
+                            "actions": {
+                                "Increment_Page": {
+                                    "runAfter": {
+                                        "On_Success_Find_Details": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "IncrementVariable",
+                                    "inputs": {
+                                        "name": "page",
+                                        "value": 1
+                                    }
+                                },
+                                "Loop_Break_condition": {
+                                    "actions": {
+                                        "set_iteration_flag": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "iteration_flag",
+                                                "value": 0
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Increment_Page": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('counter')",
+                                                    "@body('incident_list_response')?['data']?['totalitems']"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "On_Success_Find_Details": {
+                                    "actions": {
+                                        "Extract_Details": {
+                                            "foreach": "@body('Parse_Incident_Listing')",
+                                            "actions": {
+                                                "Events_details": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentId": "@items('Extract_Details')['id']",
+                                                            "infvector": "@items('Extract_Details')['infectionvector']"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['SlashNext']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/api/integration/v4/incidents/detail"
+                                                    }
+                                                },
+                                                "Increment_counter": {
+                                                    "runAfter": {
+                                                        "On_Success": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "IncrementVariable",
+                                                    "inputs": {
+                                                        "name": "counter",
+                                                        "value": 1
+                                                    }
+                                                },
+                                                "On_Success": {
+                                                    "actions": {
+                                                        "Check_infection_vector": {
+                                                            "actions": {
+                                                                "Check_for_Email_Text_Threats": {
+                                                                    "actions": {
+                                                                        "Send_Email_Text_Threat_Data": {
+                                                                            "runAfter": {},
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": "{\n\"Targeted User\":\"@{items('Extract_Details')['fullname']}\",\n\"Targeted User Email\":\"@{items('Extract_Details')['email']}\",\n\"Title\": \"@{body('Parse_Email_Threat')?['data']?['user']?['title']}\",\n\"User Group\":\"@{items('Extract_Details')['groupname']}\",\n\"Department\": \"@{items('Extract_Details')['department']}\",\n\"Infection Vector\":\"@{items('Extract_Details')['infectionvector']}\",\n\"Sender Email\" : \"@{items('Extract_Details')['sender_email']}\",\n\"Email Subject\": \"@{replace(items('Extract_Details')['email_subject'],'\\','\\\\')}\",\n\"Email Time\" : \"@{items('Extract_Details')['email_time']}\",\n\"Incident Time\":\"@{items('Extract_Details')['incidenttime']}\",\n\"Email From - Display Name\" : \"@{items('Extract_Details')['emailfrom_name']}\",\n\"Email From - Email\" : \"@{items('Extract_Details')['emailfrom_email']}\",\n\"Threat Type\":\"@{items('Extract_Details')['threattype']}\",\n\"Threat Name\":\"@{items('Extract_Details')['threatname']}\",\n\"Detected Via\":\"@{items('Extract_Details')['eptypeText']}\",\n\"Remediation Action\" : \"@{items('Extract_Details')['remediation_action']}\",\n\"Impersonation\": \"@{items('Extract_Details')['isimpersonated']}\",\n\"VIP\" : \"@{items('Extract_Details')['isvip']}\",\n\"Has Attachment\" : \"@{body('Parse_Email_Threat')?['data']?['threat']?['has_attachment']}\",\n\"Has URL\" : \"@{items('Extract_Details')['hasurl']}\",\n\"Total User Incident\": \"@{items('Extract_Details')['totalincidents']}\",\n\"User Risk Score\" : \"@{body('Parse_Email_Threat')?['data']?['user']?['userRiskScore']}\"\n}",
+                                                                                "headers": {
+                                                                                    "Log-Type": "SlashNext"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/api/logs"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Parse_Email_Threat": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Send_Email_Threat_Data_": {
+                                                                                "runAfter": {},
+                                                                                "type": "ApiConnection",
+                                                                                "inputs": {
+                                                                                    "body": "{\n\"Targeted User\":\"@{items('Extract_Details')['fullname']}\",\n\"Targeted User Email\":\"@{items('Extract_Details')['email']}\",\n\"Title\": \"@{body('Parse_Email_Threat')?['data']?['user']?['title']}\",\n\"User Group\":\"@{items('Extract_Details')['groupname']}\",\n\"Department\": \"@{items('Extract_Details')['department']}\",\n\"Infection Vector\":\"@{items('Extract_Details')['infectionvector']}\",\n\"Sender Email\" : \"@{items('Extract_Details')['sender_email']}\",\n\"Email Subject\": \"@{replace(items('Extract_Details')['email_subject'],'\\','\\\\')}\",\n\"Email Time\" : \"@{items('Extract_Details')['email_time']}\",\n\"Incident Time\":\"@{items('Extract_Details')['incidenttime']}\",\n\"Email From - Email\" : \"@{items('Extract_Details')['emailfrom_email']}\",\n\"Threat Type\":\"@{items('Extract_Details')['threattype']}\",\n\"Threat Name\":\"@{items('Extract_Details')['threatname']}\",\n\"Malicious URL/Attachment\":\"@{replace(items('Extract_Details')['phishingUrl'], '\\', '\\\\')}\",\n\"Detected Via\":\"@{items('Extract_Details')['eptypeText']}\",\n\"Impersonation\": \"@{items('Extract_Details')['isimpersonated']}\",\n\"VIP\" : \"@{items('Extract_Details')['isvip']}\",\n\"Remediation Action\" : \"@{items('Extract_Details')['remediation_action']}\",\n\"Has Attachment\" : \"@{body('Parse_Email_Threat')?['data']?['threat']?['has_attachment']}\",\n\"Has URL\" : \"@{items('Extract_Details')['hasurl']}\",\n\"Total User Incident\": \"@{items('Extract_Details')['totalincidents']}\",\n\"User Risk Score\" : \"@{body('Parse_Email_Threat')?['data']?['user']?['userRiskScore']}\"\n}",
+                                                                                    "headers": {
+                                                                                        "Log-Type": "SlashNext"
+                                                                                    },
+                                                                                    "host": {
+                                                                                        "connection": {
+                                                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method": "post",
+                                                                                    "path": "/api/logs"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@body('Parse_Email_Threat')?['data']?['threat']?['eventType']",
+                                                                                    "Email Text"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Parse_Email_Threat": {
+                                                                    "runAfter": {},
+                                                                    "type": "ParseJson",
+                                                                    "inputs": {
+                                                                        "content": "@body('Events_details')",
+                                                                        "schema": {
+                                                                            "properties": {
+                                                                                "code": {
+                                                                                    "type": "integer"
+                                                                                },
+                                                                                "data": {
+                                                                                    "properties": {
+                                                                                        "config": {
+                                                                                            "properties": {
+                                                                                                "days": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"]
+                                                                                                },
+                                                                                                "events": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"]
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "email": {
+                                                                                            "properties": {
+                                                                                                "malicious_email_text": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "incident": {
+                                                                                            "properties": {
+                                                                                                "actionTaken": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "advisory": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "device": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "eptype": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "threatBlocked": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "warningServed": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "threat": {
+                                                                                            "properties": {
+                                                                                                "attachment_type": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "eventType": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "has_attachment": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "has_insight": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "has_methodology": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "smsContent": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "smsSender": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "userClicks": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "user": {
+                                                                                            "properties": {
+                                                                                                "lastMonthIncident": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "phone": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "title": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "userRiskScore": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "integer",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "message": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Parse_Threat": {
+                                                                        "runAfter": {},
+                                                                        "type": "ParseJson",
+                                                                        "inputs": {
+                                                                            "content": "@body('Events_details')",
+                                                                            "schema": {
+                                                                                "properties": {
+                                                                                    "code": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "data": {
+                                                                                        "properties": {
+                                                                                            "config": {
+                                                                                                "properties": {
+                                                                                                    "days": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "events": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "incident": {
+                                                                                                "properties": {
+                                                                                                    "actionTaken": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "advisory": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "device": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "eptype": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "threatBlocked": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "warningServed": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "threat": {
+                                                                                                "properties": {
+                                                                                                    "attachment_type": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "eventType": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "has_attachment": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "has_insight": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "has_methodology": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "smsContent": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "smsSender": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "userClicks": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "user": {
+                                                                                                "properties": {
+                                                                                                    "lastMonthIncident": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "phone": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "title": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "userRiskScore": {
+                                                                                                        "type": [
+                                                                                                            "string",
+                                                                                                            "integer",
+                                                                                                            "null"
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            }
+                                                                                        },
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "message": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "Send_Threat_Data": {
+                                                                        "runAfter": {
+                                                                            "Parse_Threat": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "body": "{\n\"Targeted User\":\"@{items('Extract_Details')['fullname']}\",\n\"Targeted User Email\":\"@{items('Extract_Details')['email']}\",\n\"Title\": \"@{body('Parse_Threat')?['data']?['user']?['title']}\",\n\"User Group\":\"@{items('Extract_Details')['groupname']}\",\n\"Department\": \"@{items('Extract_Details')['department']}\",\n\"Infection Vector\":\"@{items('Extract_Details')['infectionvector']}\",\n\"Device Name\" : \"@{body('Parse_Threat')?['data']?['incident']?['device']}\",\n\"SMS Sender\" : \"@{body('Parse_Threat')?['data']?['threat']?['smsSender']}\",\n\"SMS Content\" : \"@{body('Parse_Threat')?['data']?['threat']?['smsContent']}\",\n\"Incident Time\":\"@{items('Extract_Details')['incidenttime']}\",\n\"Threat Name\":\"@{items('Extract_Details')['threatname']}\",\n\"Malicious URL\":\"@{replace(items('Extract_Details')['phishingUrl'], '\\', '\\\\')}\",\n\"User Click\" : \"@{body('Parse_Threat')?['data']?['threat']?['userClicks']}\",\n\"URL Click Blocked\": \"@{body('Parse_Threat')?['data']?['incident']?['threatBlocked']}\",\n\"Warning Served\" : \"@{body('Parse_Threat')?['data']?['incident']?['warningServed']}\",\n\"Detected Via\":\"@{items('Extract_Details')['eptypeText']}\",\n\"Impersonation\": \"@{items('Extract_Details')['isimpersonated']}\",\n\"VIP\" : \"@{items('Extract_Details')['isvip']}\",\n\"SMS Remediation Action\" : \"@{items('Extract_Details')['remediation_action']}\",\n\"Total User Incident\":\"@{items('Extract_Details')['totalincidents']}\",\n\"User Risk Score\" : \"@{body('Parse_Threat')?['data']?['user']?['userRiskScore']}\"\n}",
+                                                                            "headers": {
+                                                                                "Log-Type": "SlashNext"
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "path": "/api/logs"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@items('Extract_Details')?['infectionvector']",
+                                                                            "email"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Events_details": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@body('Events_details')?['code']",
+                                                                    200
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_Incident_Listing": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Parse_Incident_Listing": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('incident_list_response')?['data']?['items']",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "department": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "email": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "email_subject": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "email_time": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "emailfrom_email": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "emailfrom_name": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "eptypeText": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "fullname": {
+                                                                "type": ["string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "groupname": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "incidenttime": {
+                                                                "type": ["string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "infectionvector": {
+                                                                "type": "string"
+                                                            },
+                                                            "isattachmentthreat": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "isimpersonated": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "isvip": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "hasurl": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "loggingaction": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "longthreatname": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "phishingUrl": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "remediation_action": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "sender_email": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "threatname": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "threattype": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "threattypeText": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "threattypelogo": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "totalincidents": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "incident_list_response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('incident_list_response')?['code']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_Save_offset_true": {
+                                    "runAfter": {
+                                        "Loop_Break_condition": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "offset_save",
+                                        "value": 1
+                                    }
+                                },
+                                "incident_list_response": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "filters": [
+                                                {
+                                                    "time": "@{variables('min_offset')}#@{variables('offset_max')}",
+                                                    "vector": [
+                                                        "@variables('SMS-vector')",
+                                                        "@variables('web-vector')",
+                                                        "@variables('email-vector')"
+                                                    ]
+                                                }
+                                            ],
+                                            "page": "@variables('page')",
+                                            "rpp": "@variables('rpp')",
+                                            "sortby": "time",
+                                            "sortorder": "desc"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['SlashNext']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/integration/v4/incidents/list"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "save_offset": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@not(equals(variables('iteration_stop'), variables('iteration_flag')))",
+                            "limit": {
+                                "count": 1000,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Web_vector_var": {
+                            "runAfter": {
+                                "Email_vector_var": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "web-vector",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "counter": {
+                            "runAfter": {
+                                "iteration_stop": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "counter",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "if_Email_Threats": {
+                            "actions": {
+                                "Set_Email_Vector": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "email-vector",
+                                        "value": "email"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "SMS_vector_var": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('is_email')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "if_SMS_Threats": {
+                            "actions": {
+                                "Set_SMS_vector": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "SMS-vector",
+                                        "value": "mobile"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "If_Web_Threats": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('is_sms')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "is_Email": {
+                            "runAfter": {
+                                "Scope": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_email",
+                                        "type": "boolean",
+                                        "value": "[parameters('Enable Email Incident')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "is_SMS": {
+                            "runAfter": {
+                                "is_Web": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_sms",
+                                        "type": "boolean",
+                                        "value": "[parameters('Enable SMS Incident')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "is_Web": {
+                            "runAfter": {
+                                "is_Email": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_web",
+                                        "type": "boolean",
+                                        "value": "[parameters('Enable Web Incident')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "iteration_stop": {
+                            "runAfter": {
+                                "Iteration_Flag": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "iteration_stop",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        },
+                        "max_offset": {
+                            "runAfter": {
+                                "page": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "offset_max",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(body('Current_Time'),'yyyy-MM-dd HH:mm:ss')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "page": {
+                            "runAfter": {
+                                "rpp": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "page",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        },
+                        "rpp": {
+                            "runAfter": {
+                                "if_SMS_Threats": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "rpp",
+                                        "type": "integer",
+                                        "value": 100
+                                    }
+                                ]
+                            }
+                        },
+                        "save_offset": {
+                            "runAfter": {
+                                "counter": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "offset_save",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "SlashNext": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections',variables('CustomConnectorName'))]",
+                                "connectionName": "SlashNext-CMS",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections',variables('blob_connection_name'))]",
+                                "connectionName": "[concat(parameters('PlaybookName'),'-storage')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azureblob')]"
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections',variables('workspace_connection_name'))]",
+                                "connectionName": "[concat(parameters('PlaybookName'),'-workspace')]",
+                                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

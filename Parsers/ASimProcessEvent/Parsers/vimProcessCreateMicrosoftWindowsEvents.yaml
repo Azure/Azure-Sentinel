@@ -1,0 +1,200 @@
+Parser:
+  Title: Process Create Event ASIM parser for WEF Security Events 
+  Version: '0.3'
+  LastUpdated: May 1st 2023
+Product:
+  Name: Security Events
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc 
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports filtering and normalizing Windows process create events (event 4688) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema. 
+ParserName: vimProcessCreateMicrosoftWindowsEvents
+EquivalentBuiltInParser: _Im_ProcessCreate_MicrosoftWindowsEvents
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetusername_has
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
+    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
+        T 
+        | extend 
+             type = case (
+                username == "-", "",
+                domain == "-", "Simple",
+                "Windows"
+            ),
+            username = case (
+              username == "-", "",
+              domain == '-', username,
+              strcat(domain, @"\" , username)
+            )
+    };
+    let MandatoryLabelLookup = datatable (MandatoryLabel:string,MandatoryLabelRid:string, MandatoryLabelText:string, MandatoryLabelMeaning:string)
+    [
+        'S-1-16-0', '0x00000000', 'SECURITY_MANDATORY_UNTRUSTED_RID', 'Untrusted',
+        'S-1-16-4096', '0x00001000', 'SECURITY_MANDATORY_LOW_RID', 'Low integrity',
+        'S-1-16-8192', '0x00002000', 'SECURITY_MANDATORY_MEDIUM_RID', 'Medium integrity',
+        'S-1-16-8448', '0x00002100', 'SECURITY_MANDATORY_MEDIUM_PLUS_RID', 'Medium high integrity',
+        'S-1-16-12288', '0X00003000', 'SECURITY_MANDATORY_HIGH_RID', 'High integrity',
+        'S-1-16-16384', '0x00004000', 'SECURITY_MANDATORY_SYSTEM_RID', 'System integrity',
+        'S-1-16-20480', '0x00005000', 'SECURITY_MANDATORY_PROTECTED_PROCESS_RID', 'Protected process'
+        ];
+    let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      targetusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      hashes_has_any:dynamic=dynamic([]),
+      disabled:bool=false
+    ) {
+    WindowsEvent
+    // -- pre-filtering
+    | where
+      (isnull(starttime)   or TimeGenerated >= starttime )
+      and (isnull(endtime) or TimeGenerated <= endtime )
+      and EventID == 4688
+      and not(disabled)
+      and (eventtype=='*' or eventtype=='ProcessCreated')
+      and (array_length(parentprocess_has_any)==0)
+      and (array_length(hashes_has_any) == 0)
+      and (array_length(dvcipaddr_has_any_prefix)==0)
+      and (array_length(commandline_has_all)==0 or EventData.CommandLine has_all (commandline_has_all)) 
+      and (array_length(commandline_has_any)==0 or EventData.CommandLine has_any (commandline_has_any)) 
+      and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventData.CommandLine, commandline_has_any_ip_prefix) ) 
+      and (array_length(actingprocess_has_any)==0 or EventData.ParentProcessName has_any (actingprocess_has_any)) 
+      and (array_length(targetprocess_has_any)==0 or EventData.NewProcessName has_any (targetprocess_has_any)) 
+      and (targetusername_has=='*' or EventData has targetusername_has)  
+      and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))   
+      // --
+    | project-rename
+        DvcHostname = Computer
+    | extend
+        EventCount = int(1),
+        EventVendor = 'Microsoft',
+        EventProduct = 'Security Events',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'ProcessEvent',
+        EventResult = 'Success',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventType = 'ProcessCreated',
+        EventOriginalType = tostring(EventID),
+        DvcOs = 'Windows'
+    | extend 
+        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
+        ActorUserId = tostring(EventData.SubjectUserSid)
+    | extend
+        ActorUserIdType = iff (ActorUserId <> "S-1-0-0", "SID", ""),
+        ActorUserId = iff (ActorUserId <> "S-1-0-0", ActorUserId, ""),    
+        ActorUsernameType = "Windows",
+        username = tostring(EventData.TargetUserName)
+    | extend
+        TargetUsername = iff(username == "-", ActorUsername, strcat(EventData.SubjectDomainName, @'\', username))
+    | where // -- post filtering
+        (targetusername_has=='*' or TargetUsername has targetusername_has)  
+    | extend
+        TargetUserId = iff(username == "-", ActorUserId, tostring(EventData.TargetUserSid))
+    | extend
+        TargetUserIdType = iff (TargetUserId <> "S-1-0-0", "SID", ""),
+        TargetUserId = iff (TargetUserId <> "S-1-0-0", TargetUserId, ""), 
+        TargetUsernameType = "Windows"
+    | project-away
+        username
+    | extend 
+        TargetUserSid = TargetUserId,
+        ActorUserSid = ActorUserId,
+        ActorUserType = _ASIM_GetWindowsUserType(ActorUsername, ActorUserId),
+        TargetUserType = _ASIM_GetWindowsUserType(TargetUsername, TargetUserId)
+    | extend
+        ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
+        TargetUserSessionId = tostring(toint(EventData.TargetLogonId)),    
+        // Processes 
+        ActingProcessId = tostring(toint(tolong(EventData.ProcessId))),
+        ActingProcessName = tostring(EventData.ParentProcessName),
+        TargetProcessId = tostring(toint(tolong(EventData.NewProcessId))),
+        TargetProcessName = tostring(EventData.NewProcessName),
+        TargetProcessCommandLine = tostring(EventData.CommandLine),
+        TargetProcessTokenElevation = tostring(EventData.TokenElevationType),
+        MandatoryLabel = tostring(EventData.MandatoryLabel)
+    | extend 
+        ActingProcessFilename = ASIM_GetFilenamePart(ActingProcessName),
+        TargetProcessFilename = ASIM_GetFilenamePart(TargetProcessName)
+    | lookup MandatoryLabelLookup on MandatoryLabel
+    // -- Aliases
+    | extend
+        User = TargetUsername,
+        Dvc = DvcHostname,
+        Process = TargetProcessName,
+        CommandLine = TargetProcessCommandLine
+    | project-away Channel, EventData, Data, EventID, EventLevelName, EventLevel, Provider, RawEventData, Task, TenantId, ManagementGroupName, SourceSystem, EventOriginId
+    }; 
+    parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      targetusername_has=targetusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      hashes_has_any=hashes_has_any,
+      disabled=disabled
+    )

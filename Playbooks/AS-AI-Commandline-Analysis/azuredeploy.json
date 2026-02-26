@@ -1,0 +1,293 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "Description":  "This playbook is intended to be run from a Microsoft Sentinel incident that has a Commandline entity. It will send a prompt to GPT-3 (text-davinci-003 model) and return an explanation of the commandline to the comments of the incident.",
+        "Author": "Curtis Middlehurst"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AI-Commandline-Analysis",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "OpenaiConnectionName": "[concat('openaiip-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('OpenaiConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "OpenAIKey",
+                "statuses": [
+                    {
+                        "status": "Connected"
+                    }
+                ],
+                "customParameterValues": {},
+                "nonSecretParameterValues": {},
+                "createdTime": "2023-01-31T14:39:59.3231119Z",
+                "changedTime": "2023-01-31T14:39:59.3231119Z",
+                "api": {
+                    "name": "openaiip",
+                    "displayName": "OpenAI (Independent Publisher)",
+                    "description": "Connect to the OpenAI API and use the Power of GPT3, API key must be entered as \"Bearer YOUR_API_KEY\"",
+                    "iconUri": "https://connectoricons-prod.azureedge.net/releases/v1.0.1615/1.0.1615.3163/openaiip/icon.png",
+                    "brandColor": "#da3b01",
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/openaiip')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "testLinks": []
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('OpenaiConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_Commandline_variable_used_for_comments": {
+                            "runAfter": {
+                                "Parse_Entitites": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Commandline",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Entitites": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "commandLine": {
+                                                        "type": "string"
+                                                    },
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "id",
+                                            "name",
+                                            "type",
+                                            "kind",
+                                            "properties"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Send_Commandline_to_GPT_for_Analysis": {
+                            "foreach": "@body('Parse_Entitites')",
+                            "actions": {
+                                "Checks_for_blank_commandlines": {
+                                    "actions": {},
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Add_response_to_comments": {
+                                                "foreach": "@body('GPT3_Completes_your_prompt')?['choices']",
+                                                "actions": {
+                                                    "Add_comment_to_incident_(V3)": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                "message": "<p><strong>Analysis of Commandline</strong> <em>[</em><em>@{replace(variables('Commandline'), 'http', 'hxxp')}</em><em>]</em> @{items('Add_response_to_comments')?['text']}</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "GPT3_Completes_your_prompt": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Foreach"
+                                            },
+                                            "GPT3_Completes_your_prompt": {
+                                                "runAfter": {
+                                                    "Sets_Commandline_variable_for_use_in_comments": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "best_of": 1,
+                                                        "frequency_penalty": 0,
+                                                        "max_tokens": 200,
+                                                        "n": 1,
+                                                        "presence_penalty": 0,
+                                                        "prompt": "Can you tell me what this commandline does, @{items('Send_Commandline_to_GPT_for_Analysis')?['properties']?['commandLine']}",
+                                                        "temperature": 0
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['openaiip']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/v1/engines/text-davinci-003/completions"
+                                                }
+                                            },
+                                            "Sets_Commandline_variable_for_use_in_comments": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Commandline",
+                                                    "value": "@items('Send_Commandline_to_GPT_for_Analysis')?['properties']?['commandLine']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "equals": [
+                                                    "@items('Send_Commandline_to_GPT_for_Analysis')?['properties']?['commandLine']",
+                                                    ""
+                                                ]
+                                            },
+                                            {
+                                                "equals": [
+                                                    "@items('Send_Commandline_to_GPT_for_Analysis')?['properties']?['commandLine']",
+                                                    null
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Commandline_variable_used_for_comments": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "openaiip": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OpenaiConnectionName'))]",
+                                "connectionName": "[variables('OpenaiConnectionName')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/openaiip')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,41 @@
+id: a7214393-9da7-432e-9b41-fb02b4f740bd
+name: Remote File Creation with PsExec
+description: |
+  This query detects remote file creation events that might indicate an active attack using PsExec.
+description-detailed: |
+  This query was originally published in the threat analytics report, Ryuk ransomware. There is also a related blog.
+  Ryuk is human-operated ransomware. Much like DoppelPaymer ransomware, Ryuk is spread manually, often on networks that are already infected with Trickbot.
+  Ryuk operators use PsExec to manually spread the ransomware to other devices.
+  The following query detects remote file creation events that might indicate an active attack.
+  The See also section below lists links to other queries associated with Ryuk ransomware.
+  References:
+  https://www.microsoft.com/security/blog/2020/03/05/human-operated-ransomware-attacks-a-preventable-disaster/
+  https://www.microsoft.com/wdsi/threats/malware-encyclopedia-description?Name=Ransom:Win32/Ryuk&threatId=-2147232689
+  https://www.microsoft.com/security/blog/2020/03/05/human-operated-ransomware-attacks-a-preventable-disaster/
+  https://docs.microsoft.com/sysinternals/downloads/psexec
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+tactics:
+  - LateralMovement
+query: |
+  // Find PsExec creating multiple files on remote machines in a 10-minute window
+  DeviceFileEvents
+  | where TimeGenerated > ago(7d)
+  // Looking for PsExec by accepteula command flag
+  | where InitiatingProcessCommandLine has "accepteula"
+  // Remote machines and file is exe
+  | where FolderPath has "\\\\" and FileName endswith ".exe"
+  | extend Exe = countof(InitiatingProcessCommandLine, ".exe")
+  // Checking to see if command line has 2 .exe or .bat
+  | where InitiatingProcessCommandLine !has ".ps1" and Exe > 1 or
+  InitiatingProcessCommandLine has ".bat"
+  // Exclusions: Remove the following line to widen scope of AHQ
+  | where not(InitiatingProcessCommandLine has_any("batch", "auditpol",
+  "script", "scripts", "illusive", "rebootrequired"))
+  | summarize FileCount = dcount(FolderPath), make_set(SHA1, 100000), make_set(FolderPath, 100000),
+  make_set(FileName, 100000), make_set(InitiatingProcessCommandLine, 100000) by DeviceId,
+  TimeWindow=bin(TimeGenerated, 10m), InitiatingProcessFileName
+  | where FileCount > 4
+version: 1.0.0

@@ -1,0 +1,470 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata": {
+        "title": "Put Defender for Endpoint Alert as Hunting ARM Template in GitHub Rep",
+        "description": "This Playbook Provides the automation to Push Defender for Endpoint Alerts including Alert Names, MITRE Tactics, Techniques and Sub-Techniques as Hunting ARM Templates into a Sentinel Github Repository",
+        "prerequisites": [
+            "1. Personal Access Token for your GitHub repository generated",
+            "2. GitHub repository setup for deploying custom content into your Sentinel workspace from Github",
+			"3. [Important step]Store the Github API secret key in Key vault and provide the key url of the stored secret during deployment"
+        ],
+        "postDeployment": [
+            "1. During deployment you need to provide your Github Repo Name, Github Repo Owner Name and Key vault URL of stored secret key.",
+	    "2. Give this Logic App's Managed Identity access to your keyvault where your Github API Key is stored",
+	    "3. Edit the Playbook and update the Microsoft Sentinel connection activity"
+        ],
+        "prerequisitesDeployTemplateFile": "../Playbooks/Put-MDEAlert-Hunting-GitHub/azuredeploy.json",
+        "lastUpdateTime": "2022-01-03T00:00:00.000Z",
+        "entities": [ ],
+        "tags": [ "Hunting", "GitHub", "ARMTemplate", "MDE Alert", "MITRE", "Defender for Endpoint" ],
+        "support": {
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Chris Stelzer"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Put-MDEAlert-Hunting-GitHub",
+            "type":  "string"
+        },
+        "GitHubRepoName":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter your Github Repo Name Connected to Sentinel"
+            }
+        },
+        "GitHubRepoOwnerName":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter your GitHub Owner Name of the Repo Connected to Sentinel"
+            }
+        },
+        "KeyVaultGitHubCredentialsURL":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter Keyvault URL for your GitHub API Key with Workflow and Repo Permissions"
+            }
+        }
+    },
+    "variables":  {
+        "AzuremonitorlogsConnectionName":  "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "GitHubRepoName":  {
+                            "defaultValue":  "[parameters('GitHubRepoName')]",
+                            "type":  "string"
+                        },
+                        "GitHubRepoOwnerName":  {
+                            "defaultValue":  "[parameters('GitHubRepoOwnerName')]",
+                            "type":  "string"
+                        },
+                        "KeyVaultGitHubCredentialsURL":  {
+                            "defaultValue":  "[parameters('KeyVaultGitHubCredentialsURL')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "frequency":  "Day",
+                                "interval":  1
+                            },
+                            "evaluatedRecurrence":  {
+                                "frequency":  "Day",
+                                "interval":  1
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "For_Each_Alert":  {
+                            "foreach":  "@body('Grab_MDE_Alerts_with_Mitre_Techniques')?['value']",
+                            "actions":  {
+                                "Check_if_File_Exists_In_Github_Repo":  {
+                                    "actions":  {
+                                    },
+                                    "runAfter":  {
+                                        "Generate_File_Name":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Compose_ARM_Template":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "Payload",
+                                                    "value":  "{\n  \"$schema\": \"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#\",\n  \"contentVersion\": \"1.0.0.0\",\n  \"parameters\": {\n    \"workspace\": {\n      \"type\": \"String\"\n    }\n  },\n  \"resources\": [\n    {\n      \"type\": \"Microsoft.OperationalInsights/workspaces/savedSearches\",\n      \"apiVersion\": \"2020-08-01\",\n      \"name\": \"[concat(parameters('workspace'), '/MDE_@{replace(replace(item()?['AlertName'], ' ', '_'), '/', '_')}_@{replace(replace(item()?['MitreTechnique'], ';', '_'), '.', '_')}')]\",\n      \"location\": \"[resourceGroup().location]\",\n      \"properties\": {\n        \"eTag\": \"*\",\n        \"displayName\": \"MDE Alert - @{items('For_Each_Alert')?['AlertName']}\",\n        \"category\": \"Hunting Queries\",\n        \"query\": \"SecurityAlert\\n| where ProductName == \\\"Microsoft Defender Advanced Threat Protection\\\"\\n| extend ep=parse_json(ExtendedProperties)\\n| extend MitreTechnique = ep.[\\\"MitreTechniques\\\"]\\n| where AlertName == \\\"@{items('For_Each_Alert')?['AlertName']}\\\"\\n| where MitreTechnique == \\\"@{items('For_Each_Alert')?['MitreTechnique']}\\\"\",\n        \"version\": 1,\n        \"tags\": [\n          {\n            \"name\": \"description\",\n            \"value\": \"Microsoft Defender for Endpoint Alert - @{items('For_Each_Alert')?['AlertName']} - Mitre Techniques @{replace(item()?['MitreTechnique'], ';', ',')}\"\n          },\n          {\n            \"name\": \"tactics\",\n            \"value\": \"@{items('For_Each_Alert')?['Tactics']}\"\n          },\n\t\t  {\n            \"name\": \"techniques\",\n            \"value\": \"@{replace(item()?['MitreTechnique'], ';', ',')}\"\n          }\n        ]\n      }\n    }\n  ]\n}"
+                                                }
+                                            },
+                                            "Delay_Between_API_Requests":  {
+                                                "runAfter":  {
+                                                    "Compose_ARM_Template":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "Wait",
+                                                "inputs":  {
+                                                    "interval":  {
+                                                        "count":  10,
+                                                        "unit":  "Second"
+                                                    }
+                                                }
+                                            },
+                                            "Post_Hunting_JSON_Arm_Template_to_Github":  {
+                                                "runAfter":  {
+                                                    "Delay_Between_API_Requests":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "Http",
+                                                "inputs":  {
+                                                    "body":  {
+                                                        "content":  "@{base64(variables('Payload'))}",
+                                                        "message":  "New Hunting ARM Template added from MDE Alert Logic App"
+                                                    },
+                                                    "headers":  {
+                                                        "Accept":  "application/vnd.github+json",
+                                                        "Authorization":  "Bearer @{body('Parse_Github_Key')?['value']}"
+                                                    },
+                                                    "method":  "PUT",
+                                                    "uri":  "https://api.github.com/repos/@{parameters('GitHubRepoOwnerName')}/@{parameters('GitHubRepoName')}/contents/Hunting/MDE_@{replace(replace(item()?['AlertName'], ' ', '_'), '/', '_')}_@{replace(replace(item()?['MitreTechnique'], ';', '_'), '.', '_')}.json"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "contains":  [
+                                                    "@string(variables('RepoContents'))",
+                                                    "@variables('FileName')"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Generate_File_Name":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "FileName",
+                                        "value":  "MDE_@{replace(replace(item()?['AlertName'], ' ', '_'), '/', '_')}_@{replace(replace(item()?['MitreTechnique'], ';', '_'), '.', '_')}.json"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Grab_MDE_Alerts_with_Mitre_Techniques":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach",
+                            "runtimeConfiguration":  {
+                                "concurrency":  {
+                                    "repetitions":  1
+                                }
+                            }
+                        },
+                        "Get_Github_Key_from_Keyvault":  {
+                            "runAfter":  {
+                                "Initialize_FileName":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "authentication":  {
+                                    "audience":  "https://vault.azure.net",
+                                    "type":  "ManagedServiceIdentity"
+                                },
+                                "method":  "GET",
+                                "queries":  {
+                                    "api-version":  "2016-10-01"
+                                },
+                                "uri":  "@parameters('KeyVaultGitHubCredentialsURL')"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Get_Github_Repo_Contents":  {
+                            "runAfter":  {
+                                "Parse_Github_Key":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "headers":  {
+                                    "Accept":  "application/vnd.github+json",
+                                    "Authorization":  "Bearer @{body('Parse_Github_Key')?['value']}"
+                                },
+                                "method":  "GET",
+                                "uri":  "https://api.github.com/repos/@{parameters('GitHubRepoOwnerName')}/@{parameters('GitHubRepoName')}/contents/Hunting"
+                            }
+                        },
+                        "Grab_MDE_Alerts_with_Mitre_Techniques":  {
+                            "runAfter":  {
+                                "Set_Repo_Contents":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "SecurityAlert\n| extend ep=parse_json(ExtendedProperties)\n| extend MitreTechnique = ep.[\"MitreTechniques\"]\n| where ProductName == \"Microsoft Defender Advanced Threat Protection\"\n| where isnotnull(MitreTechnique)\n| where isnotnull(Tactics)\n| where Tactics != \"Unknown\"\n| project AlertName, ProductName, Tactics, tostring(MitreTechnique)\n| distinct AlertName, ProductName, Tactics, tostring(MitreTechnique)\n| sort by AlertName asc",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups":  "",
+                                    "resourcename":  "",
+                                    "resourcetype":  "",
+                                    "subscriptions":  "",
+                                    "timerange":  "Last 24 hours"
+                                }
+                            }
+                        },
+                        "Initialize_ARM_Template":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Payload",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_FileName":  {
+                            "runAfter":  {
+                                "Initialize_Repo_Contents":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "FileName",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Repo_Contents":  {
+                            "runAfter":  {
+                                "Initialize_ARM_Template":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "RepoContents",
+                                        "type":  "array",
+                                        "value":  [
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Github_Key":  {
+                            "runAfter":  {
+                                "Get_Github_Key_from_Keyvault":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('Get_Github_Key_from_Keyvault')",
+                                "schema":  {
+                                    "properties":  {
+                                        "attributes":  {
+                                            "properties":  {
+                                                "created":  {
+                                                    "type":  "integer"
+                                                },
+                                                "enabled":  {
+                                                    "type":  "boolean"
+                                                },
+                                                "recoveryLevel":  {
+                                                    "type":  "string"
+                                                },
+                                                "updated":  {
+                                                    "type":  "integer"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        },
+                                        "id":  {
+                                            "type":  "string"
+                                        },
+                                        "value":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        },
+                        "Parse_Repo_Contents":  {
+                            "runAfter":  {
+                                "Get_Github_Repo_Contents":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('Get_Github_Repo_Contents')",
+                                "schema":  {
+                                    "items":  {
+                                        "properties":  {
+                                            "_links":  {
+                                                "properties":  {
+                                                    "git":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "html":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "self":  {
+                                                        "type":  "string"
+                                                    }
+                                                },
+                                                "type":  "object"
+                                            },
+                                            "download_url":  {
+                                                "type":  "string"
+                                            },
+                                            "git_url":  {
+                                                "type":  "string"
+                                            },
+                                            "html_url":  {
+                                                "type":  "string"
+                                            },
+                                            "name":  {
+                                                "type":  "string"
+                                            },
+                                            "path":  {
+                                                "type":  "string"
+                                            },
+                                            "sha":  {
+                                                "type":  "string"
+                                            },
+                                            "size":  {
+                                                "type":  "integer"
+                                            },
+                                            "type":  {
+                                                "type":  "string"
+                                            },
+                                            "url":  {
+                                                "type":  "string"
+                                            }
+                                        },
+                                        "required":  [
+                                            "name",
+                                            "path",
+                                            "sha",
+                                            "size",
+                                            "url",
+                                            "html_url",
+                                            "git_url",
+                                            "download_url",
+                                            "type",
+                                            "_links"
+                                        ],
+                                        "type":  "object"
+                                    },
+                                    "type":  "array"
+                                }
+                            }
+                        },
+                        "Set_Repo_Contents":  {
+                            "runAfter":  {
+                                "Parse_Repo_Contents":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "SetVariable",
+                            "inputs":  {
+                                "name":  "RepoContents",
+                                "value":  "@body('Parse_Repo_Contents')"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuremonitorlogs":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName":  "[variables('AzuremonitorlogsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzuremonitorlogsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        }
+    ]
+}

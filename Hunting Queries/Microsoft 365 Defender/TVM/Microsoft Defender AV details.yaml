@@ -1,0 +1,39 @@
+id: FEE07B7B-E704-4216-BBFC-3B1344136E07
+name: Microsoft Defender AV details
+description: |  
+  'This query will identify the Microsoft Defender Antivirus Security Intelligence version, Security Intelligence up to date value, Engine version, Engine up to date value,  Product version (aka Platform version),Product (aka Platform) up to date value, Security Intelligence publish/build timestamp, Security intel refresh timestamp and provide a list of devices with these details.'
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+    let expiringPublishdate = ago(8d);
+    DeviceTvmInfoGathering
+    | extend AvMode = iif(tostring(AdditionalFields.AvMode) == '0', 'Active', iif(tostring(AdditionalFields.AvMode) == '1', 'Passive',iif(tostring(AdditionalFields.AvMode) == '2', 'Disabled', iif(tostring(AdditionalFields.AvMode) == '5', 'PassiveAudit',iif(tostring(AdditionalFields.AvMode) == '4', 'EDR Blocked' ,'Unknown')))))  
+    | extend AvIsSignatureUpToDateTemp = tostring(AdditionalFields.AvIsSignatureUptoDate), DataRefreshTimestamp= Timestamp,
+    AvIsPlatformUptodateTemp=tostring(AdditionalFields.AvIsPlatformUptodate),
+    AvIsEngineUptodateTemp = tostring(AdditionalFields.AvIsEngineUptodate), 
+    AvSignatureDataRefreshTime = todatetime(AdditionalFields.AvSignatureDataRefreshTime), 
+    AvSignaturePublishTime = todatetime(AdditionalFields.AvSignaturePublishTime),
+    AvSignatureVersion =  tostring(AdditionalFields.AvSignatureVersion),
+    AvEngineVersion =  tostring(AdditionalFields.AvEngineVersion),
+    AvPlatformVersion =  tostring(AdditionalFields.AvPlatformVersion)
+    | extend AvIsSignatureUpToDate = iif(((((isnull(AvIsSignatureUpToDateTemp)
+    or (isnull(AvSignatureDataRefreshTime)))
+    or (isnull(AvSignaturePublishTime))))
+    or (AvIsSignatureUpToDateTemp == "true"
+    and AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsSignatureUpToDateTemp))
+    | extend AvIsEngineUpToDate = iif(((((isnull(AvIsEngineUptodateTemp)
+    or (isnull(AvSignatureDataRefreshTime)))
+    or (isnull(AvSignaturePublishTime)))
+    or (AvSignatureDataRefreshTime < expiringPublishdate))
+    or (AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsEngineUptodateTemp))
+    | extend AvIsPlatformUpToDate = iif(((((isnull(AvIsPlatformUptodateTemp)
+    or (isnull(AvSignatureDataRefreshTime)))
+    or (isnull(AvSignaturePublishTime)))
+    or (AvSignatureDataRefreshTime < expiringPublishdate))
+    or (AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsPlatformUptodateTemp))
+    | project DeviceId, DeviceName, DataRefreshTimestamp, OSPlatform, AvMode, AvSignatureVersion, AvIsSignatureUpToDate, AvEngineVersion, AvIsEngineUpToDate, AvPlatformVersion , AvIsPlatformUpToDate, AvSignaturePublishTime, AvSignatureDataRefreshTime
+    //| where DataRefreshTimestamp between (datetime("2022-07-19 00:00:00") .. datetime("2022-07-19 18:01:00"))
+    | where DataRefreshTimestamp > ago(6h)
+    | order by DeviceName asc
+    | limit 10000

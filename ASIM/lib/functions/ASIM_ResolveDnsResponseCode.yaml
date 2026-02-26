@@ -1,0 +1,54 @@
+Function:
+  Title: An ASIM function sets DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter 
+  Version: '0.1'
+  LastUpdated: Apr 27th 2022
+References:
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: KQL Invoke operator
+  Link: https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator
+- Title: DNS response codes
+  Link: https://www.iana.org/assignments/dns-parameters/dns-parameters.xhtml#dns-parameters-6
+Description: |
+  This ASIM tabular function is intended for use in ASIM DNS parsers and sets the DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter. For example, for the RCode 3, the function sets DnsResponseCode to 3 and DnsResponseCodeName to NXDOMAIN. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.  
+FunctionName: ASIM_ResolveDnsResponseCode
+EquivalentBuiltInFunction: _ASIM_ResolveDnsResponseCode
+FunctionParams:
+  - Name: T
+    Type: table:(*)
+  - Name: field
+    Type: string
+
+FunctionQuery: |
+  let DnsResponseCodeLookup=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
+    0,'NOERROR',
+    1,'FORMERR',
+    2,'SERVFAIL',
+    3,'NXDOMAIN',
+    4,'NOTIMP',
+    5,'REFUSED',
+    6,'YXDOMAIN',
+    7,'YXRRSET',
+    8,'NXRRSET',
+    9,'NOTAUTH',
+    10,'NOTZONE',
+    11,'DSOTYPENI',
+    16,'BADVERS',
+    16,'BADSIG',
+    17,'BADKEY',
+    18,'BADTIME',
+    19,'BADMODE',
+    20,'BADNAME',
+    21,'BADALG',
+    22,'BADTRUNC',
+    23,'BADCOOKIE'
+  ];
+  T
+  | extend DnsResponseCode = toint(column_ifexists(field,0))
+  | lookup DnsResponseCodeLookup on DnsResponseCode
+  | extend DnsResponseCodeName = 
+    case (
+      DnsResponseCodeName != "", DnsResponseCodeName,
+      DnsResponseCode between (3841 .. 4095), 'Reserved for Private Use',
+      'Unassigned'
+    )

@@ -1,0 +1,141 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+         "workspace": {
+            "defaultValue": "Sentinel-Dev",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+            "apiVersion": "2023-06-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "EgressDefendPolling",
+                    "title": "Egress Defend",
+                    "publisher": "Egress Software Technologies",
+                    "descriptionMarkdown": "The Egress Defend audit connector provides the capability to ingest Egress Defend Data into Microsoft Sentinel.",
+                    "graphQueriesTableName": "EgressDefend_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Egress Defend Events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All logs",
+                            "query": "DefendAuditData"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": [
+                                "APIPolling"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions on the Log Analytics workspace are required to enable the data connector.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true,
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Egress API Token",
+                                "description": "An Egress API token is required to ingest audit records to Microsoft Sentinel."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Egress Defend with Microsoft Sentinel",
+                            "description": "Enter your Egress Defend API URl, Egress Domain and API token.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "API URL",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{apiUrl}}"
+                                            },
+                                            {
+                                                "displayText": "Domain name",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{domain}}"
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyName": "X-Api-Key",
+                        "IsAPIKeyInPostPayload": false
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{apiUrl}}/V1/events/?pagingMode=offset&domain={{domain}}",
+                        "httpMethod": "Get",
+                        "startTimeAttributeName": "startTime",
+                        "endTimeAttributeName":"endTime",
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss.fffZ",
+                        "retryCount": 2,
+                        "queryWindowInMin": 5,
+                        "timeoutInSeconds": 120,
+                        "headers": {
+				        	"Accept": "application/json"
+				        }
+                    },
+                    "paging": {
+                        "pagingType": "Offset",
+                        "offsetParaName": "offset",
+                        "pageSizeParaName": "limit",
+                        "pageSize": 100
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..items"
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}

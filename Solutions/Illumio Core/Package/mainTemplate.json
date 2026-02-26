@@ -1,0 +1,235 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for Illumio Core"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Illumio Core",
+    "_solutionVersion": "3.0.3",
+    "solutionId": "azuresentinel.azure-sentinel-solution-illumiocore",
+    "_solutionId": "[variables('solutionId')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','IllumioCoreEvent')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'IllumioCoreEvent')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('IllumioCoreEvent-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "IllumioCoreEvent-Parser"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "IllumioCoreEvent Data Parser with template version 3.0.3",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "IllumioCoreEvent",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "IllumioCoreEvent",
+                "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Illumio'\n| extend EventCount = int(1)\n| extend EventType = coalesce(\n                column_ifexists(\"DeviceEventCategory\", \"\"),\n                extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\n                \"\"\n                )\n        ,EventResult = coalesce(\n                column_ifexists(\"EventOutcome\", \"\"),\n                extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\n                \"\"\n                )\n        ,EventOriginalResultDetails = coalesce(\n                column_ifexists(\"Reason\", \"\"),\n                extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\n                \"\"\n                ),\n        SchemaVersion = coalesce(\n                tostring(column_ifexists(\"FieldDeviceCustomNumber2\", long(null))),\n                tostring(column_ifexists(\"DeviceCustomNumber2\",long(null)))\n                ),\n        EventStartTime =  coalesce(\n                StartTime,\n                extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)),\n                todatetime(ReceiptTime),\n                datetime(null)\n                ),\n        EventEndTime =  coalesce(\n                EndTime,\n                extract(@'end=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)),\n                todatetime(ReceiptTime),\n                datetime(null)\n                )\n        ,EventOriginalUid = case(DeviceCustomString1Label =~ 'event_href', DeviceCustomString1, '')\n        ,DstVulns = case(DeviceCustomString1Label =~ 'dst_vulns', DeviceCustomString1, '')\n        ,ResourceChanges = case(DeviceCustomString2Label =~ 'resource_changes', DeviceCustomString2, '')\n        ,State = case(DeviceCustomString2Label =~ 'state', DeviceCustomString2, '')\n        ,Notifications = case(DeviceCustomString4Label =~ 'notifications', DeviceCustomString4, '')\n        ,DstLabels = case(DeviceCustomString4Label =~ 'dst_labels', DeviceCustomString4, '')\n        ,DstHref = case(DeviceCustomString6Label =~ 'dst_href', DeviceCustomString6, '')\n| project-rename  EventVendor=DeviceVendor\n                , EventProduct=DeviceProduct\n                , EventProductVersion=DeviceVersion\n                , EventSubType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , DvcAction=DeviceAction\n                , NetworkDirection=CommunicationDirection\n                , NetworkProtocol=Protocol\n                , UrlOriginal=RequestURL\n                , HttpRequestMethod=RequestMethod\n                , EventOriginalResult=Activity\n                , DstHostname=DestinationHostName\n                , DstIpAddr=DestinationIP\n                , DstPortNumber=DestinationPort\n                , ActingProcessName=DestinationProcessName\n                , DstUsername=DestinationUserName\n                , Dvc=DeviceName\n                , SrcBytes=SentBytes\n                , EventMessage=Message\n                , DstBytes=ReceivedBytes\n                , SrcIpAddr=SourceIP\n| project-away  AdditionalExtensions\n            ,   DeviceCustomNumber1\n            ,   DeviceCustomNumber1Label\n            ,   DeviceCustomNumber2\n            ,   DeviceCustomNumber2Label\n            ,   DeviceCustomString1\n            ,   DeviceCustomString1Label\n            ,   DeviceCustomString2\n            ,   DeviceCustomString2Label\n            ,   DeviceCustomString3\n            ,   DeviceCustomString3Label\n            ,   DeviceCustomString4\n            ,   DeviceCustomString4Label\n            ,   DeviceCustomString5\n            ,   DeviceCustomString5Label\n            ,   DeviceCustomString6\n            ,   DeviceCustomString6Label\n            ,   DeviceCustomDate1Label\n            ,   DeviceCustomDate1\n            ,   DeviceCustomDate2Label\n            ,   DeviceCustomDate2\n            ,   FlexString1Label\n            ,   FlexString1\n            ,   FlexString2Label\n            ,   FlexString2\n            ,   DeviceCustomFloatingPoint1Label\n            ,   DeviceCustomFloatingPoint1\n            ,   DeviceCustomFloatingPoint2Label\n            ,   DeviceCustomFloatingPoint2\n            ,   DeviceCustomIPv6Address1Label\n            ,   DeviceCustomIPv6Address1\n            ,   DeviceCustomIPv6Address2Label\n            ,   DeviceCustomIPv6Address2\n            ,   DeviceCustomIPv6Address3Label\n            ,   DeviceCustomIPv6Address3\n            ,   SimplifiedDeviceAction\n            ,   OriginalLogSeverity\n            ,   ApplicationProtocol\n            ,   DestinationDnsDomain\n            ,   DestinationServiceName\n            ,   DestinationTranslatedAddress\n            ,   DestinationTranslatedPort\n            ,   DeviceDnsDomain\n            ,   DeviceExternalID\n            ,   DeviceFacility\n            ,   DeviceInboundInterface\n            ,   DeviceNtDomain\n            ,   DeviceOutboundInterface\n            ,   DevicePayloadId\n            ,   ProcessName\n            ,   DeviceTranslatedAddress\n            ,   DestinationMACAddress\n            ,   DestinationNTDomain\n            ,   DestinationProcessId\n            ,   DestinationUserPrivileges\n            ,   DeviceTimeZone\n            ,   DestinationUserID\n            ,   DeviceAddress\n            ,   DeviceMacAddress\n            ,   ProcessID\n            ,   EndTime\n            ,   ExternalID\n            ,   FileCreateTime\n            ,   FileHash\n            ,   FileID\n            ,   FileModificationTime\n            ,   FilePath\n            ,   FilePermission\n            ,   FileType\n            ,   FileName\n            ,   FileSize\n            ,   OldFileCreateTime\n            ,   OldFileHash\n            ,   OldFileID\n            ,   OldFileModificationTime\n            ,   OldFileName\n            ,   OldFilePath\n            ,   OldFilePermission\n            ,   OldFileSize\n            ,   OldFileType\n            ,   ReceiptTime\n            ,   RequestClientApplication\n            ,   RequestContext\n            ,   RequestCookies\n            ,   SourceHostName\n            ,   SourceMACAddress\n            ,   SourceNTDomain\n            ,   SourceDnsDomain\n            ,   SourceServiceName\n            ,   SourceTranslatedAddress\n            ,   SourceTranslatedPort\n            ,   SourceProcessId\n            ,   SourceUserPrivileges\n            ,   SourceProcessName\n            ,   SourcePort\n            ,   StartTime\n            ,   SourceUserID\n            ,   SourceUserName\n            ,   DeviceCustomIPv6Address4\n            ,   DeviceCustomIPv6Address4Label\n            ,   DeviceCustomFloatingPoint3\n            ,   DeviceCustomFloatingPoint3Label\n            ,   DeviceCustomFloatingPoint4\n            ,   DeviceCustomFloatingPoint4Label\n            ,   DeviceCustomNumber3\n            ,   DeviceCustomNumber3Label\n            ,   FlexDate1\n            ,   FlexDate1Label\n            ,   FlexNumber1\n            ,   FlexNumber1Label\n            ,   FlexNumber2\n            ,   FlexNumber2Label\n            ,   RemoteIP\n            ,   RemotePort\n            ,   MaliciousIP\n            ,   ThreatSeverity\n            ,   IndicatorThreatType\n            ,   ThreatDescription\n            ,   ThreatConfidence\n            ,   ReportReferenceLink\n            ,   MaliciousIPLongitude\n            ,   MaliciousIPLatitude\n            ,   MaliciousIPCountry\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'IllumioCoreEvent')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "Illumio Core",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "IllumioCoreEvent",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "IllumioCoreEvent",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "IllumioCoreEvent",
+        "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Illumio'\n| extend EventCount = int(1)\n| extend EventType = coalesce(\n                column_ifexists(\"DeviceEventCategory\", \"\"),\n                extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\n                \"\"\n                )\n        ,EventResult = coalesce(\n                column_ifexists(\"EventOutcome\", \"\"),\n                extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\n                \"\"\n                )\n        ,EventOriginalResultDetails = coalesce(\n                column_ifexists(\"Reason\", \"\"),\n                extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string)),\n                \"\"\n                ),\n        SchemaVersion = coalesce(\n                tostring(column_ifexists(\"FieldDeviceCustomNumber2\", long(null))),\n                tostring(column_ifexists(\"DeviceCustomNumber2\",long(null)))\n                ),\n        EventStartTime =  coalesce(\n                StartTime,\n                extract(@'start=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)),\n                todatetime(ReceiptTime),\n                datetime(null)\n                ),\n        EventEndTime =  coalesce(\n                EndTime,\n                extract(@'end=(.*?)(?:;|$)',1, AdditionalExtensions,typeof(datetime)),\n                todatetime(ReceiptTime),\n                datetime(null)\n                )\n        ,EventOriginalUid = case(DeviceCustomString1Label =~ 'event_href', DeviceCustomString1, '')\n        ,DstVulns = case(DeviceCustomString1Label =~ 'dst_vulns', DeviceCustomString1, '')\n        ,ResourceChanges = case(DeviceCustomString2Label =~ 'resource_changes', DeviceCustomString2, '')\n        ,State = case(DeviceCustomString2Label =~ 'state', DeviceCustomString2, '')\n        ,Notifications = case(DeviceCustomString4Label =~ 'notifications', DeviceCustomString4, '')\n        ,DstLabels = case(DeviceCustomString4Label =~ 'dst_labels', DeviceCustomString4, '')\n        ,DstHref = case(DeviceCustomString6Label =~ 'dst_href', DeviceCustomString6, '')\n| project-rename  EventVendor=DeviceVendor\n                , EventProduct=DeviceProduct\n                , EventProductVersion=DeviceVersion\n                , EventSubType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , DvcAction=DeviceAction\n                , NetworkDirection=CommunicationDirection\n                , NetworkProtocol=Protocol\n                , UrlOriginal=RequestURL\n                , HttpRequestMethod=RequestMethod\n                , EventOriginalResult=Activity\n                , DstHostname=DestinationHostName\n                , DstIpAddr=DestinationIP\n                , DstPortNumber=DestinationPort\n                , ActingProcessName=DestinationProcessName\n                , DstUsername=DestinationUserName\n                , Dvc=DeviceName\n                , SrcBytes=SentBytes\n                , EventMessage=Message\n                , DstBytes=ReceivedBytes\n                , SrcIpAddr=SourceIP\n| project-away  AdditionalExtensions\n            ,   DeviceCustomNumber1\n            ,   DeviceCustomNumber1Label\n            ,   DeviceCustomNumber2\n            ,   DeviceCustomNumber2Label\n            ,   DeviceCustomString1\n            ,   DeviceCustomString1Label\n            ,   DeviceCustomString2\n            ,   DeviceCustomString2Label\n            ,   DeviceCustomString3\n            ,   DeviceCustomString3Label\n            ,   DeviceCustomString4\n            ,   DeviceCustomString4Label\n            ,   DeviceCustomString5\n            ,   DeviceCustomString5Label\n            ,   DeviceCustomString6\n            ,   DeviceCustomString6Label\n            ,   DeviceCustomDate1Label\n            ,   DeviceCustomDate1\n            ,   DeviceCustomDate2Label\n            ,   DeviceCustomDate2\n            ,   FlexString1Label\n            ,   FlexString1\n            ,   FlexString2Label\n            ,   FlexString2\n            ,   DeviceCustomFloatingPoint1Label\n            ,   DeviceCustomFloatingPoint1\n            ,   DeviceCustomFloatingPoint2Label\n            ,   DeviceCustomFloatingPoint2\n            ,   DeviceCustomIPv6Address1Label\n            ,   DeviceCustomIPv6Address1\n            ,   DeviceCustomIPv6Address2Label\n            ,   DeviceCustomIPv6Address2\n            ,   DeviceCustomIPv6Address3Label\n            ,   DeviceCustomIPv6Address3\n            ,   SimplifiedDeviceAction\n            ,   OriginalLogSeverity\n            ,   ApplicationProtocol\n            ,   DestinationDnsDomain\n            ,   DestinationServiceName\n            ,   DestinationTranslatedAddress\n            ,   DestinationTranslatedPort\n            ,   DeviceDnsDomain\n            ,   DeviceExternalID\n            ,   DeviceFacility\n            ,   DeviceInboundInterface\n            ,   DeviceNtDomain\n            ,   DeviceOutboundInterface\n            ,   DevicePayloadId\n            ,   ProcessName\n            ,   DeviceTranslatedAddress\n            ,   DestinationMACAddress\n            ,   DestinationNTDomain\n            ,   DestinationProcessId\n            ,   DestinationUserPrivileges\n            ,   DeviceTimeZone\n            ,   DestinationUserID\n            ,   DeviceAddress\n            ,   DeviceMacAddress\n            ,   ProcessID\n            ,   EndTime\n            ,   ExternalID\n            ,   FileCreateTime\n            ,   FileHash\n            ,   FileID\n            ,   FileModificationTime\n            ,   FilePath\n            ,   FilePermission\n            ,   FileType\n            ,   FileName\n            ,   FileSize\n            ,   OldFileCreateTime\n            ,   OldFileHash\n            ,   OldFileID\n            ,   OldFileModificationTime\n            ,   OldFileName\n            ,   OldFilePath\n            ,   OldFilePermission\n            ,   OldFileSize\n            ,   OldFileType\n            ,   ReceiptTime\n            ,   RequestClientApplication\n            ,   RequestContext\n            ,   RequestCookies\n            ,   SourceHostName\n            ,   SourceMACAddress\n            ,   SourceNTDomain\n            ,   SourceDnsDomain\n            ,   SourceServiceName\n            ,   SourceTranslatedAddress\n            ,   SourceTranslatedPort\n            ,   SourceProcessId\n            ,   SourceUserPrivileges\n            ,   SourceProcessName\n            ,   SourcePort\n            ,   StartTime\n            ,   SourceUserID\n            ,   SourceUserName\n            ,   DeviceCustomIPv6Address4\n            ,   DeviceCustomIPv6Address4Label\n            ,   DeviceCustomFloatingPoint3\n            ,   DeviceCustomFloatingPoint3Label\n            ,   DeviceCustomFloatingPoint4\n            ,   DeviceCustomFloatingPoint4Label\n            ,   DeviceCustomNumber3\n            ,   DeviceCustomNumber3Label\n            ,   FlexDate1\n            ,   FlexDate1Label\n            ,   FlexNumber1\n            ,   FlexNumber1Label\n            ,   FlexNumber2\n            ,   FlexNumber2Label\n            ,   RemoteIP\n            ,   RemotePort\n            ,   MaliciousIP\n            ,   ThreatSeverity\n            ,   IndicatorThreatType\n            ,   ThreatDescription\n            ,   ThreatConfidence\n            ,   ReportReferenceLink\n            ,   MaliciousIPLongitude\n            ,   MaliciousIPLatitude\n            ,   MaliciousIPCountry\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": ""
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'IllumioCoreEvent')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "Illumio Core",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.3",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Illumio Core",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Illumio%20Core/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.illumio.com/products/\">Illumio Core</a> solution allows you to ingest Illumio Core logs into Microsoft Sentinel.</p>\n<p>This solution is dependent on the Common Event Format solution containing the CEF via AMA connector to collect the logs. The CEF solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE:</strong> Microsoft recommends installation of CEF via AMA Connector. The existing connectors were deprecated on <strong>Aug 31, 2024</strong>.</p>\n<p><strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Workbooks/Images/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Illumio Core",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            },
+            {
+              "kind": "Solution",
+              "contentId": "azuresentinel.azure-sentinel-solution-commoneventformat"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-26",
+        "providers": [
+          "Illumio"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

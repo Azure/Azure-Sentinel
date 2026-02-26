@@ -30,8 +30,9 @@ This package includes:
 
 You can choose to deploy the whole package : Connector + all five playbook templates, or each one seperately from it's specific folder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FConsolidatedTemplate.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FConsolidatedTemplate.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoMeraki%2FConsolidatedTemplate.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoMeraki%2FConsolidatedTemplate.json)
+
 
 
 # Cisco Meraki documentation 
@@ -82,7 +83,7 @@ API Key Authentication
 4.  Click Save
 
 ## b. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with risky IP address, URL or Hosts. 
+1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky IP address, URL or Hosts. 
 2. Configure the automation rules to trigger the playbooks.
 
 
@@ -108,4 +109,4 @@ Playbooks
 
 #  Known Issues and Limitations
  - Need to authorize the api connections after deploying the playbooks.
- - For Block Device Client Playbook, While configuring the rule in Azure Sentinel - Device Client MAC needs to be mapped with hostname in Host entity.
+ - For Block Device Client Playbook, While configuring the rule in Microsoft Sentinel - Device Client MAC needs to be mapped with hostname in Host entity.

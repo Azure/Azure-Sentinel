@@ -1,0 +1,419 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.5.0.0",
+    "metadata": {
+        "author": {
+            "name": "Recorded Future"
+        },
+        "description": "This playbook imports alerts from Recorded Future and stores them in a custom log in the log analytics workspace. It can create alerts dependant on the parameter: create_incident. ",
+        "entities": [],
+        "lastUpdateTime": "2024-11-28T00:00:00.000Z",
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "prerequisites": [
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
+        ],
+        "releaseNotes": [
+            {
+                "notes": [
+                    "Initial version"
+                ],
+                "title": "RecordedFuture-Alert-Importer",
+                "version": "1.0"
+            },
+            {
+                "notes": [
+                    "Fixed ARM encoding"
+                ],
+                "title": "RecordedFuture-Alert-Importer",
+                "version": "1.1"
+            },
+            {
+                "notes": [
+                    "API connector renaming."
+                ],
+                "title": "RecordedFuture-Alert-Importer",
+                "version": "1.2"
+            },
+            {
+                "notes": [
+                    "Encoding and latest_event_date fix."
+                ],
+                "title": "RecordedFuture-Alert-Importer",
+                "version": "1.3"
+            },
+            {
+                "notes": [
+                    "More JSON encoding fixes, and add utm parameter to links"
+                ],
+                "title": "RecordedFuture-Alert-Importer",
+                "version": "1.4"
+            },
+            {
+                "notes": [
+                    "Make azuremonitorlogs API connection default to using system-assigned managed identity"
+                ],
+                "title": "RecordedFuture-Alert-Importer",
+                "version": "1.5"
+            }
+        ],
+        "support": {
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator",
+            "tier": "Partner"
+        },
+        "tags": [
+            "Alert"
+        ],
+        "title": "RecordedFuture-Alert-Importer"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-AlertImporter",
+            "type": "string"
+        },
+        "create_incident": {
+            "metadata": {
+                "description": "Create Microsoft Sentinel incidents (possible values true/false)"
+            },
+            "type": "string"
+        },
+        "workspace_name": {
+            "defaultValue": "",
+            "metadata": {
+                "description": "Microsoft Sentinel Workspace name"
+            },
+            "type": "string"
+        }
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Recordedfuturev2ConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('PlaybookName')]",
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "For_each_triggered_alert": {
+                            "actions": {
+                                "Create_incident_if_parameter_is_set": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Create_incident')?['id']",
+                                                    "message": "<p>@{items('For_each_triggered_alert')?['title']}<br>\nAlert ID: @{items('For_each_triggered_alert')?['id']}<br>\nTriggered: @{items('For_each_triggered_alert')?['log']?['triggered']}<br>\n[Open Recorded Future portal](@{concat(items('For_each_triggered_alert')?['url']?['portal'], '&utm_source=microsoft_sentinel')})<br>\nAI Summary: @{items('For_each_triggered_alert')?['ai_insights']?['text']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            },
+                                            "runAfter": {
+                                                "Create_incident": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection"
+                                        },
+                                        "Create_incident": {
+                                            "inputs": {
+                                                "body": {
+                                                    "description": "**Recorded Future Alert**\n@{items('For_each_triggered_alert')?['title']}\nAlert ID: @{items('For_each_triggered_alert')?['id']}\nTriggered: @{items('For_each_triggered_alert')?['log']?['triggered']}\n[Open Recorded Future portal](@{concat(items('For_each_triggered_alert')?['url']?['portal'],'&utm_source=microsoft_sentinel')})\nAI summary: @{items('For_each_triggered_alert')?['ai_insights']?['text']}",
+                                                    "severity": "Medium",
+                                                    "status": "New",
+                                                    "tagsToAdd": {
+                                                        "TagsToAdd": [
+                                                            {
+                                                                "Tag": "Recorded Future Alert"
+                                                            }
+                                                        ]
+                                                    },
+                                                    "title": "@items('For_each_triggered_alert')?['title']"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "[concat('/Incidents/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/workspaces/',parameters('workspace_name') ) ]"
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@parameters('create_incident')",
+                                                    "true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "For_each_hit": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each_hit": {
+                                    "actions": {
+                                        "Send_Data_2": {
+                                            "inputs": {
+                                                "body": "{\n\"RuleName\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nitems('For_each_triggered_alert')?['rule']?['name'],\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\",\n\"Triggered\": \"@{items('For_each_triggered_alert')?['log']?['triggered']}\",\n\"AlertName\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nitems('For_each_triggered_alert')?['title'],\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\",\n\"AlertID\": \"@{items('For_each_triggered_alert')?['id']}\", \n\"Entity\": @{items('For_each_hit')?['entities']},\n\"Documents\": @{items('For_each_hit')?['document']},\n\"URL\": \"@{items('For_each_triggered_alert')?['rule']?['url']?['portal']}\",\n\"Document_url\": \"@{items('For_each_hit')?['document']?['url']}\",\n\"AISummary\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\ncoalesce(items('For_each_triggered_alert')?['ai_insights']?['text'],''),\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\",\n\"Fragment\": \"@{replace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nreplace(\nitems('For_each_hit')?['fragment'],\n'\\', '\\\\'),\n'\"', '\\\"'),\n'\n', '\\n'),\n'\t', '\\t'),\n'\b', '\\b'),\n'\f', '\\f'),\n'\n', '\\r')}\"}",
+                                                "headers": {
+                                                    "Log-Type": "RecordedFuturePortalAlerts"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            },
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "foreach": "@items('For_each_triggered_alert')['hits']",
+                                    "type": "Foreach"
+                                }
+                            },
+                            "foreach": "@body('Search_Triggered_Alerts')?['data']",
+                            "runAfter": {
+                                "Search_Triggered_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "latest_event_date",
+                                        "type": "string",
+                                        "value": "@{addHours(utcNow(), -24)}"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Run_query_and_list_results": {
+                            "inputs": {
+                                "body": "RecordedFuturePortalAlerts_CL\n| summarize LatestEvent=max(Triggered_t)| extend LatestEvent=coalesce(LatestEvent, ago(1d))",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[resourceGroup().name]",
+                                    "resourcename": "[parameters('workspace_name')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "timerange": "Last 7 days"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Search_Triggered_Alerts": {
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['recordedfuturev2']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/alerts",
+                                "queries": {
+                                    "triggered": "[[@{addSeconds(variables('latest_event_date'),1)},@{utcNow()}]"
+                                }
+                            },
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded",
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Set_variable": {
+                            "inputs": {
+                                "name": "latest_event_date",
+                                "value": "@string(body('Run_query_and_list_results')?['value'][0]['LatestEvent'])"
+                            },
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "create_incident": {
+                            "defaultValue": "[parameters('create_incident')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                            },
+                            "recordedfuturev2": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Recordedfuturev2ConnectionName'))]",
+                                "connectionName": "[variables('Recordedfuturev2ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
+                            }
+                        }
+                    }
+                },
+                "provisioningState": "Succeeded",
+                "state": "Enabled"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-AlertImporter",
+                "hidden-SentinelTemplateVersion": "1.5"
+            },
+            "type": "Microsoft.Logic/workflows"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "parameterValueSet": {
+                    "name": "managedIdentityAuth"
+                }
+            },
+            "type": "Microsoft.Web/connections"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative"
+            },
+            "type": "Microsoft.Web/connections"
+        },
+        {
+            "apiVersion": "2016-06-01",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "name": "[variables('Recordedfuturev2ConnectionName')]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
+                },
+                "customParameterValues": {},
+                "displayName": "[variables('Recordedfuturev2ConnectionName')]"
+            },
+            "type": "Microsoft.Web/connections"
+        }
+    ],
+    "variables": {
+        "AzureloganalyticsdatacollectorConnectionName": "RecordedFuture-Azureloganalyticsdatacollector",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "RecordedFuture-MicrosoftSentinelConnection",
+        "Recordedfuturev2ConnectionName": "RecordedFuture-ConnectorV2"
+    }
+}

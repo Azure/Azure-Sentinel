@@ -1,0 +1,137 @@
+Parser:
+  Title:  Network Session ASIM filtering parser for Microsoft Defender for IoT sensor logs
+  Version: '0.2.1'
+  LastUpdated: Oct 31, 2022
+Product:
+  Name: Microsoft Defender for IoT
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft Defender for IoT sensor logs to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionMD4IoTSensor
+EquivalentBuiltInParser: _Im_NetworkSession_MD4IoTSensor
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstportnumber:int=int(null), 
+        hostname_has_any:dynamic=dynamic([]), 
+        dvcaction:dynamic=dynamic([]), 
+        eventresult:string='*', 
+        disabled:bool=false)
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    DefenderIoTRawEvent
+    | where RawEventName == "NetworkConnectionData"
+    | where (isnull(starttime) or TimeGenerated>=starttime)
+      and (isnull(endtime) or TimeGenerated<=endtime)
+      and not(disabled)
+      and (array_length(dvcaction) == 0)
+      and (array_length(hostname_has_any) == 0)
+      and (eventresult in ("*","Success"))
+    | extend
+      DstIpAddr = tostring(EventDetails.Destination.IPAddress),
+      SrcIpAddr = tostring(EventDetails.Source.IPAddress)
+    | extend temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any)
+           , temp_DstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+    | extend ASimMatchingIpAddr=case(
+        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+        temp_SrcMatch and temp_DstMatch, "Both",
+        temp_SrcMatch, "SrcIpAddr",
+        temp_DstMatch, "DstIpAddr",
+        "No match"
+      )
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
+    | extend
+      DstPortNumber = toint(EventDetails.Destination.Port)
+    | where (isnull(dstportnumber) or DstPortNumber==dstportnumber)
+    | project-rename 
+        DvcSubscriptionId = AzureSubscriptionId
+    | extend 
+        Dvc = tostring(EventDetails.SourceId),
+        DstDvcId = tostring(EventDetails.Destination.DeviceId),
+        DstMacAddr = tostring(EventDetails.Destination.MacAddress),
+        DstDescription = tostring(EventDetails.Destination.DeviceName),
+        SrcDvcId = tostring(EventDetails.Source.DeviceId),
+        SrcMacAddr = tostring(EventDetails.Source.MacAddress),
+        SrcPortNumber = toint(EventDetails.Source.Port),
+        SrcDescription = tostring(EventDetails.Source.DeviceName),
+        EventOriginalUid = tostring(EventDetails.Id),
+        EventEndTime = todatetime(EventDetails.LastSeen),
+        EventStartTime = todatetime(EventDetails.StartTime),
+        NetworkProtocol = tostring(EventDetails.TransportProtocol)
+    | extend
+        EventProduct = 'Defender for IoT',
+        EventResult = 'Success',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.4',
+        EventCount = toint(1),
+        EventSeverity = 'Informational',
+        EventType = iff(DstIpAddr=='' and SrcIpAddr == '','L2NetworkSession','NetworkSession'),
+        NetworkDirection = iff(tobool(EventDetails.IsInternal), 'Local',''),
+        EventVendor = 'Microsoft',
+        DstDvcIdType = 'MD4IoTid',
+        SrcDvcIdType = 'MD4IoTid'
+    | extend // -- Aliases
+        Dst = coalesce(DstIpAddr,DstMacAddr),
+        Src = coalesce(SrcIpAddr,SrcMacAddr),
+        IpAddr = SrcIpAddr,
+        EventStartTime = EventEndTime
+    | project-away 
+        RawEventCategory, RawEventName, RawEventType, SourceSystem, TenantId, AgentVersion, IoTRawEventId, IsEmpty, AgentId, DeviceId, TimeStamp
+    | project-away EventDetails, AssociatedResourceId
+  };
+  parser (
+    starttime=starttime, 
+    endtime=endtime, 
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+    dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
+    ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+    dstportnumber=dstportnumber, 
+    hostname_has_any=hostname_has_any, 
+    dvcaction=dvcaction,
+    eventresult=eventresult,
+    disabled=disabled
+  )

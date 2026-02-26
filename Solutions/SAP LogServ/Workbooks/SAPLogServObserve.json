@@ -1,0 +1,804 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# SAP LogServ Insights Dashboard\n\nReal-time monitoring of **SAP RISE infrastructure, private cloud edition component** log ingestion and system activity. Use the [Microsoft Sentinel Solution for SAP applications](https://learn.microsoft.com/azure/sentinel/sap/solution-overview) to complete your threat monitoring.\n\n>**💡 Learn More:** Visit our [Ultimate Blog Series: SAP LogServ Integration with Microsoft Sentinel](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/ultimate-blog-series-sap-logserv-integration-with-microsoft-sentinel/ba-p/14126401) to discover advanced integration capabilities and best practices.\n\n**Data Freshness Status**\n| 🟢 Fresh (<1h): Current, actively flowing | 🟡 Recent (1-6h): Slightly delayed, acceptable | 🟠 Older (6-24h): May be experiencing delays | 🔴 Stale (>24h): Ingestion may have stopped |",
+        "style": "upsell"
+      },
+      "name": "title-header"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---",
+        "style": "divider"
+      },
+      "name": "section-divider"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "workspace-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "🏢 Log Analytics Workspace",
+            "type": 5,
+            "isRequired": true,
+            "query": "Resources\n| where type =~ 'microsoft.operationalinsights/workspaces'\n| project value = id, label = name, selected = false",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "param-timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "🕐 Time Range",
+            "type": 4,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 604800000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "param-clzdir",
+            "version": "KqlParameterItem/1.0",
+            "name": "ClzDir",
+            "label": "📁 Log Type",
+            "type": 2,
+            "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where isnotempty(clz_dir)\n| summarize Count = count() by clz_dir\n| order by Count desc\n| project Value = clz_dir, Label = strcat(clz_dir, ' (', Count, ')'), Selected = false",
+            "crossComponentResources": [
+              "{Workspace}"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "param-clzsubdir",
+            "version": "KqlParameterItem/1.0",
+            "name": "ClzSubDir",
+            "label": "📂 Log Sub-Type",
+            "type": 2,
+            "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where isnotempty(clz_subdir)\n| summarize Count = count() by clz_subdir\n| order by Count desc\n| project Value = clz_subdir, Label = strcat(clz_subdir, ' (', Count, ')'), Selected = false",
+            "crossComponentResources": [
+              "{Workspace}"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "defaultValue": "value::all",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "param-status",
+            "version": "KqlParameterItem/1.0",
+            "name": "StatusFilter",
+            "label": "📊 Activity Status",
+            "type": 2,
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "*",
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\":\"*\",\"label\":\"All Statuses\",\"selected\":true},{\"value\":\"🟢 Active\",\"label\":\"🟢 Active (<1h)\",\"selected\":false},{\"value\":\"🟡 Recent\",\"label\":\"🟡 Recent (1-6h)\",\"selected\":false},{\"value\":\"🔴 Inactive\",\"label\":\"🔴 Inactive (>6h)\",\"selected\":false}]",
+            "defaultValue": "value::all",
+            "queryType": 0
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "alert-workspace-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AlertWorkspace",
+            "type": 5,
+            "isRequired": true,
+            "query": "Resources\n| where id =~ '{Workspace}'\n| project value = id, label = id, selected = true\n| take 1",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "isHiddenWhenLocked": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "alert-location-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AlertLocation",
+            "type": 1,
+            "isRequired": true,
+            "query": "Resources\n| where id =~ '{AlertWorkspace}'\n| project location",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "isHiddenWhenLocked": true,
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "alert-rg-param",
+            "version": "KqlParameterItem/1.0",
+            "name": "AlertResourceGroup",
+            "type": 1,
+            "isRequired": true,
+            "query": "Resources\n| where id =~ '{AlertWorkspace}'\n| project rg = strcat('/subscriptions/', subscriptionId, '/resourceGroups/', resourceGroup)",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "isHiddenWhenLocked": true,
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          }
+        ],
+        "style": "above",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
+      },
+      "conditionalVisibility": {
+        "parameterName": "ShowAlertConfig",
+        "comparison": "isEqualTo",
+        "value": "true"
+      },
+      "name": "alert-parameters"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let filteredLogs = SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}';\nfilteredLogs\n| summarize TotalLogs = count()\n| project Value = TotalLogs, Label = \"📊 Total Events\"",
+              "size": 1,
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Label",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "blue"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 0
+                    }
+                  }
+                },
+                "showBorder": false
+              }
+            },
+            "customWidth": "20",
+            "name": "kpi-total-logs"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let filteredLogs = SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}';\nfilteredLogs\n| summarize UniqueSystems = dcount(host)\n| project Value = UniqueSystems, Label = \"🖥️ Active Systems\"",
+              "size": 1,
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Label",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "green"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal"
+                    }
+                  }
+                },
+                "showBorder": false
+              }
+            },
+            "customWidth": "20",
+            "name": "kpi-active-systems"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let filteredLogs = SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}';\nfilteredLogs\n| summarize DataVolumeGB = round(sum(strlen(coalesce(Raw, \"\"))) / (1024.0 * 1024.0 * 1024.0), 2)\n| project Value = DataVolumeGB, Label = \"💾 Data Volume (GB)\"",
+              "size": 1,
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Label",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "orange"
+                  },
+                  "numberFormat": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 1
+                    }
+                  }
+                },
+                "showBorder": false
+              }
+            },
+            "customWidth": "20",
+            "name": "kpi-data-volume"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let filteredLogs = SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}';\nfilteredLogs\n| summarize LatestLogTime = max(TimeGenerated)\n| extend \n    DataFreshness = case(\n        LatestLogTime >= ago(1h), \"🟢 Fresh\",\n        LatestLogTime >= ago(6h), \"🟡 Recent\",\n        LatestLogTime >= ago(24h), \"🟠 Older\",\n        \"🔴 Stale\"\n    )\n| project Value = DataFreshness, Label = \"🔄 Data Status\"",
+              "size": 1,
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Label",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 1
+                },
+                "showBorder": false
+              }
+            },
+            "customWidth": "20",
+            "name": "kpi-data-status"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let filteredLogs = SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}';\nfilteredLogs\n| summarize LatestLogTime = max(TimeGenerated)\n| extend FormattedTime = strcat(format_datetime(LatestLogTime, 'yyyy-MM-dd HH:mm:ss'), ' UTC')\n| project Value = FormattedTime, Label = \"⏰ Most Recent Data\"",
+              "size": 1,
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Label",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 1
+                },
+                "showBorder": false
+              }
+            },
+            "customWidth": "20",
+            "name": "kpi-latest-log"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "Alert Configuration",
+              "expandable": true,
+              "expanded": true,
+              "items": [
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "alert-type-selector",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertType",
+                        "label": "Alert Type",
+                        "type": 2,
+                        "description": "Choose the type of alert to create",
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[{\"value\":\"count\",\"label\":\"🚨 Volume Count Alert - Triggers when hourly event count exceeds threshold\",\"selected\":true},{\"value\":\"change\",\"label\":\"📊 Volume Change Alert - Triggers when volume changes significantly\",\"selected\":false}]",
+                        "value": "change"
+                      },
+                      {
+                        "id": "unified-alert-name",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertName",
+                        "label": "Alert Name",
+                        "type": 1,
+                        "description": "Name for the alert rule",
+                        "value": "SAP LogServ - Volume Change Alert",
+                        "typeSettings": {
+                          "paramValidationRules": [
+                            {
+                              "regExp": "^[a-zA-Z0-9-_ \\(\\)]+$",
+                              "match": true,
+                              "message": "Alert name can only contain alphanumeric characters, spaces, hyphens, underscores, and parentheses"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "unified-threshold",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertThreshold",
+                        "label": "Threshold",
+                        "type": 1,
+                        "description": "Alert threshold (events for count alert, percentage for change alert)",
+                        "value": "10",
+                        "typeSettings": {
+                          "paramValidationRules": [
+                            {
+                              "regExp": "^[0-9]+$",
+                              "match": true,
+                              "message": "Please enter a valid number"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "id": "unified-severity",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "AlertSeverity",
+                        "label": "Severity",
+                        "type": 2,
+                        "description": "Alert severity level",
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[{\"value\":\"0\",\"label\":\"Critical\",\"selected\":false},{\"value\":\"1\",\"label\":\"Error\",\"selected\":false},{\"value\":\"2\",\"label\":\"Warning\",\"selected\":true},{\"value\":\"3\",\"label\":\"Informational\",\"selected\":false},{\"value\":\"4\",\"label\":\"Verbose\",\"selected\":false}]"
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "unified-alert-params"
+                },
+                {
+                  "type": 11,
+                  "content": {
+                    "version": "LinkItem/1.0",
+                    "style": "nav",
+                    "links": [
+                      {
+                        "id": "create-unified-alert-link",
+                        "linkTarget": "ArmTemplate",
+                        "linkLabel": "Create Alert Rule",
+                        "style": "primary",
+                        "linkIsContextBlade": true,
+                        "templateRunContext": {
+                          "componentIdSource": "parameter",
+                          "componentId": "AlertResourceGroup",
+                          "templateUriSource": "static",
+                          "templateUri": "Community-Workbooks/Workloads/Alerts/log-metric-noag.armtemplate",
+                          "templateParameters": [
+                            {
+                              "name": "alertName",
+                              "source": "parameter",
+                              "value": "AlertName",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertLocation",
+                              "source": "parameter",
+                              "value": "AlertLocation",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "dataSourceId",
+                              "source": "parameter",
+                              "value": "AlertWorkspace",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertThreshold",
+                              "source": "parameter",
+                              "value": "AlertThreshold",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertOperator",
+                              "source": "static",
+                              "value": "GreaterThan",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricThreshold",
+                              "source": "static",
+                              "value": "1",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricOperator",
+                              "source": "static",
+                              "value": "GreaterThan",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricType",
+                              "source": "static",
+                              "value": "Total",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertMetricColumn",
+                              "source": "static",
+                              "value": "LogCount",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertQuery",
+                              "source": "static",
+                              "value": "SAPLogServ_CL | where isnotempty(clz_dir) and isnotempty(clz_subdir) | summarize AggregatedValue = count() by bin(TimeGenerated, 1h)",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertDescription",
+                              "source": "static",
+                              "value": "Alert triggered when SAP LogServ event volume exceeds monitoring threshold",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertSeverity",
+                              "source": "parameter",
+                              "value": "AlertSeverity",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "profileId",
+                              "source": "static",
+                              "value": "SAP-LogServ-Profile",
+                              "kind": "stringValue"
+                            },
+                            {
+                              "name": "alertTemplateId",
+                              "source": "static",
+                              "value": "SAP-LogServ-Alert",
+                              "kind": "stringValue"
+                            }
+                          ],
+                          "titleSource": "static",
+                          "title": "Create SAP LogServ Alert Rule",
+                          "descriptionSource": "static",
+                          "description": "This will create an alert rule that monitors SAP LogServ event volume based on your selected criteria.",
+                          "runLabelSource": "static",
+                          "runLabel": "Deploy Alert Rule"
+                        }
+                      }
+                    ]
+                  },
+                  "name": "create-unified-alert-button"
+                }
+              ]
+            },
+            "name": "unified-alert-config",
+            "styleSettings": {
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| make-series LogCount = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step 1h",
+                    "size": 0,
+                    "title": "📈 Log Volume Timeline",
+                    "timeContextFromParameter": "TimeRange",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "areachart"
+                  },
+                  "customWidth": "100",
+                  "name": "volume-timeline"
+                }
+              ]
+            },
+            "customWidth": "100",
+            "name": "volume-timeline-with-alerts"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| where isnotempty(clz_subdir)\n| summarize LogCount = count() by clz_subdir\n| order by LogCount desc\n| project SubType = clz_subdir, Count = LogCount\n| take 10",
+              "size": 1,
+              "title": "📂 Sub-Type Distribution (Top 10)",
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "SubType",
+                "yAxis": [
+                  "Count"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Count",
+                    "color": "#7E58FF"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "subtype-bar"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| where isnotempty(clz_dir)\n| summarize LogCount = count() by clz_dir\n| order by LogCount desc\n| project Classification = clz_dir, Count = LogCount",
+              "size": 1,
+              "title": "🏗️ Log Type Distribution",
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Count",
+                    "color": "#0F828F"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "classification-pie"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| summarize \n    LogCount = count(),\n    LatestActivity = max(TimeGenerated),\n    DataSizeGB = round(sum(strlen(coalesce(Raw, \"\"))) / (1024.0 * 1024.0 * 1024.0), 3),\n    UniqueTypes = dcount(clz_dir),\n    UniqueSubTypes = dcount(clz_subdir)\n    by host\n| order by LogCount desc\n| extend \n    ActivityStatus = case(\n        LatestActivity >= ago(1h), \"🟢 Active\",\n        LatestActivity >= ago(6h), \"🟡 Recent\",\n        \"🔴 Inactive\"\n    ),\n    FormattedLatest = strcat(format_datetime(LatestActivity, 'yyyy-MM-dd HH:mm:ss'), ' UTC')\n| where '{StatusFilter}' == '*' or ActivityStatus == '{StatusFilter}'\n| project \n    ['🖥️ System'] = host,\n    ['📈 Event Count'] = LogCount,\n    ['💾 GB'] = DataSizeGB,\n    ['📁 Types'] = UniqueTypes,\n    ['📂 Sub-Types'] = UniqueSubTypes,\n    ['⏰ Latest'] = FormattedLatest,\n    ['📊 Status'] = ActivityStatus\n| take 15",
+              "size": 0,
+              "title": "🖥️ System Analysis by Log Types",
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "📈 Event Count",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  },
+                  {
+                    "columnMatch": "💾 GB",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "green"
+                    }
+                  },
+                  {
+                    "columnMatch": "📁 Types",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "purple"
+                    }
+                  },
+                  {
+                    "columnMatch": "📂 Sub-Types",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "orange"
+                    }
+                  },
+                  {
+                    "columnMatch": "⏰ Latest",
+                    "formatter": 1
+                  }
+                ]
+              }
+            },
+            "name": "systems-analysis"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "SAPLogServ_CL\n| where TimeGenerated >= {TimeRange:start}\n| where '{ClzDir}' == '*' or clz_dir == '{ClzDir}'\n| where '{ClzSubDir}' == '*' or clz_subdir == '{ClzSubDir}'\n| where isnotempty(clz_dir) and isnotempty(clz_subdir)\n| summarize \n    LogCount = count(),\n    UniqueHosts = dcount(host),\n    LatestActivity = max(TimeGenerated),\n    DataSizeGB = round(sum(strlen(coalesce(Raw, \"\"))) / (1024.0 * 1024.0 * 1024.0), 3)\n    by clz_dir, clz_subdir\n| order by LogCount desc\n| extend \n    ActivityStatus = case(\n        LatestActivity >= ago(1h), \"🟢 Active\",\n        LatestActivity >= ago(6h), \"🟡 Recent\",\n        \"🔴 Inactive\"\n    ),\n    FormattedLatest = strcat(format_datetime(LatestActivity, 'yyyy-MM-dd HH:mm:ss'), ' UTC')\n| where '{StatusFilter}' == '*' or ActivityStatus == '{StatusFilter}'\n| project \n    ['📁 Log Type'] = clz_dir,\n    ['📂 Sub-Type'] = clz_subdir,\n    ['📈 Events'] = LogCount,\n    ['🖥️ Hosts'] = UniqueHosts,\n    ['💾 GB'] = DataSizeGB,\n    ['⏰ Latest'] = FormattedLatest,\n    ['📊 Status'] = ActivityStatus\n| take 20",
+              "size": 0,
+              "title": "🔍 Detailed Type/Sub-Type Analysis",
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "📈 Events",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "blue"
+                    }
+                  },
+                  {
+                    "columnMatch": "🖥️ Hosts",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "green"
+                    }
+                  },
+                  {
+                    "columnMatch": "💾 GB",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "orange"
+                    }
+                  },
+                  {
+                    "columnMatch": "⏰ Latest",
+                    "formatter": 1
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_📈 Events_2",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_📈 Events_2",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "name": "detailed-analysis"
+          }
+        ]
+      },
+      "name": "main-analysis"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "styleSettings": {
+    "spacingStyle": "small"
+  },
+  "fromTemplateId": "sentinel-SAPLogServObserve",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

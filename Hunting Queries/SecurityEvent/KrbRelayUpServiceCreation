@@ -1,0 +1,38 @@
+id: 06f83b36-a1df-4045-98a5-deda74d84e4a
+name: KrbRelayUp Local Privilege Escalation Service Creation
+description: |
+   'This query detects the default service name created by KrbRelayUp. KrbRelayUp is Local Privilege Escalation tool that combine features of Rubeus and KrbRelay.
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - Event
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1543
+query: |
+  let MaliciousService = dynamic (["KrbSCM"]);
+  Event
+  | where Source == "Service Control Manager" and EventID == 7045
+  | parse EventData with * 'ServiceName">' ServiceName "<" * 'ImagePath">' ImagePath "<" *
+  | where ServiceName has_any (MaliciousService) or ImagePath has_any (MaliciousService)
+  | parse EventData with * 'AccountName">' AccountName "<" *
+  |summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, ServiceName, ImagePath, AccountName
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: FullName
+      columnName: AccountName
+- entityType: File
+  fieldMappings:
+    - identifier: Name
+      columnName: ImagePath
+- entityType: Host
+  fieldMappings:
+    - identifier: FullName
+      columnName: Computer

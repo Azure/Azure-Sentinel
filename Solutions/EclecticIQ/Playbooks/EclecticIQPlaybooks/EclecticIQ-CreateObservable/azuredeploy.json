@@ -1,0 +1,941 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Create Observable - EclecticIQ",
+        "description":  "This playbook adds new observable in EclecticIQ based on the entities info present in Sentinel incident. If same type and value exists already, then it will update the observable and comment will be added to Sentinel's incident",
+        "prerequisites":  ["1. EclecticIQ Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+        "2. API key. To get API Key, find the instructions here https://developers.eclecticiq.com/docs/authenticate#generate-api-token "],
+        "postDeployment":  ["1. Once deployment is complete, you will need to authorize each connection.",
+        "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"],
+        "prerequisitesDeployTemplateFile":  "../../CustomConnector/EclecticIQCustomConnector/azuredeploy.json",
+        "lastUpdateTime":  "2022-11-30T00:00:00.000Z",
+        "entities":  ["account","ip","filehash","url","host"],
+        "tags":  ["Remediation","Notification","EclecticIQ","ThreatIntelligence"
+        ],
+        "support":  {
+            "tier":  "microsoft",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Microsoft"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "EclecticIQ-CreateObservable",
+            "type":  "string",
+         "metadata": {
+          "description": "Name of the Playbook (default:EclecticIQ-CreateObservable ), You can change the name of this playbook if you want"
+        }           
+        },
+		"CustomConnectorName":  {
+            "defaultValue":  "EclecticIQCustomConnector",
+            "type":  "string",
+        "metadata": {
+          "description": "Name of the custom connector, if you want to change the default name, make sure to use the same when you were installing EclecticIQ custom connector"
+        }            
+        }              
+    },
+    "variables":  {
+        "EclecticIQcustomconnectorConnectionName":  "[concat('EclecticIQCustomConnector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+               "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "For_each_Account_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_FileHash_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_Host_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_IP_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "For_each_URL_in_Entity": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{variables('Incident_Comment')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            },
+                            "description": "You can remove below entire branch if you don't want to create account observables"
+                        },
+                        "Entities_-_Get_FileHashes": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            },
+                            "description": "You can remove below entire branch if you don't want to create observables for File Hash"
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each_Account_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Append_message_to_Comment_-_Accounts": {
+                                    "runAfter": {
+                                        "Compose_comment_message-Accounts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Incident_Comment",
+                                        "value": "@outputs('Compose_comment_message-Accounts')"
+                                    }
+                                },
+                                "Compose_comment_message-Accounts": {
+                                    "runAfter": {
+                                        "Parse_JSON_Response-Account": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "\nCreated/Updated below in EclecticIQ for @{items('For_each_Account_in_Entity')?['Name']} (Account)\n----------------------------------------------------------------------\nObservable Type: @{body('Parse_JSON_Response-Account')?['data']?['type']}\nObservable Value: @{body('Parse_JSON_Response-Account')?['data']?['value']}\nMaliciousness: @{body('Parse_JSON_Response-Account')?['data']?['meta']?['maliciousness']}\nCreared at: @{body('Parse_JSON_Response-Account')?['data']?['created_at']}\nLast updated at: @{body('Parse_JSON_Response-Account')?['data']?['last_updated_at']}\n----------------------------------------------------------------------\n"
+                                },
+                                "Create_or_Update_Observables_-_Accounts": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "data": {
+                                                "type": "name",
+                                                "value": "@items('For_each_Account_in_Entity')?['Name']"
+                                            }
+                                        },
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "content-type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['EclecticIQCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/v1/observables/"
+                                    },
+                                    "description": "Modify type below if you are seeing different type (default = name)"
+                                },
+                                "Parse_JSON_Response-Account": {
+                                    "runAfter": {
+                                        "Create_or_Update_Observables_-_Accounts": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Create_or_Update_Observables_-_Accounts')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "created_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "entities": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_updated_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "meta": {
+                                                            "properties": {
+                                                                "maliciousness": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sources": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_FileHash_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                            "actions": {
+                                "Append_message_to_Comment_-_FileHash": {
+                                    "runAfter": {
+                                        "Compose_comment_message-FileHash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Incident_Comment",
+                                        "value": "@outputs('Compose_comment_message-FileHash')"
+                                    }
+                                },
+                                "Compose_comment_message-FileHash": {
+                                    "runAfter": {
+                                        "Parse_JSON_Response-FileHash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "\nCreated/Updated below in EclecticIQ for @{items('For_each_FileHash_in_Entity')?['Value']} (File Hash)\n----------------------------------------------------------------------\nObservable Type: @{body('Parse_JSON_Response-FileHash')?['data']?['type']}\nObservable Value: @{body('Parse_JSON_Response-FileHash')?['data']?['value']}\nMaliciousness: @{body('Parse_JSON_Response-FileHash')?['data']?['meta']?['maliciousness']}\nCreared at: @{body('Parse_JSON_Response-FileHash')?['data']?['created_at']}\nLast updated at: @{body('Parse_JSON_Response-FileHash')?['data']?['last_updated_at']}\n----------------------------------------------------------------------\n"
+                                },
+                                "Create_or_Update_Observables-FileHash": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "data": {
+                                                "type": "hash-md5",
+                                                "value": "@items('For_each_FileHash_in_Entity')?['Value']"
+                                            }
+                                        },
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "content-type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['EclecticIQCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/v1/observables/"
+                                    }
+                                },
+                                "Parse_JSON_Response-FileHash": {
+                                    "runAfter": {
+                                        "Create_or_Update_Observables-FileHash": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Create_or_Update_Observables-FileHash')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "created_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "entities": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_updated_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "meta": {
+                                                            "properties": {
+                                                                "maliciousness": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sources": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_FileHash": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_Host_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "Append_message_to_Comment_-_Host": {
+                                    "runAfter": {
+                                        "Compose_comment_message-Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Incident_Comment",
+                                        "value": "@outputs('Compose_comment_message-Host')"
+                                    }
+                                },
+                                "Compose_comment_message-Host": {
+                                    "runAfter": {
+                                        "Parse_JSON_Response-Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "\nCreated/Updated below in EclecticIQ for @{items('For_each_Host_in_Entity')?['HostName']} (Host)\n----------------------------------------------------------------------\nObservable Type: @{body('Parse_JSON_Response-Host')?['data']?['type']}\nObservable Value: @{body('Parse_JSON_Response-Host')?['data']?['value']}\nMaliciousness: @{body('Parse_JSON_Response-Host')?['data']?['meta']?['maliciousness']}\nCreared at: @{body('Parse_JSON_Response-Host')?['data']?['created_at']}\nLast updated at: @{body('Parse_JSON_Response-Host')?['data']?['last_updated_at']}\n----------------------------------------------------------------------\n"
+                                },
+                                "Create_or_Update_Observables-Host": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "data": {
+                                                "type": "host",
+                                                "value": "@items('For_each_Host_in_Entity')?['HostName']"
+                                            }
+                                        },
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "content-type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['EclecticIQCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/v1/observables/"
+                                    }
+                                },
+                                "Parse_JSON_Response-Host": {
+                                    "runAfter": {
+                                        "Create_or_Update_Observables-Host": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Create_or_Update_Observables-Host')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "created_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "entities": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_updated_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "meta": {
+                                                            "properties": {
+                                                                "maliciousness": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sources": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_IP_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_message_to_Comment_-_IP": {
+                                    "runAfter": {
+                                        "Compose_comment_message-IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Incident_Comment",
+                                        "value": "@{outputs('Compose_comment_message-IP')}\n"
+                                    }
+                                },
+                                "Compose_comment_message-IP": {
+                                    "runAfter": {
+                                        "Parse_JSON_Response-IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "\nCreated/Updated below in EclecticIQ for @{items('For_each_IP_in_Entity')?['Address']} (IP Address)\n----------------------------------------------------------------------\nObservable Type: @{body('Parse_JSON_Response-IP')?['data']?['type']}\nObservable Value: @{body('Parse_JSON_Response-IP')?['data']?['value']}\nMaliciousness: @{body('Parse_JSON_Response-IP')?['data']?['meta']?['maliciousness']}\nCreared at: @{body('Parse_JSON_Response-IP')?['data']?['created_at']}\nLast updated at: @{body('Parse_JSON_Response-IP')?['data']?['last_updated_at']}\n----------------------------------------------------------------------\n"
+                                },
+                                "Create_or_Update_Observables-IP": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "data": {
+                                                "type": "ipv4",
+                                                "value": "@items('For_each_IP_in_Entity')?['Address']"
+                                            }
+                                        },
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "content-type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['EclecticIQCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/v1/observables/"
+                                    }
+                                },
+                                "Parse_JSON_Response-IP": {
+                                    "runAfter": {
+                                        "Create_or_Update_Observables-IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Create_or_Update_Observables-IP')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "created_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "entities": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_updated_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "meta": {
+                                                            "properties": {
+                                                                "maliciousness": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sources": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_URL_in_Entity": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Append_message_to_Comment_-_URL": {
+                                    "runAfter": {
+                                        "Compose_comment_message-URLs": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Incident_Comment",
+                                        "value": "@{outputs('Compose_comment_message-URLs')}\n"
+                                    }
+                                },
+                                "Compose_comment_message-URLs": {
+                                    "runAfter": {
+                                        "Parse_JSON_Response-URLs": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "\nCreated/Updated below in EclecticIQ for @{items('For_each_URL_in_Entity')?['Url']} (URL)\n----------------------------------------------------------------------\nObservable Type: @{body('Parse_JSON_Response-URLs')?['data']?['type']}\nObservable Value: @{body('Parse_JSON_Response-URLs')?['data']?['value']}\nMaliciousness: @{body('Parse_JSON_Response-URLs')?['data']?['meta']?['maliciousness']}\nCreared at: @{body('Parse_JSON_Response-URLs')?['data']?['created_at']}\nLast updated at: @{body('Parse_JSON_Response-URLs')?['data']?['last_updated_at']}\n----------------------------------------------------------------------\n"
+                                },
+                                "Create_or_Update_Observables-URI": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "data": {
+                                                "type": "uri",
+                                                "value": "@items('For_each_URL_in_Entity')?['Url']"
+                                            }
+                                        },
+                                        "headers": {
+                                            "accept": "application/json",
+                                            "content-type": "application/json"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['EclecticIQCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/v1/observables/"
+                                    }
+                                },
+                                "Parse_JSON_Response-URLs": {
+                                    "runAfter": {
+                                        "Create_or_Update_Observables-URI": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Create_or_Update_Observables-URI')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "created_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "entities": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "id": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_updated_at": {
+                                                            "type": "string"
+                                                        },
+                                                        "meta": {
+                                                            "properties": {
+                                                                "maliciousness": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sources": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        },
+                                                        "value": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_to_indicate_empty_result_sting_-_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-_Incident_Comment": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident_Comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_Accounts": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_accounts",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_FileHash": {
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_hash",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_Hosts": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_IPs": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_ips",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_to_indicate_empty_result_sting_-_URLs": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "empty_result_urls",
+                                        "type": "string",
+                                        "value": "[[]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "EclecticIQCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('EclecticIQcustomconnectorConnectionName'))]",
+                                "connectionName":  "[variables('EclecticIQcustomconnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "EclecticIQ-CreateObservable",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('EclecticIQcustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('EclecticIQcustomconnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('EclecticIQcustomconnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

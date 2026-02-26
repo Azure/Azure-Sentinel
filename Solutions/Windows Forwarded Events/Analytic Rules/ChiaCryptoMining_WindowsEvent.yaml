@@ -1,0 +1,64 @@
+id: 4d173248-439b-4741-8b37-f63ad0c896ae
+name: Chia_Crypto_Mining IOC - June 2021
+description: | 
+  'Identifies a match across IOC's related to Chia cryptocurrency farming/plotting activity'
+severity: Low
+status: Available 
+requiredDataConnectors: 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Impact
+relevantTechniques:
+  - T1496
+tags:
+  - Chia 
+  - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/MultipleDataSources/ChiaCryptoMining.yaml
+    version: 1.1.0
+query:  |  
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ChiaCryptoIOC.csv"] with (format="csv", ignoreFirstRecord=True);
+  let process = (iocs | where Type =~ "process" | project IoC);
+  //This query uses sysmon data, sections that have - | where Source == "Microsoft-Windows-Sysmon" - may need to be updated with latest
+  WindowsEvent
+  | where EventID == '4688' and EventData has_any (process)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | where NewProcessName  has_any (process)
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+    , Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+    , NewProcessId = tostring(EventData.NewProcessId)
+  | extend Computer, Account, File = tostring(split(NewProcessName, '\\', -1)[-1]), AlertDetail = 'Chia crypto IOC detected'
+  | extend FilePath = replace_string(NewProcessName, File, '')
+  | project TimeGenerated, File, AlertDetail, FilePath,Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
+  | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: File
+      - identifier: Directory
+        columnName: FilePath
+version: 1.0.4
+kind: Scheduled

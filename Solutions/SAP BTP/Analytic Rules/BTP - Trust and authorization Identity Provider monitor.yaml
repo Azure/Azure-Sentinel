@@ -1,0 +1,74 @@
+id: 62357c23-ecdc-4edc-9349-8338063af1ef
+kind: Scheduled
+name: BTP - Trust and authorization Identity Provider monitor
+description: Identifies CRUD operations on Identity Provider settings within a sub
+  account.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1606
+  - T1556
+  - T1134
+query: |
+  SAPBTPAuditLog_CL
+  | where isnotnull(Message.object)
+  | extend Object = Message.object, Attributes = Message.attributes
+  | where Object.type == "IdentityProvider"
+  | extend CrudType = tostring(parse_json(tostring(Object.id)).crudType)
+  | mv-expand Attributes
+  | extend MessageText = case(
+                             CrudType == "CREATE",
+                             "An identity provider was created",
+                             CrudType == "UPDATE",
+                             "An identity provider was updated",
+                             CrudType == "DELETE",
+                             "An identity provider was deleted",
+                             "Unclassified CRUD operation encountered"
+                         )
+  | extend NewAttributes = parse_json(replace_regex(tostring(Attributes.new), "\\r", ""))
+  | extend OldAttributes = parse_json(replace_regex(tostring(Attributes.old), "\\r", ""))
+  | extend IdentityProviderName = case(
+                                      CrudType == "CREATE" or CrudType == "UPDATE",
+                                      NewAttributes.name,
+                                      CrudType == "DELETE",
+                                      OldAttributes.name,
+                                      "Unknown"
+                                  )
+  | project
+      UpdatedOn,
+      UserName,
+      MessageText,
+      IdentityProviderName,
+      Tenant,
+      SpaceId,
+      CloudApp = "SAP BTP"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP BTP: {{MessageText}}'
+  alertDescriptionFormat: '{{MessageText}} by {{UserName}}. Identity provider name:
+    {{IdentityProviderName}}'
+version: 3.0.5

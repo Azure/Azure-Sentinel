@@ -1,0 +1,147 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "<Enter Log Analytics Workspace name>",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/',parameters('connectorResourceName'))]",
+            "apiVersion": "2021-03-01-preview",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "AtlassianJira",
+                    "title": "Atlassian Jira",
+                    "publisher": "Atlassian",
+                    "descriptionMarkdown": "The Atlassian Jira data connector provides the capability to ingest [Atlassian Jira audit logs](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/) into Microsoft Sentinel.",
+                    "graphQueriesTableName": "AtlassianJiraNativePoller_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Atlassian Jira audit logs",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All Atlassian Jira audit logs",
+                            "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": []
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Atlassian Jira API credentials",
+                                "description": "Jira Username and Jira Access Token are required. [See the documentation to learn more about Atlassian Jira API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/#about). Jira domain must be provided as well."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Atlassian Jira",
+                            "description": "Please insert your credentials",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "Domain Name",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{domain}}",
+                                                "placeHolderValue": ""
+                                            }
+                                        ]
+                                    },
+                                    "type": "BasicAuth"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "Basic"
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{domain}}/rest/api/3/auditing/record",
+                        "httpMethod": "Get",
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                        "startTimeAttributeName": "from",
+                        "endTimeAttributeName": "to",
+                        "queryWindowInMin": 5
+                    },
+                    "paging": {
+                        "pagingType": "Offset",
+                        "offsetParaName": "offset",
+                        "pageSizeParaName": "limit",
+                        "pageSize": 1000
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..records"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

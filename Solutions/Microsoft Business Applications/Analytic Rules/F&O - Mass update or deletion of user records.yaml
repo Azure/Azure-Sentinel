@@ -1,0 +1,50 @@
+id: 5ab00fbb-ba2c-44dc-b02e-f119639b9a11
+kind: Scheduled
+name: F&O - Mass update or deletion of user records
+description: Identifies large delete or update operations on Finance & Operations
+  user records based on predefined thresholds.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+      - FinanceOperationsActivity_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1565
+  - T1491
+query: |
+  // Set threshold for number of updated or deleted records
+  let update_detection_threshold = 50;
+  let deleted_detection_threshold = 10;
+  FinanceOperationsActivity_CL
+  | where TableName == "UserInfo" and LogType in ("Update", "Delete")
+  | summarize
+      TotalEvents = count(),
+      StartTime = min(LogCreatedDateTime),
+      EndTime = max(LogCreatedDateTime)
+      by TableName, Username, LogType
+  | where (LogType == "Update" and TotalEvents > update_detection_threshold) or (LogType == "Delete" and TotalEvents > deleted_detection_threshold)
+  | extend FinOpsAppId = 32780
+  | project StartTime, EndTime, Username, LogType, TableName, TotalEvents, FinOpsAppId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Username
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: FinOpsAppId
+alertDetailsOverride:
+  alertDisplayNameFormat: F&O - many user account records deleted
+  alertDescriptionFormat: '{{TotalEvents}} user records deleted in F&O by user {{Username}}'
+version: 3.2.0

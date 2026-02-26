@@ -1,0 +1,52 @@
+id: 1be34fb9-f81b-47ae-84fb-465e6686d76c
+name: DopplePaymer Procdump
+description: |
+  This query was originally published in the threat analytics report, Doppelpaymer: More human-operated ransomware. There is also a related blog.
+  DoppelPaymer is ransomware that is spread manually by human operators. These operators have exhibited extensive knowledge of system administration and common network security misconfigurations. For example, they use SysInternal utilities such as ProcDump to dump credentials from LSASS. They often use these stolen credentials to turn off security software, run malicious commands, and spread malware throughout an organization.
+  The following query detects ProcDump being used to dump credentials from LSASS.
+  The See also section below lists links to other queries associated with DoppelPaymer.
+  References:
+  https://msrc-blog.microsoft.com/2019/11/20/customer-guidance-for-the-dopplepaymer-ransomware/
+  https://www.microsoft.com/en-us/wdsi/threats/malware-encyclopedia-description?Name=Ransom:Win32/DoppelPaymer.KM!MTB
+  https://docs.microsoft.com/sysinternals/downloads/procdump
+  https://docs.microsoft.com/windows-server/security/credentials-protection-and-management/configuring-additional-lsa-protection
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003
+tags:
+  - DoppelPaymer
+  - Ransomware
+  - Procdump
+  - Credential Dumping
+query: |
+  // Dumping of LSASS memory using procdump
+  DeviceProcessEvents
+  // Command lines that include "lsass" and -accepteula or -ma flags used in procdump
+  | where (ProcessCommandLine has "lsass" and (ProcessCommandLine has "-accepteula" or
+  ProcessCommandLine contains "-ma"))
+  // Omits possible FPs where the full command is just "procdump.exe lsass"
+  or (FileName in~ ('procdump.exe','procdump64.exe') and ProcessCommandLine has 'lsass')
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0
+kind: Scheduled

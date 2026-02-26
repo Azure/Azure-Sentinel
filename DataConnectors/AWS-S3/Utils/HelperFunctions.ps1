@@ -28,12 +28,15 @@ function Write-RequiredConnectorDefinitionInfo
         Specifies the connector destination table
     #>
     param(
-        [Parameter(Mandatory=$true,Position=0)][string]$DestinationTable
+        [Parameter(Mandatory=$false,Position=0)][string]$DestinationTable
     )
     Write-Log -Message "Use the values below to configure the Amazon Web Service S3 data connector in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 3
     Write-Log -Message "Role Arn: $roleArn" -LogFileName $LogFileName -Severity Information -LinePadding 1
     Write-Log -Message "Sqs Url: $sqsUrl" -LogFileName $LogFileName -Severity Information
-    Write-Log -Message "Destination Table: $DestinationTable" -LogFileName $LogFileName -Severity Information
+    if ($DestinationTable -ne "")
+    {
+        Write-Log -Message "Destination Table: $DestinationTable" -LogFileName $LogFileName -Severity Information
+    }
 }
 
 function Write-ScriptNotes

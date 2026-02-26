@@ -1,0 +1,45 @@
+id: 90e198a9-efb6-4719-ad89-81b8e93633a7
+name: Files uploaded to teams and access summary
+description: |
+  'This hunting queries identifies files uploaded to SharePoint via a Teams chat and
+  summarizes users and IP addresses that have accessed these files. This allows for 
+  identification of anomolous file sharing patterns.'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+tactics:
+  - InitialAccess
+  - Exfiltration
+relevantTechniques:
+  - T1199
+  - T1102
+  - T1078
+query: |
+  OfficeActivity 
+  | where RecordType =~ "SharePointFileOperation"
+  | where Operation =~ "FileUploaded" 
+  | where UserId != "app@sharepoint"
+  | where SourceRelativeUrl has "Microsoft Teams Chat Files" 
+  | join kind= leftouter ( 
+     OfficeActivity 
+      | where RecordType =~ "SharePointFileOperation"
+      | where Operation =~ "FileDownloaded" or Operation =~ "FileAccessed" 
+      | where UserId != "app@sharepoint"
+      | where SourceRelativeUrl has "Microsoft Teams Chat Files" 
+  ) on OfficeObjectId 
+  | extend userBag = bag_pack(UserId1, ClientIP1) 
+  | summarize make_set(UserId1, 10000), make_bag(userBag, 10000) by TimeGenerated, UserId, OfficeObjectId, SourceFileName 
+  | extend NumberUsers = array_length(bag_keys(bag_userBag))
+  | project timestamp=TimeGenerated, UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, NumberOfUsersAccessed=NumberUsers
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  | extend Account_0_Name = AccountName
+  | extend Account_0_UPNSuffix = AccountUPNSuffix 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1

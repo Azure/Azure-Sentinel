@@ -43,6 +43,13 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                 {
                     return new ValidationResult($"An old mapping for entity '{oldEntityMappingColumnName}' does not have a matching new mapping entry.");
                 }
+                if (HasAMatchingNewMappingEntry(template, oldEntityMappingColumnName))
+                {
+                    if (!template.Query.Contains(oldEntityMappingColumnName))
+                    {
+                        return new ValidationResult($"Entity '{oldEntityMappingColumnName}' does not have a matching entry in the Query.");
+                    }
+                }
             }
 
             return ValidationResult.Success;

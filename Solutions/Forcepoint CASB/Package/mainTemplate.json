@@ -1,0 +1,206 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Forcepoint",
+    "comments": "Solution template for Forcepoint CASB"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Forcepoint Cloud Access Security Broker (CASB)",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "Forcepoint CASB",
+    "_solutionVersion": "3.0.2",
+    "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-forcepoint-casb",
+    "_solutionId": "[variables('solutionId')]",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "ForcepointCASBWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "ForcepointCASB Workbook with template version 3.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Get insights on user risk with the Forcepoint CASB (Cloud Access Security Broker) workbook."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"<h2>Top 5 Users by Number of Failed Attempts</h2>\"},\"name\":\"text - 0\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\r\\n| where TimeGenerated <= now()\\r\\n| extend outcome = coalesce(\\r\\n                        column_ifexists(\\\"EventOutcome\\\", \\\"\\\"),\\r\\n                        split(split(AdditionalExtensions, \\\";\\\", 2)[0], \\\"=\\\", 1)[0],\\r\\n                        \\\"\\\"\\r\\n                        )\\r\\n| extend reason = coalesce(\\r\\n                        column_ifexists(\\\"Reason\\\", \\\"\\\"),\\r\\n                        split(split(AdditionalExtensions, \\\";\\\", 3)[0], \\\"=\\\", 1)[0],\\r\\n                        \\\"\\\"\\r\\n                        )\\r\\n| where DeviceVendor == \\\"Forcepoint CASB\\\"\\r\\n| where DeviceProduct in (\\\"SaaS Security Gateway\\\", \\\"Cloud Service Monitoring\\\", \\\"CASB Admin audit log\\\")\\r\\n| where outcome ==\\\"Failure\\\" \\r\\n| summarize Count= count() by DestinationUserName| render barchart\",\"size\":0,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"\\r\\n<h2>Top 5 Users With The Highest Number Of Logs</h2>\"},\"name\":\"text - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CommonSecurityLog \\r\\n| where TimeGenerated <= now()\\r\\n| where DeviceVendor == \\\"Forcepoint CASB\\\"\\r\\n| where DeviceProduct in (\\\"SaaS Security Gateway\\\", \\\"Cloud Service Monitoring\\\", \\\"CASB Admin audit log\\\")\\r\\n| summarize Count = count() by DestinationUserName\\r\\n| top 5 by DestinationUserName| render barchart\",\"size\":1,\"timeContext\":{\"durationMs\":2592000000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 4\"}],\"fromTemplateId\":\"sentinel-ForcepointCASB\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=ForcepointCASBWorkbook; logoFileName=FP_Green_Emblem_RGB-01.svg; description=Get insights on user risk with the Forcepoint CASB (Cloud Access Security Broker) workbook.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Forcepoint Cloud Access Security Broker (CASB); templateRelativePath=ForcepointCASB.json; subtitle=; provider=Forcepoint}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Forcepoint CASB",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Forcepoint"
+                },
+                "support": {
+                  "tier": "Community",
+                  "name": "Community",
+                  "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "CommonSecurityLog",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "ForcepointCasb",
+                      "kind": "DataConnector"
+                    },
+                    {
+                      "contentId": "ForcepointCasbAma",
+                      "kind": "DataConnector"
+                    },
+                    {
+                      "contentId": "CefAma",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Forcepoint CASB",
+        "publisherDisplayName": "Community",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Forcepoint%20CASB/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.forcepoint.com/product/casb-cloud-access-security-broker\">Forcepoint CASB</a> (Cloud Access Security Broker) Solution for Microsoft Sentinel allows you to automatically export CASB logs and events into Microsoft Sentinel in real-time. This enriches visibility into user activities across locations and cloud applications, enables further correlation with data from Azure workloads and other feeds, and improves monitoring capability with Workbooks inside Microsoft Sentinel.</p>\n<p>For more details about this solution refer to <a href=\"https://forcepoint.github.io/docs/casb_and_azure_sentinel/\">integration documentation</a>.</p>\n<p>This solution is dependent on the Common Event Format solution containing the CEF via AMA connector to collect the logs. The CEF solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE:</strong> Microsoft recommends installation of CEF via AMA Connector. The existing connectors were deprecated on <strong>Aug 31, 2024</strong>.</p>\n<p><strong>Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Forcepoint CASB",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Forcepoint"
+        },
+        "support": {
+          "name": "Community",
+          "tier": "Community",
+          "link": "https://github.com/Azure/Azure-Sentinel/issues"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "Solution",
+              "contentId": "azuresentinel.azure-sentinel-solution-commoneventformat"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-19",
+        "providers": [
+          "Forcepoint"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

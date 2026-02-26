@@ -1,0 +1,111 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Log Analytics workspace where the solution will be deployed."
+      }
+    }
+  },
+  "variables": {
+    "_dataConnectorContentId": "NordPass"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[parameters('workspaceName')]",
+      "location": "[resourceGroup().location]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/onboardingStates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspaceName'), '/Microsoft.SecurityInsights/default')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+      ]
+    },
+    {
+      "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[resourceGroup().location]",
+      "kind": "GenericUI",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/providers/onboardingStates', parameters('workspaceName'), 'Microsoft.SecurityInsights', 'default')]"
+      ],
+      "properties": {
+        "connectorUiConfig": {
+          "id": "NordPass",
+          "title": "NordPass",
+          "publisher": "NordPass",
+          "descriptionMarkdown": "Integrating NordPass with Microsoft Sentinel SIEM via the API will allow you to automatically transfer Activity Log data from NordPass to Microsoft Sentinel and get real-time insights, such as item activity, all login attempts, and security notifications.",
+          "graphQueriesTableName": "NordPassEventLogs_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "NordPass",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "{{graphQueriesTableName}}\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "description": "Ensure that the [resource group](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-portal#create-resource-groups) and the [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/quick-create-workspace?tabs=azure-portal) are created and located in the same region so you can deploy the Azure Functions."
+              },
+              {
+                "description": "[Add Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/quickstart-onboard#enable-microsoft-sentinel-) to the created Log Analytics workspace."
+              },
+              {
+                "description": "Generate a [Microsoft Sentinel API URL and token](https://www.google.com/url?q=https://support.nordpass.com/hc/en-us/articles/31972037289873&sa=D&source=docs&ust=1743770997230005&usg=AOvVaw16p0hstJ6OeBBoFdBKZRfr) in the NordPass Admin Panel to finish the Azure Functions integration. Please note that you’ll need the NordPass Enterprise account for that."
+              },
+              {
+                "description": "**Important:** This connector uses Azure Functions to retrieve Activity Logs from NordPass into Microsoft Sentinel. This may result in additional data ingestion costs. For more information, refer to the Azure Functions pricing page."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "To proceed with the Microsoft Sentinel setup\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-Nordpass-azuredeploy)\n2. **Please note that after the successful deployment, the system pulls Activity Log data every 1 minute by default.**"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

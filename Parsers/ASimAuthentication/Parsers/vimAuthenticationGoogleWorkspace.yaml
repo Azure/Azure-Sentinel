@@ -1,0 +1,235 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Google Workspace
+  Version: '0.1.1'
+  LastUpdated: Mar 22, 2024
+Product:
+  Name: Google Workspace
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Google Workspace documentation
+  Link: https://developers.google.com/admin-sdk/reports/v1/appendix/activity/login#login
+Description: |
+  This ASIM parser supports normalizing the Google Workspace sign-in logs(type=login) ingested in 'GWorkspace_ReportsAPI_login_CL' table to the ASIM Authentication normalized schema.
+ParserName: vimAuthenticationGoogleWorkspace
+EquivalentBuiltInParser: _Im_Authentication_GoogleWorkspace
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null), 
+    username_has_any: dynamic = dynamic([]),
+    targetappname_has_any: dynamic = dynamic([]),
+    srcipaddr_has_any_prefix: dynamic = dynamic([]),
+    srchostname_has_any: dynamic = dynamic([]),
+    eventtype_in: dynamic = dynamic([]),
+    eventresultdetails_in: dynamic = dynamic([]),
+    eventresult: string = '*',
+    disabled: bool=false
+    )
+  {
+      let GoogleWorkspaceSchema = datatable
+  (
+      event_name_s: string,
+      event_type_s: string,
+      id_uniqueQualifier_s: string,
+      actor_email_s: string,
+      actor_profileId_s: string,
+      IPAddress: string,
+      login_challenge_method_s: string,
+      id_applicationName_s: string,
+      affected_email_address_s: string,
+      is_suspicious_b: bool,
+      is_second_factor_b: bool,
+      login_type_s: string,
+      sensitive_action_name_s: string,
+      login_challenge_status_s: string,
+      TimeGenerated: datetime,
+      _ItemId: string,
+      _ResourceId: string,
+      Computer: string,
+      MG: string,
+      ManagementGroupName: string,
+      RawData: string,
+      SourceSystem: string,
+      TenantId: string
+  )[];
+      let EventFieldsLookup = datatable
+  (
+      EventOriginalSubType: string,
+      EventType: string,
+      EventResult: string,
+      DvcAction: string
+  )
+  [
+      "login_success", "Logon", "Success", "Allowed",
+      "login_failure", "Logon", "Failure", "Blocked",
+      "login_challenge", "Logon", "", "",
+      "login_verification", "Logon", "", "",
+      "risky_sensitive_action_blocked", "Logon", "Failure", "Blocked",
+      "riskay_sensitive_action_allowed", "Logon", "Success", "Allowed",
+      "logout", "Logoff", "Success", "Allowed",
+      "suspicious_login", "Logon", "Failure", "Blocked",
+      "suspicious_login_less_secure_app", "Logon", "Failure", "Blocked",
+      "suspicious_programmatic_login", "Logon", "Failure", "Blocked",
+      "user_signed_out_due_to_suspicious_session_cookie", "Logoff", "Success", "Allowed"
+  ];
+      let ThreatEventTypes = dynamic(['suspicious_login', 'suspicious_login_less_secure_app', 'suspicious_programmatic_login', 'user_signed_out_due_to_suspicious_session_cookie']);
+      let SupportedEventNames = EventFieldsLookup
+          | project EventOriginalSubType;
+      union isfuzzy=true  GoogleWorkspaceSchema, GWorkspace_ReportsAPI_login_CL
+      | where not(disabled)
+      //  -- Pre filtering
+      | where 
+          (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(username_has_any) == 0) or actor_email_s has_any (username_has_any))
+          and ((array_length(targetappname_has_any) == 0) or 'Google Workspace - login' in~ (targetappname_has_any))
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(IPAddress, srcipaddr_has_any_prefix)))
+          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+          and ((array_length(eventtype_in) == 0) or ("Logon" in~ (eventtype_in)) or ("Logoff" in~ (eventtype_in)))
+          // eventresultdetails_in filtering done later in the parser
+          // eventresult filtering done later in the parser
+          and event_name_s in (SupportedEventNames)
+      | lookup EventFieldsLookup on $left.event_name_s == $right.EventOriginalSubType
+      // Filtering on 'eventresult' and eventtype_in
+      | where (eventresult == "*" or (EventResult == eventresult))
+          and ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))
+      | project-rename
+          TargetUsername = actor_email_s,
+          TargetUserId = actor_profileId_s,
+          SrcIpAddr = IPAddress,
+          LogonMethod = login_challenge_method_s,
+          EventOriginalType = event_type_s,
+          EventOriginalUid = id_uniqueQualifier_s
+      // mapping ASimMatchingUsername
+      | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+      // ActorUsername not coming from source. Hence, not mapped.
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      "No match"
+                                  )
+      | extend
+          TargetUsername = iif(event_name_s in (ThreatEventTypes), affected_email_address_s, TargetUsername),
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          TargetUserIdType = iif(isnotempty(TargetUserId), "GWorkspaceProfileID", ""),
+          EventSeverity = iif(event_name_s in (ThreatEventTypes), "High", "Informational")
+      | extend 
+          AdditionalFields = bag_pack
+                    (
+                        "Is_Suspicious",
+                        is_suspicious_b,
+                        "Is_Second_Factor_b",
+                        is_second_factor_b,
+                        "Logon_Type",
+                        login_type_s,
+                        "Sensitive_Action_Name",
+                        sensitive_action_name_s
+                    ),
+          EventResult = case
+                (
+                    event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == "passed",
+                    "Success",
+                    event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == "incorrect_answer_entered",
+                    "Failure",
+                    EventResult
+                ),
+          EventResultDetails = iif(event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == "incorrect_answer_entered", "MFA not satisfied", ""),
+          RuleName = case
+            (
+                event_name_s == 'suspicious_login',
+                "Google has detected a suspicious login for TargetUSerName",
+                event_name_s == 'suspicious_login_less_secure_app',
+                "Google has detected a suspicious login for TargetUSerName from a less secure app",
+                event_name_s == 'suspicious_programmatic_login',
+                "Google has detected a suspicious programmatic login for TargetUserName",
+                event_name_s == 'user_signed_out_due_to_suspicious_session_cookie',
+                "Suspicious session cookie detected for user TargetUserName",
+                ""
+            ),
+          ThreatField = iif(event_name_s in (ThreatEventTypes), "TargetUserName", ""),
+          ThreatFirstReportedTime = iif(event_name_s in (ThreatEventTypes), TimeGenerated, datetime(null)),
+          ThreatLastReportedTime = iif(event_name_s in (ThreatEventTypes), TimeGenerated, datetime(null))
+      // filtering on 'eventresultdetails_in'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+      | extend
+          EventOriginalSubType = event_name_s,
+          TargetAppName = "Google Workspace - login",
+          Dst = "Google Workspace",
+          Application = "Google Workspace",
+          TargetAppType = "SaaS application",
+          IpAddr = SrcIpAddr,
+          User = TargetUsername,
+          EventCount = int(1),
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventProduct = "Workspace",
+          EventVendor = "Google",
+          Dvc="Workspace",
+          EventSchema = 'Authentication',
+          EventSchemaVersion = '0.1.3',
+          EventUid = _ItemId
+      | project-away 
+          *_s,
+          *_b,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId,
+          temp*
+  };
+  parser
+  (
+      starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled
+  )

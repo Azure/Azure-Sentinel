@@ -1,0 +1,26 @@
+id: 4095e430-d3f4-426f-92c5-aa5c5e137ca0
+name: Account Brute Force
+description: |
+  This hunting query searches for public IP addresses that failed to logon to a computer multiple times, using multiple accounts, and eventually succeeded.
+description-detailed: |
+  This query searches for public IP addresses that failed to logon to a computer multiple times, using multiple accounts, and eventually succeeded. This is a common pattern for attackers who are attempting to brute force accounts.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceLogonEvents
+query: |
+  DeviceLogonEvents
+  | where isnotempty(RemoteIP) 
+      and AccountName !endswith "$"
+      and RemoteIPType == "Public"
+  | extend Account=strcat(AccountDomain, "\\", AccountName)
+  | summarize 
+      Successful=countif(ActionType == "LogonSuccess"),
+      Failed = countif(ActionType == "LogonFailed"),
+      FailedAccountsCount = dcountif(Account, ActionType == "LogonFailed"),
+      SuccessfulAccountsCount = dcountif(Account, ActionType == "LogonSuccess"),
+      FailedAccounts = make_set(iff(ActionType == "LogonFailed", Account, ""), 5),
+      SuccessfulAccounts = make_set(iff(ActionType == "LogonSuccess", Account, ""), 5)
+      by DeviceName, RemoteIP, RemoteIPType
+  | where Failed > 10 and Successful > 0 and FailedAccountsCount > 2 and SuccessfulAccountsCount == 1
+version: 1.0.0

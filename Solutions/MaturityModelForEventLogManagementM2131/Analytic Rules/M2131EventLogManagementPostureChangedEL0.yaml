@@ -1,8 +1,9 @@
 id: 1f8fcca5-47ed-409d-a8fa-d49ef821feaf
-name: (Preview)M2131_EventLogManagementPostureChanged_EL0
+name: M2131_EventLogManagementPostureChanged_EL0
 description: |
   'This alert is desinged to monitor Azure policies aligned with the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when EL0 policy compliance falls below 70% within a 1 week timeframe.'
 severity: Medium
+status: Available
 requiredDataConnectors: []
 queryFrequency: 7d
 queryPeriod: 7d
@@ -13,9 +14,12 @@ tactics:
 relevantTechniques:
   - T1082
 query: |
-  let EventLogManagement = externaldata(RecommendationDisplayName:string,LoggingCategory:string,MaturityLevel:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/EventLogManagement.csv"] with (format="csv", ignoreFirstRecord=True);
   SecurityRecommendation
-  | join kind=leftouter (EventLogManagement) on RecommendationDisplayName
+  | where RecommendationDisplayName <> ""
+  | extend MaturityLevel=iff(RecommendationDisplayName has_any("agent","extension","retention","logs encryption","collect","retained","log profile","CloudTrail","metric","AWS","GCP","DNS","Auditing","Flow","logging","usage"), "Event Logging (EL0)",
+  iff(RecommendationDisplayName has_any("container registries","logic apps","Enhanced monitoring","IoT Hub","Event Hub","App Service", "Kubernetes","updates","email", "automation", "adaptive"), "Advanced Event Logging (EL3)",
+  iff(RecommendationDisplayName has_any("signatures","CMK","CMEK","double encryption","managed key","KMS","container","Watcher"), "Intermediate Event Logging (EL2)",
+  iff(RecommendationDisplayName has_any("Exploit Guard","endpoint protection","Antimalware","health","VPC","Defender","Vulnerabilities","vulnerability","diagnostic","Key","activity log alert",""), "Basic Event Logging (EL1)","Other"))))
   | summarize arg_max(TimeGenerated, *) by RecommendationDisplayName, AssessedResourceId, MaturityLevel
   | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by MaturityLevel
   | extend PassedControls = (Passed/todouble(Total))*100

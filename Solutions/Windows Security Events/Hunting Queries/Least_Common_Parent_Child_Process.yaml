@@ -1,0 +1,35 @@
+id: 3712595d-6f47-416b-963a-605201ed2764
+name: Least Common Parent And Child Process Pairs
+description: |
+  'Looks across your environment for least common Parent/Child process combinations.
+  Will possibly find some malicious activity disguised as well known process names.
+  By ZanCo'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
+  let Allowlist = dynamic (['foo.exe', 'baz.exe']);
+  let Sensitivity = 5;
+  SecurityEvent
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID == 4688 and isnotempty(ParentProcessName)  
+  | extend ProcArray = split(NewProcessName, '\\'), ParentProcArray = split(ParentProcessName, '\\')
+  // ProcArrayLength is Folder Depth
+  | extend ProcArrayLength = array_length(ProcArray), ParentProcArrayLength = array_length(ParentProcArray)
+  | extend LastIndex = ProcArrayLength - 1, ParentLastIndex = ParentProcArrayLength - 1
+  | extend Proc = ProcArray[LastIndex], ParentProc = ParentProcArray[ParentLastIndex]
+  | where Proc !in (Allowlist)
+  | extend ParentChildPair = strcat(ParentProc , ' > ', Proc)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = make_set(Computer,maxSize=1000), UserCount = dcount(SubjectUserName), Users = make_set(SubjectUserName,maxSize=1000) by ParentChildPair
+  | where TimesSeen < Sensitivity
+  | extend timestamp = StartTimeUtc
+version: 2.0.1

@@ -1,0 +1,137 @@
+{
+	"type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+	"apiVersion": "2022-09-01-preview",
+	"name": "CiscoMerakiMultiRule",
+	"location": "{{location}}",
+	"kind": "Customizable",
+	"properties": {
+		"connectorUiConfig": {
+			"id": "CiscoMerakiMultiRule",
+			"title": "Cisco Meraki (using REST API)",
+			"publisher": "Microsoft",
+			"descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+			"graphQueriesTableName": "ASimNetworkSessionLogs",
+			"graphQueries": [
+				{
+					"metricName": "Total IDS alerts received",
+					"legend": "Get IDS Alerts",
+					"baseQuery": "{{graphQueriesTableName}} | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\""
+				},
+				{
+					"metricName": "Total File Scanned events received",
+					"legend": "Get File Scanned",
+					"baseQuery": "ASimWebSessionLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\" and EventOriginalType == \"File Scanned\""
+				},
+				{
+					"metricName": "Total API request events received",
+					"legend": "Get API Request",
+					"baseQuery": "ASimWebSessionLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\" and EventOriginalType == \"API Request\""
+				},
+				{
+					"metricName": "Total Configuration Changes received",
+					"legend": "Get Configuration Changes",
+					"baseQuery": "ASimAuditEventLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\""
+				}
+			],
+			"sampleQueries": [
+				{
+					"description": "Get Sample of Cisco Meraki IDS Alerts",
+					"query": "{{graphQueriesTableName}}\n | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"\n | take 10"
+				},
+				{
+					"description": "Total Events by Event Type",
+					"query": "union {{graphQueriesTableName}}, ASimWebSessionLogs, ASimAuditEventLogs\n | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"\n | summarize count() by EventOriginalType"
+				}
+			],
+			"dataTypes": [
+				{
+					"name": "{{graphQueriesTableName}}",
+					"lastDataReceivedQuery": "{{graphQueriesTableName}}\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"         | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+				},
+				{
+					"name": "ASimWebSessionLogs",
+					"lastDataReceivedQuery": "ASimWebSessionLogs\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+				},
+				{
+					"name": "ASimAuditEventLogs",
+					"lastDataReceivedQuery": "ASimAuditEventLogs\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+				}
+			],
+			"connectivityCriteria": [
+				{
+					"type": "HasDataConnectors"
+				}
+			],
+			"availability": {
+				"isPreview": false
+			},
+			"permissions": {
+				"resourceProvider": [
+					{
+						"provider": "Microsoft.OperationalInsights/workspaces",
+						"permissionsDisplayText": "Read and Write permissions are required.",
+						"providerDisplayName": "Workspace",
+						"scope": "Workspace",
+						"requiredPermissions": {
+							"write": true,
+							"read": true,
+							"delete": true
+						}
+					},
+					{
+						"provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+						"permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+						"providerDisplayName": "Keys",
+						"scope": "Workspace",
+						"requiredPermissions": {
+							"action": true
+						}
+					}
+				],
+				"customs": [
+					{
+						"name": "Cisco Meraki REST API Key",
+						"description": "Enable API access in Cisco Meraki and generate API Key. Please refer to Cisco Meraki official [documentation](https://aka.ms/ciscomerakiapikey) for more information."
+					},
+					{
+						"name": "Cisco Meraki Organization Id",
+						"description": "Obtain your Cisco Meraki organization id to fetch security events. Follow the steps in the [documentation](https://aka.ms/ciscomerakifindorg) to obtain the Organization Id using the Meraki API Key obtained in previous step."
+					}
+				]
+			},
+			"instructionSteps": [
+				{
+					"description": "Currently, this connector allows to ingest events from the following [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) endpoint: \n 1. [Get Organization Appliance Security Events](https://developer.cisco.com/meraki/api-latest/#!get-organization-appliance-security-events) \n>This connector parses **IDS Alert** events into ASimNetworkSessionLogs Table and **File Scanned** events into ASimWebSessionLogs Table. \n 2. [Get Organization Api Requests](https://developer.cisco.com/meraki/api-latest/#!get-organization-api-requests) \n>This connector parses events into ASimWebSessionLogs Table. \n 3. [Get Organization Configuration Changes](https://developer.cisco.com/meraki/api-latest/#!get-organization-configuration-changes) \n>This connector parses events into ASimAuditEventLogs Table.",
+					"instructions": [
+						{
+							"type": "Textbox",
+							"parameters": {
+								"label": "Organization Id",
+								"placeholder": "OrganizationId",
+								"type": "text",
+								"name": "organization"
+							}
+						},
+						{
+							"type": "Textbox",
+							"parameters": {
+								"label": "API Key",
+								"placeholder": "ApiKey",
+								"type": "password",
+								"name": "apiKey"
+							}
+						},
+						{
+							"parameters": {
+								"label": "toggle",
+								"name": "toggle"
+							},
+							"type": "ConnectionToggleButton"
+						}
+					],
+					"title": "Connect Cisco Meraki events to Microsoft Sentinel"
+				}
+			]
+		}
+	}
+}

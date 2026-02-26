@@ -8,3 +8,7 @@
 - Updated Path for Function Package
 - Deleted the usage of Storage Account to write last run executions
 - Writing Last Run executions to Azure Storage Table
+
+## 3.0
+- LA Custom Table Name as parameter
+- Updated Unix Timestamp (Epoch) Calculations

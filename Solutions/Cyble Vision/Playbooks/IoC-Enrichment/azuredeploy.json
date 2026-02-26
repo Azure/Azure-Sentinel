@@ -1,0 +1,415 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Cyble-IOC_Enrichment-Playbook",
+    "description": "This playbook leverages the Cyble API to enrich IP, Domain, Url & Hash indicators, found in Microsoft Sentinel incidents, with the following context: Risk Score, Confidence, etc. The enrichment content will be posted as a comment in the Microsoft Sentinel incident",
+    "prerequisites": [
+      "To use the Cyble Endpoints for Azure connector, you will need a valid API token from Cyble Vision platform."
+    ],
+    "postDeployment": [
+      ""
+    ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2025-05-06T00:00:00.000Z",
+    "entities": [
+      "ip",
+      "url",
+      "filehash"
+    ],
+    "tags": [
+      "Enrichment"
+    ],
+    "support": {
+      "tier": "Partner"
+    },
+    "author": {
+      "name": "Cyble Inc."
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0",
+        "title": "Cyble-IOC_Enrichment",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ],
+    "basics": {
+      "displayName": "Cyble IOC Enrichment",
+      "description": "Enrich IOCs using the Cyble Threat Intelligence API.",
+      "category": "Threat Intelligence"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Cyble-IOC-Enrichment-Playbook",
+      "type": "String"
+    },
+    "ScheduleFrequencyInMinutes": {
+      "defaultValue": "60",
+      "type": "String"
+    },
+    "CybleApiBearerToken": {
+      "defaultValue": "",
+      "type": "securestring"
+    },
+    "WorkspaceID": {
+      "defaultValue": "",
+      "type": "String"
+    }
+  },
+  "variables": {
+    "apiConnectionResourceName": "[concat(parameters('PlaybookName'), '-ti-conn-', uniqueString(resourceGroup().id, parameters('PlaybookName')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('apiConnectionResourceName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[variables('apiConnectionResourceName')]",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+          "type": "Microsoft.Web/locations/managedApis"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('apiConnectionResourceName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "ScheduleFrequencyInMinutes": {
+            "type": "String",
+            "value": "[parameters('ScheduleFrequencyInMinutes')]"
+          },
+          "CybleApiBearerToken": {
+            "type": "SecureString",
+            "value": "[parameters('CybleApiBearerToken')]"
+          },
+          "WorkspaceID": {
+            "type": "String",
+            "value": "[parameters('WorkspaceID')]"
+          },
+          "$connections": {
+            "type": "Object",
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('apiConnectionResourceName'))]",
+                "connectionName": "[variables('apiConnectionResourceName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/',  resourceGroup().location, '/managedApis/azuresentinel')]",
+                "alternativeParameterValues": {
+                  "authenticationType": "ManagedServiceIdentity"
+                }
+              }
+            }
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "ScheduleFrequencyInMinutes": {
+              "type": "String"
+            },
+            "CybleApiBearerToken": {
+              "type": "SecureString"
+            },
+            "$connections": {
+              "type": "Object"
+            },
+            "WorkspaceID": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Parse_FullIncident": {
+              "runAfter": {},
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerOutputs()?['body/object']",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "Properties": {
+                      "type": "object",
+                      "properties": {
+                        "relatedEntities": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Parse_Entities": {
+              "runAfter": {
+                "Parse_FullIncident": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Parse_FullIncident')?['Properties']?['relatedEntities']",
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "Initialize_Enrichment_Array": {
+              "runAfter": {
+                "Parse_Entities": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "FormattedComments",
+                    "type": "Array",
+                    "value": []
+                  }
+                ]
+              }
+            },
+            "For_each_Entity": {
+              "foreach": "@body('Parse_Entities')",
+              "actions": {
+                "HTTP_Get_IOC_Data": {
+                  "type": "Http",
+                  "inputs": {
+                    "uri": "@concat('https://api.cyble.ai/engine/api/v2/y/iocs?ioc=', coalesce(if(equals(toLower(item()?['kind']),'filehash'), item()?['properties']?['hashValue'], null), if(equals(toLower(item()?['kind']),'ip'), item()?['properties']?['address'], null), if(equals(toLower(item()?['kind']),'url'), item()?['properties']?['url'], null), if(equals(toLower(item()?['kind']),'host'), item()?['properties']?['hostName'], null), if(equals(toLower(item()?['kind']),'mailbox'), item()?['properties']?['mailboxPrimaryAddress'], null), ''))",
+                    "method": "GET",
+                    "headers": {
+                      "Authorization": "@concat('Bearer ', parameters('CybleApiBearerToken'))",
+                      "Content-Type": "application/json"
+                    }
+                  }
+                },
+                "Parse_IOC_Response": {
+                  "runAfter": {
+                    "HTTP_Get_IOC_Data": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('HTTP_Get_IOC_Data')",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "iocs": {
+                              "type": [
+                                "array",
+                                "null"
+                              ],
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "ioc": {
+                                    "type": "string"
+                                  },
+                                  "ioc_type": {
+                                    "type": "string"
+                                  },
+                                  "first_seen": {
+                                    "type": "number"
+                                  },
+                                  "last_seen": {
+                                    "type": "number"
+                                  },
+                                  "risk_score": {
+                                    "type": "integer"
+                                  },
+                                  "sources": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "behaviour_tags": {
+                                    "type": [
+                                      "array",
+                                      "null"
+                                    ],
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "confidence_rating": {
+                                    "type": "string"
+                                  },
+                                  "target_countries": {
+                                    "type": [
+                                      "array",
+                                      "null"
+                                    ],
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "target_regions": {
+                                    "type": [
+                                      "array",
+                                      "null"
+                                    ],
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "target_industries": {
+                                    "type": [
+                                      "array",
+                                      "null"
+                                    ],
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "related_malware": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "related_threat_actors": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "is_whitelisted": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              }
+                            },
+                            "pagination": {
+                              "type": "object",
+                              "properties": {
+                                "total_count": {
+                                  "type": "integer"
+                                },
+                                "page": {
+                                  "type": "integer"
+                                },
+                                "limit": {
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Compose_Formatted_Comment": {
+                  "runAfter": {
+                    "Parse_IOC_Response": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@concat(\n  '---\\n**Entity:** ', coalesce(item()?['properties']?['address'], item()?['properties']?['hostName'], item()?['properties']?['url'], item()?['properties']?['mailboxPrimaryAddress'], item()?['properties']?['hashValue'], 'Unknown'), '\\n',\n  if(\n    equals(body('Parse_IOC_Response')?['success'], true),\n    concat(\n      '**IOC:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'No IOCs found.',\n          first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['ioc']\n        ), '\\n',\n      '**Type:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['ioc_type']\n        ), '\\n',\n      '**Risk Score:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          string(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['risk_score'])\n        ), '\\n',\n      '**Confidence Rating:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['confidence_rating']\n        ), '\\n',\n      '**Sources:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          join(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['sources'], ', ')\n        ), '\\n',\n      '**Malware:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          string(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['related_malware'])\n        ), '\\n',\n      '**Threat Actors:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          string(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['related_threat_actors'])\n        ), '\\n',\n      '**Behavior Tags:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          if(\n            or(\n              equals(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['behaviour_tags'], null),\n              equals(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['behaviour_tags'], 'null')\n            ),\n            'None',\n            join(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['behaviour_tags'], ', ')\n          )\n        ), '\\n',\n      '**First Seen:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          string(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['first_seen'])\n        ), '\\n',\n      '**Last Seen:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          string(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['last_seen'])\n        ), '\\n',\n      '**Is Whitelisted:** ',\n        if(\n          equals(\n            length(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]'))),\n            0\n          ),\n          'N/A',\n          string(first(coalesce(body('Parse_IOC_Response')?['data']?['iocs'], json('[]')))?['is_whitelisted'])\n        ), '\\n'\n    ),\n    'API returned an error or no data available.\\n'\n  )\n)"
+                },
+                "Append_Comment_to_Array": {
+                  "runAfter": {
+                    "Compose_Formatted_Comment": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "FormattedComments",
+                    "value": "@outputs('Compose_Formatted_Comment')"
+                  }
+                }
+              },
+              "runAfter": {
+                "Initialize_Enrichment_Array": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Check_If_Comments_Not_Empty": {
+              "actions": {
+                "Add_comment_to_incident_(V3)": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "body": {
+                      "incidentArmId": "@body('Parse_FullIncident')?['id']",
+                      "message": "<p class=\"editor-paragraph\">@{concat('**IOC Enrichment Results**\\\\n\\\\n', join(variables('FormattedComments'), '\\\\n'))}</p>"
+                    },
+                    "path": "/Incidents/Comment"
+                  }
+                }
+              },
+              "runAfter": {
+                "For_each_Entity": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "No_Comments_Skip": {
+                    "type": "Compose",
+                    "inputs": "No enriched IOCs found; skipping comment."
+                  }
+                }
+              },
+              "expression": "@greater(length(variables('FormattedComments')), 0)",
+              "type": "If"
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}

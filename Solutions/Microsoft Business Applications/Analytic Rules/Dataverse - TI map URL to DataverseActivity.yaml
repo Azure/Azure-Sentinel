@@ -1,0 +1,123 @@
+id: d88a0e22-3b6a-40c2-af28-c064b44d03b7
+kind: Scheduled
+name: Dataverse - TI map URL to DataverseActivity
+description: Identifies a match in DataverseActivity from any URL IOC from Microsoft
+  Sentinel Threat Intelligence.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1566
+  - T1456
+  - T1474
+  - T0819
+  - T0865
+  - T0862
+  - T0863
+  - T1204
+  - T1574
+  - T0873
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true
+  | where isnotempty(Url)
+  | join kind=innerunique (
+      DataverseActivity
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where Message in ("Create", "Update")
+      | where isnotempty(Fields) and Fields has "http"
+      | extend
+          ExtractedUrls = extract_all("(http[s]?://(?:[a-zA-Z\\.-]|[0-9])+)", tostring(Fields)),
+          DataverseActivity_TimeGenerated = TimeGenerated
+      | mv-expand Url = ExtractedUrls
+      | project
+          DataverseActivity_TimeGenerated,
+          tostring(Url),
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          EntityName
+      )
+      on Url
+  | where DataverseActivity_TimeGenerated < ExpirationDateTime
+  | summarize DataverseActivity_TimeGenerated  = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, Url
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      DataverseActivity_TimeGenerated,
+      Description,
+      ActivityGroupNames,
+      IndicatorId,
+      ThreatType,
+      ExpirationDateTime,
+      ConfidenceScore,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix,
+      Url
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - TI match on URL in {{InstanceUrl}}
+  alertDescriptionFormat: Malicous IP {{Url}} was found in {{InstanceUrl}}. Associated
+    user is {{UserId}}
+version: 3.2.0

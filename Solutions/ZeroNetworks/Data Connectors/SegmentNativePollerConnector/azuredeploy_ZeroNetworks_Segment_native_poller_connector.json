@@ -1,0 +1,148 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logAnalyticsWorkspaceName": {
+            "defaultValue": "<Enter Log Analytics Workspace name>",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        },
+        "connectorResourceName": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "Resource name for connector"
+            }
+        },
+        "uri": {
+            "type": "string",
+            "defaultValue": "https://portal.zeronetworks.com/api/v1/audit"
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "name": "[concat(parameters('logAnalyticsWorkspaceName'),'/Microsoft.SecurityInsights/', parameters('connectorResourceName'))]",
+            "apiVersion": "2023-02-01-preview",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "ZeroNetworksSegmentAuditNativePoller",
+                    "title": "Zero Networks Segment Audit",
+                    "publisher": "Zero Networks",
+                    "descriptionMarkdown": "The [Zero Networks Segment](https://zeronetworks.com/) Audit data connector provides the capability to ingest Zero Networks Audit events into Microsoft Sentinel through the REST API. This data connector uses Microsoft Sentinel native polling capability.",
+                    "graphQueriesTableName": "ZNSegmentAuditNativePoller_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Zero Networks Segment Audit",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All Zero Networks Segment Audit events",
+                            "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": []
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "read and write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Zero Networks API Token",
+                                "description": "**ZeroNetworksAPIToken** is required for REST API. See the API Guide and follow the instructions for obtaining credentials."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Zero Networks to Microsoft Sentinel",
+                            "description": "Enable Zero Networks audit Logs.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true"
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyName": "Authorization"
+                    },
+                    "request": {
+                        "apiEndpoint": "[parameters('uri')]",
+                        "httpMethod": "GET",
+                        "queryTimeFormat": "UnixTimestampInMills",
+                        "queryWindowInMin": 5,
+                        "startTimeAttributeName": "from",
+                        "endTimeAttributeName": "to",
+                        "queryParameters": {
+                            "order": "desc"
+                        }
+                    },
+                    "paging": {
+                        "pagingType": "PageToken",
+                        "nextPageParaName": "_cursor",
+                        "nextPageTokenJsonPath": "..scrollCursor",
+                        "pageSize": 400,
+                        "pageSizeParaName": "_limit"
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$..items"
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

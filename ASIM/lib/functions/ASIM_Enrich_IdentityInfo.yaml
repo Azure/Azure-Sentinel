@@ -1,0 +1,102 @@
+Function:
+  Title: Enrich events with data from the IdentityInfo UEBA table 
+  Version: '0.1'
+  LastUpdated: Apr 27th 2022
+References:
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: The IdentityInfo table
+  Link: https://learn.microsoft.com/azure/sentinel/ueba-reference#identityinfo-table
+Description: |
+  This ASIM tabular function enabled enriching your result set with user information from the [UEBA IdentityInfo table](https://learn.microsoft.com/azure/sentinel/ueba-reference#identityinfo-table). For more information on how to use this enrichment function refer to [ASIM functions](https://learn.microsoft.com/azure/sentinel/normalization-functions).
+    
+FunctionName: ASIM_Enrich_IdentityInfo
+EquivalentBuiltInFunction: _ASIM_Enrich_IdentityInfo
+FunctionParams:
+  - Name: T
+    Type: table:(*)
+  - Name: AadIdField
+    Type: string
+    Default: ''
+  - Name: TenantIdField
+    Type: string
+    Default: ''
+  - Name: SidField
+    Type: string
+    Default: ''
+  - Name: UpnField
+    Type: string
+    Default: ''
+  - Name: EmailField
+    Type: string
+    Default: ''
+
+FunctionQuery: |
+    let AADinfo = 
+        IdentityInfo
+        | where TimeGenerated > ago(14d)
+        | where AccountObjectId != ""
+        | project-away AccountName, AccountDomain, GivenName, Surname, Type, TenantId, OnPremisesExtensionAttributes, UserState, UserStateChangedOn, SourceSystem
+        | project-away InvestigationPriority, InvestigationPriorityPercentile, ExtensionProperty, AccountCloudSID, Applications, ServicePrincipals
+        | summarize arg_max(TimeGenerated, *) by UserScopeId = AccountTenantId, UserId = AccountObjectId
+        | project-away TimeGenerated
+        | project-rename
+            Username = AccountUPN,
+            UserDisplayName = AccountDisplayName,
+            UserSid = AccountSID,
+            UserDN = OnPremisesDistinguishedName,
+            UserTags = Tags,
+            UserRiskLevel = RiskLevel,
+            UserRiskLevelDetails = RiskLevelDetails,
+            UserRiskState = RiskState, 
+            UserBlastRadius = BlastRadius,
+            UserGroupMembership = GroupMembership,
+            UserAssignedRoles = AssignedRoles,
+            UserDepartment = Department,
+            UserEmployeeId = EmployeeId,
+            UserJobTitle = JobTitle,
+            UserMailAddress = MailAddress,
+            UserAdditionalMailAddresses = AdditionalMailAddresses,
+            UserManager = Manager,
+            UserStreetAddress = StreetAddress,
+            UserCity = City,
+            UserCountry = Country,
+            UserRegion = State,
+            UserPhone = Phone,
+            UserAccountEnabled = IsAccountEnabled,
+            UserAccountCreationTime = AccountCreationTime,
+            RelatedUsers = RelatedAccounts,
+            UserDeleted = DeletedDateTime,
+            UserLastSeen = LastSeenDate,
+            UserUACFlags = UACFlags,
+            UserIsMFARegistered = IsMFARegistered,
+            UserRiskScore = EntityRiskScore
+        | extend 
+            UsernameType = "UPN",
+            UserIdType = "AadId",
+            UserType = iff(UserType == "Guest", UserType, ""),
+            UserUpn = Username
+    ;
+    T 
+    | extend
+        jkUserId = column_ifexists(AadIdField,''),
+        jkUserScopeId = column_ifexists(TenantIdField,''), 
+        jkUserSid = column_ifexists(SidField,''), 
+        jkUsername = column_ifexists(UpnField,''), 
+        jkUserMailAddress = column_ifexists(EmailField,'')
+    | extend 
+        jkUserAadFullId = iff (isnotempty(jkUserScopeId), strcat(jkUserScopeId, '/', jkUserId), jkUserId)
+    | extend
+        join_key = coalesce (jkUserAadFullId, jkUserSid, jkUsername, jkUserMailAddress)
+    | lookup ( 
+        AADinfo 
+        | extend join_key = case ( 
+            isnotempty(TenantIdField), strcat(UserScopeId, '/', UserId), 
+            isnotempty(AadIdField), UserId,
+            isnotempty(SidField), UserSid,
+            isnotempty(UpnField), UserUpn,            
+            isnotempty(EmailField), UserMailAddress,
+            ''
+        )
+    ) on join_key
+    | project-away jkUserId, jkUserAadFullId, jkUserMailAddress, jkUsername, jkUserScopeId, jkUserSid, join_key

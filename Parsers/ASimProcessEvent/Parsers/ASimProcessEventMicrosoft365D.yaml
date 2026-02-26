@@ -1,0 +1,151 @@
+Parser:
+  Title: Process Create Event ASIM parser for Microsoft 365 Defender for endpoint
+  Version: '0.2.0'
+  LastUpdated: Jan 08, 2026
+Product:
+  Name: Microsoft 365 Defender for endpoint
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.4'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports normalizing Microsoft 365 Defender for endpoint to the ASIM Process Event normalized schema.
+ParserName: ASimProcessEventMicrosoft365D
+EquivalentBuiltInParser: _ASim_ProcessEvent_Microsoft365D
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:boolean=false)
+    {
+    DeviceProcessEvents 
+    | where not(disabled)
+    | extend
+        Type = "DeviceProcessEvents",
+        EventOriginalUid = tostring(ReportId),
+        EventCount = int(1),
+        EventProduct = 'M365 Defender for Endpoint',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.4',
+        EventSchema = 'ProcessEvent',
+        EventStartTime = todatetime(Timestamp),
+        EventEndTime = todatetime(Timestamp),
+        EventResult = 'Success'
+    | extend
+        ActorUsername = iff (InitiatingProcessAccountDomain == '', InitiatingProcessAccountName, strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)),
+        TargetUsername = iff (AccountDomain == '', AccountName, strcat(AccountDomain, '\\', AccountName)),
+        TargetUsernameType = iff(AccountDomain == '','Simple', 'Windows'),
+        ActorUsernameType = iff(InitiatingProcessAccountDomain == '','Simple', 'Windows'),
+        ActorUserIdType = 'SID',
+        TargetUserIdType = 'SID',
+        ActorSessionId = tostring(InitiatingProcessLogonId),
+        TargetUserSessionId = tostring(LogonId),
+        Hash = coalesce (SHA256, SHA1, MD5, ""),
+        TargetProcessId = tostring(ProcessId),
+        ActingProcessId = tostring(InitiatingProcessId),
+        ParentProcessId = tostring(InitiatingProcessParentId),
+        DvcOs = iff (AdditionalFields has "ProcessPosixProcessGroupId", "Linux", "Windows")
+    | extend
+         HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(SHA256, SHA1, MD5),Hash)])
+    | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+    | project-rename
+        DvcId = DeviceId,
+        EventType = ActionType,
+        ActorUserId = InitiatingProcessAccountSid,
+        ActorUserAadId = InitiatingProcessAccountObjectId,
+        ActorUserUpn = InitiatingProcessAccountUpn,
+        TargetUserId = AccountSid,
+        TargetUserAadId = AccountObjectId,
+        TargetUserUpn = AccountUpn,
+        ParentProcessName = InitiatingProcessParentFileName,
+        TargetProcessFilename = FileName,
+        ParentProcessCreationTime = InitiatingProcessParentCreationTime,
+        TargetProcessName = FolderPath,
+        TargetProcessCommandLine = ProcessCommandLine,
+        TargetProcessMD5 = MD5,
+        TargetProcessSHA1 = SHA1,
+        TargetProcessSHA256 = SHA256,
+        TargetProcessIntegrityLevel = ProcessIntegrityLevel,
+        TargetProcessTokenElevation = ProcessTokenElevation,
+        TargetProcessCreationTime = ProcessCreationTime,
+        ActingProcessName = InitiatingProcessFolderPath, 
+        ActingProcessFilename = InitiatingProcessFileName,
+        ActingProcessCommandLine = InitiatingProcessCommandLine, 
+        ActingProcessMD5 = InitiatingProcessMD5, 
+        ActingProcessSHA1 = InitiatingProcessSHA1, 
+        ActingProcessSHA256 = InitiatingProcessSHA256, 
+        ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+        ActingProcessTokenElevation = InitiatingProcessTokenElevation,
+        ActingProcessCreationTime = InitiatingProcessCreationTime
+    | extend
+      ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+      TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
+    | extend  // -- aliases
+        User = coalesce(TargetUsername, ActorUsername),
+        CommandLine = TargetProcessCommandLine,
+        Process = TargetProcessName,
+        Dvc = DvcHostname
+    | project
+        TimeGenerated,
+        Type,
+        EventOriginalUid,
+        EventCount,
+        EventProduct,
+        EventVendor,
+        EventSchemaVersion,
+        EventSchema,
+        EventStartTime,
+        EventEndTime,
+        EventResult,
+        ActorUsername,
+        ActorUserIdType,
+        TargetUserIdType,
+        ActorUsernameType,
+        TargetUsername,
+        TargetUsernameType,
+        ActorSessionId,
+        Hash,
+        TargetProcessId,
+        ActingProcessId,
+        ParentProcessId,
+        DvcOs,
+        HashType,
+        DvcId,
+        EventType,
+        ActorUserId,
+        ActorUserAadId,
+        ActorUserUpn,
+        TargetUserId,
+        TargetUserAadId,
+        TargetUserUpn,
+        ParentProcessName,
+        TargetProcessFilename,
+        ParentProcessCreationTime,
+        TargetProcessName,
+        TargetProcessCommandLine,
+        TargetProcessMD5,
+        TargetProcessSHA1,
+        TargetProcessSHA256,
+        TargetProcessIntegrityLevel,
+        TargetProcessTokenElevation,
+        TargetProcessCreationTime,
+        ActingProcessName,
+        ActingProcessFilename,
+        ActingProcessCommandLine,
+        ActingProcessMD5,
+        ActingProcessSHA1,
+        ActingProcessSHA256,
+        ActingProcessIntegrityLevel,
+        ActingProcessTokenElevation,
+        ActingProcessCreationTime,
+        User,
+        CommandLine,
+        Process,
+        Dvc 
+    };
+    parser (disabled = disabled)

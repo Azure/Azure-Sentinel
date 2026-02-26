@@ -8,7 +8,7 @@ When a new sentinel incident is created, this playbook gets triggered and perfor
 
 <img src="./teams_screenshot.png" width="50%"/><br>
 
-2. Assigns a policy (policy name is provided during the deployment stage) to an andpoint (*MACAddress* of the endpoint is provided in the alert custom entities) depending on the action chosen in the adaptive card.
+2. Assigns a policy (policy name is provided during the deployment stage) to an and point (*MACAddress* of the endpoint is provided in the alert custom entities) depending on the action chosen in the adaptive card.
 3. Changes incident status and severity depending on the action chosen in the adaptive card.
 4. Adds comment to the incident with information about the actions taken.
 

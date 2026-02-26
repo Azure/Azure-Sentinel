@@ -1,0 +1,63 @@
+id: 2624fc55-0998-4897-bb48-1c6422befce4
+name: Regsvr32 Rundll32 with Anomalous Parent Process
+description: |
+  This analytical rule looks for rundll32.exe or regsvr32.exe being spawned by abnormal processes: wscript.exe, powershell.exe, cmd.exe, pwsh.exe, cscript.exe.
+  Blog: https://threathunt.blog/running-live-malware-for-threat-hunting-purposes/
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1218.010
+  - T1218.011
+tags:
+  - Defense Evasion
+  - Image Load
+  - Regsvr32 Abuse
+  - Rundll32 Abuse
+query: |
+  DeviceProcessEvents
+  | where FileName has_any ("rundll32.exe","regsvr32.exe")
+  | where InitiatingProcessFileName has_any ("wscript.exe","powershell.exe","cmd.exe","pwsh.exe","cscript.exe")
+  | project TimeGenerated, DeviceName, InvestigatedProcessName=FileName, InvestigatedProcessCommandLine = ProcessCommandLine,InvestigatedProcessStartTime = ProcessCreationTime, InvestigatedProcessId = ProcessId, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessParentFileName
+  | join (
+  DeviceNetworkEvents
+  | where InitiatingProcessFileName has_any ("rundll32.exe","regsvr32.exe")
+  | where RemoteIPType == "Public"
+  | project DeviceName, InvestigatedProcessName=InitiatingProcessFileName, InvestigatedProcessCommandLine = InitiatingProcessCommandLine,InvestigatedProcessStartTime = InitiatingProcessCreationTime, InvestigatedProcessId = InitiatingProcessId, LocalIP, RemoteIP, RemoteUrl
+  ) on DeviceName, InvestigatedProcessCommandLine, InvestigatedProcessId, InvestigatedProcessName, InvestigatedProcessStartTime
+  | project-away DeviceName1, InvestigatedProcessCommandLine1, InvestigatedProcessId1, InvestigatedProcessName1, InvestigatedProcessStartTime1
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LocalIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RemoteUrl
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,716 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SpyCloud Watachlist data - SpyCloud Enterprise", 
+        "description": "This Playbook will run daily, gets the watchlist data from SpyCloud API and saved it into the custom logs.",
+        "prerequisites": "SpyCloud Enterprise API Key.",       
+        "lastUpdateTime": "2022-09-05T00:00:00.000Z", 
+        "postDeploymentSteps": ["None"],
+        "tags": ["Feed"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "SpyCloud Integrations"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SpyCloud-Monitor-Watchlist-Data",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "SpyCloudConnectorName":{
+            "defaultValue": "SpyCloud-Enterprise-Protection",
+            "type": "String",
+            "metadata": {
+                "description": "SpyCloud Enterprise custom connector name"
+            }
+        },
+        "SpyCloud_Custom_Log_Table_Name":{
+            "defaultValue": "SpyCloudBreachDataWatchlist",
+            "type": "String",
+            "metadata": {
+                "description": "SpyCloud Enterprise custom log name"
+            }
+        }
+    },
+    "variables": {
+		"SpyCloudEnterpriseConnectionName": "[concat('spycloudconnector-', parameters('PlaybookName'))]",
+		"AzureLogAnalyticsDataConnector": "[concat('azuredataconnector-', parameters('PlaybookName'))]",
+        "SpyCloudCustomTableName": "[parameters('SpyCloud_Custom_Log_Table_Name')]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureLogAnalyticsDataConnector')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureLogAnalyticsDataConnector')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('SpyCloudEnterpriseConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('SpyCloudEnterpriseConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('SpyCloudConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('SpyCloudEnterpriseConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataConnector'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "startTime": ""
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "startTime": "2023-05-06T00:00:00Z"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Cursor": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "cursor",
+                                        "type": "string",
+                                        "value": "start"
+                                    }
+                                ]
+                            }
+                        },
+                        "Custom_Log_Name": {
+                            "runAfter": {
+                                "date_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "custom_log_name",
+                                        "type": "string",
+                                        "value": "[variables('SpyCloudCustomTableName')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "IP_address": {
+                            "runAfter": {
+                                "Is_First_Fetch": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_address",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Is_First_Fetch": {
+                            "runAfter": {
+                                "Cursor": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "first_fetch",
+                                        "type": "boolean",
+                                        "value": "@true"
+                                    }
+                                ]
+                            }
+                        },
+                        "Until_Modified_Records_Exist": {
+                            "actions": {
+                                "Check_if_this_is_first_fetch_for_modified_records": {
+                                    "actions": {
+                                        "Set_Cursor_to_null_2": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "cursor",
+                                                "value": "@{null}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('first_fetch')",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Breach_Data_for_Entire_Watchlist_2": {
+                                    "runAfter": {
+                                        "Set_modified_records_array_to_empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['SpyCloud-Enterprise-Connector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/breach/data/watchlist",
+                                        "queries": {
+                                            "cursor": "@variables('cursor')",
+                                            "since_modification_date": "@variables('date')"
+                                        }
+                                    }
+                                },
+                                "Set_false_to_first_fetch": {
+                                    "runAfter": {
+                                        "check_if_data_exist_for_date": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "first_fetch",
+                                        "value": "@false"
+                                    }
+                                },
+                                "Set_modified_records_array_to_empty": {
+                                    "runAfter": {
+                                        "Check_if_this_is_first_fetch_for_modified_records": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "modified_records",
+                                        "value": []
+                                    }
+                                },
+                                "check_if_data_exist_for_date": {
+                                    "actions": {
+                                        "For_each_response_2": {
+                                            "foreach": "@body('Get_Breach_Data_for_Entire_Watchlist_2')?['results']",
+                                            "actions": {
+                                                "Append_to_modified_records_variable": {
+                                                    "runAfter": {
+                                                        "Check_IP_Address_is_Not_empty_2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "modified_records",
+                                                        "value": {
+                                                            "Document_Id": "@{items('For_each_response_2')?['document_id']}",
+                                                            "Domain": "@{items('For_each_response_2')?['domain']}",
+                                                            "Email": "@{items('For_each_response_2')?['email']}",
+                                                            "IP_Address": "@{variables('ip_address')}",
+                                                            "Infected_Machine_Id": "@{items('For_each_response_2')?['infected_machine_id']}",
+                                                            "Infected_Path": "@{items('For_each_response_2')?['infected_path']}",
+                                                            "Infected_Time": "@{items('For_each_response_2')?['infected_time']}",
+                                                            "Password": "@{items('For_each_response_2')?['password']}",
+                                                            "Password_Plaintext": "@{items('For_each_response_2')?['password_plaintext']}",
+                                                            "Severity": "@{items('For_each_response_2')?['severity']}",
+                                                            "Source_Id": "@{items('For_each_response_2')?['source_id']}",
+                                                            "SpyCloud_Publish_Date": "@{items('For_each_response_2')?['spycloud_publish_date']}",
+                                                            "Target_Domain": "@{items('For_each_response_2')?['target_domain']}",
+                                                            "Target_SubDomain": "@{items('For_each_response_2')?['target_subdomain']}",
+                                                            "Target_URL": "@{items('For_each_response_2')?['target_url']}",
+                                                            "User_Hostname": "@{items('For_each_response_2')?['user_hostname']}",
+                                                            "User_OS": "@{items('For_each_response_2')?['user_os']}",
+                                                            "Username": "@{items('For_each_response_2')?['username']}"
+                                                        }
+                                                    }
+                                                },
+                                                "Check_IP_Address_is_Not_empty_2": {
+                                                    "actions": {
+                                                        "set_ip_variable": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "ip_address",
+                                                                "value": "@{first(items('For_each_response_2')?['ip_addresses'])}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "set_ip_variable_to_null": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "ip_address",
+                                                                    "value": "@{null}"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each_response_2')?['ip_addresses']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        },
+                                        "Modified_Records_Compose": {
+                                            "runAfter": {
+                                                "For_each_response_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@variables('modified_records')"
+                                        },
+                                        "Save_Modified_Records_to_Custom_Logs_Table": {
+                                            "runAfter": {
+                                                "Modified_Records_Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{outputs('Modified_Records_Compose')}",
+                                                "headers": {
+                                                    "Log-Type": "@variables('custom_log_name')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_Breach_Data_for_Entire_Watchlist_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@body('Get_Breach_Data_for_Entire_Watchlist_2')?['hits']",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "set_cursor_value": {
+                                    "runAfter": {
+                                        "Set_false_to_first_fetch": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "cursor",
+                                        "value": "@body('Get_Breach_Data_for_Entire_Watchlist_2')?['cursor']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "reset_first_fetch": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(empty(variables('cursor')), true)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Until_New_Records_Exist": {
+                            "actions": {
+                                "Check_if_data_exists": {
+                                    "actions": {
+                                        "For_each_response": {
+                                            "foreach": "@body('Get_Breach_Data_for_Entire_Watchlist')?['results']",
+                                            "actions": {
+                                                "Append_to_new_records_array": {
+                                                    "runAfter": {
+                                                        "Check_IP_Address_is_Not_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "new_records",
+                                                        "value": {
+                                                            "Document_Id": "@{items('For_each_response')?['document_id']}",
+                                                            "Domain": "@{items('For_each_response')?['domain']}",
+                                                            "Email": "@{items('For_each_response')?['email']}",
+                                                            "IP_Address": "@{variables('ip_address')}",
+                                                            "Infected_Machine_Id": "@{items('For_each_response')?['infected_machine_id']}",
+                                                            "Infected_Path": "@{items('For_each_response')?['infected_path']}",
+                                                            "Infected_Time": "@{items('For_each_response')?['infected_time']}",
+                                                            "Password": "@{items('For_each_response')?['password']}",
+                                                            "Password_Plaintext": "@{items('For_each_response')?['password_plaintext']}",
+                                                            "Severity": "@{items('For_each_response')?['severity']}",
+                                                            "Source_Id": "@{items('For_each_response')?['source_id']}",
+                                                            "SpyCloud_Publish_Date": "@{items('For_each_response')?['spycloud_publish_date']}",
+                                                            "Target_Domain": "@{items('For_each_response')?['target_domain']}",
+                                                            "Target_SubDomain": "@{items('For_each_response')?['target_subdomain']}",
+                                                            "Target_URL": "@{items('For_each_response')?['target_url']}",
+                                                            "User_Hostname": "@{items('For_each_response')?['user_hostname']}",
+                                                            "User_OS": "@{items('For_each_response')?['user_os']}",
+                                                            "Username": "@{items('For_each_response')?['username']}"
+                                                        }
+                                                    }
+                                                },
+                                                "Check_IP_Address_is_Not_empty": {
+                                                    "actions": {
+                                                        "Set_Address_to_value": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "ip_address",
+                                                                "value": "@{first(items('For_each_response')?['ip_addresses'])}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Address_to_null": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "ip_address",
+                                                                    "value": "@{null}"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each_response')?['ip_addresses']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        },
+                                        "New_Records_Compose": {
+                                            "runAfter": {
+                                                "For_each_response": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@variables('new_records')"
+                                        },
+                                        "Save_New_Records_to_Custom_Logs_Table": {
+                                            "runAfter": {
+                                                "New_Records_Compose": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{outputs('New_Records_Compose')}",
+                                                "headers": {
+                                                    "Log-Type": "@variables('custom_log_name')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Get_Breach_Data_for_Entire_Watchlist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@body('Get_Breach_Data_for_Entire_Watchlist')?['hits']",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Check_if_this_is_first_fetch_for_new_records": {
+                                    "actions": {
+                                        "Set_Cursor_to_null_": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "cursor",
+                                                "value": "@{null}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('first_fetch')",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Breach_Data_for_Entire_Watchlist": {
+                                    "runAfter": {
+                                        "Set_new_records_array_to_empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['SpyCloud-Enterprise-Connector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/breach/data/watchlist",
+                                        "queries": {
+                                            "cursor": "@variables('cursor')",
+                                            "since": "@variables('date')"
+                                        }
+                                    }
+                                },
+                                "Set_First_Fetch_to_False": {
+                                    "runAfter": {
+                                        "Check_if_data_exists": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "first_fetch",
+                                        "value": "@false"
+                                    }
+                                },
+                                "Set_cursor_from_the_API_response": {
+                                    "runAfter": {
+                                        "Set_First_Fetch_to_False": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "cursor",
+                                        "value": "@body('Get_Breach_Data_for_Entire_Watchlist')?['cursor']"
+                                    }
+                                },
+                                "Set_new_records_array_to_empty": {
+                                    "runAfter": {
+                                        "Check_if_this_is_first_fetch_for_new_records": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "new_records",
+                                        "value": []
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "modified_records": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(empty(variables('cursor')), true)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "date_": {
+                            "runAfter": {
+                                "IP_address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "date",
+                                        "type": "string",
+                                        "value": "@{addDays(utcNow(), -1, 'yyyy-MM-dd')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "modified_records": {
+                            "runAfter": {
+                                "new_records_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "modified_records",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "new_records_": {
+                            "runAfter": {
+                                "Custom_Log_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "new_records",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "reset_cursor": {
+                            "runAfter": {
+                                "Until_New_Records_Exist": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "cursor",
+                                "value": "start"
+                            }
+                        },
+                        "reset_first_fetch": {
+                            "runAfter": {
+                                "reset_cursor": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "first_fetch",
+                                "value": "@true"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "SpyCloud-Enterprise-Connector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SpyCloudEnterpriseConnectionName'))]",
+                                "connectionName": "[variables('SpyCloudEnterpriseConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('SpyCloudConnectorName'))]"
+                            },
+							"azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataConnector'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataConnector')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

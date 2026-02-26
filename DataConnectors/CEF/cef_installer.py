@@ -7,8 +7,8 @@
 # Supported OS:
 #   64-bit
 #       CentOS 7 and 8
-#       Amazon Linux 2017.09
-#       Oracle Linux 7
+#       Amazon Linux 2017.09 and Amazon Linux 2
+#       Oracle Linux 7, 8
 #       Red Hat Enterprise Linux Server 7 and 8
 #       Debian GNU/Linux 8 and 9
 #       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
@@ -642,6 +642,8 @@ def main():
                     oms_agent_install_url = "opinsights.azure.us"
                 elif "-p" in sys.argv[index]:
                     port_argument = True
+                elif "-d" in sys.argv[index]:
+                    oms_agent_install_url = sys.argv[index+1]
                 elif port_argument:
                     omsagent_incoming_port = sys.argv[index]
                     print_notice("Notice: omsagent incoming port was changed to " + sys.argv[index])

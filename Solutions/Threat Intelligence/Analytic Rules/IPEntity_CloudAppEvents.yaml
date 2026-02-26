@@ -1,0 +1,72 @@
+id: 4e0a6fc8-697e-4455-be47-831b41ea91ac
+name: Preview - TI map IP entity to Cloud App Events
+description: |
+   'Identifies compromises and attacks and detect malicious activities in one's IP entity from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d;
+  let ioc_lookBack = 14d; 
+  let IP_Indicators = ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | where isnotempty(NetworkIP)
+  or isnotempty(EmailSourceIpAddress)
+  or isnotempty(NetworkDestinationIP)
+  or isnotempty(NetworkSourceIP)
+    | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+    | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+    | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity);
+  IP_Indicators
+    | join kind=innerunique (
+    CloudAppEvents
+      | where isnotempty(IPAddress)
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_ipEntity == $right.IPAddress
+      | where CloudAppEvents_TimeGenerated < ExpirationDateTime
+      | summarize CloudAppEventsTimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId, IPAddress
+      | extend
+          Description = max_CloudAppEvents_TimeGenerated_Description,
+          ActivityGroupNames = max_CloudAppEvents_TimeGenerated_ActivityGroupNames,
+          ThreatType = max_CloudAppEvents_TimeGenerated_ThreatType,
+          ExpirationDateTime = max_CloudAppEvents_TimeGenerated_ExpirationDateTime,
+          ConfidenceScore = max_CloudAppEvents_TimeGenerated_ConfidenceScore,
+          TI_ipEntity = max_CloudAppEvents_TimeGenerated_TI_ipEntity,
+          NetworkDestinationIP = max_CloudAppEvents_TimeGenerated_NetworkDestinationIP,
+          NetworkSourceIP = max_CloudAppEvents_TimeGenerated_NetworkSourceIP,
+          EmailSourceIPAddress = max_CloudAppEvents_TimeGenerated_EmailSourceIpAddress
+      | project CloudAppEventsTimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, NetworkDestinationIP, NetworkSourceIP, EmailSourceIPAddress
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TI_ipEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkDestinationIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkSourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: EmailSourceIPAddress
+version: 1.0.3
+kind: Scheduled

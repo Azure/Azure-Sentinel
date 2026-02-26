@@ -4,7 +4,7 @@
     Version:        1.0
     Author:         Nicholas DiCola
     Modified By:       Sreedhar Ande
-    Last Modified:  12/16/2021
+    Last Modified:  3/18/2022
     
     DESCRIPTION
     This Function App calls the MCAS Activity REST API (https://docs.microsoft.com/cloud-app-security/api-activities) to pull the MCAS
@@ -38,6 +38,7 @@ $workspaceKey = $env:WorkspaceKey
 $Lookback = $env:Lookback
 $MCASURL = $env:MCASURL
 $LAURI = $env:LAURI
+$LACustomTable = $env:LACustomTable							   
 $TblLastRunExecutions = "MCASLastRunLogs"
 
 
@@ -227,7 +228,9 @@ $headers = @{
     'Content-Type' = "application/json"
 }
 
-$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
+#$EndEpoch = ([int64]((Get-Date -Date $StartTime) - (get-date "1/1/1970")).TotalMilliseconds)
+$EndEpoch = ([int64](($currentUTCtime) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
+$Lookback = [Int16]($Lookback)							  
 # Retrieve Timestamp from last executions 
 # Check if Table has already been created and if not create it to maintain state between executions of Function
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage.Trim().ToString()
@@ -249,11 +252,11 @@ if($null -ne $LastRunExecutionsTableRow.lastRunEpoch){
     $StartEpoch = $LastRunExecutionsTableRow.lastRunEpoch    
 }
 else {
-    $StartEpoch = ([int64]((Get-Date -Date $StartTime).AddMinutes(-$Lookback) - (get-date "1/1/1970")).TotalMilliseconds)
+    $StartEpoch = ([int64](($currentUTCtime).AddMinutes(-$Lookback) - (Get-Date -Date '1/1/1970')).TotalMilliseconds)
 }
 
 #Build query
-$body = @"
+$ActivityPayLoad = @"
 {
     "filters": {
         "date": {
@@ -275,7 +278,7 @@ $loopAgain = $true
 $totalRecords = 0
 do {
     $results = $null
-    $results = Invoke-RestMethod -Method Post -Uri $uri -Body $body -Headers $headers -ContentType "application/json" -UseBasicParsing
+    $results = Invoke-RestMethod -Method Post -Uri $uri -Body $ActivityPayLoad -Headers $headers -ContentType "application/json" -UseBasicParsing
     $activitiesStart = Convert-EpochToDateTime -Epoch $StartEpoch
     $activitiesEnd = Convert-EpochToDateTime -Epoch $EndEpoch
     if (($results.data).Count -ne 0)
@@ -298,21 +301,26 @@ do {
         
         Write-Host "Microsoft Defender for Cloud Apps Activities between $($activitiesStart) to $($activitiesEnd): "($results.data.Count)
         $totalRecords += ($results.data.Count)
-        SendToLogA -Data ($results.data) -customLogName "MCASActivity"
-
+		if ($null -ne $LACustomTable) {
+            SendToLogA -Data ($results.data) -customLogName $LACustomTable
+        } else {
+            $LACustomTable = "MCASActivity"
+            SendToLogA -Data ($results.data) -customLogName $LACustomTable
+        }
+		
         $loopAgain = $results.hasNext
     
         if($loopAgain -ne $false){
             # if there is more data update the query
-            $newBody = $body | ConvertFrom-Json
-            If($null -eq $newBody.filters.date.lte){
-                $newBody.filters.date | Add-Member -Name lte -Value ($results.nextQueryFilters.date.lte) -MemberType NoteProperty
+            $PagingActivityPayLoad = $ActivityPayLoad | ConvertFrom-Json
+            If($null -eq $PagingActivityPayLoad.filters.date.lte){
+                $PagingActivityPayLoad.filters.date | Add-Member -Name lte -Value ($results.nextQueryFilters.date.lte) -MemberType NoteProperty
             }
             else {
-                $newBody.filters.date.lte = ($results.nextQueryFilters.date.lte)
+                $PagingActivityPayLoad.filters.date.lte = ($results.nextQueryFilters.date.lte)
             }
-            $Body = $newBody | ConvertTo-Json -Depth 4
-            Write-Host $body
+            $ActivityPayLoad = $PagingActivityPayLoad | ConvertTo-Json -Depth 4 
+            Write-Host $ActivityPayLoad
         }
         else {
             Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting
@@ -320,6 +328,7 @@ do {
     }
     else {
         $loopAgain = $false
+		Add-AzTableRow -table $LastRunExecutionsTable -PartitionKey "MCASExecutions" -RowKey $workspaceId -property @{"lastRun"="$CurrentStartTime";"lastRunEpoch"="$EndEpoch"} -UpdateExisting																																													   
         Write-Host "No Microsoft Defender for Cloud Apps Activities between $($activitiesStart) to $($activitiesEnd)"
     }  
 } until ($loopAgain -eq $false)

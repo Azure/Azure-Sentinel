@@ -1,0 +1,39 @@
+id: 2458e226-76e6-458c-8bf7-8766cc993b82
+name: Bitsadmin Activity
+description: |
+  Background Intelligent Transfer Service (BITS) is a way to reliably download files from webservers or SMB servers. 
+  This service is commonly used for legitimate purposes, but can also be used as part of a malware downloader. 
+  Additionally, bitsadmin can be used to upload files and therefore can be used for data exfiltration. This
+  query will identify use of bitsadmin.exe for either purpose and will identify directionality file transfer
+  directionality.
+tactics: 
+- Persistence
+- CommandAndControl
+- Exfiltration
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+query: |
+  DeviceProcessEvents
+  | where 
+      (FileName =~ "bitsadmin.exe" or column_ifexists('ProcessVersionInfoOriginalFileName','ColumnNotAvailable') =~ 'bitsadmin.exe')
+      and ProcessCommandLine has_any ('/Transfer','/AddFile', '/AddFileSet','/AddFileWithRanges')
+  | extend 
+      ParsedCommandLine = parse_command_line(ProcessCommandLine,'windows')
+  | extend     
+      RemoteUrl = tostring(ParsedCommandLine[-2]),
+      LocalFile= tostring(ParsedCommandLine[-1]),
+      Direction = iff(ProcessCommandLine has "/Upload", 'Upload', 'Download')
+  | project-reorder 
+      Timestamp,
+      DeviceId,
+      DeviceName,
+      Direction,
+      RemoteUrl,
+      LocalFile,
+      InitiatingProcessFolderPath,
+      InitiatingProcessAccountDomain,
+      InitiatingProcessAccountName,
+      InitiatingProcessSHA256,
+      ProcessCommandLine

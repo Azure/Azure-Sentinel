@@ -46,7 +46,7 @@ For more information see
 
 This Playbook will create IP objects and add objects to group. 
 
-As prerequsit you'll need to first deploy the Check Point Connector in your subscription before you can install this playbook. 
+As prerequisite you'll need to first deploy the Check Point Connector in your subscription before you can install this playbook. 
 
    [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FPlaybooks%2Fadd-host-to-group%2FdeployCPplaybook.json)
    [![Deploy to Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazuregov.png)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fchkp-jguo%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCheck%2520Point%2FPlaybooks%2Fadd-host-to-group%2FdeployCPplaybook.json)

@@ -1,0 +1,721 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Summarize Web Session Data",
+        "description":  "The 'SummarizeWebSessionData' Playbook helps with summarizing the Web Session logs and ingesting them into custom tables for persistence. Although enabling the summarization playbook for the Web Session solution is totally optional, we highly recommend enabling it for a better user experience in environments with high EPS (events per second) data ingestion. After installing the solution, it will be deployed under Playbook Templates in the Automation blade of Microsoft Sentinel. It can be configured and managed from the Manage Solution view in Content Hub. This playbook will create four custom data summarization tables: WebSession_Summarized_SrcInfo_CL, WebSession_Summarized_SrcIP_CL, WebSession_Summarized_DstIP_CL and WebSession_Summarized_ThreatInfo_CL.",
+        "prerequisites":  [],
+        "postDeployment":  [
+            "Authorize 'Azure Monitor Logs' and 'Azure Log Analytics Data Collector' API connections."
+        ],
+        "prerequisitesDeployTemplateFile":  [],
+        "entities":  [],
+        "tags":  ["Networking"],
+        "support":  {
+            "tier":  "Microsoft"
+        },
+        "author":  {
+            "name":  "Microsoft"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "SummarizeWebSessionData",
+            "type":  "string"
+        },
+        "logAnalyticsName":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for logAnalyticsName"
+            }
+        },
+        "resourceGroupName":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for resourceGroupName"
+            }
+        },
+        "subscriptionId":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for subscriptionId"
+            }
+        }
+    },
+    "variables":  {
+        "AzureloganalyticsdatacollectorConnectionName":  "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName":  "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "logAnalyticsName":  {
+                            "defaultValue":  "[parameters('logAnalyticsName')]",
+                            "type":  "string"
+                        },
+                        "resourceGroupName":  {
+                            "defaultValue":  "[parameters('resourceGroupName')]",
+                            "type":  "string"
+                        },
+                        "subscriptionId":  {
+                            "defaultValue":  "[parameters('subscriptionId')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "frequency":  "Hour",
+                                "interval":  1
+                            },
+                            "evaluatedRecurrence":  {
+                                "frequency":  "Hour",
+                                "interval":  1
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "Condition_DstIP":  {
+                            "actions":  {
+                                "For_each_DstIP":  {
+                                    "foreach":  "@variables('multipleArraysDstIP')",
+                                    "actions":  {
+                                        "Send_Data_DstIP":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  "@{items('For_each_DstIP')}",
+                                                "headers":  {
+                                                    "Log-Type":  "WebSession_Summarized_DstIP_CL"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "path":  "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Set_variable_-_multipleArraysDstIP":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Set_variable_-_multipleArraysDstIP":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "multipleArraysDstIP",
+                                        "value":  "@chunk(body('Run_query_and_list_results_DstIP')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthDstIP'),variables('ArraySizeDstIP'))))"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_multipleArraysDstIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "greater":  [
+                                            "@variables('ArraySizeDstIP')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Condition_SourceInfo":  {
+                            "actions":  {
+                                "For_each_-_SubArray_-_SourceInfo":  {
+                                    "foreach":  "@variables('multipleArraysSourceInfo')",
+                                    "actions":  {
+                                        "Send_Data_SourceInfo":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  "@{items('For_each_-_SubArray_-_SourceInfo')}",
+                                                "headers":  {
+                                                    "Log-Type":  "WebSession_Summarized_SrcInfo_CL"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "path":  "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Set_variable":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Set_variable":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "multipleArraysSourceInfo",
+                                        "value":  "@chunk(body('Run_query_and_list_results_SourceInfo')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthSourceInfo'),variables('ArraySizeSourceInfo'))))"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_multipleArrays_-_SourceInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "greater":  [
+                                            "@variables('ArraySizeSourceInfo')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Condition_SrcIP":  {
+                            "actions":  {
+                                "For_each":  {
+                                    "foreach":  "@variables('multipleArraysSrcIP')",
+                                    "actions":  {
+                                        "Send_Data_SrcIP":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  "@{items('For_each')}",
+                                                "headers":  {
+                                                    "Log-Type":  "WebSession_Summarized_SrcIP_CL"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "path":  "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Set_variable_multipleArraysIP":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Set_variable_multipleArraysIP":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "multipleArraysSrcIP",
+                                        "value":  "@chunk(body('Run_query_and_list_results_SrcIP')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthSrcIP'),variables('ArraySizeSrcIP'))))"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_multipleArraysSrcIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "greater":  [
+                                            "@variables('ArraySizeSrcIP')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Condition_ThreatInfo":  {
+                            "actions":  {
+                                "For_each_ThreatInfo":  {
+                                    "foreach":  "@variables('multipleArraysThreatInfo')",
+                                    "actions":  {
+                                        "Send_Data":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  "@{items('For_each_ThreatInfo')}",
+                                                "headers":  {
+                                                    "Log-Type":  "WebSession_Summarized_ThreatInfo_CL"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "path":  "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Set_variable_-_multipleArraysThreatInfo":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Set_variable_-_multipleArraysThreatInfo":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "multipleArraysThreatInfo",
+                                        "value":  "@chunk(body('Run_query_and_list_results_ThreatInfo')?['value'],div(variables('MaxByteSizeAllowed'),div(variables('TotalCharacterLengthThreatInfo'),variables('ArraySizeThreatInfo'))))"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_multipleArraysThreatInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "greater":  [
+                                            "@variables('ArraySizeThreatInfo')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Initialize_variable_-_ArraySizeDstIP":  {
+                            "runAfter":  {
+                                "Run_query_and_list_results_DstIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ArraySizeDstIP",
+                                        "type":  "integer",
+                                        "value":  "@length(body('Run_query_and_list_results_DstIP')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySizeSrcIP":  {
+                            "runAfter":  {
+                                "Run_query_and_list_results_SrcIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ArraySizeSrcIP",
+                                        "type":  "integer",
+                                        "value":  "@length(body('Run_query_and_list_results_SrcIP')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySizeThreatInfo":  {
+                            "runAfter":  {
+                                "Run_query_and_list_results_ThreatInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ArraySizeThreatInfo",
+                                        "type":  "integer",
+                                        "value":  "@length(body('Run_query_and_list_results_ThreatInfo')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_ArraySize_-_SourceInfo":  {
+                            "runAfter":  {
+                                "Run_query_and_list_results_SourceInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "ArraySizeSourceInfo",
+                                        "type":  "integer",
+                                        "value":  "@length(body('Run_query_and_list_results_SourceInfo')?['value'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLengthSrcIP":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_ArraySizeSrcIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "TotalCharacterLengthSrcIP",
+                                        "type":  "integer",
+                                        "value":  "@length(string(body('Run_query_and_list_results_SrcIP')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLengthThreatInfo":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_ArraySizeThreatInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "TotalCharacterLengthThreatInfo",
+                                        "type":  "integer",
+                                        "value":  "@length(string(body('Run_query_and_list_results_ThreatInfo')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharacterLength_-_SourceInfo":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_ArraySize_-_SourceInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "TotalCharacterLengthSourceInfo",
+                                        "type":  "integer",
+                                        "value":  "@length(string(body('Run_query_and_list_results_SourceInfo')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_TotalCharaterLengthDstIP":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_ArraySizeDstIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "TotalCharacterLengthDstIP",
+                                        "type":  "integer",
+                                        "value":  "@length(string(body('Run_query_and_list_results_DstIP')?['value']))"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArraysDstIP":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_TotalCharaterLengthDstIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "multipleArraysDstIP",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArraysSrcIP":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_TotalCharacterLengthSrcIP":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "multipleArraysSrcIP",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArraysThreatInfo":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_TotalCharacterLengthThreatInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "multipleArraysThreatInfo",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_multipleArrays_-_SourceInfo":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_TotalCharacterLength_-_SourceInfo":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "multipleArraysSourceInfo",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "MaxRequestSizeAllowed":  {
+                            "runAfter":  {
+                                "nowTime":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "MaxByteSizeAllowed",
+                                        "type":  "integer",
+                                        "value":  26214400
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results_DstIP":  {
+                            "runAfter":  {
+                                "MaxRequestSizeAllowed":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_DstIP_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by DstIpAddr, SrcIPIsPrivate = ipv4_is_private(SrcIpAddr), DstPortNumber, DestDomain = tostring(parse_url(Url)[\"Host\"]), DstHostname, EventResult, EventResultDetails, EventProduct,  EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups":  "@parameters('resourceGroupName')",
+                                    "resourcename":  "@parameters('logAnalyticsName')",
+                                    "resourcetype":  "Log Analytics Workspace",
+                                    "subscriptions":  "@parameters('subscriptionId')",
+                                    "timerange":  "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_SourceInfo":  {
+                            "runAfter":  {
+                                "MaxRequestSizeAllowed":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_SrcInfo_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by HttpUserAgent, EventResultDetails, EventResult,  UrlCategory, NetworkApplicationProtocol, HttpRequestMethod, HttpContentType, EventTime = bin(TimeGenerated, 1h), EventProduct, EventVendor, EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups":  "@parameters('resourceGroupName')",
+                                    "resourcename":  "@parameters('logAnalyticsName')",
+                                    "resourcetype":  "Log Analytics Workspace",
+                                    "subscriptions":  "@parameters('subscriptionId')",
+                                    "timerange":  "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_SrcIP":  {
+                            "runAfter":  {
+                                "MaxRequestSizeAllowed":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_SrcIP_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| summarize SrcBytes = sum(SrcBytes), DstBytes = sum(DstBytes), EventCount = count() by SrcUsername, SrcIpAddr, SrcHostname, DstIPIsPrivate = ipv4_is_private(DstIpAddr), DestDomain = tostring(parse_url(Url)[\"Host\"]), EventResult, EventResultDetails, EventProduct, EventType, bin(TimeGenerated,1h)\n| extend EventTime = TimeGenerated",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups":  "@parameters('resourceGroupName')",
+                                    "resourcename":  "@parameters('logAnalyticsName')",
+                                    "resourcetype":  "Log Analytics Workspace",
+                                    "subscriptions":  "@parameters('subscriptionId')",
+                                    "timerange":  "Last 1 day"
+                                }
+                            }
+                        },
+                        "Run_query_and_list_results_ThreatInfo":  {
+                            "runAfter":  {
+                                "MaxRequestSizeAllowed":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "let nowTime = todatetime(\"@{variables('nowTime')}\");\nlet lastRecievedTime = toscalar (\n    union isfuzzy=true\n        (\n           WebSession_Summarized_ThreatInfo_CL \n            | summarize max(EventTime_t)\n            | extend max_TimeGenerated = datetime_add('hour',1,bin(max_EventTime_t,1h))\n        ),\n        (\n            print (nowTime)\n            | extend max_TimeGenerated = datetime_add('day',-1,bin(print_0,1h)) \n            | project-away print_0\n        )\n        | summarize max(max_TimeGenerated)\n    );\n_Im_WebSession(starttime=lastRecievedTime,endtime=bin(nowTime,1h))\n| where TimeGenerated \u003c bin(nowTime,1h)\n| where (ThreatName != 'None' and isnotempty(ThreatName)) or (ThreatCategory != 'None' and isnotempty(ThreatCategory)) or ThreatRiskLevel \u003e 60 or toint(ThreatOriginalConfidence) \u003e 0 or EventSeverity in ('Medium','High') or isnotempty(ThreatField)\n| summarize EventCount=count() by ThreatName, ThreatCategory, ThreatRiskLevel, toint(ThreatOriginalConfidence), EventSeverity, ThreatField, SrcIpAddr, SrcUsername, DestDomain = tostring(parse_url(Url)[\"Host\"]), bin(TimeGenerated, 1h), EventResult, DstIpAddr\n| extend EventTime = TimeGenerated",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups":  "@parameters('resourceGroupName')",
+                                    "resourcename":  "@parameters('logAnalyticsName')",
+                                    "resourcetype":  "Log Analytics Workspace",
+                                    "subscriptions":  "@parameters('subscriptionId')",
+                                    "timerange":  "Last 1 day"
+                                }
+                            }
+                        },
+                        "nowTime":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "nowTime",
+                                        "type":  "string",
+                                        "value":  "@{utcNow()}"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azureloganalyticsdatacollector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            },
+                            "azuremonitorlogs":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName":  "[variables('AzuremonitorlogsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "SummarizeWebSessionData",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzuremonitorlogsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        }
+    ]
+}

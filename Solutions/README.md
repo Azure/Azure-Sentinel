@@ -31,7 +31,7 @@ Use the following steps to create your content structure:
   * Analytic Rules – yaml file templates of analytic rules goes in this folder.
   * Hunting queries – yaml file templates of hunting queries goes in this folder.
   * Playbooks – json playbook and Azure Logic Apps custom connectors can go in this folder. 
-  * Parser – txt file for Kusto Functions or Parsers can go in this folder.
+  * Parser – yaml file for Kusto Functions or Parsers can go in this folder. Use [this](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Parsers/CrowdStrikeReplicatorV2.yaml) as reference.
   
   For example, see the folder structure for our [Cisco ISE solution](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cisco%20ISE).
 
@@ -57,58 +57,87 @@ For more information, see the [solution template documentation](https://docs.mic
 
 After creating both the `mainTemplate.json` and the `createUIDefinition.json` files, validate them, and package them into a .zip file that you can upload as part of the publishing process (Step 3).
 
-Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution#azure-sentinel-solutions-packaging-tool-guidance) to use the tool and package your content.
+Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V3) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md) to use the tool and package your content.
 
 ### Updating your solution
 
 If you already have an Microsoft Sentinel solution and want to update your package, use the package creation tool with updated content to create a new version of the package.
 
-For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `1.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
+For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `3.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
 
 When updating your package, make sure to raise the version value, regardless of how small or trivial the change is, including typo fixes in a content or solution definition file.
 
-For example, if your original package version is `1.0.1`, you might update your versions as follows:
+For example, if your original package version is `3.0.1`, you might update your versions as follows:
 
-* **Major updates** might have a new version of 2.0.0
-* **Minor updates**, like changes in a few pieces of content in the package, might have a new version of `1.1.0`
-* **Very minor revisions**, such as those scoped to a single piece of content, might have a new version of `1.0.2`
+* **Major updates** have a new version of 3.0.0 - this is usually reserved for major tooling or package level changes
+* **Minor updates**, for changes in content of the package, might have a new version of `3.1.0`
+* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `3.0.2`
 
 Since solutions use ARM templates, you can customize the solution text as well as tabs as needed to cater to specific scenarios.
 
 ## Step 3 – Publish your solution
 
-The Microsoft Sentinel solution publishing experience is powered by the [Microsoft Partner Center](https://docs.microsoft.com/partner-center/overview).
+For a detailed walkthrough of how to publish your solutions, please refer to the following links - 
 
-### Registration (one-time)
+1. Publish solutions to Microsoft Sentinel - https://learn.microsoft.com/en-us/azure/sentinel/publish-sentinel-solutions
+2. Solution tracking after publishing in the Microsoft Partner center - https://learn.microsoft.com/en-us/azure/sentinel/sentinel-solutions-post-publish-tracking
 
-If you or your company is a first-time app publisher on Azure Marketplace, [follow the steps](https://docs.microsoft.com/azure/marketplace/partner-center-portal/create-account) to register and create a [Commercial Marketplace](https://docs.microsoft.com/azure/marketplace/overview) account in Partner Center. This process provides you with a unique **Publisher ID** and access to the Commercial Marketplace authoring and publishing experience, where you'll create, certify, and publish your solution.
 
-### Author and publish a solution offer
+### Certification FAQs:
 
-The following steps reference the Partner Center's more detailed documentation.
++ #### What Search keyword must be present for Sentinel solutions? 
+&emsp;&emsp;&emsp; The Search keyword must contain the Sentinel GUID: **f1de974b-f438-4719-b423-8bf704ba2aef**. 
 
-1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
++ #### Is the text 'Azure Sentinel' allowed in offers or packages? 
+&emsp;&emsp;&emsp; No. The text 'Azure Sentinel' must not appear anywhere. The correct branding is 'Microsoft Sentinel'. 
 
-2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
++ #### Should package name and package version match? 
+&emsp;&emsp;&emsp; Yes. Package name and package version mentioned in Partner Center must be the same. For instance if package version is 3.0.1 then the package name should be 3.0.1.zip.
 
-3.	Configure the [Offer listing details](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-listing), including the title, description, pictures, videos, support information, and so on. As one of your search keywords, add `f1de974b-f438-4719-b423-8bf704ba2aef` to have your solution appear in the Microsoft Sentinel content hub.
++ #### Where should the version number match? 
+&emsp;&emsp;&emsp; The version number must match across Partner Center, Solution Metadata, and mainTemplate.json. 
 
-   **Note**: If you want to start your solution in Preview (Public Preview), you can do so by appending "(Preview)" in the solution / offer title. This will ensure your offer  gets tagged with Preview tag in Microsoft Sentinel Content hub. 
++ #### Is ARM-TTK validation required? 
+&emsp;&emsp;&emsp; Yes. ARM-TTK must pass successfully. Any failures should result in rejection with details. 
 
-4.	[Create a plan](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-plans) and select **Solution Template** as the plan type.
++ #### What image and logo checks are required? 
+&emsp;&emsp;&emsp; Ensure images load correctly and logos referenced to master branch, not PR links or private branch links. 
 
-5.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-solution) the **Solutions template** plan. This is where you’ll upload the zip file that you'd created in step two and set a version for your package. Make sure to follow the versioning guidance described in step 2, above.
++ #### Should DARSy zip content match GitHub repository content? 
+&emsp;&emsp;&emsp; Yes. The package submitted to certification must exactly match GitHub master repository files. To ensure this, the Pull Request must be approved and merged prior to publishing the offer.
 
-6.	[Validate and test](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish) your solution offer.  
++ #### Why should short-links be verified? 
+&emsp;&emsp;&emsp; All links, especially short-links, must resolve correctly. Broken links are grounds for rejection. 
 
-7.	After the validation passes, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process, which can take up to 3 business days. 
++ #### Are release notes mandatory? 
+&emsp;&emsp;&emsp; Yes. Release notes must be present and properly added. Missing release notes will cause rejection. 
 
-**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
++ #### Are support information mandatory?
+&emsp;&emsp;&emsp; Yes. Support information including name, email, tier and link is mandatory.
 
-**Note:** You must make the offer public in order for it to show up in the Microsoft Sentinel content hub so that customers can find it.
 
 ## Feedback
 
 [Email Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with any feedback on this process, for new scenarios not covered in this guide, or with any constraints you may encounter. 
 
+## FAQs
 
+### CSP (Cloud Solution Provider)
+
+#### What is CSP?
+Microsoft Azure Customers may purchase their Azure Subscriptions either directly from Microsoft, or via an Azure Reseller who is part of the Microsoft Cloud Solution Provider (CSP) program.  Microsoft Sentinel Solutions are valid for both subscription purchase paths.   
+
+#### Why is there a “CSP Opt-in” option on Microsoft Sentinel solution offers?
+“CSP Opt-in” is a general feature of the Azure Marketplace and applies to multiple offer types, including the Azure App offer type used by Microsoft Sentinel solutions.  For some publishers, there is occasionally a desire to restrict individual offers to only be deployable in subscriptions that were purchased directly through Microsoft.   This is controllable via the “CSP opt-in” flag for each individual offer.  
+
+#### Is Microsoft Sentinel available to customers who purchased their Azure subscription from a CSP Reseller partner?
+Yes.  There are many customers purchasing directly from Microsoft, via a CSP Reseller and even some who purchase Azure via both programs.
+
+#### What happens when you enable “CSP opt-in” for your Microsoft Sentinel Solution offer?
+Quite simply, it permits your Microsoft Sentinel solution to be deployed into Microsoft Sentinel Workspaces regardless of how the customer acquired it. It is more of a pro-active stance to eliminate an message for your customers who are trying to deploy your Microsoft Sentinel Solution into a CSP purchase subscription.
+
+#### What does **not** happen when you enable “CSP opt-in” for your Microsoft Sentinel solution offer?
+You are **not** joining the CSP program.  Each offer is individually enabled or disabled for deployability in CSP sourced subscriptions, and setting this flag for your Microsoft Sentinel solution does not affect any other offer in your Marketplace publishing account.
+
+#### What will happen if you do not enable “CSP opt-in” for your Microsoft Sentinel solution offer?
+If the customer who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 

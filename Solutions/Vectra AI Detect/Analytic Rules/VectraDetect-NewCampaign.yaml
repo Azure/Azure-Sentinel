@@ -1,0 +1,62 @@
+id: a34d0338-eda0-42b5-8b93-32aae0d7a501
+name: Vectra AI Detect - New Campaign Detected
+description: |
+  'Identifies when a new Campaign has been detected.  This occurs when multiple Detections accross different Hosts are suspected to be part of the same Attack Campaign.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+  - CommandAndControl
+relevantTechniques:
+  - T1021
+  - T1071
+query: |
+  CommonSecurityLog
+  | where DeviceVendor == "Vectra Networks"
+  | where DeviceProduct == "X Series"
+  | where DeviceEventClassID contains "campaign"
+  | where DeviceAction == "START"
+  | extend reason = coalesce(
+                            column_ifexists("Reason", ""), 
+                            extract("reason=(.+?)($|;)", 1, AdditionalExtensions),
+                            ""
+                        )
+  | project-rename vectra_URL = DeviceCustomString4
+  | sort by TimeGenerated
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Activity
+alertDetailsOverride:
+  alertDisplayNameFormat: Vectra AI - New Campaign Detected
+  alertDescriptionFormat: |
+    A new campaign named {{Activity}} has been detected (reason is {{reason}})
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: vectra_URL
+    - alertProperty: ProductName
+      value: DeviceProduct
+    - alertProperty: ProviderName
+      value: DeviceVendor
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+customDetails:
+  CampaignName: Activity 
+  CampaignReason: reason 
+  CampaignSourceHost: SourceHostName
+version: 1.2.3
+kind: Scheduled

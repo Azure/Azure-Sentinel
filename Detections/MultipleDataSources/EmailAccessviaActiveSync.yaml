@@ -14,6 +14,12 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -33,16 +39,32 @@ query: |
   (
   SecurityEvent
   | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688
   | where CommandLine has_all (cmdList)
   | project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated, AccountEntity = Account, HostEntity = Computer
+  ),
+  ( WindowsEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4688
+  | where EventData has_all (cmdList)
+  | extend CommandLine = tostring(EventData.CommandLine) 
+  | where CommandLine has_all (cmdList)
+  | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend SubjectUserName = tostring(EventData.SubjectUserName)
+  | extend SubjectDomainName = tostring(EventData.SubjectDomainName)
+  | extend NewProcessName = tostring(EventData.NewProcessName)
+  | extend Process=tostring(split(NewProcessName, '\\')[-1])
+  | extend ParentProcessName = tostring(EventData.ParentProcessName)
+  | project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine
+  | extend timestamp = TimeGenerated, AccountEntity = Account, HostEntity = Computer
   ),
   (
   DeviceProcessEvents
   | where TimeGenerated >= ago(timeframe)
   | where InitiatingProcessCommandLine has_all (cmdList)
   | project Type, TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine
-  | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName
+  | extend timestamp = TimeGenerated, AccountDomain = InitiatingProcessAccountDomain, AccountName = InitiatingProcessAccountName, HostEntity = DeviceName
   ),
   (
   Event
@@ -58,17 +80,37 @@ query: |
   | where CommandLine has_all (cmdList)
   | extend Type = strcat(Type, ": ", Source)
   | project Type, TimeGenerated, Computer, User, Process, ParentImage, CommandLine
-  | extend timestamp = TimeGenerated, AccountCustomEntity = User, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated, AccountEntity = User, HostEntity = Computer
   )
   )
+  | extend HostName = tostring(split(HostEntity, ".")[0]), DomainIndex = toint(indexof(HostEntity, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(HostEntity, DomainIndex + 1), HostEntity)
+  | extend AccountName = tostring(split(AccountEntity, @'\')[1]), AccountDomain = tostring(split(AccountEntity, @'\')[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: AccountEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.0.0
+        columnName: HostEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.2.1
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

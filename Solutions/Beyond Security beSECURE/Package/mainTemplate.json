@@ -1,0 +1,500 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Beyond Security - isv@email.com",
+    "comments": "Solution template for Beyond Security beSECURE"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "publisherId_test.offerId_test",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "BeyondSecuritybeSECURE",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "BeyondSecuritybeSECURE",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Beyond Security beSECURE data connector with template",
+        "displayName": "Beyond Security beSECURE template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Beyond Security beSECURE data connector with template version 2.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Beyond Security beSECURE",
+                  "publisher": "Beyond Security",
+                  "descriptionMarkdown": "The [Beyond Security beSECURE](https://beyondsecurity.com/) connector allows you to easily connect your Beyond Security beSECURE scan events, scan results and audit trail with Azure Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Beyond Security beSECURE Scan Event",
+                      "baseQuery": "beSECURE_ScanEvent_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Beyond Security beSECURE Scan Results",
+                      "baseQuery": "beSECURE_ScanResults_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Beyond Security beSECURE Audit",
+                      "baseQuery": "beSECURE_Audit_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "CVSS Score Aggregated",
+                      "query": "beSECURE_ScanResults_CL  | summarize count() by cvss_score_s"
+                    },
+                    {
+                      "description": "Risk Aggregated",
+                      "query": "beSECURE_ScanResults_CL  | summarize count() by risk_name_s"
+                    },
+                    {
+                      "description": "Host Risk Aggregated",
+                      "query": "beSECURE_ScanResults_CL  | summarize count() by destination_host_s, risk_name_s"
+                    },
+                    {
+                      "description": "Top 10 most vulnerable Hosts",
+                      "query": "beSECURE_ScanResults_CL  | \n where (risk_value_s == 8 or risk_value_s == 4) | \n summarize count() by destination_host_s, risk_value_s | \n order by risk_value_s, count_ | \n limit 10"
+                    },
+                    {
+                      "description": "Failed login",
+                      "query": "beSECURE_Audit_CL | \n where audit_event_s == 'Login failed' "
+                    },
+                    {
+                      "description": "Completed Scans",
+                      "query": "beSECURE_ScanEvent_CL | \n where scan_event_s == 'Scan Complete' | \n summarize count()"
+                    },
+                    {
+                      "description": "Failed to Complete Scans",
+                      "query": "beSECURE_ScanEvent_CL | \n where scan_event_s == 'Scan Failed' | \n summarize count()"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "beSECURE_ScanResults_CL",
+                      "lastDataReceivedQuery": "beSECURE_ScanResults_CL \n | summarize Time = max(TimeGenerated)\n      | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "beSECURE_ScanEvent_CL",
+                      "lastDataReceivedQuery": "beSECURE_ScanEvent_CL \n | summarize Time = max(TimeGenerated)\n      | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "beSECURE_Audit_CL",
+                      "lastDataReceivedQuery": "beSECURE_Audit_CL \n | summarize Time = max(TimeGenerated)\n      | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "beSECURE_ScanEvent_CL \n | summarize LastLogReceived = max(TimeGenerated) \n | project IsConnected = LastLogReceived > ago(30d)",
+                        "beSECURE_ScanResults_CL \n | summarize LastLogReceived = max(TimeGenerated) \n | project IsConnected = LastLogReceived > ago(30d)",
+                        "beSECURE_Audit_CL \n | summarize LastLogReceived = max(TimeGenerated) \n | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Follow the steps below to configure your beSECURE solution to send out scan results, scan status and audit trail to Azure Sentinel.",
+                      "innerSteps": [
+                        {
+                          "title": "1. Access the Integration menu",
+                          "description": "1.1 Click on the 'More' menu option\n\n1.2 Select Server\n\n1.3 Select Integration\n\n1.4 Enable Azure Sentinel"
+                        },
+                        {
+                          "title": "2. Provide Azure Sentinel settings",
+                          "description": "Fill in the Workspace ID and Primary Key values, click 'Modify'",
+                          "instructions": [
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "WorkspaceId"
+                                ],
+                                "label": "Workspace ID"
+                              },
+                              "type": "CopyableLabel"
+                            },
+                            {
+                              "parameters": {
+                                "fillWith": [
+                                  "PrimaryKey"
+                                ],
+                                "label": "Primary Key"
+                              },
+                              "type": "CopyableLabel"
+                            }
+                          ]
+                        }
+                      ],
+                      "title": "Configure beSECURE"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "3be993d4-3aa7-41de-8280-e62de7859eca",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Beyond Security"
+                    },
+                    "support": {
+                      "name": "Beyond Security",
+                      "link": "https://beyondsecurity.freshdesk.com/support/home",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Beyond Security beSECURE",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Beyond Security",
+                  "email": "isv@email.com"
+                },
+                "support": {
+                  "name": "Beyond Security",
+                  "tier": "Partner",
+                  "link": "https://beyondsecurity.freshdesk.com/support/home"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Beyond Security beSECURE",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Beyond Security",
+          "email": "isv@email.com"
+        },
+        "support": {
+          "name": "Beyond Security",
+          "tier": "Partner",
+          "link": "https://beyondsecurity.freshdesk.com/support/home"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Beyond Security beSECURE",
+          "publisher": "Beyond Security",
+          "descriptionMarkdown": "The [Beyond Security beSECURE](https://beyondsecurity.com/) connector allows you to easily connect your Beyond Security beSECURE scan events, scan results and audit trail with Azure Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Beyond Security beSECURE Scan Event",
+              "baseQuery": "beSECURE_ScanEvent_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "Beyond Security beSECURE Scan Results",
+              "baseQuery": "beSECURE_ScanResults_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "Beyond Security beSECURE Audit",
+              "baseQuery": "beSECURE_Audit_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "beSECURE_ScanResults_CL",
+              "lastDataReceivedQuery": "beSECURE_ScanResults_CL \n | summarize Time = max(TimeGenerated)\n      | where isnotempty(Time)"
+            },
+            {
+              "name": "beSECURE_ScanEvent_CL",
+              "lastDataReceivedQuery": "beSECURE_ScanEvent_CL \n | summarize Time = max(TimeGenerated)\n      | where isnotempty(Time)"
+            },
+            {
+              "name": "beSECURE_Audit_CL",
+              "lastDataReceivedQuery": "beSECURE_Audit_CL \n | summarize Time = max(TimeGenerated)\n      | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "beSECURE_ScanEvent_CL \n | summarize LastLogReceived = max(TimeGenerated) \n | project IsConnected = LastLogReceived > ago(30d)",
+                "beSECURE_ScanResults_CL \n | summarize LastLogReceived = max(TimeGenerated) \n | project IsConnected = LastLogReceived > ago(30d)",
+                "beSECURE_Audit_CL \n | summarize LastLogReceived = max(TimeGenerated) \n | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "CVSS Score Aggregated",
+              "query": "beSECURE_ScanResults_CL  | summarize count() by cvss_score_s"
+            },
+            {
+              "description": "Risk Aggregated",
+              "query": "beSECURE_ScanResults_CL  | summarize count() by risk_name_s"
+            },
+            {
+              "description": "Host Risk Aggregated",
+              "query": "beSECURE_ScanResults_CL  | summarize count() by destination_host_s, risk_name_s"
+            },
+            {
+              "description": "Top 10 most vulnerable Hosts",
+              "query": "beSECURE_ScanResults_CL  | \n where (risk_value_s == 8 or risk_value_s == 4) | \n summarize count() by destination_host_s, risk_value_s | \n order by risk_value_s, count_ | \n limit 10"
+            },
+            {
+              "description": "Failed login",
+              "query": "beSECURE_Audit_CL | \n where audit_event_s == 'Login failed' "
+            },
+            {
+              "description": "Completed Scans",
+              "query": "beSECURE_ScanEvent_CL | \n where scan_event_s == 'Scan Complete' | \n summarize count()"
+            },
+            {
+              "description": "Failed to Complete Scans",
+              "query": "beSECURE_ScanEvent_CL | \n where scan_event_s == 'Scan Failed' | \n summarize count()"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Follow the steps below to configure your beSECURE solution to send out scan results, scan status and audit trail to Azure Sentinel.",
+              "innerSteps": [
+                {
+                  "title": "1. Access the Integration menu",
+                  "description": "1.1 Click on the 'More' menu option\n\n1.2 Select Server\n\n1.3 Select Integration\n\n1.4 Enable Azure Sentinel"
+                },
+                {
+                  "title": "2. Provide Azure Sentinel settings",
+                  "description": "Fill in the Workspace ID and Primary Key values, click 'Modify'",
+                  "instructions": [
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "WorkspaceId"
+                        ],
+                        "label": "Workspace ID"
+                      },
+                      "type": "CopyableLabel"
+                    },
+                    {
+                      "parameters": {
+                        "fillWith": [
+                          "PrimaryKey"
+                        ],
+                        "label": "Primary Key"
+                      },
+                      "type": "CopyableLabel"
+                    }
+                  ]
+                }
+              ],
+              "title": "Configure beSECURE"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "properties": {
+        "version": "2.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Beyond Security beSECURE",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Beyond Security",
+          "email": "isv@email.com"
+        },
+        "support": {
+          "name": "Beyond Security",
+          "tier": "Partner",
+          "link": "https://beyondsecurity.freshdesk.com/support/home"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-02",
+        "providers": [
+          "Beyond Security"
+        ],
+        "categories": {
+          "domains": [
+            "Security – Vulnerability Management"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

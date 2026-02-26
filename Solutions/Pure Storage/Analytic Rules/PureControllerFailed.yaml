@@ -1,0 +1,44 @@
+id: c317b007-84e7-4449-93f4-4444f6638fd0
+name: Pure Controller Failed
+version: 1.0.0
+kind: NRT
+description: Detect controller failure and take appropriate response action.
+severity: High
+tactics:
+- Execution
+relevantTechniques:
+- T0871
+query: |-
+  Syslog
+  | where SyslogMessage has "purity.alert"
+  | extend Message = replace_regex(SyslogMessage, "#012", "\n")
+  | extend ParsedLog = extract_all(@"((?P<process>.*?)\[(?P<processid>.*?)\]:\s(?P<object>.*)\[(?P<responsecode>\w+)\][\s\S]*Severity:\s*(?P<severity>\S+)\s*(Tag:\s*(?P<reason>\S+))?\s*UTC([\s\S]*)Array Name:\s*(?P<objectname>\S+)\s*Domain:\s*(?P<domainorigin>\S+)\s*(?P<part2log>[\s\S]*))", dynamic(['process','processid','object','objectname','responsecode','severity','reason','domainorigin','part2log']), Message)
+  | mv-expand ParsedLog
+  | extend ResidueLog = tostring(ParsedLog[8])
+  | extend Rlog = extract_all(@"(((Suggested Action:\s*(?P<action>[\s\S]*)\s*Knowledge Base Article:\s*(?P<url>.*))|(Knowledge Base Article:\s*(?P<url>.*)\s*Suggested Action:\s*(?P<action>.*)\s*)|(Suggested Action:\s*(?P<action>[\s\S]*)))(([\s\S]*)Purity Version:\s*(?P<pversion>.*))?\s*([\s\S]*)Variables: \(below\)\s*(?P<subject>[\s\S]*))", dynamic(['action','url','pversion','subject']),ResidueLog)
+  | mv-expand Rlog
+  | extend PureLogType = ParsedLog[0], PureProcessID = ParsedLog[1], PureObject = ParsedLog[2], PureCode = ParsedLog[4], PureSeverity = ParsedLog[5], PureReason = ParsedLog[6], PureObjectName = ParsedLog[3], PureDomainOrigin = ParsedLog[7], PureAction = Rlog[0], PureUrl = Rlog[1], PureVersion = Rlog[2], PureMessage = Rlog[3]
+  | project-away ResidueLog, Rlog, ParsedLog
+  | where PureObject matches regex @"(Controllers ct[0-9] have failed)"
+suppressionDuration: 5h
+suppressionEnabled: false
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDynamicProperties: []
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: HostIP
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+

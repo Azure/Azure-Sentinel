@@ -1,0 +1,37 @@
+id: 9de9f7e2-d0f2-4226-a128-a2583f3d2806
+Function:
+  Title: Parser for Veeam ONE Events
+  Version: '1.0.0'
+  LastUpdated: '2024-08-12'
+Category: Microsoft Sentinel Parser
+FunctionName: Veeam_GetVeeamONEAlarms
+FunctionAlias: Veeam_GetVeeamONEAlarms
+FunctionQuery: |
+    let watchlist = union isfuzzy=true 
+        (datatable(ID:string, Severity:string, Type1:string, ["Event Name"]:string)[]),
+        (_GetWatchlist("vbr_events_lookup")); 
+    Syslog
+    | where SyslogMessage has "predefined_alarm_id"
+    | extend predefined_alarm_id = extract("predefined_alarm_id=\"(\\d+)\"", 1, SyslogMessage)
+    | where predefined_alarm_id in ("395", "364", "369", "391", "365", "370", "314", "331", "376", "377", "403", "316", "342", "381", "315", "332", "344", "378")
+    | lookup kind=leftouter (watchlist) 
+        on $left.predefined_alarm_id == $right.ID
+    | extend alarm_details = extract("alarm_details=\"(?<alarm_details>[^\"]*)\"", 1, SyslogMessage)
+    | extend alarm_name = extract("alarm_name=\"(?<alarm_name>[^\"]*)\"", 1, SyslogMessage)
+    | extend alarm_type = extract("alarm_type=\"(?<alarm_type>[^\"]*)\"", 1, SyslogMessage)
+    | extend event_module = extract("event_module=\"(?<event_module>[^\"]*)\"", 1, SyslogMessage)
+    | extend eventtype = extract("eventtype=\"(?<eventtype>[^\"]*)\"", 1, SyslogMessage)
+    | extend object_name = extract("object_name=\"(?<object_name>[^\"]*)\"", 1, SyslogMessage)
+    | extend object_path = extract("object_path=\"(?<object_path>[^\"]*)\"", 1, SyslogMessage)
+    | extend original_host = extract("original_host=\"(?<original_host>[^\"]*)\"", 1, SyslogMessage)
+    | extend predefined_alarm_id = extract("predefined_alarm_id=\"(?<predefined_alarm_id>[^\"]*)\"", 1, SyslogMessage)
+    | extend severity = extract("severity=\"(?<severity>[^\"]*)\"", 1, SyslogMessage)
+    | extend status_new = extract("status_new=\"(?<status_new>[^\"]*)\"", 1, SyslogMessage)
+    | extend status_old = extract("status_old=\"(?<status_old>[^\"]*)\"", 1, SyslogMessage)
+    | extend VoneHostName=Computer
+    | extend SeverityDescription = case(Severity=="critical","Critical",
+        Severity=="high","High",
+        Severity=="medium","Medium",
+        Severity=="information","Information", 
+        "Unknown")
+    | project ["Event Name"], TimeGenerated, alarm_details, alarm_name, alarm_type, object_name, object_path, predefined_alarm_id, Severity, status_new, status_old, VoneHostName, SeverityDescription, SyslogMessage

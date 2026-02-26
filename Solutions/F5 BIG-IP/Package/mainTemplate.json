@@ -1,0 +1,678 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "F5 Networks",
+    "comments": "Solution template for F5 Big-IP"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "F5 BIG-IP System Metrics",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    },
+    "workbook2-name": {
+      "type": "string",
+      "defaultValue": "F5 BIG-IP ASM",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "f5-networks.f5_bigip_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "F5BigIp",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "F5BigIp",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.1.0",
+    "workbookContentId1": "F5BIGIPSytemMetricsWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "workbookVersion2": "1.1.0",
+    "workbookContentId2": "F5NetworksWorkbook",
+    "workbookId2": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId2'))]",
+    "workbookTemplateSpecName2": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId2')))]",
+    "_workbookContentId2": "[variables('workbookContentId2')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "F5 Big-IP data connector with template",
+        "displayName": "F5 Big-IP template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "F5 Big-IP data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "F5 BIG-IP",
+                  "publisher": "F5 Networks",
+                  "descriptionMarkdown": "The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+                  "logo": "ffive_logo.png",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "F5Telemetry_LTM_CL",
+                      "baseQuery": "F5Telemetry_LTM_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "F5Telemetry_system_CL",
+                      "baseQuery": "F5Telemetry_system_CL"
+                    },
+                    {
+                      "metricName": "Total data received",
+                      "legend": "F5Telemetry_ASM_CL",
+                      "baseQuery": "F5Telemetry_ASM_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Count how many LTM logs have been generated from different client IP addresses over time",
+                      "query": "F5Telemetry_LTM_CL\n            | summarize count() by client_ip_s, TimeGenerated\n            | sort by TimeGenerated"
+                    },
+                    {
+                      "description": "Present the System Telemetry host names",
+                      "query": "F5Telemetry_system_CL\n            | project hostname_s\n            | sort by TimeGenerated"
+                    },
+                    {
+                      "description": "Count how many ASM logs have been generated from different locations",
+                      "query": "F5Telemetry_ASM_CL\n            | summarize count() by geo_location_s"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "F5Telemetry_system_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "F5Telemetry_LTM_CL",
+                      "lastDataReceivedQuery": "F5Telemetry_LTM_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "F5Telemetry_system_CL",
+                      "lastDataReceivedQuery": "F5Telemetry_system_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "F5Telemetry_ASM_CL",
+                      "lastDataReceivedQuery": "F5Telemetry_ASM_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "To connect your F5 BIGIP, you have to post a JSON declaration to the system’s API endpoint. For instructions on how to do this, see [Integrating the F5 BGIP with Microsoft Sentinel](https://aka.ms/F5BigIp-Integrate).",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "Configure and connect F5 BIGIP"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "bf5e4cc6-398a-48a0-a75b-a072362ff27a",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "F5"
+                    },
+                    "support": {
+                      "name": "F5",
+                      "link": "https://support.f5.com/csp/home",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "F5 Big-IP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "F5 Networks"
+                },
+                "support": {
+                  "name": "F5 Networks",
+                  "tier": "Partner",
+                  "link": "https://support.f5.com/csp/home"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "F5 Big-IP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "F5 Networks"
+        },
+        "support": {
+          "name": "F5 Networks",
+          "tier": "Partner",
+          "link": "https://support.f5.com/csp/home"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "F5 BIG-IP",
+          "publisher": "F5 Networks",
+          "descriptionMarkdown": "The F5 firewall connector allows you to easily connect your F5 logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "F5Telemetry_LTM_CL",
+              "baseQuery": "F5Telemetry_LTM_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "F5Telemetry_system_CL",
+              "baseQuery": "F5Telemetry_system_CL"
+            },
+            {
+              "metricName": "Total data received",
+              "legend": "F5Telemetry_ASM_CL",
+              "baseQuery": "F5Telemetry_ASM_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "F5Telemetry_LTM_CL",
+              "lastDataReceivedQuery": "F5Telemetry_LTM_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "F5Telemetry_system_CL",
+              "lastDataReceivedQuery": "F5Telemetry_system_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "F5Telemetry_ASM_CL",
+              "lastDataReceivedQuery": "F5Telemetry_ASM_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "F5Telemetry_system_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(7d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Count how many LTM logs have been generated from different client IP addresses over time",
+              "query": "F5Telemetry_LTM_CL\n            | summarize count() by client_ip_s, TimeGenerated\n            | sort by TimeGenerated"
+            },
+            {
+              "description": "Present the System Telemetry host names",
+              "query": "F5Telemetry_system_CL\n            | project hostname_s\n            | sort by TimeGenerated"
+            },
+            {
+              "description": "Count how many ASM logs have been generated from different locations",
+              "query": "F5Telemetry_ASM_CL\n            | summarize count() by geo_location_s"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "To connect your F5 BIGIP, you have to post a JSON declaration to the system’s API endpoint. For instructions on how to do this, see [Integrating the F5 BGIP with Microsoft Sentinel](https://aka.ms/F5BigIp-Integrate).",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "Configure and connect F5 BIGIP"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "F5 Big-IP Workbook with template",
+        "displayName": "F5 Big-IP workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "F5BIGIPSystemMetricsWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insight into F5 BIG-IP health and performance.  This workbook provides visibility of various metrics including CPU, memory, connectivity, throughput and disk utilization."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"## F5 BIG-IP System Metrics\"},\"name\":\"text - 2\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"crossComponentResources\":[\"{Workspace}\"],\"parameters\":[{\"id\":\"2cb5690b-61f2-47f0-a020-5c59e6783621\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"DefaultSubscription_Internal\",\"type\":1,\"isRequired\":true,\"query\":\"where type =~ 'microsoft.operationalinsights/workspaces'\\r\\n| take 1\\r\\n| project subscriptionId\",\"crossComponentResources\":[\"value::selected\"],\"isHiddenWhenLocked\":true,\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"77b8a63c-f0cd-475f-ad87-7939d8c13547\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Subscription\",\"type\":6,\"isRequired\":true,\"query\":\"summarize by subscriptionId\\r\\n| project value = strcat(\\\"/subscriptions/\\\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)\\r\\n\",\"crossComponentResources\":[\"value::selected\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::1\"]},\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"0565232c-bc82-44db-ac13-b9d7c1a90348\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Workspace\",\"type\":5,\"isRequired\":true,\"query\":\"where type =~ 'microsoft.operationalinsights/workspaces'\\r\\n| project id\",\"crossComponentResources\":[\"{Subscription}\"],\"value\":\"\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":1,\"resourceType\":\"microsoft.resourcegraph/resources\"},{\"id\":\"5273ece9-ebfd-479f-9d94-1463360b302a\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"HostName\",\"label\":\"Host Name\",\"type\":2,\"isRequired\":true,\"query\":\"F5Telemetry_AVR_CL\\r\\n| distinct hostname_s\",\"crossComponentResources\":[\"{Workspace}\"],\"value\":\"\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"f260e834-0fd6-4d4f-8741-4cb24968a0c3\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":14400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"resourceType\":\"microsoft.insights/components\",\"label\":\"Time Range\"},{\"id\":\"2af8b5f6-7703-49f7-b970-e004a1a4c4f1\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"SamplePeriod\",\"label\":\"Sample Rate\",\"type\":2,\"isRequired\":true,\"jsonData\":\"[\\r\\n    { \\\"value\\\": \\\"m\\\", \\\"label\\\": \\\"Minute(s)\\\", \\\"selected\\\":true },\\r\\n    { \\\"value\\\": \\\"h\\\", \\\"label\\\": \\\"Hour(s)\\\" },\\r\\n    { \\\"value\\\": \\\"d\\\", \\\"label\\\": \\\"Day(s)\\\" }\\r\\n]\",\"resourceType\":\"microsoft.insights/components\"},{\"id\":\"8e2d5a7c-a59e-4768-acb6-553494d132fd\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"SampleValue\",\"label\":\"Rate Value\",\"type\":2,\"isRequired\":true,\"jsonData\":\"[\\r\\n    { \\\"value\\\": \\\"1\\\", \\\"label\\\": \\\"1\\\" },\\r\\n    { \\\"value\\\": \\\"5\\\", \\\"label\\\": \\\"5\\\", \\\"selected\\\":true },\\r\\n    { \\\"value\\\": \\\"10\\\", \\\"label\\\": \\\"10\\\" },\\r\\n    { \\\"value\\\": \\\"15\\\", \\\"label\\\": \\\"15\\\" },\\r\\n    { \\\"value\\\": \\\"30\\\", \\\"label\\\": \\\"30\\\" },\\r\\n    { \\\"value\\\": \\\"45\\\", \\\"label\\\": \\\"45\\\" },\\r\\n    { \\\"value\\\": \\\"60\\\", \\\"label\\\": \\\"60\\\" },\\r\\n    { \\\"value\\\": \\\"90\\\", \\\"label\\\": \\\"90\\\" }\\r\\n]\",\"resourceType\":\"microsoft.insights/components\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"\\r\\nF5Telemetry_AVR_CL\\r\\n| where hostname_s == '{HostName}'\\r\\n| where TimeGenerated > ago(10m)\\r\\n| project hostname_s, CPU=todouble(MaxCpu_s)/100, logTime= TimeGenerated\\r\\n| join kind=inner (\\r\\n    F5Telemetry_system_CL \\r\\n    | where hostname_s == '{HostName}'\\r\\n    | where TimeGenerated > ago(10m) \\r\\n    | project hostname_s, version_s, licenseReady_s, marketingName_s, syncMode_s, failoverStatus_s, provisioning_ltm_level_s,provisioning_gtm_level_s, provisioning_afm_level_s ,provisioning_apm_level_s, provisioning_asm_level_s, provisioning_avr_level_s\\r\\n) on hostname_s\\r\\n| project-away hostname_s1, logTime\\r\\n| top 1 by CPU\\r\\n\\r\\n\\r\\n\\r\\n\\r\\n\\r\\n\\r\\n\",\"size\":4,\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"licenseReady_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"yes\",\"representation\":\"Available\",\"text\":\"YES\"},{\"operator\":\"Default\",\"representation\":\"3\",\"text\":\"{0}{1}\"}]},\"numberFormat\":{\"unit\":0,\"options\":{\"style\":\"decimal\",\"useGrouping\":false}}},{\"columnMatch\":\"failoverStatus_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"ACTIVE\",\"representation\":\"Available\",\"text\":\"Active\"},{\"operator\":\"Default\",\"representation\":\"stopped\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"provisioning_ltm_level_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"colors\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"minimum\",\"representation\":\"yellow\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"none\",\"representation\":\"gray\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"green\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"provisioning_gtm_level_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"colors\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"minimal\",\"representation\":\"yellow\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"none\",\"representation\":\"gray\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"green\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"provisioning_afm_level_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"colors\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"minimum\",\"representation\":\"yellow\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"none\",\"representation\":\"gray\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"green\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"provisioning_apm_level_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"colors\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"minimum\",\"representation\":\"yellow\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"none\",\"representation\":\"gray\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"green\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"provisioning_asm_level_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"colors\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"minimum\",\"representation\":\"yellow\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"none\",\"representation\":\"gray\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"green\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"provisioning_avr_level_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"colors\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"minimum\",\"representation\":\"yellow\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"none\",\"representation\":\"gray\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"green\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"CPU\",\"formatter\":8,\"formatOptions\":{\"palette\":\"greenRed\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\",\"useGrouping\":false}}},{\"columnMatch\":\"TimeGenerated\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true,\"aggregation\":\"Max\"}},{\"columnMatch\":\"Licensed\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"YES\",\"representation\":\"success\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"3\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"LTM\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"NONE\",\"representation\":\"disabled\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Available\",\"text\":\"{0}{1}\"}]},\"numberFormat\":{\"unit\":0,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"DNS\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"NONE\",\"representation\":\"disabled\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"success\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"AFM\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"NONE\",\"representation\":\"disabled\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Available\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"APM\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"NONE\",\"representation\":\"disabled\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Available\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"ASM\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"NONE\",\"representation\":\"disabled\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Available\",\"text\":\"{0}{1}\"}]}},{\"columnMatch\":\"AVR\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"NONE\",\"representation\":\"disabled\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"Available\",\"text\":\"{0}{1}\"}]}}],\"sortBy\":[{\"itemKey\":\"$gen_heatmap_CPU_1\",\"sortOrder\":1}],\"labelSettings\":[{\"columnId\":\"hostname_s\",\"label\":\"Host Name\"},{\"columnId\":\"version_s\",\"label\":\"Version\"},{\"columnId\":\"licenseReady_s\",\"label\":\"Licensed?\"},{\"columnId\":\"marketingName_s\",\"label\":\"Platform\"},{\"columnId\":\"syncMode_s\",\"label\":\"Mode\"},{\"columnId\":\"failoverStatus_s\",\"label\":\"Status\"},{\"columnId\":\"provisioning_ltm_level_s\",\"label\":\"LTM\"},{\"columnId\":\"provisioning_gtm_level_s\",\"label\":\"DNS\"},{\"columnId\":\"provisioning_afm_level_s\",\"label\":\"AFM\"},{\"columnId\":\"provisioning_apm_level_s\",\"label\":\"APM\"},{\"columnId\":\"provisioning_asm_level_s\",\"label\":\"ASM\"},{\"columnId\":\"provisioning_avr_level_s\",\"label\":\"AVR\"}]},\"sortBy\":[{\"itemKey\":\"$gen_heatmap_CPU_1\",\"sortOrder\":1}]},\"name\":\"query - 13\"},{\"type\":1,\"content\":{\"json\":\"# Processor and Memory \"},\"name\":\"text - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL \\n| where Entity_s == 'SystemMonitor'\\n| where hostname_s == '{HostName}'\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\n| summarize AggregatedValue = max(todouble(MaxCpu_s))/100 by hostname_s, bin (TimeGenerated, {SampleValue}{SamplePeriod})\\n\",\"size\":0,\"aggregation\":2,\"title\":\"BIG-IP CPU % Over Time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"chartSettings\":{\"xAxis\":\"TimeGenerated\",\"ySettings\":{\"unit\":1}}},\"customWidth\":\"50\",\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL \\r\\n| where Entity_s == 'CpuStat'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize CPU_Usage_per_CPU_ID = max(todouble(system_s)/100) by  cpu_id_s, hostname_s, bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\\r\\n\\r\\n\",\"size\":0,\"aggregation\":2,\"title\":\"BIG-IP CPU(%) per Core\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"CPU_Usage_per_CPU_ID\",\"formatter\":1,\"formatOptions\":{\"showIcon\":true,\"aggregation\":\"Average\"},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}}],\"labelSettings\":[{\"columnId\":\"hostname_s\",\"label\":\"Host Name\"},{\"columnId\":\"cpu_id_s\",\"label\":\"CPU ID\"},{\"columnId\":\"TimeGenerated\",\"label\":\"\"},{\"columnId\":\"CPU_Usage_per_CPU_ID\",\"label\":\"Usage (%)\"}]},\"chartSettings\":{\"ySettings\":{\"unit\":1}}},\"customWidth\":\"50\",\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL \\r\\n| where Entity_s == 'SystemMonitor'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize Memory_Usage = max(todouble(AvgMemory_s)/100) by hostname_s, bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\\r\\n\",\"size\":0,\"aggregation\":2,\"title\":\"BIG-IP Memory Utlilzation (%)\",\"color\":\"green\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"chartSettings\":{\"ySettings\":{\"unit\":1}}},\"name\":\"query - 10\"},{\"type\":1,\"content\":{\"json\":\"---\\r\\n# Disk Utilization\"},\"name\":\"text - 6 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"\\r\\n F5Telemetry_system_CL\\r\\n| where hostname_s == '{HostName}'\\r\\n| project TimeGenerated, User = toint(trim(@\\\"%\\\", diskStorage__usr_Capacity_s)),UserSize = toint(diskStorage__usr_1024_blocks_s)/2097152, Shared = toint(trim(@\\\"%\\\", diskStorage__shared_Capacity_s)) ,SharedSize = toint(diskStorage__shared_1024_blocks_s)/2097152 , Var = toint(trim(@\\\"%\\\", diskStorage__var_Capacity_s)), VarSize = toint(diskStorage__var_1024_blocks_s)/2097152, AppData = toint(trim(@\\\"%\\\", diskStorage__appdata_Capacity_s)), AppDataSize = toint(diskStorage__appdata_1024_blocks_s)/2097152,Config = toint(trim(@\\\"%\\\", diskStorage__config_Capacity_s )), ConfigSize = toint(diskStorage__config_1024_blocks_s )/2097152,Dev = toint(trim(@\\\"%\\\", diskStorage__dev_Capacity_s)) , DevSize = toint(diskStorage__dev_1024_blocks_s)/2097152 , DevShm = toint(trim(@\\\"%\\\", diskStorage__dev_shm_Capacity_s)),  DevShmSize = toint(diskStorage__dev_shm_1024_blocks_s)/2097152,Run = toint(trim(@\\\"%\\\", diskStorage__run_Capacity_s)),RunSize = toint(diskStorage__run_1024_blocks_s)/2097152\\r\\n| top 1 by TimeGenerated\\r\\n| project-away TimeGenerated\",\"size\":4,\"aggregation\":2,\"title\":\"Disk Capacity(%)  and Size by Volume\",\"color\":\"green\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"User\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\",\"useGrouping\":false}}},{\"columnMatch\":\"UserSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"Shared\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"SharedSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"Var\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"VarSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"AppData\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"AppDataSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"Config\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"ConfigSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"Dev\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"DevSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"DevShm\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"DevShmSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"Run\",\"formatter\":8,\"formatOptions\":{\"min\":1,\"max\":100,\"palette\":\"coldHot\",\"showIcon\":true},\"numberFormat\":{\"unit\":1,\"options\":{\"style\":\"decimal\"}}},{\"columnMatch\":\"RunSize\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true},\"numberFormat\":{\"unit\":5,\"options\":{\"style\":\"decimal\"}}}],\"labelSettings\":[{\"columnId\":\"User\"},{\"columnId\":\"UserSize\",\"label\":\"User Vol\"},{\"columnId\":\"Shared\"},{\"columnId\":\"SharedSize\",\"label\":\"Shared Vol\"},{\"columnId\":\"Var\"},{\"columnId\":\"VarSize\",\"label\":\"Var Vol\"},{\"columnId\":\"AppData\"},{\"columnId\":\"AppDataSize\",\"label\":\"AppData Vol\"},{\"columnId\":\"Config\"},{\"columnId\":\"ConfigSize\",\"label\":\"Config Vol\"},{\"columnId\":\"Dev\"},{\"columnId\":\"DevSize\",\"label\":\"Dev Vol\"},{\"columnId\":\"DevShm\"},{\"columnId\":\"DevShmSize\",\"label\":\"DevShm Vol\"},{\"columnId\":\"Run\"},{\"columnId\":\"RunSize\",\"label\":\"Run Vol\"}]},\"chartSettings\":{\"ySettings\":{\"unit\":1}}},\"name\":\"query - 10 - Copy\"},{\"type\":1,\"content\":{\"json\":\"---\\r\\n# Connections and Throughput\"},\"name\":\"text - 7\"},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":1,\"content\":{\"json\":\"### Network Interface Metrics\"},\"name\":\"text - 15\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"crossComponentResources\":[\"{Workspace}\"],\"parameters\":[{\"id\":\"69858195-8db8-4943-8263-407970f386b0\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Interface\",\"label\":\"Interface Name\",\"type\":2,\"isRequired\":true,\"query\":\"F5Telemetry_AVR_CL\\r\\n| where hostname_s == '{HostName}'\\r\\n| where interface_name_s startswith '1.' or interface_name_s startswith 'mg' or interface_name_s startswith '2.'\\r\\n| distinct interface_name_s \\r\\n| order by interface_name_s asc\\r\\n\",\"crossComponentResources\":[\"{Workspace}\"],\"value\":\"\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 15\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL\\r\\n| where Entity_s in ('InterfaceTraffic', 'InterfaceHealth')\\r\\n| where hostname_s == '{HostName}'\\r\\n| where interface_name_s == '{Interface}'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| extend drop_pkts = todouble(counters_drops_in_s) + todouble(counters_drops_out_s)\\r\\n| extend err_pkts = todouble(counters_errors_in_s) + todouble(counters_errors_out_s)\\r\\n| summarize max(toint(counters_pkts_in_s)), max(toint(counters_pkts_out_s)) , max(drop_pkts) , max(err_pkts) by interface_name_s, bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\\r\\n\\r\\n\",\"size\":0,\"aggregation\":3,\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"interface_name_s\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"avg_counters_pkts_in_s\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"max_counters_pkts_in_s\",\"label\":\"Packets In\"},{\"seriesName\":\"max_counters_pkts_out_s\",\"label\":\"Packets out\"}],\"ySettings\":{\"unit\":17}}},\"name\":\"query - 17\"}]},\"name\":\"interfaceGroup\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL \\r\\n| where tolong(transactions_s) >= 0\\r\\n| extend tps = tolong(transactions_s )\\r\\n| where notempty(pool_name_s) or Entity_s == 'DeviceTraffic'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize Transactions_Per_Second = max(tps) by pool_name_s, bin (TimeGenerated,{SampleValue}{SamplePeriod})\",\"size\":0,\"aggregation\":2,\"title\":\"Transactions per Second (TPS)\",\"color\":\"blueDark\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"unstackedbar\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"<empty>\",\"label\":\"Device Traffic\",\"color\":\"turquoise\"}]}},\"customWidth\":\"50\",\"name\":\"query - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL\\r\\n| where Entity_s == 'globalThroughput'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize KBsOUT = max(todouble(bytes_out_s)/1024), KBsIN = max(todouble(bytes_in_s)/1024) by hostname_s, bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\",\"size\":0,\"aggregation\":2,\"title\":\"KBs In & KBs Out\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"categoricalbar\"},\"customWidth\":\"50\",\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL\\r\\n| where Entity_s == 'TCP'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where RequestSide_s == 'Server-side'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize Connections_Opened = max(todouble(ConnStatsNumStarts_s)), Connections_Closed = max(todouble(ConnStatsNumEndings_s)) by bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\",\"size\":0,\"aggregation\":2,\"showAnnotations\":true,\"title\":\"Server-side  TCP Connections\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\"},\"customWidth\":\"50\",\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL\\r\\n| where Entity_s == 'TCP'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where RequestSide_s == 'Client-side'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize Connections_Opened = max(todouble(ConnStatsNumStarts_s)), Connections_Closed = max(todouble(ConnStatsNumEndings_s)) by bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\",\"size\":0,\"aggregation\":2,\"showAnnotations\":true,\"title\":\"Client side TCP Connections\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"Connections_Opened\",\"color\":\"turquoise\"},{\"color\":\"pink\"}]}},\"customWidth\":\"50\",\"name\":\"query - 4 - Copy\"},{\"type\":1,\"content\":{\"json\":\"---\"},\"name\":\"text - 15\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL \\r\\n| where Entity_s == 'TCP'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where RequestSide_s == 'Server-side'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| summarize PacketsSent = avg(toint(PktsSent_s)), PacketsReceived = avg(toint(PktsRecv_s)), PacketsLost = avg(toint(PktsLost_s)) by bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n\\r\\n\\r\\n\",\"size\":0,\"aggregation\":2,\"title\":\"Server-side  TCP Packets Sent, Received, Lost\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"PacketsSent\",\"color\":\"blueDark\"},{\"seriesName\":\"PacketsReceived\",\"color\":\"green\"},{\"seriesName\":\"PacketsLost\",\"color\":\"redBright\"}]}},\"customWidth\":\"50\",\"name\":\"query - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_AVR_CL \\r\\n| where Entity_s == 'TCP'\\r\\n| where hostname_s == '{HostName}'\\r\\n| where TimeGenerated between ({TimeRange:start}..{TimeRange:end})\\r\\n| where RequestSide_s == 'Client-side'\\r\\n| summarize PacketsSent = max(toint(PktsSent_s)), PacketsReceived = max(toint(PktsRecv_s)), PacketsLost = max(toint(PktsLost_s)) by bin (TimeGenerated, {SampleValue}{SamplePeriod})\\r\\n| render areachart\\r\\n\\r\\n\",\"size\":0,\"aggregation\":2,\"title\":\"Client-side  TCP Packets Sent, Received, Lost\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"crossComponentResources\":[\"{Workspace}\"],\"visualization\":\"timechart\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"PacketsSent\",\"color\":\"blueDark\"},{\"seriesName\":\"PacketsReceived\",\"color\":\"green\"},{\"seriesName\":\"PacketsLost\",\"color\":\"redBright\"}]}},\"customWidth\":\"50\",\"name\":\"query - 11 - Copy\"}],\"fromTemplateId\":\"sentinel-F5BIGIPSystemMetrics\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=F5BIGIPSytemMetricsWorkbook; logoFileName=f5_logo.svg; description=Gain insight into F5 BIG-IP health and performance.  This workbook provides visibility of various metrics including CPU, memory, connectivity, throughput and disk utilization.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.1.0; title=F5 BIG-IP System Metrics; templateRelativePath=F5BIGIPSystemMetrics.json; subtitle=; provider=F5 Networks}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "F5 Big-IP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "F5 Networks"
+                },
+                "support": {
+                  "name": "F5 Networks",
+                  "tier": "Partner",
+                  "link": "https://support.f5.com/csp/home"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "F5Telemetry_system_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "F5Telemetry_AVR_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "F5BigIp",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "F5 Big-IP Workbook with template",
+        "displayName": "F5 Big-IP workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName2'),'/',variables('workbookVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "F5NetworksWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion2')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId2')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insights into F5 BIG-IP Application Security Manager (ASM), by analyzing traffic and activities.\nThis workbook provides insight into F5's web application firewall events and identifies attack traffic patterns across multiple ASM instances as well as overall BIG-IP health."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook2-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":1,\"content\":{\"json\":\"# F5 BIG-IP ASM Insights\"},\"name\":\"text - 0\"},{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"query\":\"\",\"parameters\":[{\"id\":\"977757fe-a2e3-4c43-8b7f-cc4cae3b03cc\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":2419200000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true}}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let data = F5Telemetry_LTM_CL;\\r\\ndata\\r\\n| summarize Count = count() by hostname_s\\r\\n| join kind = fullouter (datatable(hostname_s:string)['OneDrive', 'SharePoint']) on hostname_s\\r\\n| project hostname_s = iff(hostname_s == '', hostname_s1, hostname_s), Count = iff(hostname_s == '', 0, Count)\\r\\n| join kind = inner (data\\r\\n    | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by hostname_s)\\r\\n    on hostname_s\\r\\n| project-away hostname_s1, TimeGenerated\\r\\n| extend hostname_s = hostname_s\\r\\n| union (\\r\\n    data \\r\\n    | summarize Count = count() \\r\\n    | extend jkey = 1\\r\\n    | join kind=inner (data\\r\\n        | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\\r\\n        | extend jkey = 1) on jkey\\r\\n    | extend hostname_s = 'All', hostname_ss = '*'    \\r\\n)\\r\\n| order by Count desc\\r\\n| take 10\\r\\n\",\"size\":4,\"exportFieldName\":\"hostname_s\",\"exportParameterName\":\"HostName\",\"exportDefaultValue\":\"All\",\"exportToExcelOptions\":\"visible\",\"title\":\"HostName events\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"tiles\",\"tileSettings\":{\"titleContent\":{\"columnMatch\":\"hostname_s\",\"formatter\":1,\"formatOptions\":{\"showIcon\":true}},\"leftContent\":{\"columnMatch\":\"Count\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\",\"showIcon\":true},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}},\"secondaryContent\":{\"columnMatch\":\"Trend\",\"formatter\":10,\"formatOptions\":{\"min\":0,\"palette\":\"blue\",\"showIcon\":true}},\"showBorder\":false}},\"name\":\"query - 2\"},{\"type\":1,\"content\":{\"json\":\"---\\r\\n## LTM events\"},\"name\":\"text - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_LTM_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| summarize count() by hostname_s, bin(TimeGenerated, {TimeRange:grain}) \",\"size\":0,\"exportToExcelOptions\":\"visible\",\"title\":\"HostName LTM events over time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query - 3\"},{\"type\":1,\"content\":{\"json\":\"---\\r\\n## System events\"},\"name\":\"text - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_system_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| summarize AggregatedValue = avg(cpu_d) by hostname_s, bin(TimeGenerated, {TimeRange:grain}) \\r\\n| sort by AggregatedValue desc\",\"size\":0,\"exportToExcelOptions\":\"visible\",\"title\":\"BIG-IP CPU use over time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"customWidth\":\"50\",\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_system_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| summarize AggregatedValue = avg(tmmMemory_d) by hostname_s, bin(TimeGenerated, {TimeRange:grain}) \\r\\n| sort by AggregatedValue desc\",\"size\":0,\"exportToExcelOptions\":\"visible\",\"title\":\"BIG-IP TMM Memory use over time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"customWidth\":\"50\",\"name\":\"query - 5\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_system_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| summarize AggregatedValue = avg(memory_d) by hostname_s, bin(TimeGenerated, {TimeRange:grain}) \\r\\n| sort by AggregatedValue desc\",\"size\":0,\"exportToExcelOptions\":\"visible\",\"title\":\"BIG-IP Memory use over time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"hostname_s\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"AggregatedValue\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"customWidth\":\"50\",\"name\":\"query - 6\"},{\"type\":1,\"content\":{\"json\":\"---\\r\\n## ASM events\"},\"name\":\"text - 10\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_ASM_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| where isnotempty(request_status_s)\\r\\n| summarize ASM_Policy_Status = count() by ['Request Status'] = request_status_s, severity_s, violations_s\\r\\n| order by ['Request Status'] asc\",\"size\":0,\"exportToExcelOptions\":\"visible\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Request Status\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"severity_s\",\"formatter\":18,\"formatOptions\":{\"showIcon\":true,\"thresholdsOptions\":\"icons\",\"thresholdsGrid\":[{\"operator\":\"==\",\"thresholdValue\":\"Critical\",\"representation\":\"4\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Informational\",\"representation\":\"1\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Error\",\"representation\":\"3\",\"text\":\"{0}{1}\"},{\"operator\":\"==\",\"thresholdValue\":\"Worning\",\"representation\":\"warning\",\"text\":\"{0}{1}\"},{\"operator\":\"Default\",\"representation\":\"more\",\"text\":\"{0}{1}\"}],\"aggregation\":\"Unique\"}},{\"columnMatch\":\"violations_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true,\"aggregation\":\"Unique\"}},{\"columnMatch\":\"ASM_Policy_Status\",\"formatter\":8,\"formatOptions\":{\"min\":0,\"palette\":\"blue\",\"showIcon\":true,\"aggregation\":\"Sum\"}},{\"columnMatch\":\"request_status\",\"formatter\":5,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"request_status_s\",\"formatter\":5,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"$gen_group\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}],\"hierarchySettings\":{\"treeType\":1,\"groupBy\":[\"Request Status\"],\"expandTopLevel\":true},\"sortBy\":[{\"itemKey\":\"$gen_group\",\"sortOrder\":1}],\"labelSettings\":[{\"columnId\":\"request_status_s\",\"label\":\"Request Status\"},{\"columnId\":\"severity_s\",\"label\":\"Severity\"},{\"columnId\":\"violations_s\",\"label\":\"Violations\"},{\"columnId\":\"ASM_Policy_Status\",\"label\":\"Count\"}]}},\"name\":\"query - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_ASM_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| where isnotempty(attack_type_s) \\r\\n| summarize count() by hostname_s, bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"exportToExcelOptions\":\"visible\",\"title\":\"ASM violations\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_ASM_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| where isnotempty(attack_type_s) \\r\\n| summarize Total_Attacks = count() by ['Attack Type'] = attack_type_s , attack_type_s\\r\\n| sort by Total_Attacks\",\"size\":0,\"exportFieldName\":\"attack_type_s\",\"exportParameterName\":\"attack_type\",\"exportDefaultValue\":\"All\",\"exportToExcelOptions\":\"visible\",\"title\":\"ASM violations attacks\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"Attack Type\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"attack_type_s\",\"formatter\":5,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"Total_Attacks\",\"formatter\":8,\"formatOptions\":{\"min\":0,\"palette\":\"greenRed\",\"showIcon\":true}}],\"filter\":true}},\"customWidth\":\"50\",\"name\":\"query - 12\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_ASM_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| where '{attack_type}' == attack_type_s or '{attack_type}' == \\\"All\\\"\\r\\n| where isnotempty(attack_type_s) \\r\\n| summarize Total_Attacks = count() by ['Attack Type'] = attack_type_s \\r\\n| sort by Total_Attacks\",\"size\":0,\"exportToExcelOptions\":\"visible\",\"title\":\"ASM violations attacks\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 14\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"F5Telemetry_ASM_CL \\r\\n| where hostname_s == '{HostName}' or '{HostName}' == \\\"All\\\"\\r\\n| where '{attack_type}' == attack_type_s or '{attack_type}' == \\\"All\\\"\\r\\n| where  request_status_s == \\\"blocked\\\" \\r\\n| project TimeGenerated, ip_client_s, request_status_s, violation_rating_s ,hostname_s, request_s , attack_type_s, violations_s, support_id_s \\r\\n| order by toint(violation_rating_s) desc\\r\\n\",\"size\":0,\"showAnalytics\":true,\"exportToExcelOptions\":\"visible\",\"title\":\"Attack summary\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"ip_client_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"request_status_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"hostname_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"request_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"attack_type_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"violations_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}},{\"columnMatch\":\"violation_rating_s\",\"formatter\":8,\"formatOptions\":{\"palette\":\"greenRed\",\"showIcon\":true}},{\"columnMatch\":\"session_id_s\",\"formatter\":0,\"formatOptions\":{\"showIcon\":true}}],\"filter\":true,\"labelSettings\":[{\"columnId\":\"ip_client_s\",\"label\":\"IP client\"},{\"columnId\":\"request_status_s\",\"label\":\"Request Status\"},{\"columnId\":\"hostname_s\",\"label\":\"Hostname\"},{\"columnId\":\"request_s\",\"label\":\"Request\"},{\"columnId\":\"attack_type_s\",\"label\":\"Attack Type\"},{\"columnId\":\"violations_s\",\"label\":\"Violations\"},{\"columnId\":\"violation_rating_s\",\"label\":\"Violation Rating\"},{\"columnId\":\"session_id_s\",\"label\":\"Session Id\"}]}},\"name\":\"query - 13\"}],\"fromTemplateId\":\"sentinel-F5Networks\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId2'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=F5NetworksWorkbook; logoFileName=f5_logo.svg; description=Gain insights into F5 BIG-IP Application Security Manager (ASM), by analyzing traffic and activities.\nThis workbook provides insight into F5's web application firewall events and identifies attack traffic patterns across multiple ASM instances as well as overall BIG-IP health.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.1.0; title=F5 BIG-IP ASM; templateRelativePath=F5Networks.json; subtitle=; provider=F5 Networks}.description",
+                "parentId": "[variables('workbookId2')]",
+                "contentId": "[variables('_workbookContentId2')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "F5 Big-IP",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "F5 Networks"
+                },
+                "support": {
+                  "name": "F5 Networks",
+                  "tier": "Partner",
+                  "link": "https://support.f5.com/csp/home"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "F5Telemetry_LTM_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "F5Telemetry_system_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "F5Telemetry_ASM_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "F5BigIp",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "F5 Big-IP",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "F5 Networks"
+        },
+        "support": {
+          "name": "F5 Networks",
+          "tier": "Partner",
+          "link": "https://support.f5.com/csp/home"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId2')]",
+              "version": "[variables('workbookVersion2')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-25",
+        "providers": [
+          "F5 Networks"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

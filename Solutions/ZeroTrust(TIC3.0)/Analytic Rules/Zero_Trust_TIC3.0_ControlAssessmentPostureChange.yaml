@@ -1,0 +1,48 @@
+id: 4942992d-a4d3-44b0-9cf4-b5a23811d82d
+name: ZeroTrust(TIC3.0) Control Assessment Posture Change
+description: |
+  'Zero Trust(TIC3.0) Control Assessments have Deviated from Configured Threshold Baselines'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  SecurityRecommendation
+  | where RecommendationDisplayName <> ""
+  | extend ControlFamily=iff(RecommendationDisplayName has_any("email"), "Email",
+      iff(RecommendationDisplayName has_any("apps", "teams", "meeting", "call"), "Unified Communications & Collaboration",
+      iff(RecommendationDisplayName has_any("dns", "domain"), "DNS",
+      iff(RecommendationDisplayName has_any("endpoint protection", "malware", "file", "files", "IaaSAntimalware"), "Files",
+      iff(RecommendationDisplayName has_any("Security Center", "defender", "adaptive", "HoneyTokens", "honey", "deception", "intrusion", "incident", "incidents"), "Intrusion Detection",
+      iff(RecommendationDisplayName has_any("firewall", "watcher", "proxy", "certificate", "url", "web"), "Web",
+      iff(RecommendationDisplayName has_any("network", "segment", "network security groups", "subnet", "application gateway", "security groups", "IP forwarding", "port", "ports", "networks"), "Networking",
+      iff(RecommendationDisplayName has_any("backup", "denial", "DDoS", "load", "scale", "front", "traffic manager", "pool", "disaster", "region", "redundant", "geo"), "Resiliency",
+      iff(RecommendationDisplayName has_any("encrypt", "rest", "transit", "data", "http", "https", "TLS", "transfer", "transit", "Secure Socket", "SSH", "just", "FTP", "server-side", "storage", "database", "databases", "SQL", "disk", "disks"), "Data Protection",
+      iff(RecommendationDisplayName has_any("private", "vpn", "automation", "playbook", "logic", "notification", "authorized", "safe", "network gateway", "express", "VPC"), "Enterprise",
+      iff(RecommendationDisplayName has_any("recover", "log", "configured", "configuration", "identity", "privilege", "admin", "authentication", "JIT", "just", "password", "time", "sync", "vulnerability", "Vulnerabilities", "updates", "update", "upgrade", "audit", "account", "guest", "shared", "access", "machines", "rights", "VM", "key", "keys", "IAM", "EC2", "GuardDuty", "logs", "CloudTrail", "MFA", "External accounts", "accounts", "config", "credentials", "privileged", "owner", "owners", "login", "logon", "virtual machine", "container", "containers", "Kubernetes"), "Universal Security Capabilities", "Other")))))))))))
+  | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationDisplayName
+  | summarize
+      Failed=countif(RecommendationState == "Unhealthy"),
+      Passed=countif(RecommendationState == "Healthy"),
+      Total=countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy")
+      by ControlFamily
+  | extend PassedControlsPercentage = (Passed / todouble(Total)) * 100
+  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/5')
+  | extend URLCustomEntity = RemediationLink
+  | project ControlFamily, Total, PassedControlsPercentage, Passed, Failed, RemediationLink, URLCustomEntity
+  | where PassedControlsPercentage < 70 //Adjust PassedRatePercentage Thresholds within Organizational Needs
+  | sort by PassedControlsPercentage asc
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

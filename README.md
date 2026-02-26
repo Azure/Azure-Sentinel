@@ -1,19 +1,22 @@
-# Microsoft Sentinel
-Welcome to the Microsoft Sentinel repository! This repository contains out of the box detections, exploration queries, hunting queries, workbooks, playbooks and much more to help you get ramped up with Microsoft Sentinel and provide you security content to secure your environment and hunt for threats. You can also submit to [issues](https://github.com/Azure/Azure-Sentinel/issues) for any samples or resources you would like to see here as you onboard to Microsoft Sentinel. This repository welcomes contributions and refer to this repository's [wiki](https://aka.ms/threathunters) to get started. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
+
+# Microsoft Sentinel and Microsoft 365 Defender 
+Welcome to the unified Microsoft Sentinel and Microsoft 365 Defender repository! This repository contains out of the box detections, exploration queries, hunting queries, workbooks, playbooks and much more to help you get ramped up with Microsoft Sentinel and provide you security content to secure your environment and hunt for threats. The hunting queries also include Microsoft 365 Defender hunting queries for advanced hunting scenarios in both Microsoft 365 Defender and Microsoft Sentinel. You can also submit to [issues](https://github.com/Azure/Azure-Sentinel/issues) for any samples or resources you would like to see here as you onboard to Microsoft Sentinel. This repository welcomes contributions and refer to this repository's [wiki](https://aka.ms/threathunters) to get started. For questions and feedback, please contact [AzureSentinel@microsoft.com](AzureSentinel@microsoft.com) 
 
 # Resources
 * [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/?linkid=2073774&clcid=0x409)
+* [Microsoft 365 Defender documentation](https://docs.microsoft.com/microsoft-365/security/defender/microsoft-365-defender?view=o365-worldwide)
 * [Security Community Webinars](https://aka.ms/securitywebinars)
 * [Getting started with GitHub](https://help.github.com/en#dotcom)
 
 We value your feedback. Here are some channels to help surface your questions or feedback:
-1. General product specific Q&A - Join in the [Microsoft Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/microsoft-sentinel/bd-p/MicrosoftSentinel)
-1. Product specific feature requests - Upvote or post new on [Microsoft Sentinel feedback forums](https://feedback.azure.com/d365community/forum/37638d17-0625-ec11-b6e6-000d3a4f07b8)
-1. Report product or contribution bugs - File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
-1. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
+1. General product specific Q&A for SIEM and SOAR - Join in the [Microsoft Sentinel Tech Community conversations](https://techcommunity.microsoft.com/t5/microsoft-sentinel/bd-p/MicrosoftSentinel)
+2. General product specific Q&A for XDR - Join in the [Microsoft 365 Defender Tech Community conversations](https://techcommunity.microsoft.com/t5/microsoft-365-defender/bd-p/MicrosoftThreatProtection)
+3. Product specific feature requests - Upvote or post new on [Microsoft Sentinel feedback forums](https://feedback.azure.com/d365community/forum/37638d17-0625-ec11-b6e6-000d3a4f07b8)
+4. Report product or contribution bugs - File a GitHub Issue using [Bug template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=bug_report.md&title=)
+5. General feedback on community and contribution process - File a GitHub Issue using [Feature Request template](https://github.com/Azure/Azure-Sentinel/issues/new?assignees=&labels=&template=feature_request.md&title=)
 
 
-# Contributing
+# Contribution guidelines
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
@@ -28,7 +31,7 @@ Brand new or update to a contribution via these methods:
     * Browse to the folder you want to upload your file to
     * Choose Upload Files and browse to your file. 
     * You will be required to create your own branch and then submit the Pull Request for review.
-* Use [GitHub Desktop](https://help.github.com/en/desktop/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
+* Use [GitHub Desktop](https://docs.github.com/en/desktop/overview/getting-started-with-github-desktop) or [Visual Studio](https://visualstudio.microsoft.com/vs/) or [VSCode](https://code.visualstudio.com/?wt.mc_id=DX_841432)
     * [Fork the repo](https://docs.github.com/github/getting-started-with-github/fork-a-repo)  
     * [Clone the repo](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
     * [Create your own branch](https://help.github.com/en/desktop/contributing-to-projects/creating-a-branch-for-your-work)
@@ -54,8 +57,8 @@ A total of 1 test files matched the specified pattern.
    Expected object to be <null>, but found System.ComponentModel.DataAnnotations.ValidationException with message "An old mapping for entity 'AccountCustomEntity' does not have a matching new mapping entry."
 ```
 
-### Pull Request Kql Validation Check
-As part of the PR checks we run a syntax validation of the kql queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
+### Pull Request KQL Validation Check
+As part of the PR checks we run a syntax validation of the KQL queries defined in the template. If this check fails go to Azure Pipeline (by pressing on the errors link on the checks tab in your PR)
 ![Azurepipeline](.github/Media/Azurepipeline.png)
 In the pipeline you can see which test failed and what is the cause:
 ![Pipeline Tests Tab](.github/Media/PipelineTestsTab.png)
@@ -91,8 +94,8 @@ your table schema is defined in json file in the folder *Azure-Sentinel\\.script
   ]
 }
 ```
-### Run Kql Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
+### Run KQL Validation Locally
+In order to run the KQL validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
 * Open Shell and navigate to  `Azure-Sentinel\\.script\tests\KqlvalidationsTests\`
 * Execute `dotnet test`
@@ -100,7 +103,7 @@ In order to run the kql validation before submitting Pull Request in you local m
 Example of output (in Ubuntu):
 ```
 Welcome to .NET Core 3.1!
----------------------
+----------------------
 SDK Version: 3.1.403
 
 Telemetry
@@ -137,7 +140,7 @@ The schema validation includes the detection's frequency and period, the detecti
 A wrong format or missing attributes will result with an informative check failure, which should guide you through the resolution of the issue, but make sure to look into the format of already approved detection.
 
 ### Run Detection Schema Validation Locally
-In order to run the kql validation before submitting Pull Request in you local machine:
+In order to run the KQL validation before submitting Pull Request in you local machine:
 * You need to have **.Net Core 3.1 SDK** installed [How to download .Net](https://dotnet.microsoft.com/download) (Supports all platforms)
 * Open Shell and navigate to  `Azure-Sentinel\\.script\tests\DetectionTemplateSchemaValidation\`
 * Execute `dotnet test`
@@ -151,4 +154,4 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
-For information on what you can contribute and further details, refer to the ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) section on the project's [wiki](https://aka.ms/threathunters).
+For information on what you can contribute and further details, refer to the ["get started"](https://github.com/Azure/Azure-Sentinel/wiki#get-started) section on the project's [wiki](https://aka.ms/threathunters). 

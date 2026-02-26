@@ -1,0 +1,360 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for Cisco ISE
+  Version: '0.1'
+  LastUpdated: July 13, 2023
+Product:
+  Name: Cisco ISE
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Cisco ISE Security Events 
+  Link: https://www.cisco.com/c/en/us/td/docs/security/ise/3-2/admin_guide/b_ise_admin_3_2/b_ISE_admin_32_maintain_monitor.html#ID58
+Description: |
+  This ASIM parser supports normalizing administrative activity in the Cisco ISE events to the ASIM Audit Event schema.
+ParserName: vimAuditEventCiscoISE
+EquivalentBuiltInParser: _Im_AuditEvent_CiscoISE
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let EventFieldsLookup=datatable(
+    EventOriginalType: int,
+    EventType: string,
+    EventResult: string,
+    EventOriginalSeverity: string,
+    EventSeverity: string,
+    Object: string,
+    Operation: string,
+    EventMessage: string
+    )[
+    "52000", "Create", "Success", "NOTICE", "Informational", "ISE instance", "Added configuration", "Added configuration",
+    "52001", "Set", "Success", "NOTICE", "Informational", "ISE instance", "Changed configuration", "Changed configuration",
+    "52002", "Delete", "Success", "NOTICE", "Informational", "ISE instance", "Deleted configuration", "Deleted configuration",
+    "52003", "Other", "Success", "NOTICE", "Informational", "Node", "Deregister Node", "One of the ISE instances in the deployment has been de-registered.",
+    "52004", "Other", "Success", "NOTICE", "Informational", "Node", "Register Node", "A new ISE instance has been registered and has joined the deployment.",
+    "52005", "Enable", "Success", "NOTICE", "Informational", "Node", "Activate Node", "An ISE instance has been activated to receive updates from the Primary node.",
+    "52006", "Disable", "Success", "NOTICE", "Informational", "Node", "Deactivate ISE Node", "An ISE instance has been deactivated and will no longer receive updates from the Primary node.",
+    "52007", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Force Full replication", "A Force Full replication has been issued for an ISE instance.",
+    "52008", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Replacement Register Handler", "A new ISE instance has joined the deployment through hardware replacement.",
+    "52009", "Other", "Success", "NOTICE", "Informational", "Node", "Promote Node", "A Secondary node has been promoted to be the Primary node of the deployment.",
+    "52013", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Hardware Replacement", "A new ISE instance has joined the deployment through hardware replacement.",
+    "52015", "Enable", "Success", "NOTICE", "Informational", "LogCollector Target", "Enable LogCollector Target", "Enable the deployment Log Collector target.",
+    "52016", "Other", "Success", "NOTICE", "Informational", "LogCollector Node", "Select LogCollector Node", "The Log Collector node for the deployment has been selected.",
+    "52017", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Apply software update", "Apply a software update to the selected ISE instances.",
+    "52030", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Full replication succeeded", "Full replication was completed successfully",
+    "52031", "Other", "Failure", "NOTICE", "Low", "ISE instance", "Full replication failed", "Failed to complete full replication",
+    "52033", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Registration succeeded", "Registration with the primary node was completed successfully",
+    "52035", "Other", "Failure", "NOTICE", "Low", "ISE instance", "Registration failed", "Failed to perform the full replication requested by the primary instance",
+    "52038", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Registration succeeded", "The ISE instance was successfully joined to a distributed ISE deployment",
+    "52039", "Other", "Failure", "NOTICE", "Low", "ISE instance", "Registration failed", "The ISE instance was unable to join a distributed deployment",
+    "52042", "Other", "Success", "NOTICE", "Informational", "Primary instance", "Demotion succeeded", "Demotion of the existing primary instance was completed successfully",
+    "52043", "Other", "Failure", "NOTICE", "Low", "Primary instance", "Demotion failed", "Demotion of the existing primary instance failed",
+    "52045", "Other", "Success", "NOTICE", "Informational", "Secondary instance", "Promotion succeeded", "Promotion of the secondary instance was completed successfully",
+    "52046", "Other", "Failure", "NOTICE", "Low", "Secondary instance", "Promotion failed", "Promotion of a secondary instance failed",
+    "52072", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Deregister succeeded", "Deregistration was completed successfully",
+    "52073", "Other", "Failure", "NOTICE", "Low", "ISE instance", "Deregister failed", "Deregistration failed",
+    "52078", "Delete", "Failure", "NOTICE", "Low", "ISE secondary instance", "Delete node failed", "Failed to delete the ISE secondary instance in inactive mode from the deployment",
+    "52079", "Delete", "Success", "NOTICE", "Informational", "ISE secondary instance", "Delete node succeeded", "The ISE primary instance successfully deleted the secondary instance in inactive mode",
+    "52080", "Delete", "Failure", "NOTICE", "Low", "ISE secondary instance", "Delete node failed", "Failed to delete the ISE secondary instance in inactive mode from the primary instance",
+    "52082", "Other", "Failure", "NOTICE", "Low", "ISE secondary instance", "Backup failed", "An immediate backup for the secondary instance failed",
+    "52084", "Other", "Success", "NOTICE", "Informational", "ISE primary instance", "Backup succeeded", "An immediate backup for the primary instance was completed successfully",
+    "52085", "Other", "Failure", "NOTICE", "Low", "ISE primary instance", "Backup failed", "An immediate backup for the primary failed",
+    "52091", "Other", "Failure", "NOTICE", "Low", "Update bundle", "Software update failed", "Software update download of update bundle failed",
+    "52092", "Other", "Success", "NOTICE", "Informational", "ISE instance", "Software update succeeded", "The software update was completed successfully",
+    "52093", "Other", "Failure", "NOTICE", "Low", "ISE instance", "Software update failed", "The software update failed",
+    "57000", "Other", "Success", "NOTICE", "Informational", "Log file(s)", "Deleted rolled-over local log file(s)", "Deleted rolled-over local log file(s)",
+    "58001", "Other", "Success", "NOTICE", "Informational", "ISE process", "ISE process started", "An ISE process has started",
+    "58002", "Other", "Success", "NOTICE", "Informational", "ISE process", "ISE process stopped", "An ISE process has stopped",
+    "58003", "Other", "Success", "NOTICE", "Informational", "ISE processes", "ISE processes started", "All ISE processes have started",
+    "58004", "Other", "Success", "NOTICE", "Informational", "ISE processes", "ISE processes stopped", "All ISE processes have stopped",
+    "58005", "Other", "Success", "NOTICE", "Informational", "ISE process", "ISE process was restarted by watchdog service", "The watchdog service has restarted an ISE process",
+    "60000", "Install", "Success", "NOTICE", "Informational", "Node", "Patch installation completed successfully on the node", "Patch installation completed successfully on the node",
+    "60001", "Install", "Failure", "NOTICE", "Low", "Node", "Patch installation failed on the node", "Patch installation failed on the node",
+    "60002", "Other", "Success", "NOTICE", "Informational", "Node", "Patch rollback completed successfully on the node", "Patch rollback completed successfully on the node",
+    "60003", "Other", "Failure", "NOTICE", "Low", "Node", "Patch rollback failed on the node", "Patch rollback failed on the node",
+    "60050", "Create", "Success", "NOTICE", "Informational", "Node", "Node added to deployment successfully", "Node added to deployment successfully",
+    "60051", "Create", "Failure", "NOTICE", "Low", "Node", "Failed to add node to deployment", "Failed to add node to deployment",
+    "60052", "Delete", "Success", "NOTICE", "Informational", "Node", "Node removed from deployment", "Node removed from deployment",
+    "60053", "Delete", "Failure", "NOTICE", "Low", "Node", "Failed to remove node from deployment", "Failed to remove node from deployment",
+    "60054", "Other", "Success", "NOTICE", "Informational", "Node", "Node updated successfully", "Node updated successfully",
+    "60055", "Other", "Failure", "NOTICE", "Low", "Node", "Failed to update node", "Failed to update node",
+    "60056", "Other", "Success", "NOTICE", "Informational", "Cluster", "The runtime status of the node group has changed", "There is a change in the cluster state",
+    "60057", "Other", "Success", "NOTICE", "Informational", "PSN node", "A PSN node went down", "One of the PSN nodes in the node group has gone down",
+    "60058", "Other", "Success", "NOTICE", "Informational", "Heartbeat System", "The initial status of the heartbeat system", "The initial status of the heartbeat system",
+    "60059", "Other", "Success", "NOTICE", "Informational", "Node", "Node has successfully registered with MnT", "Node has successfully registered with MnT",
+    "60060", "Other", "Success", "NOTICE", "Informational", "Policy Service nodes", "Administrator invoked OCSP Clear Cache operation for all Policy Service nodes", "The ISE Administrator invoked OCSP Clear Cache operation for all Policy Service nodes",
+    "60061", "Other", "Success", "NOTICE", "Informational", "Policy Service nodes", "OCSP Clear Cache operation completed successfully", "OCSP Clear Cache operation completed successfully on all Policy Service nodes",
+    "60062", "Other", "Failure", "NOTICE", "Low", "Policy Service nodes", "OCSP Clear Cache operation terminated with error", "OCSP Clear Cache clear operation terminated with error on one or more Policy Service nodes",
+    "60063", "Other", "Success", "NOTICE", "Informational", "ISE secondary node", "Replication to node completed successfully", "Replication of data to secondary node completed successfully",
+    "60064", "Other", "Failure", "NOTICE", "Low", "ISE secondary node", "Replication to node failed", "Replication of data to secondary node failed",
+    "60068", "Other", "Success", "INFO", "Informational", "Profiler Feed Service", "Profiler Feed Service - manual download initiated", "The Profiler Feed Service has begun the check and download of new and/or updated Profiles in response to Administrator's request",
+    "60069", "Other", "Success", "INFO", "Informational", "Profiler Feed Service", "Profiler Feed Service - Profiles Downloaded", "The Profiler Feed Service has downloaded new and/or updated Profiles",
+    "60070", "Other", "Success", "INFO", "Informational", "Profiler Feed Service", "Profiler Feed Service - No Profiles Downloaded", "The Profiler Feed Service found no new and/or updated Profiles to download",
+    "60083", "Set", "Success", "INFO", "Informational", "Syslog Server", "Syslog Server configuration change", "Syslog Server configuration change has occurred",
+    "60084", "Set", "Success", "INFO", "Informational", "ADEOS CLI user", "ADEOS CLI user configuration change", "Configuration change occurred for ADEOS CLI user",
+    "60085", "Set", "Success", "INFO", "Informational", "ADEOS Repository", "ADEOS Repository configuration change", "Configuration change occurred for ADEOS repository",
+    "60086", "Set", "Success", "INFO", "Informational", "ADEOS SSH Service", "ADEOS SSH Service configuration change", "Configuration change occurred for ADEOS SSH Service",
+    "60087", "Set", "Success", "INFO", "Informational", "ADEOS Maximum SSH CLI sessions", "ADEOS Maximum SSH CLI sessions configuration change", "Configuration change occurred for ADEOS Maximum CLI sessions",
+    "60088", "Set", "Success", "INFO", "Informational", "ADEOS SNMP agent", "ADEOS SNMP agent configuration change", "Configuration change occurred for ADEOS SNMP agent",
+    "60089", "Set", "Success", "INFO", "Informational", "ADEOS CLI kron scheduler", "ADEOS CLI kron scheduler policy configuration change", "Configuration change occurred for ADEOS CLI kron scheduler policy",
+    "60090", "Set", "Success", "INFO", "Informational", "ADEOS CLI kron scheduler", "ADEOS CLI kron scheduler occurence configuration change", "Configuration change occurred for ADEOS CLI kron scheduler occurence",
+    "60091", "Set", "Success", "INFO", "Informational", "ADEOS CLI pre-login banner", "ADEOS CLI pre-login banner configuration change", "Configuration change occurred for ADEOS CLI pre-login banner",
+    "60092", "Set", "Success", "INFO", "Informational", "ADEOS CLI post-login banner", "ADEOS CLI post-login banner configuration change", "Configuration change occurred for ADEOS CLI post-login banner",
+    "60094", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE Backup has completed successfully", "ISE Backup has completed successfully",
+    "60095", "Other", "Failure", "ERROR", "Low", "ISE instance", "ISE Backup has failed", "ISE Backup has failed",
+    "60097", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE Log Backup has completed successfully", "ISE Log Backup has completed successfully",
+    "60098", "Other", "Failure", "ERROR", "Low", "ISE instance", "ISE Log Backup has failed", "ISE Log Backup has failed",
+    "60100", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE Restore has completed successfully", "ISE Restore has completed successfully",
+    "60101", "Other", "Failure", "ERROR", "Low", "ISE instance", "ISE Restore has failed", "ISE Restore has failed",
+    "60102", "Install", "Success", "INFO", "Informational", "ISE instance", "Application installation completed successfully", "Application installation completed successfully",
+    "60103", "Install", "Failure", "ERROR", "Low", "ISE instance", "Application installation failed", "Application installation failed",
+    "60105", "Delete", "Success", "INFO", "Informational", "ISE instance", "Application remove completed successfully", "Application remove completed successfully",
+    "60106", "Delete", "Failure", "ERROR", "Low", "ISE instance", "Application remove failed", "Application remove failed",
+    "60107", "Other", "Failure", "ERROR", "Low", "ISE instance", "Application upgrade failed", "Application upgrade failed",
+    "60111", "Delete", "Success", "INFO", "Informational", "ISE instance", "Application patch remove has completed successfully", "Application patch remove has completed successfully",
+    "60112", "Delete", "Failure", "ERROR", "Low", "ISE instance", "Application patch remove has failed", "Application patch remove has failed",
+    "60113", "Other", "Success", "WARN", "Informational", "ISE server", "ISE server reload has been initiated", "ISE server reload has been initiated",
+    "60114", "Other", "Success", "WARN", "Informational", "ISE server", "ISE server shutdown has been initiated", "ISE server shutdown has been initiated",
+    "60118", "Delete", "Success", "INFO", "Informational", "File", "ADEOS CLI user has used delete CLI to delete file", "ADEOS CLI user has used delete CLI to delete file",
+    "60119", "Execute", "Success", "INFO", "Informational", "File", "ADEOS CLI user has used copy CLI to copy file", "ADEOS CLI user has used copy CLI to copy file",
+    "60120", "Execute", "Success", "INFO", "Informational", "Directory", "ADEOS CLI user has used mkdir CLI to create a directory", "ADEOS CLI user has used mkdir CLI to create a directory",
+    "60121", "Other", "Success", "INFO", "Informational", "System Config", "ADEOS CLI user has copied out running system configuration", "ADEOS CLI user has copied out running system configuration",
+    "60122", "Other", "Success", "INFO", "Informational", "System Config", "ADEOS CLI user has copied in system configuration", "ADEOS CLI user has copied in system configuration",
+    "60123", "Other", "Success", "INFO", "Informational", "System Config", "ADEOS CLI user has saved running system configuration", "ADEOS CLI user has saved running system configuration",
+    "60126", "Install", "Failure", "ERROR", "Low", "ISE instance", "Application patch installation failed", "Application patch installation failed",
+    "60128", "Other", "Failure", "ERROR", "Low", "File", "Failure occurred trying to copy file in from ADEOS CLI", "Failure occurred trying to copy file in from ADEOS CLI",
+    "60129", "Other", "Failure", "ERROR", "Low", "File", "Failure occurred trying to copy file out from ADEOS CLI", "Failure occurred trying to copy file out from ADEOS CLI",
+    "60130", "Set", "Success", "INFO", "Informational", "ISE Backup", "ISE Scheduled Backup has been configured", "ISE Scheduled Backup has been configured",
+    "60131", "Create", "Success", "INFO", "Informational", "ISE Support bundle", "ISE Support bundle has been created from web UI", "ISE Support bundle has been created from web UI",
+    "60132", "Delete", "Success", "INFO", "Informational", "ISE Support bundle", "ISE Support bundle has been deleted from web UI", "ISE Support bundle has been deleted from web UI",
+    "60133", "Other", "Failure", "ERROR", "Low", "ISE Support bundle", "ISE Support bundle generation from web UI has failed", "ISE Support bundle generation from web UI has failed",
+    "60153", "Other", "Success", "INFO", "Informational", "Certificate", "Certificate has been exported", "Certificate has been exported",
+    "60166", "Other", "", "WARN", "Informational", "Certificate", "Certificate will expire soon", "Certificate Expiration warning",
+    "60167", "Other", "", "WARN", "Informational", "Certificate", "Certificate has expired", "Certificate has expired",
+    "60172", "Other", "Success", "INFO", "Informational", "ISE instance", "Alarm(s) has/have been acknowledged", "These alarms are acknowledged and will not be displayed on the Dashboard",
+    "60173", "Other", "Success", "INFO", "Informational", "ISE instance", "Outdated alarms are purged", "Only latest 15000 alarms would be retained and rest of them are purged",
+    "60187", "Other", "Success", "INFO", "Informational", "ISE instance", "Application upgrade succeeded", "Application upgrade succeeded",
+    "60189", "Set", "Success", "INFO", "Informational", "ISE instance", "Terminal Session timeout has been modified", "Configuration change occurred for ADEOS CLI Terminal Session timeout",
+    "60193", "Set", "Success", "INFO", "Informational", "ISE instance", "RSA key configuration has been modified", "Configuration change occurred for ADEOS CLI RSA key",
+    "60194", "Set", "Success", "INFO", "Informational", "ISE instance", "Host key configuration has been modified", "Configuration change occurred for ADEOS CLI host key",
+    "60197", "Disable", "Success", "NOTICE", "Informational", "Certificate", "Revoked ISE CA issued Certificate.", "Certificate issued to Endpoint by ISE CA is revoked by Administrator",
+    "60198", "Delete", "Success", "INFO", "Informational", "MnT", "MnT purge event occurred", "MnT purge event occurred",
+    "60199", "Other", "Success", "INFO", "Informational", "ISE instance", "An IP-SGT mapping was deployed successfully", "An IP-SGT mapping was deployed successfully to a TrustSec device",
+    "60200", "Other", "Failure", "INFO", "Low", "ISE instance", "An IP-SGT mapping has failed deploying", "An IP-SGT mapping has failed deploying to a TrustSec device",
+    "60201", "Other", "Success", "INFO", "Informational", "ISE instance", "IP-SGT deployment to TrustSec device was successful", "IP-SGT deployment to TrustSec device was successful",
+    "60202", "Other", "Failure", "INFO", "Low", "ISE instance", "IP-SGT deployment to TrustSec device failed", "IP-SGT deployment to TrustSec device failed",
+    "60207", "Set", "Success", "INFO", "Informational", "ISE instance", "Logging loglevel configuration has been modified", "Configuration change occurred for ADEOS CLI logging loglevel",
+    "60208", "Other", "Success", "INFO", "Informational", "ISE instance", "Root CA certificate has been replaced", "Root CA certificate has been replaced",
+    "60209", "Enable", "Success", "INFO", "Informational", "CA service", "CA service enabled", "CA service enabled",
+    "60210", "Disable", "Success", "INFO", "Informational", "CA service", "CA service disabled", "CA service disabled",
+    "60213", "Other", "Success", "INFO", "Informational", "ISE instance", "CA keys were replaced by import operation", "CA keys were replaced by import operation",
+    "60214", "Other", "Success", "INFO", "Informational", "ISE instance", "CA keys were exported", "CA keys were exported",
+    "60215", "Other", "Success", "INFO", "Informational", "ISE instance", "Endpoint certs were marked expired", "Endpoint certs were marked expired by daily scheduled job",
+    "60216", "Delete", "Success", "INFO", "Informational", "ISE instance", "Endpoint certs were purged", "Endpoint certs were purged by daily scheduled job",
+    "60451", "Enable", "Success", "INFO", "Informational", "ISE instance", "Telemetry is enabled on this deployment", "Telemetry is enabled on this deployment",
+    "60452", "Disable", "Success", "INFO", "Informational", "ISE instance", "Telemetry is disabled on this deployment", "Telemetry is disabled on this deployment",
+    "61002", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new SGT from IEPG", "ISE has learned a new SGT from IEPG",
+    "61003", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has propagated a new EEPG to APIC", "ISE has propagated a new EEPG to APIC.",
+    "61004", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new SXP mapping from APIC endpoint", "ISE has learned a new SXP mapping from APIC endpoint",
+    "61005", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has propagated a new endpoint(SXP mapping) to APIC", "ISE has propagated a new endpoint(SXP mapping) to APIC",
+    "61006", "Delete", "Success", "INFO", "Informational", "SGT", "ISE has removed an SGT due to deleted IEPG", "ISE has removed an SGT due to deleted IEPG",
+    "61007", "Delete", "Success", "INFO", "Informational", "APIC", "ISE has removed EEPG from APIC due to SGT deletion", "ISE has removed EEPG from APIC due to SGT deletion",
+    "61008", "Delete", "Success", "INFO", "Informational", "APIC", "ISE has removed an SXP mapping due to endpoint deletion on APIC", "ISE has removed an SXP mapping due to endpoint deletion on APIC",
+    "61009", "Delete", "Success", "INFO", "Informational", "APIC", "ISE has removed endpoint APIC due to SXP mapping removal a new SXP mapping to APIC", "ISE has removed endpoint APIC due to SXP mapping removal a new SXP mapping to APIC",
+    "61016", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE failed to refresh EPG subscriber against APIC", "ISE failed to refresh EPG subscriber against APIC",
+    "61017", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE failed to refresh endpoint subscriber against APIC", "ISE failed to refresh endpoint subscriber against APIC",
+    "61018", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE failed to refresh EEPG subscriber against APIC", "ISE failed to refresh EEPG subscriber against APIC",
+    "61020", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE failed to refresh L3EXTOUT subscriber against APIC", "ISE failed to refresh L3EXTOUT subscriber against APIC",
+    "61022", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE has failed to propagate SGT to EEPG", "ISE has failed to propagate SGT to EEPG",
+    "61023", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE has failed to learn IEPG from APIC", "ISE has failed to learn IEPG from APIC",
+    "61024", "Other", "Failure", "INFO", "Low", "ISE instance", "ISE has failed to parse VRF for EPG", "ISE has failed to parse VRF for EPG",
+    "61030", "Other", "Failure", "INFO", "Low", "ISE instance", "TrustSec deploy verification was canceled.", "TrustSec deployment verification process was canceled as a new TrustSec deploy started.",
+    "61033", "Other", "Success", "INFO", "Informational", "ISE instance", "TrustSec deployment verification process succeeded.", "ISE trustsec configuration was successfully deployed to all network access devices.",
+    "61034", "Other", "", "INFO", "Low", "ISE instance", "Maximum resource limit reached.", "Maximum resource limit reached.",
+    "61051", "Set", "Success", "INFO", "Informational", "ISE instance", "Synflood-limit configured", "Synflood-limit configured",
+    "61052", "Set", "Success", "INFO", "Informational", "ISE instance", "Rate-limit configured", "Rate-limit configured",
+    "61100", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new tenant from ACI", "ISE has learned a new tenant from ACI",
+    "61101", "Delete", "Success", "INFO", "Informational", "ACI tenant", "ISE has removed ACI tenant", "ISE has removed ACI tenant",
+    "61102", "Other", "Failure", "ERROR", "Low", "ISE instance", "Failed to learn new tenant from ACI in ISE", "Failed to learn new tenant from ACI in ISE",
+    "61103", "Delete", "Failure", "ERROR", "Low", "ISE instance", "Failed to remove ACI tenant in ISE", "Failed to remove ACI tenant in ISE",
+    "61104", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new tenant from SDA", "ISE has learned a new tenant from SDA",
+    "61105", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new VN info", "IISE has learned a new VN info",
+    "61106", "Create", "Failure", "ERROR", "Low", "ISE instance", "Failed to create VN info in ISE", "Failed to create VN info in ISE",
+    "61107", "Other", "Success", "INFO", "Informational", "ISE instance", "VN info is updated in ISE", "VN info is updated in ISE",
+    "61108", "Other", "Failure", "ERROR", "Low", "ISE instance", "Failed to update VN info in ISE", "Failed to update VN info in ISE",
+    "61109", "Delete", "Success", "INFO", "Informational", "ACI tenant", "VN info is deleted in ISE", "VN info is deleted in ISE",
+    "61110", "Delete", "Failure", "ERROR", "Low", "ISE instance", "Failed to deleted VN info in ISE", "Failed to deleted VN info in ISE",
+    "61111", "Other", "Failure", "ERROR", "Low", "ISE instance", "Domain registration process failed", "Domain registration process failed",
+    "61114", "Other", "Success", "INFO", "Informational", "ISE instance", "Domain registration completed successfully", "Domain registration completed successfully",
+    "61115", "Other", "Failure", "ERROR", "Low", "ISE instance", "Domain registration failed", "Domain registration failed",
+    "61116", "Other", "Failure", "ERROR", "Low", "ACI certificate", "Unable to store ACI certificate", "Unable to store ACI certificate",
+    "61117", "Other", "Success", "INFO", "Informational", "ACI connector", "ACI connector started successfully", "ACI connector started successfully",
+    "61118", "Other", "Failure", "ERROR", "Low", "ACI connector", "Failed to start ACI connector", "Failed to start ACI connector",
+    "61120", "Delete", "Success", "INFO", "Informational", "ACI certificate", "Successfully deleted ACI certificate from ISE", "Successfully deleted ACI certificate from ISE",
+    "61121", "Delete", "Failure", "ERROR", "Low", "ACI certificate", "Failed to delete ACI certificate from ISE", "Failed to delete ACI certificate from ISE",
+    "61122", "Delete", "Failure", "ERROR", "Low", "ACI keystore", "Failed to delete ACI keystore", "Failed to delete ACI keystore",
+    "61123", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new ACI domain", "ISE has learned a new ACI domain",
+    "61124", "Other", "Failure", "ERROR", "Low", "ISE instance", "Failed to learn a new ACI domain", "Failed to learn a new ACI domain",
+    "61125", "Delete", "Success", "INFO", "Informational", "ACI domain", "ISE has removed ACI domain", "ISE has removed ACI domain",
+    "61126", "Delete", "Failure", "ERROR", "Low", "ACI domain", "Failed to remove ACI domain", "Failed to remove ACI domain",
+    "61127", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE has learned a new SDA domain", "ISE has learned a new SDA domain",
+    "61128", "Other", "Failure", "ERROR", "Low", "ISE instance", "Failed to learn a new SDA domain", "Failed to learn a new SDA domain",
+    "61129", "Delete", "Success", "INFO", "Informational", "SDA domain", "ISE has removed SDA domain", "ISE has removed SDA domain",
+    "61130", "Delete", "Failure", "ERROR", "Low", "SDA domain", "Failed to remove SDA domain", "Failed to remove SDA domain",
+    "61158", "Other", "Failure", "ERROR", "Low", "ISE instance", "ISE failed in receiving SDA SXP configuration", "ISE failed in receiving SDA SXP configuration",
+    "61160", "Other", "Failure", "ERROR", "Low", "ISE instance", "ISE failed to publish Gateway advertisement message to ACI", "ISE failed to publish Gateway advertisement message to ACI",
+    "61161", "Other", "Success", "INFO", "Informational", "ISE instance", "ISE learned new SXP Listener", "ISE learned new SXP Listener",
+    "61162", "Other", "Success", "INFO", "Informational", "SXP Listener", "ISE updates VN defined for SXP Listener", "ISE updates VN defined for SXP Listener",
+    "61163", "Other", "Success", "INFO", "Informational", "SXP Listener", "ISE learned new VN defined for SXP Listener", "ISE learned new VN defined for SXP Listener",
+    "61164", "Other", "Success", "INFO", "Informational", "SXP Listener", "ISE updates SXP Listener", "ISE updates SXP Listener",
+    "61165", "Delete", "Success", "INFO", "Informational", "SXP Listener", "ISE removed all SXP connections related to SXP Listener", "ISE removed all SXP connections related to SXP Listener",
+    "61166", "Other", "Success", "INFO", "Informational", "ACI", "ACI published Gateway advertisement message to SDA", "ACI published Gateway advertisement message to SDA",
+    "61167", "Other", "Success", "INFO", "Informational", "ISE instance", "Send ACI Gateway advertisement message to ISE", "Send ACI Gateway advertisement message to ISE",
+    "61168", "Other", "Failure", "ERROR", "Low", "ISE instance", "Failed to send ACI Gateway advertisement message to ISE", "Failed to send ACI Gateway advertisement message to ISE/SDA",
+    "61169", "Other", "Success", "INFO", "Informational", "ISE instance", "Successfully Send ACI Gateway advertisement message", "Successfully Send ACI Gateway advertisement message",
+    "61234", "Other", "Success", "WARN", "Informational", "ISE instance", "Got event with unknown properties", "Got event with unknown properties",
+    "62000", "Execute", "Success", "INFO", "Informational", "ISE instance", "Agentless script execute completed", "Agentless script execute completed",
+    "62001", "Execute", "Failure", "WARN", "Low", "ISE instance", "Agentless script execute failed", "Agentless script execute failed",
+    "62002", "Other", "Success", "INFO", "Informational", "ISE instance", "Agentless script upload completed", "Agentless script upload completed",
+    "62003", "Other", "Failure", "WARN", "Low", "ISE instance", "Agentless script upload failed", "Agentless script upload failed",
+    "61300", "Other", "Success", "INFO", "Informational", "ISE instance", "Network Access policy request", "Network Access policy request",
+    "61301", "Other", "Success", "INFO", "Informational", "ISE instance", "Device Admin policy request", "Device Admin policy request",
+    "61302", "Other", "Success", "INFO", "Informational", "ISE instance", "Policy component request", "Policy component request",
+    "60467", "Other", "Failure", "ERROR", "Low", "ISE instance", "OCSP Certificate renewal failed", "OCSP Certificate renewal failed.",
+    "60468", "Other", "Failure", "ERROR", "Low", "ISE instance", "Root CA Regeneration failed", "Regeneration of Root CA failed.",
+    "62008", "Other", "Success", "INFO", "Informational", "Meraki connector", "Meraki connector sync service starts", "Meraki connector sync service starts",
+    "62009", "Other", "Success", "INFO", "Informational", "Meraki connector", "Meraki connector sync service stops", "Meraki connector sync service stops",
+    "62010", "Other", "Failure", "WARN", "Low", "Meraki connector", "Meraki connector sync service failure", "Meraki connector sync service failure",
+    "62011", "Other", "Success", "INFO", "Informational", "Meraki connector", "Meraki connector sync cycle starts", "Meraki connector sync cycle starts",
+    "62012", "Other", "Success", "INFO", "Informational", "Meraki connector", "Meraki connector sync cycle stops", "Meraki connector sync cycle stops",
+    "62013", "Other", "Failure", "WARN", "Low", "Meraki connector", "Meraki connector sync cycle failure", "Meraki connector sync cycle failure",
+    "62014", "Other", "Success", "INFO", "Informational", "Meraki connector", "Meraki connector sync operation success", "Meraki connector sync operation success",
+    "62015", "Other", "Failure", "WARN", "Low", "Meraki connector", "Meraki connector sync operation failure", "Meraki connector sync operation failure",
+    "62016", "Other", "Success", "INFO", "Informational", "ISE instance", "Port 2484 opened for Data Connect", "Port 2484 opened for Data Connect",
+    "62017", "Other", "Success", "INFO", "Informational", "ISE instance", "Data Connect port 2484 closed", "Data Connect port 2484 closed"
+    ];
+    let CiscoISEAuditParser=(
+        starttime: datetime=datetime(null), 
+        endtime: datetime=datetime(null),
+        srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+        eventresult: string='*',
+        actorusername_has_any: dynamic=dynamic([]),
+        eventtype_in: dynamic=dynamic([]),
+        operation_has_any: dynamic=dynamic([]),
+        object_has_any: dynamic=dynamic([]),
+        newvalue_has_any: dynamic=dynamic([]),
+        disabled: bool = false
+    ) {
+    let EventOriginalTypeList = toscalar(EventFieldsLookup 
+        | where (eventresult == "*" or eventresult == EventResult)
+                and (array_length(eventtype_in) == 0 or EventType in (eventtype_in))
+                and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+        | summarize make_set(EventOriginalType));
+    Syslog
+    | where not(disabled)
+    //***************************** <Prefiltering> **************************
+    | where     (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime) 
+    //***************************** </Prefiltering> *************************
+    | where ProcessName has_any ("CISE", "CSCO")
+    | parse SyslogMessage with * " " longvalue:long " " EventOriginalType:int " " *
+    | where EventOriginalType in (EventOriginalTypeList)
+    | where 
+        (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SyslogMessage, srcipaddr_has_any_prefix))
+        and (array_length(actorusername_has_any) == 0 or SyslogMessage has_any (actorusername_has_any))
+        and (array_length(operation_has_any) == 0 or SyslogMessage has_any (operation_has_any))
+        and (array_length(newvalue_has_any) == 0 or SyslogMessage has_any (newvalue_has_any))
+    | project
+        TimeGenerated,
+        EventTime,
+        EventOriginalType,
+        Computer,
+        HostName,
+        HostIP,
+        SyslogMessage
+    | lookup EventFieldsLookup on EventOriginalType
+    | parse-kv SyslogMessage as (NetworkDeviceName: string, ['User-Name']: string, UserName: string, User: string, ['Remote-Address']: string, ['Device IP Address']: string) with (pair_delimiter=',', kv_delimiter='=')
+    | project-rename
+        SrcIpAddr=['Remote-Address']
+        , TargetIpAddr =['Device IP Address']
+    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+    | extend DvcHostname = coalesce(NetworkDeviceName, Computer, HostName)
+    | extend ActorUsername = coalesce(['User-Name'], UserName, User)
+    | extend ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)      
+    | where (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
+    | extend 
+        DvcIpAddr = iif(isnotempty(HostIP) and HostIP != "Unknown IP", HostIP, extract(@"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", 1, Computer)) 
+        , EventStartTime = coalesce(EventTime, TimeGenerated)
+        , EventEndTime = coalesce(EventTime, TimeGenerated)
+        , EventVendor = "Cisco"
+        , EventProduct = "ISE"
+        , EventProductVersion = "3.2"
+        , EventCount = int(1)
+        , EventSchema = "AuditEvent"
+        , EventSchemaVersion = "0.1.0"
+        , ObjectType = "Configuration Atom"
+        , TargetAppName = "ISE"
+        , TargetAppType = "Service"
+    // ***************** <Aliases> ********************
+    | extend 
+        Dvc = coalesce(DvcIpAddr, DvcHostname)
+        , Application = TargetAppName
+        , IpAddr = coalesce(SrcIpAddr, TargetIpAddr)
+        , Dst = TargetIpAddr
+        , Src = SrcIpAddr
+        , User = ActorUsername
+    // ***************** </Aliases> *******************
+    | project-away
+        EventTime,
+        Computer,
+        HostName,
+        SyslogMessage,
+        NetworkDeviceName,
+        ['User-Name'],
+        UserName
+    };
+    CiscoISEAuditParser(
+        starttime = starttime,
+        endtime = endtime,
+        srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+        actorusername_has_any = actorusername_has_any,
+        eventtype_in = eventtype_in,
+        eventresult = eventresult,
+        operation_has_any = operation_has_any,
+        object_has_any=object_has_any,
+        newvalue_has_any=newvalue_has_any,
+        disabled=disabled
+    )
