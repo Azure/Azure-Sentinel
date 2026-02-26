@@ -28,7 +28,7 @@ class LocalStorage(BaseStorage):
 class AzureBlobStorage(BaseStorage):
     def __init__(self):
         storage_account = os.environ.get('AzureWebJobsStorage')
-        audit_container = os.environ.get('StorageContainer', 'audit-query-storage')
+        audit_container = os.environ.get('StorageContainer', 'epm-query-storage')
         self.container_client = ContainerClient.from_connection_string(conn_str=storage_account,
                                                                        container_name=audit_container)
 

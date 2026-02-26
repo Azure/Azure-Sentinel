@@ -8,12 +8,12 @@ from typing import Optional
 import requests
 
 from .pyepm import (
-    getAggregatedEvents,
-    getAdminAuditEvents,
-    getAggregatedPolicyAudits,
-    getDetailedRawEvents,
-    getPolicyAuditRawEventDetails,
-    getSetsList,
+    get_admin_audit_events,
+    get_aggregated_events,
+    get_aggregated_policy_audits,
+    get_detailed_raw_events,
+    get_policy_audit_raw_event_details,
+    get_sets_list,
 )
 from .storage import AzureBlobStorage, LocalStorage
 
@@ -150,7 +150,7 @@ def collect_events() -> list:
     filter_date = '{"filter": "arrivalTime GE ' + str(start_time) + ' AND arrivalTime LE ' + end_time + '"}'
 
     try:
-        sets_list = getSetsList(epmserver=dispatcher_url, epmToken=token)
+        sets_list = get_sets_list(epmserver=dispatcher_url, epm_token=token)
         sets = sets_list.json().get('Sets') or []
     except Exception:
         logging.error('CyberArkEPMServerURL is invalid')
@@ -159,34 +159,34 @@ def collect_events() -> list:
     all_events: list = []
     for set_id in sets:
         logging.info(f"Collecting aggregated events from {set_id.get('Name')}")
-        for e in _fetch_set_events(getAggregatedEvents, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_aggregated_events, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'aggregated_events'
             all_events.append(e)
 
         logging.info(f"Collecting raw events from {set_id.get('Name')}")
-        for e in _fetch_set_events(getDetailedRawEvents, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_detailed_raw_events, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'raw_event'
             all_events.append(e)
 
         logging.info(f"Collecting aggregated policy audits from {set_id.get('Name')}")
-        for e in _fetch_set_events(getAggregatedPolicyAudits, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_aggregated_policy_audits, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'aggregated_policy_audits'
             all_events.append(e)
 
         logging.info(f"Collecting policy audit raw event details from {set_id.get('Name')}")
-        for e in _fetch_set_events(getPolicyAuditRawEventDetails, token=token, filter_date=filter_date, set_id=set_id):
+        for e in _fetch_set_events(get_policy_audit_raw_event_details, token=token, filter_date=filter_date, set_id=set_id):
             if isinstance(e, dict):
                 e['event_type'] = 'policy_audit_raw_event_details'
             all_events.append(e)
 
         logging.info(f"Collecting Admin Audit Data from {set_id.get('Name')}")
         try:
-            admin_events = getAdminAuditEvents(
+            admin_events = get_admin_audit_events(
                 epmserver=dispatcher_url,
-                epmToken=token,
+                epm_token=token,
                 setid=set_id['Id'],
                 start_time=start_time,
                 end_time=end_time,
