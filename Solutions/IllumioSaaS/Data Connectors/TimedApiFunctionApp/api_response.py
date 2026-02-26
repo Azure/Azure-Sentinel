@@ -12,6 +12,9 @@ from ..CommonCode.constants import (
     PCE_FQDN,
     PORT,
     ORG_ID,
+    AZURE_CLIENT_ID,
+    AZURE_CLIENT_SECRET,
+    AZURE_TENANT_ID,
     DCE_ENDPOINT,
     DCR_ID,
     WORKLOADS_API_LOGS_CUSTOM_TABLE,
@@ -202,6 +205,9 @@ async def main(mytimer: func.TimerRequest) -> None:
                 DCE_ENDPOINT,
                 DCR_ID,
                 WORKLOADS_API_LOGS_CUSTOM_TABLE,
+                AZURE_CLIENT_ID,
+                AZURE_CLIENT_SECRET,
+                AZURE_TENANT_ID,
                 queue_size=1,
             )
             await sentinel.send(api_response)
