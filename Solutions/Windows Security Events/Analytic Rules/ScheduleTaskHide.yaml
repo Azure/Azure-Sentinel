@@ -1,0 +1,59 @@
+id: 6dd2629c-534b-4275-8201-d7968b4fa77e
+name: Scheduled Task Hide
+description: |
+   'This query detects attempts by malware to hide the scheduled task by deleting the SD (Security Descriptor) value. Removal of SD value results in the scheduled task disappearing from schtasks /query and Task Scheduler.
+    The query requires auditing to be turned on for HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree registry hive as well as audit policy for registry auditing to be turned on.
+    Reference: https://www.microsoft.com/security/blog/2022/04/12/tarrask-malware-uses-scheduled-tasks-for-defense-evasion/
+    Reference: https://4sysops.com/archives/audit-changes-in-the-windows-registry/'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+tags:
+  - Tarrask
+query: |
+  SecurityEvent
+  | where EventID == 4657
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)
+  | extend ObjectName = column_ifexists('ObjectName', ""), OperationType = column_ifexists('OperationType', ""), ObjectValueName = column_ifexists('ObjectValueName', "")
+  | where ObjectName has 'Schedule\\TaskCache\\Tree' and ObjectValueName == "SD" and OperationType == "%%1906"  // %%1906 - Registry value deleted
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(TargetAccount, @'\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\')[0])
+  | extend timestamp = TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetAccount
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.1
+kind: Scheduled

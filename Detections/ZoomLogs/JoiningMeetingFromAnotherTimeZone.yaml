@@ -11,35 +11,48 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
+  - PrivilegeEscalation
 relevantTechniques:
   - T1078
 query: |
-
-  let schedule_lookback = 14d; 
-  let join_lookback = 1d; 
+  let schedule_lookback = 14d;
+  let join_lookback = 1d;
   // If you want to whitelist specific timezones include them in a list here
   let tz_whitelist = dynamic([]);
-  let meetings = ( 
-  ZoomLogs 
-  | where TimeGenerated >= ago(schedule_lookback) 
-  | where Event =~ "meeting.created" 
-  | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId)  
-  | extend SchedTimezone = tostring(parse_json(MeetingEvents).Timezone)); 
-  ZoomLogs 
-  | where TimeGenerated >= ago(join_lookback) 
-  | where Event =~ "meeting.participant_joined" 
-  | extend JoinedTimeZone = tostring(parse_json(MeetingEvents).Timezone) 
-  | extend MeetingName = tostring(parse_json(MeetingEvents).MeetingName) 
-  | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId) 
+  let meetings = (
+  ZoomLogs
+  | where TimeGenerated >= ago(schedule_lookback)
+  | where Event =~ "meeting.created"
+  | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId)
+  | extend SchedTimezone = tostring(parse_json(MeetingEvents).Timezone));
+  ZoomLogs
+  | where TimeGenerated >= ago(join_lookback)
+  | where Event =~ "meeting.participant_joined"
+  | extend JoinedTimeZone = tostring(parse_json(MeetingEvents).Timezone)
+  | extend MeetingName = tostring(parse_json(MeetingEvents).MeetingName)
+  | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId)
   | where JoinedTimeZone !in (tz_whitelist)
-  | join (meetings) on MeetingId 
-  | where SchedTimezone != JoinedTimeZone 
-  | project TimeGenerated, MeetingName, JoiningUser=payload_object_participant_user_name_s, JoinedTimeZone, SchedTimezone, MeetingScheduler=User1 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = JoiningUser
+  | join (meetings) on MeetingId
+  | where SchedTimezone != JoinedTimeZone
+  | project TimeGenerated, MeetingName, JoiningUser=payload_object_participant_user_name_s, JoinedTimeZone, SchedTimezone, MeetingScheduler=User1
+  | extend AccountName = tostring(split(JoiningUser, "@")[0]), AccountUPNSuffix = tostring(split(JoiningUser, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+        columnName: JoiningUser
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 1.0.4
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

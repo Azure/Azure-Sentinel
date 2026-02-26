@@ -17,8 +17,10 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         {
             var sampleFunctions = base.Load();
             Dictionary<string, List<Column>> schemaToResultColumnsMapping = GetSchemaToResultColumnsMapping(sampleFunctions);
-            var functions = GetFunctions(schemaToResultColumnsMapping);
-            return functions;
+            var parsersFunctions = GetFunctions(schemaToResultColumnsMapping);
+            var defaultFunctions = (new SentinelDefaultFunctionsLoader()).Load().Select(function => function.FunctionName);
+            parsersFunctions = parsersFunctions.Where(function => !defaultFunctions.Contains(function.FunctionName));
+            return parsersFunctions;
         }
 
         /// <summary>
@@ -32,7 +34,8 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private Dictionary<string, List<Column>> GetSchemaToResultColumnsMapping(IEnumerable<FunctionSchema> sampleFunctions)
         {
             Dictionary<string, string> sampleFunctionToSchemaMapping = ParsersDatabase.Parsers.ToDictionary(keySelector: parser => parser.SampleFunctionName, elementSelector: parser => parser.Schema);
-            return sampleFunctions.ToDictionary(keySelector: sampleFunction => sampleFunctionToSchemaMapping[sampleFunction.FunctionName], elementSelector: sampleFunction => sampleFunction.FunctionResultColumns);
+            var sampleSchemaFunctions = sampleFunctions.Where(function => sampleFunctionToSchemaMapping.ContainsKey(function.FunctionName));
+            return sampleSchemaFunctions.ToDictionary(keySelector: sampleFunction => sampleFunctionToSchemaMapping[sampleFunction.FunctionName], elementSelector: sampleFunction => sampleFunction.FunctionResultColumns);
         }
 
         /// <summary>
@@ -43,7 +46,8 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private IEnumerable<FunctionSchema> GetFunctions(Dictionary<string, List<Column>> schemaToResultColumnsMapping)
         {
             var parsersYamlFilesLoader = new ParsersYamlFilesLoader();
-            var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames();
+            var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames(true);
+
             return parsersYamlFiles.Select(fileName =>
             {
                 var schema = fileName.Split(Path.DirectorySeparatorChar)[^3];

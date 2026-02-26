@@ -1,0 +1,29 @@
+id: dd9674cf-898b-4c80-96f1-f70bec66e6fc
+name: ProofpointPOD - Large size outbound emails
+description: |
+  'Search for emails which size is 2 times grater than average size of outbound email for user.'
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_message_CL
+tactics:
+  - Exfiltration
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let out_msg = ProofpointPOD
+  | where TimeGenerated between (lookback..starttime)
+  | where EventType == 'message'
+  | where NetworkDirection == 'outbound'
+  | where SrcUserUpn != '';
+  ProofpointPOD
+  | where TimeGenerated between(starttime..endtime)
+  | where EventType == 'message'
+  | where NetworkDirection == 'outbound'
+  | where SrcUserUpn != ''
+  | summarize AvgMsgSize = toint(avg(NetworkBytes)) by SrcUserUpn
+  | join out_msg on SrcUserUpn
+  | where NetworkBytes > AvgMsgSize*2
+  | project SrcUserUpn, AvgMsgSize, NetworkBytes
+  | extend AccountCustomEntity = SrcUserUpn

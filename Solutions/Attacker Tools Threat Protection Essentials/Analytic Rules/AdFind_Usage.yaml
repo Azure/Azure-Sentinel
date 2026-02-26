@@ -1,0 +1,62 @@
+id: c63ae777-d5e0-4113-8c9a-c2c9d3d09fcd
+name: Probable AdFind Recon Tool Usage
+description: |
+  'This query identifies the host and account that executed AdFind, by hash and filename, in addition to the flags commonly utilized by various threat actors during the reconnaissance phase.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1016
+  - T1018
+  - T1069.002
+  - T1087.002
+  - T1482
+query: |
+ let args = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*","dclist"]);
+ let parentProcesses = dynamic(["pwsh.exe","powershell.exe","cmd.exe"]);
+ DeviceProcessEvents
+ //looks for execution from a shell
+ | where InitiatingProcessFileName in~ (parentProcesses)
+ // main filter
+ | where FileName =~ "AdFind.exe" or SHA256 == "c92c158d7c37fea795114fa6491fe5f145ad2f8c08776b18ae79db811e8e36a3"
+    // AdFind common Flags to check for from various threat actor TTPs
+     or ProcessCommandLine has_any (args)
+ | extend HostName = split(DeviceName, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'), FileHashAlgorithm = "SHA256"
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountDomain 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: InitiatingProcessFileName
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: FileHashAlgorithm
+      - identifier: Value
+        columnName: SHA256
+
+version: 1.0.3
+kind: Scheduled

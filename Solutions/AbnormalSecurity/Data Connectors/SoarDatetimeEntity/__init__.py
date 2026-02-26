@@ -1,20 +1,39 @@
 import azure.durable_functions as df
 import datetime
+import logging
 
-min_time = "2021-01-01T00:00:00Z"
+current_time = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def entity_function(context: df.DurableEntityContext):
-    current_datetime_str = context.get_state(lambda: datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
-    operation = context.operation_name
-    if operation == "set":
-        new_timestamp_str = context.get_input()
-        current_datetime_str = new_timestamp_str
-    elif operation == "reset":
-        current_datetime_str = min_time
-    elif operation == "get":
-        
-        context.set_result(current_datetime_str)
-    context.set_state(current_datetime_str)
 
+    state = context.get_state(lambda: {
+        "threats_date": current_time,
+        "cases_date": current_time  
+    })
+
+    operation = context.operation_name
+    input_data = context.get_input()
+    
+    if operation == "set":
+        date_type = input_data.get("type")  
+        new_timestamp_str = input_data.get("date")
+        if date_type in state:
+            state[date_type] = new_timestamp_str
+            logging.info(f"The Entity Function is being updated with {date_type}: {new_timestamp_str}")
+        else:
+            logging.error(f"Invalid date type: {date_type}")
+
+    elif operation == "reset":
+       state = {"threats_date": current_time, "cases_date": current_time}
+       
+    elif operation == "get":
+        date_type = input_data.get("type")
+        if date_type in state:
+            context.set_result(state[date_type])
+        else:
+            logging.error(f"Invalid date type: {date_type}")
+            context.set_result(None)
+            
+    context.set_state(state)
 
 main = df.Entity.create(entity_function)

@@ -14,10 +14,19 @@ function check_package() {
 	fi
 }
 
+function log() {
+	echo "$@"
+	DATE=$(date)
+	echo "$DATE" "$@" | sudo tee -a  /var/log/sapcon-update.log > /dev/null
+}		
+
+STARTPARAMS="$@"
 #global
-dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-sdkfileloc=/sapcon-app/inst/
+dockerimage="mcr.microsoft.com/azure-sentinel/solutions/sapcon"
+sdkfileloc="/sapcon-app/inst/"
 CONTAINERNAMES=()
+test_logs="NO LOGS TO DISPLAY"
+
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -29,6 +38,10 @@ while [[ $# -gt 0 ]]; do
 		NOTESTRUN=1
 		shift 1
 		;;
+	--no-imageprune)
+		NOIMAGEPRUNE=1
+		shift 1
+		;;
 	--sdk)
 		SDKFILELOC="$2"
 		SDKFILELOC="${SDKFILELOC/#\~/$HOME}"
@@ -38,13 +51,30 @@ while [[ $# -gt 0 ]]; do
 		CONTAINERNAMES+=("$2")
 		shift 2
 		;;
+	--appid)
+		APPID="$2"
+		shift 2
+		;;
+	--appsecret)
+		APPSECRET="$2"
+		shift 2
+		;;
 	--devmode)
 		DEVMODE=1
 		shift 1
 		;;
+	--tag-version)
+		TAG_VERSION="$2"
+		FORCE=1
+		shift 2
+		;;	
 	--dev-acr)
 		DEVURL="$2"
 		shift 2
+		;;
+    --hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--dev-acr-login)
 		DEVACRLOGIN="$2"
@@ -84,24 +114,21 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 #Copyright (c) Microsoft Corporation. All rights reserved.
-echo 'Microsoft Azure Sentinel SAP Continuous Threat Monitoring.
-SAP ABAP Logs Connector -  Preview
-
-Copyright (c) Microsoft Corporation. 
-You may use this preview software internally and only in accordance with the Azure preview terms, located at https://azure.microsoft.com/support/legal/preview-supplemental-terms/  
-
-Microsoft reserves all other rights
-****
+echo 'Microsoft Sentinel Solution for SAP agent update script.
 
 -----Update All MS SAPcon instances----
-This process will download the latest version of Sentinel SAP Connector, Updates current image and containers. A currently running version of the instance will be stopped and automatically start after the process.
-In order to process you will need the following prerequisites: 
+This process will update the Microsoft Sentinel SAP agent to latest version.
 '
 # Parameter validation
 if [ -n "$SDKFILELOC" ] && [ ! -f "$SDKFILELOC" ]; then
-	echo 'Invalid SDK path'
+	log 'Invalid SDK path:'
+	log "$SDKFILELOC"
 	exit 1
 fi
+
+check_package docker
+check_package "jq"
+
 # Image selection
 if [ $DEVMODE ]; then
 	dockerimage=$(echo "$DEVURL" | awk -F: '{print $1}')
@@ -110,159 +137,263 @@ if [ $DEVMODE ]; then
 	tagver=$(echo "$DEVURL" | awk -F: '{print ":"$2}')
 else
 	dockerimage=mcr.microsoft.com/azure-sentinel/solutions/sapcon
-	if [ $PREVIEW ]; then
-		tagver=":latest-preview"
-	else
-		tagver=":latest"
+fi
+
+contlist=$(docker ps -a --format "{{.Names}}")
+while IFS= read -r contname; do
+	containerlabel=$(docker inspect "$contname" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.build.repository.name"}}')
+	if [ "$containerlabel" != "ASI-Sentinel4SAP" ]; then
+		log "Skipping container $contname as it does not appear to be a Microsoft Sentinel Solution for SAP Agent"
+		continue
 	fi
-fi
 
-check_package docker
-check_package jq
+	if [[ ! -z ${CONTAINERNAMES[*]} ]] && [[ ! ${CONTAINERNAMES[*]} =~ $contname ]]; then
+		log "Skipping agent $contname as it is not specified in --containername list"
+		continue
+	fi
 
-echo 'Starting Docker image Pull'
-docker pull $dockerimage$tagver
-if [ $? -eq 1 ]; then
-	echo 'There is an error with the docker image - please Check network connection'
-	exit 1
-fi
-pause '
-Image has been downloaded - Press <Enter> key to continue with the Update'
-repoimageid=$(docker inspect "$dockerimage$tagver" --format '{{.Id}}')
+	log "Checking if upgrade is necessary for agent $contname"
+	CLOUD=$(docker inspect "$contname" --format '{{index .Config.Labels "Cloud"}}')
 
-contlist=$(docker container ls -a | awk 'NR!=1 {print $1}')
-while IFS= read -r contid; do
-	containerlabel=$(docker inspect "$contid" | jq '.[].Config.Labels."com.visualstudio.msazure.image.build.repository.name"')
-	if [ "$containerlabel" == '"ASI-Sentinel4SAP"' ]; then
-		contimg=$(docker inspect --format='{{.Image}}' "$contid")
-		contname=$(docker inspect --format '{{.Name}}' "$contid")
-		contname="${contname:1}"
-		if [[ -z ${CONTAINERNAMES[*]} ]] || [[ ${CONTAINERNAMES[*]} =~ $contname ]]; then
-			echo "Checking if upgrade is necessary for container $contname"
-			if [ ! "$contimg" = "$repoimageid" ] || [ $FORCE = 1 ]; then
-				echo "Updating $contname"
-				if [ -n "$contid" ]; then
-					sysfileloc=$(docker inspect -f '{{ .Mounts }}' $contname | awk 'NR==1 {print $2}')
-					if [ -z "$sysfileloc" ]; then
-						echo "Container $contname cannot be updated - The mount point is empty"
-						exit 1
-					fi
-					last=${sysfileloc: -1}
-
-					if [ "$last" != "/" ]; then
-						sysfileloc="$sysfileloc/"
-					fi
-
-					read -r -a containervariables <<<"$(docker inspect $contname -f '{{.Config.Env}}' | tr -d '[' | tr -d ']' | tr ' ' ' ')"
-					envstring=""
-					for variable in "${containervariables[@]}"; do
-						if [[ ! $variable == PATH=* ]] &&
-							[[ ! $variable == LANG=* ]] &&
-							[[ ! $variable == GPG_KEY=* ]] &&
-							[[ ! $variable == PYTHON_VERSION=* ]] &&
-							[[ ! $variable == PYTHON_PIP_VERSION=* ]] &&
-							[[ ! $variable == PYTHON_SETUPTOOLS_VERSION=* ]] &&
-							[[ ! $variable == PYTHON_GET_PIP_URL=* ]] &&
-							[[ ! $variable == PYTHON_GET_PIP_SHA256=* ]]; then
-							envstring+="-e $variable "
-						fi
-					done
-
-					isRunning=$(docker inspect --format='{{.State.Running}}' "$contname")
-					if [ "$isRunning" == "true" ]; then
-						docker stop "$contname"
-					fi
-					mkdir -p /tmp/sapcon-update/ >/dev/null 2>&1
-					sudo rm -rf "/tmp/sapcon-update/$contname" >/dev/null 2>&1
-					mkdir "/tmp/sapcon-update/$contname" >/dev/null 2>&1
-
-					#renaming the container, creating a new test container
-					oldname="$contname-OLD"
-					docker container rename "$contname" "$oldname" >/dev/null
-
-					#Extract SDK from old container, or use a newly supplied one
-					if [ -n "$SDKFILELOC" ]; then
-						mkdir -p "/tmp/sapcon-update/$contname/inst"
-						cp "$SDKFILELOC" "/tmp/sapcon-update/$contname/inst/"
-					else
-						docker cp "$oldname":$sdkfileloc "/tmp/sapcon-update/$contname"
-					fi
-					sdkfilename=$(ls -1r /tmp/sapcon-update/$contname/inst/nwrfc*.zip | head -n 1)
-
-					if [ ! $NOTESTRUN ]; then
-						# If test run is required
-						docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring --name "$contname" $dockerimage$tagver --sapconinstanceupdate >/dev/null
-
-						docker cp "$sdkfilename" "$contname":$sdkfileloc
-						docker start "$contname" >/dev/null
-
-						let timeelapsed=0
-						dryruninprogress="true"
-						echo -n "Starting container test run..."
-						while [ "$dryruninprogress" == "true" ] && [ $timeelapsed -le 120 ]; do
-							dryruninprogress=$(docker inspect --format='{{.State.Running}}' "$contname")
-							if [ "$dryruninprogress" == "false" ]; then
-								containerexitcode=$(docker container inspect --format '{{.State.ExitCode}}' "$contname")
-								printf "\nContainer dry run exited. Exit code $containerexitcode"
-								if [ "$containerexitcode" == 0 ]; then
-									dryrunsuccess=1
-									docker rm "$contname" >/dev/null
-									docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring --name "$contname" $dockerimage$tagver >/dev/null
-									docker cp $sdkfilename "$contname":"$sdkfileloc"
-								elif [ "$containerexitcode" == 7 ]; then
-									printf "\nInsufficient authorizations in SAP"
-									dryrunsuccess=0
-									break
-								elif [ "$containerexitcode" == 8 ]; then
-									printf "\nContainer runtime error"
-									dryrunsuccess=0
-									break
-								else
-									printf "\nContainer exited with code $containerexitcode"
-									dryrunsuccess=0
-									break
-								fi
-							fi
-							sleep 1
-							let timeelapsed=timeelapsed+1
-							echo -n "."
-						done
-						if [ "$dryruninprogress" == "true" ]; then
-							# container did not exit after 60 seconds
-							printf "\nContainer is running after timeout period expired"
-							docker stop "$contname" >/dev/null
-						fi
-
-						if [ "$dryrunsuccess" == 1 ]; then
-							printf "\nTest run successful, removing old container"
-							docker rm "$oldname" >/dev/null
-						else
-							printf "\nTest run NOT successful, removing new container, renaming the old container to original name"
-							echo "----Container debug logs START----"
-							docker logs "$contname"
-							echo "----Container debug logs END----"
-							docker rm "$contname" >/dev/null
-							docker rename "$oldname" "$contname" >/dev/null
-						fi
-					else
-						docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring --name "$contname" $dockerimage$tagver >/dev/null
-						docker cp "$sdkfilename" "$contname":"$sdkfileloc"
-						docker rm "$oldname"
-					fi
-					sudo rm -rf /tmp/sapcon-update >/dev/null 2>&1
-				fi
-				if [ "$isRunning" == "true" ]; then
-					echo "Starting container $contname"
-					docker start "$contname" >/dev/null
-				fi
-			else
-				echo "Container image for container $contname is identical to the one in the repo"
-			fi
+	labelstring="--label Cloud=$CLOUD"
+	if [ ! $DEVMODE ]; then
+		if [ "$CLOUD" == 'public' ] || [ -z $CLOUD ]; then
+			tag=':latest'
+		elif [ "$CLOUD" == 'fairfax' ]; then
+			tag=':ffx-latest'
+			az cloud set --name "AzureUSGovernment" >/dev/null 2>&1
+		elif [ "$CLOUD" == 'mooncake' ]; then
+			tag=':mc-latest'
+			az cloud set --name "AzureChinaCloud" >/dev/null 2>&1
 		else
-			echo "Skipping container $contname as it is not specified in --containername list"
+			log "Skipping container $contname as its Cloud label is not supported: $CLOUD"
+			continue
 		fi
-	else
-		echo "Skipping container id $contid as it does not appear to be a sapcon container"
+		if [ $PREVIEW ]; then
+			tagver="$tag-preview"
+		else
+			tagver=$tag
+		fi
+		# in case the TAG_VERSION is defined we are updating the tag specific version
+		if [ $TAG_VERSION ]; then
+			if [ $PREVIEW ]; then
+				tagver=${tagver/latest/$TAG_VERSION}
+			else
+				tagver=${tagver/latest/$TAG_VERSION-latest}
+			fi
+		fi
 	fi
+
+	sysfileloc=$(docker inspect "$contname" --format '{{ .Mounts }}'| awk 'NR==1 {print $2}')
+	containerimage=$(docker inspect "$contname" --format '{{.Config.Image}}')
+	containerreleaseid=$(docker inspect "$contname" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
+	log "Agent $contname release id is $containerreleaseid"	
+
+	log 'Starting Docker image Pull'
+	docker pull "$dockerimage$tagver"
+	imagereleaseid=$(docker inspect "$dockerimage$tagver" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
+	if [ $? -eq 1 ]; then
+		log 'There was an error pulling updated agent - please check network connection'
+		exit 1
+	fi
+	log "Updated image: $dockerimage$tagver  release id: $imagereleaseid"
+
+	# Update container if container image is not the same as the one in repo, or if force is set.
+	# Update container if running a manual update, or if container has Auto Update flag set
+	if [ "$imagereleaseid" == "$containerreleaseid" ] && [ ! $FORCE ]; then
+		log "Agent image for agent $contname is identical to the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
+		continue
+	elif [ "$containerreleaseid" -gt "$imagereleaseid" ] && [ ! $FORCE ]; then
+		if [[ "$containerimage" == *"-preview"* ]] && [ ! $PREVIEW ]; then
+			# Image is on preview, and no newer version is available
+			log "Current agent is in preview branch, and release branch has an older build (current release id is $containerreleaseid, latest is $imagereleaseid). Not updating this agent"
+		else
+			log "Agent image for agent $contname is newer than the one in the container registry. Agent release id $containerreleaseid, release id of image available in container registry: $imagereleaseid. Not updating this agent"
+		fi
+		continue
+	elif [ "$imagereleaseid" -gt "$containerreleaseid" ] || [ "$FORCE" == 1 ]; then	
+		if [[ "$containerimage" == *"-preview"* ]] && [ ! $PREVIEW ] && [ "$imagereleaseid" -gt "$containerreleaseid" ]; then
+			#Non-preview version of the image is newer than current
+			log "Current agent is in preview branch, however a release branch has a newer build (current release id is $containerreleaseid, latest is $imagereleaseid). Switching agent to release branch"
+		fi
+		
+		log "Inspecting $contname"
+
+		if [ -z "$sysfileloc" ]; then
+			log "Agent $contname cannot be updated - The config mount point is empty"
+			exit 1
+		fi
+		if [ "${sysfileloc: -1}" != "/" ]; then
+			sysfileloc="$sysfileloc/"
+		fi
+		read -r -a containervariables <<<$(docker inspect "$contname" --format '{{.Config.Env}}' | tr -d '[' | tr -d ']' | tr ' ' ' ')
+		envstring=""
+		cmdparams=""
+		for variable in "${containervariables[@]}"; do
+			# Check if we set the APPID and APPSECRET, if we do, we need to update the container with the new values
+			if [[ -n $APPID && -n $APPSECRET ]]; then
+				[[ $variable == AZURE_CLIENT_ID=* ]] && variable="AZURE_CLIENT_ID=$APPID"
+				[[ $variable == AZURE_CLIENT_SECRET=* ]] && variable="AZURE_CLIENT_SECRET=$APPSECRET"
+			fi
+
+			if [[ ! $variable == PATH=* ]] &&
+				[[ ! $variable == LANG=* ]] &&
+				[[ ! $variable == GPG_KEY=* ]] &&
+				[[ ! $variable == PYTHON_VERSION=* ]] &&
+				[[ ! $variable == PYTHON_PIP_VERSION=* ]] &&
+				[[ ! $variable == PYTHON_SETUPTOOLS_VERSION=* ]] &&
+				[[ ! $variable == PYTHON_GET_PIP_URL=* ]] &&
+				[[ ! $variable == PYTHON_PATH=* ]] &&
+				[[ ! $variable == PIPX_HOME=* ]] &&
+				[[ ! $variable == PIPX_BIN_DIR=* ]] &&
+				[[ ! $variable == NVM_DIR=* ]] &&
+				[[ ! $variable == NVM_SYMLINK_CURRENT=* ]] &&
+				[[ ! $variable == PYTHON_GET_PIP_SHA256=* ]]; then
+				envstring+="-e $variable "
+			fi
+		done
+
+		# Check if we have an agent guid already. if we don't have - generate and add to the envstring
+		if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
+			envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
+		fi
+			
+		ContainerNetworkSetting=$(docker inspect "$contname" --format '{{.Config.Labels.ContainerNetworkSetting}}')
+		if [ "$ContainerNetworkSetting" == "<no value>" ]; then
+			ContainerNetworkSetting=""
+		fi
+			
+		RestartPolicy=$(docker inspect "$contname" --format '{{.HostConfig.RestartPolicy.Name}}')
+			
+		restartpolicystring="--restart $RestartPolicy"
+		
+		log "Agent $contname restart policy is set to $RestartPolicy"
+
+		isRunning=$(docker inspect "$contname" --format='{{.State.Running}}')
+		log "Agent $contname running state is $isRunning"
+		isRestarting=$(docker inspect "$contname" --format='{{.State.Restarting}}')
+		log "Agent $contname restarting state is $isRestarting"
+		lastExitCode=$(docker inspect "$contname" --format='{{.State.ExitCode}}')
+		log "Agent $contname last exit code is $lastExitCode"
+		lastFinished=$(docker inspect "$contname" --format='{{.State.FinishedAt}}')
+		log "Agent $contname last stop time is $lastFinished"
+		lastStarted=$(docker inspect "$contname" --format='{{.State.StartedAt}}')
+		log "Agent $contname last start time is $lastStarted"
+
+		if [ "$isRunning" == "true" ] || [ "$isRestarting" == "true" ];  then
+			log "Stopping agent $contname before update"
+			docker stop "$contname" >/dev/null 2>&1
+		fi
+
+		mkdir -p /tmp/sapcon-update/ >/dev/null 2>&1
+		sudo rm -rf "/tmp/sapcon-update/$contname" >/dev/null 2>&1
+		mkdir "/tmp/sapcon-update/$contname" >/dev/null 2>&1
+
+		#Extract SDK from old container, or use a newly supplied one
+		if [ -n "$SDKFILELOC" ]; then
+			mkdir -p "/tmp/sapcon-update/$contname/inst"
+			cp "$SDKFILELOC" "/tmp/sapcon-update/$contname/inst/"
+		else
+			docker cp "$contname":$sdkfileloc "/tmp/sapcon-update/$contname/inst/"
+		fi
+		sdkfilename=$(ls -1r /tmp/sapcon-update/$contname/inst/nwrfc*.zip | head -n 1)
+		if [ $HOSTNETWORK ]; then
+			cmdparams+=" --network host "
+		fi
+		if [ ! $NOTESTRUN ]; then
+			# If test run is required
+			testruncontainer="$contname-testrun"
+			log "Creating agent $contname in test mode"
+			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $cmdparams $envstring $ContainerNetworkSetting --name "$testruncontainer" $dockerimage$tagver --sapconinstanceupdate >/dev/null
+			docker cp "$sdkfilename" "$testruncontainer":$sdkfileloc
+			docker start "$testruncontainer" >/dev/null
+
+			let timeelapsed=0
+			dryruninprogress="true"
+			log "Starting agent test run..."
+			while [ "$dryruninprogress" == "true" ] && [ $timeelapsed -le 120 ]; do
+				dryruninprogress=$(docker inspect --format='{{.State.Running}}' "$testruncontainer")
+				if [ "$dryruninprogress" == "false" ]; then
+					containerexitcode=$(docker container inspect --format '{{.State.ExitCode}}' "$testruncontainer")
+					echo ""
+					log "Agent test run finished. Exit code $containerexitcode"
+					if [ "$containerexitcode" == 0 ]; then
+						dryrunsuccess=1
+					elif [ "$containerexitcode" == 5 ]; then
+						echo ""
+						log "Failed to connect to the SAP system"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 6 ]; then
+						echo ""
+						log "Failed to send heartbeat data to Azure Sentinel Workspace"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 7 ]; then
+						echo ""
+						log "Insufficient authorizations in SAP"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 8 ]; then
+						echo ""
+						log "Agent runtime error"
+						dryrunsuccess=0
+						break
+					else
+						echo ""
+						log "Agent test run exited with code $containerexitcode"
+						dryrunsuccess=0
+						break
+					fi
+				fi
+				sleep 1
+				let timeelapsed=timeelapsed+1
+				echo -n "."
+			done
+			if [ "$dryruninprogress" == "true" ]; then
+				# container did not exit after 60 seconds
+				echo ""
+				log "Agent is running after timeout period expired"
+				dryrunsuccess=0
+				docker stop "$testruncontainer" >/dev/null
+			fi
+			log "Test run finished, removing agent in test run mode"
+            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1)
+			docker rm "$testruncontainer" >/dev/null
+		else
+			log "Creating new agent without test mode"
+			dryrunsuccess=1
+		fi
+		if [ "$dryrunsuccess" == 1 ]; then
+			echo ""
+			log "Test run successful, removing old agent"
+			docker rm "$contname" >/dev/null
+		else
+			echo ""
+			log "Test run NOT successful, removing new agent, renaming the old agent to original name"
+			log "----Agent debug logs START----"
+			log "$test_logs"
+			log "----Agent debug logs END----"
+		fi
+		if [ $dryrunsuccess == 1 ]; then
+			log "Creating updated agent $contname"
+			labelstring="--label Cloud=$CLOUD "
+			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $cmdparams $envstring $labelstring $restartpolicystring $ContainerNetworkSetting --name "$contname" $dockerimage$tagver >/dev/null
+			docker cp "$sdkfilename" "$contname":"$sdkfileloc"
+		fi
+		#Cleaning sapcon-update folder
+		sudo rm -rf /tmp/sapcon-update >/dev/null 2>&1
+
+		if [ "$isRunning" == "true" ] || [ "$isRestarting" == "true" ]; then
+			log "Starting agent $contname"
+			docker start "$contname" >/dev/null
+		fi
+	fi
+
 done \
 	<<<"$contlist"
+
+# Clearing old images
+if [ -z $NOIMAGEPRUNE ]; then
+	log "$(docker image prune --filter "label=com.visualstudio.msazure.image.build.repository.name=ASI-Sentinel4SAP" -a -f)"	
+fi

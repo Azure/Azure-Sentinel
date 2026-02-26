@@ -1,0 +1,400 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "DockerImageName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Docker image name."
+            }
+        },
+		"NetskopeHostName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Netskope Host Name."
+            }
+        },
+        "NetskopeAPIToken": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter the Netskope API Token."
+            }
+        },
+		"SeekTimestamp": {
+            "type": "string",
+			"defaultValue": "",
+            "metadata": {
+                "description": "Enter the epoch timestamp if you want to seek the pubsublite pointer."
+            }
+        },
+		"WorkspaceID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Workspace ID of Log Analytics workspace."
+            }
+        },
+        "WorkspaceKey": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Workspace Key of Log Analytics workspace."
+            }
+        },
+		"BackoffRetryCount": {
+            "type": "int",
+    		"defaultValue": 3,
+            "metadata": {
+                "description": "Enter the backoff retry count which is the number of retries for the exponential retry."
+            }
+        },
+		"BackoffSleepTime": {
+            "type": "int",
+    		"defaultValue": 60,
+            "metadata": {
+                "description": "Enter the backoff sleep time which is the sleep time for the exponential retry."
+            }
+        },
+		"IdleTimeout": {
+            "type": "int",
+    		"defaultValue": 600,
+            "metadata": {
+                "description": "Enter the idle timeout which is the time after which it will close the connection and retry pulling data."
+            }
+        },
+        "vmName": {
+            "defaultValue": "nskpWebtxVM",
+            "type": "String",
+            "metadata": {
+                "description": "The name of your Virtual Machine."
+            }
+        },
+        "authenticationType": {
+            "defaultValue": "password",
+            "allowedValues": [
+                "sshPublicKey",
+                "password"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Type of authentication to use on the Virtual Machine. SSH key is recommended."
+            }
+        },
+        "adminPasswordOrKey": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "SSH Key or password for the Virtual Machine. SSH key is recommended."
+            }
+        },
+        "dnsLabelPrefix": {
+            "defaultValue": "[toLower(format('{0}-{1}', parameters('vmName'), uniqueString(resourceGroup().id)))]",
+            "type": "String",
+            "metadata": {
+                "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+            }
+        },
+        "ubuntuOSVersion": {
+            "defaultValue": "Ubuntu-20.04",
+            "allowedValues": [
+                "Ubuntu-20.04",
+                "Ubuntu-22.04"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version."
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "vmSize": {
+            "defaultValue": "Standard_D8s_v3",
+            "type": "String",
+            "metadata": {
+                "description": "The size of the VM"
+            }
+        },
+        "virtualNetworkName": {
+            "defaultValue": "vNet",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the VNET"
+            }
+        },
+        "subnetName": {
+            "defaultValue": "Subnet",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the subnet in the virtual network"
+            }
+        },
+        "networkSecurityGroupName": {
+            "defaultValue": "SecGroupNet",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Network Security Group"
+            }
+        },
+        "securityType": {
+            "defaultValue": "TrustedLaunch",
+            "allowedValues": [
+                "Standard",
+                "TrustedLaunch"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Security Type of the Virtual Machine."
+            }
+        }
+    },
+    "variables": {
+        "imageReference": {
+            "Ubuntu-20.04": {
+                "publisher": "Canonical",
+                "offer": "0001-com-ubuntu-server-focal",
+                "sku": "20_04-lts-gen2",
+                "version": "latest"
+            },
+            "Ubuntu-22.04": {
+                "publisher": "Canonical",
+                "offer": "0001-com-ubuntu-server-jammy",
+                "sku": "22_04-lts-gen2",
+                "version": "latest"
+            }
+        },
+		"adminUsername": "devuser",
+        "publicIPAddressName": "[format('{0}PublicIP', parameters('vmName'))]",
+        "networkInterfaceName": "[format('{0}NetInt', parameters('vmName'))]",
+        "osDiskType": "Standard_LRS",
+        "subnetAddressPrefix": "10.1.0.0/24",
+        "addressPrefix": "10.1.0.0/16",
+        "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+                "publicKeys": [
+                    {
+                        "path": "[format('/home/{0}/.ssh/authorized_keys', variables('adminUsername'))]",
+                        "keyData": "[parameters('adminPasswordOrKey')]"
+                    }
+                ]
+            }
+        },
+        "securityProfileJson": {
+            "uefiSettings": {
+                "secureBootEnabled": true,
+                "vTpmEnabled": true
+            },
+            "securityType": "[parameters('securityType')]"
+        },
+        "extensionName": "GuestAttestation",
+        "customScriptExtensionName": "CustomScriptExtension",
+        "extensionPublisher": "Microsoft.Azure.Security.LinuxAttestation",
+        "extensionVersion": "1.0",
+        "maaTenantName": "GuestAttestation",
+        "maaEndpoint": "[substring('emptystring', 0, 0)]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2021-05-01",
+            "name": "[variables('networkInterfaceName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]",
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
+                            }
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2021-05-01",
+            "name": "[parameters('networkSecurityGroupName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "SSH",
+                        "properties": {
+                            "priority": 1000,
+                            "protocol": "Tcp",
+                            "access": "Allow",
+                            "direction": "Inbound",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "22"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2021-05-01",
+            "name": "[parameters('virtualNetworkName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('addressPrefix')]"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2021-05-01",
+            "name": "[format('{0}/{1}', parameters('virtualNetworkName'), parameters('subnetName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+            ],
+            "properties": {
+                "addressPrefix": "[variables('subnetAddressPrefix')]",
+                "privateEndpointNetworkPolicies": "Enabled",
+                "privateLinkServiceNetworkPolicies": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2021-05-01",
+            "name": "[variables('publicIPAddressName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Basic"
+            },
+            "properties": {
+                "publicIPAllocationMethod": "Dynamic",
+                "publicIPAddressVersion": "IPv4",
+                "dnsSettings": {
+                    "domainNameLabel": "[parameters('dnsLabelPrefix')]"
+                },
+                "idleTimeoutInMinutes": 4
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2021-11-01",
+            "name": "[parameters('vmName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "storageProfile": {
+                    "osDisk": {
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "[variables('osDiskType')]"
+                        },
+						"diskSizeGB": 50
+                    },
+                    "imageReference": "[variables('imageReference')[parameters('ubuntuOSVersion')]]"
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[parameters('vmName')]",
+                    "adminUsername": "[variables('adminUsername')]",
+                    "adminPassword": "[parameters('adminPasswordOrKey')]",
+                    "linuxConfiguration": "[if(equals(parameters('authenticationType'), 'password'), null(), variables('linuxConfiguration'))]"
+                },
+                "securityProfile": "[if(equals(parameters('securityType'), 'TrustedLaunch'), variables('securityProfileJson'), null())]"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "apiVersion": "2022-03-01",
+            "name": "[format('{0}/{1}', parameters('vmName'), variables('extensionName'))]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+            ],
+            "properties": {
+                "publisher": "[variables('extensionPublisher')]",
+                "type": "[variables('extensionName')]",
+                "typeHandlerVersion": "[variables('extensionVersion')]",
+                "autoUpgradeMinorVersion": true,
+                "enableAutomaticUpgrade": true,
+                "settings": {
+                    "AttestationConfig": {
+                        "MaaSettings": {
+                            "maaEndpoint": "[variables('maaEndpoint')]",
+                            "maaTenantName": "[variables('maaTenantName')]"
+                        }
+                    }
+                }
+            },
+            "condition": "[and(equals(parameters('securityType'), 'TrustedLaunch'), and(equals(variables('securityProfileJson').uefiSettings.secureBootEnabled, true()), equals(variables('securityProfileJson').uefiSettings.vTpmEnabled, true())))]"
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "apiVersion": "2019-03-01",
+            "name": "[format('{0}/{1}', parameters('vmName'), variables('customScriptExtensionName'))]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+            ],
+            "tags": {
+                "displayName": "config-app"
+            },
+            "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.1",
+                "autoUpgradeMinorVersion": true,
+                "settings": {},
+                "protectedSettings": {
+					"commandToExecute": "[concat('sudo sh install_docker.sh ',parameters('DockerImageName'),' ',parameters('NetskopeHostName'),' ',parameters('NetskopeAPIToken'),' ',parameters('WorkspaceKey'),' ',parameters('WorkspaceID'),' ',parameters('BackoffRetryCount'),' ',parameters('BackoffSleepTime'),' ',parameters('IdleTimeout'),' ',parameters('SeekTimestamp'))]",
+                    "fileUris": [
+                        "https://aka.ms/sentinel-NetSkopeV2-InstallDocker"
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "adminUsername": {
+            "type": "String",
+            "value": "[variables('adminUsername')]"
+        },
+        "hostname": {
+            "type": "String",
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn]"
+        },
+        "sshCommand": {
+            "type": "String",
+            "value": "[format('ssh {0}@{1}', variables('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn)]"
+        }
+    }
+}

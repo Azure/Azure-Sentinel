@@ -1,6 +1,6 @@
 # Microsoft 365 Defender for Endpoint ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Microsoft 365 Defender for Endpoint.
+ARM template for ASIM RegistryEvent schema parser for Microsoft 365 Defender for Endpoint.
 
 This ASIM parser supports normalizing Microsoft 365 Defender for endpoint logs, produced by the Microsoft Sentinel Microsoft 365 Defender connector, to the ASIM Registry Event normalized schema.
 
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM RegistryEvent normalization schema reference](https://aka.ms/ASimRegistryEventDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimRegistryEvent/CHANGELOG/vimRegistryEventMicrosoft365D.md)
 
 <br>
 

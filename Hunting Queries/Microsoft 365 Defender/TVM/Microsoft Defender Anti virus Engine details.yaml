@@ -1,0 +1,24 @@
+
+id: 02BE358B-8733-46B7-8E3D-624B1F918237
+name: Microsoft Defender AV Engine up to date info
+description: |
+  'Provides the Engine version and total count of up to date devices, not up to date devices and count of devices whose status is not available relevant to the Engine version.'
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+    let expiringPublishdate = ago(8d);
+    DeviceTvmInfoGathering
+    | extend DataRefreshTimestamp = Timestamp,    
+    AvIsEngineUpToDateTemp = tostring(AdditionalFields.AvIsEngineUptodate),   
+    AvSignatureDataRefreshTime = todatetime(AdditionalFields.AvSignatureDataRefreshTime), 
+    AvSignaturePublishTime = todatetime(AdditionalFields.AvSignaturePublishTime),    
+    AvEngineVersion =  tostring(AdditionalFields.AvEngineVersion)
+    | extend AvIsEngineUpToDate = iif(((((isempty(AvIsEngineUpToDateTemp)
+    or (isnull(AvSignatureDataRefreshTime)))
+    or (isnull(AvSignaturePublishTime)))
+    or (AvSignatureDataRefreshTime < expiringPublishdate))
+    or (AvSignaturePublishTime < expiringPublishdate)), "Unknown", tostring(AvIsEngineUpToDateTemp))  
+    | extend AvEngineVersion = iif(AvEngineVersion == "", "Unknown", AvEngineVersion)
+    | project DeviceId, DeviceName,  OSPlatform, AvEngineVersion, DataRefreshTimestamp, AvIsEngineUpToDate, AvSignaturePublishTime, AvSignatureDataRefreshTime
+    | summarize DeviceCount = count(), DataRefreshTimestamp = max(DataRefreshTimestamp), EngineUpToDateDeviceCount = countif(AvIsEngineUpToDate == "true"), EngineNotUpToDateDeviceCount = countif(AvIsEngineUpToDate == "false"), EngineNotAvailableDeviceCount = countif(AvIsEngineUpToDate == "Unknown") by OSPlatform,AvEngineVersion

@@ -13,14 +13,10 @@
             1. Check if table has any configuration (Basic\Analytics)
             2. Update Table configuration either to Analytics
             3. Update Table Retention based to Analytics
-           
-    
-    .PARAMETER TenantId
-        Enter Azure Tenant Id (required)  
-
+         
     .NOTES
         AUTHOR: Sreedhar Ande
-        LASTEDIT: 3/9/2022
+        Last Edit : 11/9/2023 - Sreedhar Ande - Added Support for Azure Gov        
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -29,8 +25,7 @@
 #region UserInputs
 
 param(
-    [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")]
-    [string] $TenantID
+    [parameter(Mandatory = $true, HelpMessage = "Enter your Tenant Id")] [string] $TenantID    
 ) 
 
 #endregion UserInputs
@@ -164,14 +159,15 @@ function Get-RequiredModules {
 function Get-LATables {
 	[CmdletBinding()]
     param (        
-        [parameter(Mandatory = $true)] $RetentionMethod                
+        [parameter(Mandatory = $true)] $RetentionMethod,
+        [parameter(Mandatory = $true)] $APIEndpoint                
     )
 	
 	$TablesArray = New-Object System.Collections.Generic.List[System.Object]
 	
 	try {       
         Write-Log -Message "Retrieving tables from $LogAnalyticsWorkspaceName" -LogFileName $LogFileName -Severity Information
-        $WSTables = Get-AllTables
+        $WSTables = Get-AllTables -APIEndpoint $APIEndpoint
                                          
         if ($RetentionMethod -eq "Analytics") {        
             $searchPattern = '(AzureActivity|Usage)'        
@@ -195,13 +191,14 @@ function Set-TableConfiguration {
 	[CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $QualifiedTables,
-		[parameter(Mandatory = $true)] $RetentionType
+		[parameter(Mandatory = $true)] $RetentionType,
+        [parameter(Mandatory = $true)] $APIEndpoint
     )
 	
 	$SuccessTables = @()
     
     foreach($QTable in $QualifiedTables) {	
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-12-01-preview"								
+		$TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($QTable.TableName)" + "?api-version=2021-12-01-preview"								
 		
 		$TablesApiBody = @"
 			{
@@ -225,17 +222,19 @@ function Set-TableConfiguration {
                                 TotalLogRetention=$TablesApiResult.properties.totalRetentionInDays;
                                 RetentionInArchive=$TablesApiResult.properties.archiveRetentionInDays;
                                 RetentionInWorkspace=$TablesApiResult.properties.retentionInDays
-                            }  
-             
-
-		}
+                            }
+        }
 	}
     return $SuccessTables
 }
 
-function Get-AllTables {		
+function Get-AllTables {	
+    [CmdletBinding()]
+    param (        
+        [parameter(Mandatory = $true)] $APIEndpoint
+    )	
 	$AllTables = @()	
-    $TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-12-01-preview"								
+    $TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables" + "?api-version=2021-12-01-preview"								
 	    		
     try {        
         $TablesApiResult = Invoke-RestMethod -Uri $TablesApi -Method "GET" -Headers $LaAPIHeaders           			
@@ -245,7 +244,7 @@ function Get-AllTables {
     }
 
     If ($TablesApiResult.StatusCode -ne 200) {
-        $searchPattern = '(_RST)'                
+        $searchPattern = '(_RST|_EXT)'                
         foreach ($ta in $TablesApiResult.value) { 
             try {
                 if($ta.name.Trim() -notmatch $searchPattern) {                    
@@ -259,11 +258,9 @@ function Get-AllTables {
             }
             catch {
                 Write-Log -Message "Error adding $ta to collection" -LogFileName $LogFileName -Severity Error
-            }
-            	
+            }            	
         }
-    }
-	
+    }	
     return $AllTables
 }
 
@@ -271,17 +268,17 @@ function Update-TablesRetention {
 	[CmdletBinding()]
     param (        
         [parameter(Mandatory = $true)] $TablesForRetention,		
-		[parameter(Mandatory = $true)] $TotalRetentionInDays
+		[parameter(Mandatory = $true)] $TotalRetentionInDays,
+        [parameter(Mandatory = $true)] $APIEndpoint
     )
 	$UpdatedTablesRetention = @()
     foreach($tbl in $TablesForRetention) {
-		$TablesApi = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
+		$TablesApi = "https://$APIEndpoint/subscriptions/$SubscriptionId/resourcegroups/$LogAnalyticsResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$LogAnalyticsWorkspaceName/tables/$($tbl.TableName)" + "?api-version=2021-12-01-preview"		
         $ArchiveDays = [int]($TotalRetentionInDays)
         
         $TablesApiBody = @"
 			{
-				"properties": {
-					"retentionInDays": $null,
+				"properties": {					
 					"totalRetentionInDays":$ArchiveDays
 				}
 			}
@@ -315,10 +312,20 @@ function Collect-AnalyticsPlanRetentionDays {
     )
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    
+        
+    # Create a new form
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Table Plan:Analytics'
-    $form.Size = New-Object System.Drawing.Size(380,250)
+
+    # Get the primary screen
+    $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
+
+    # Set the form size and position
+    $formWidth = $primaryScreen.WorkingArea.Width * 0.2  # Adjust the form width as desired (80% of screen width in this example)
+    $formHeight = $primaryScreen.WorkingArea.Height * 0.2  # Adjust the form height as desired (80% of screen height in this example)
+    $formSize = New-Object System.Drawing.Size($formWidth, $formHeight)
+    $form.ClientSize = $formSize
+
     $form.StartPosition = 'CenterScreen'
 
     $okButton = New-Object System.Windows.Forms.Button
@@ -341,7 +348,7 @@ function Collect-AnalyticsPlanRetentionDays {
     $label = New-Object System.Windows.Forms.Label
     $label.Location = New-Object System.Drawing.Point(10,20)
     $label.Size = New-Object System.Drawing.Size(350,60)
-    $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days"
+    $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383 days"
     $form.Controls.Add($label)
 
     $textBox = New-Object System.Windows.Forms.TextBox
@@ -349,16 +356,16 @@ function Collect-AnalyticsPlanRetentionDays {
     $textBox.Size = New-Object System.Drawing.Size(260,60)
     $textBox.TabIndex = 1
     $form.Controls.Add($textBox)  
-    
+        
     $textBox.Add_TextChanged({
         $days = [int]$textBox.Text.Trim()
-        $AllowedDays = '(1095|1460|1826|2191|2556)'
+        $AllowedDays = '(1095|1460|1826|2191|2556|2922|3288|3653|4018|4383)'
         if ($days -in 4..730 -or $days -match $AllowedDays) {         
             $okButton.Enabled = $true
             $ErrorProvider.Clear()
         }
         else {
-            $ErrorProvider.SetError($textBox, "Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days")  
+            $ErrorProvider.SetError($textBox, "Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383 days")  
             $okButton.Enabled = $false            
         } 
     }) 
@@ -382,9 +389,21 @@ function Collect-AnalyticsPlanRetentionDays {
 function Select-Plan {    
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+   
+
+    # Create a new form
     $logselectform = New-Object System.Windows.Forms.Form
     $logselectform.Text = 'Table Plan'
-    $logselectform.Size = New-Object System.Drawing.Size(400,180)
+
+    # Get the primary screen
+    $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
+
+    # Set the form size and position
+    $formWidth = $primaryScreen.WorkingArea.Width * 0.2  # Adjust the form width as desired (80% of screen width in this example)
+    $formHeight = $primaryScreen.WorkingArea.Height * 0.2  # Adjust the form height as desired (80% of screen height in this example)
+    $formSize = New-Object System.Drawing.Size($formWidth, $formHeight)
+    $logselectform.ClientSize = $formSize
+
     $logselectform.StartPosition = 'CenterScreen'
     
     $okb = New-Object System.Windows.Forms.Button
@@ -415,13 +434,23 @@ function Select-Plan {
 function Get-Confirmation {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    $logselectform = New-Object System.Windows.Forms.Form
-    $logselectform.Text = 'Confirmation'
-    $logselectform.Size = New-Object System.Drawing.Size(250,160)
-    $logselectform.StartPosition = 'CenterScreen'
+     # Create a new form
+     $logselectform = New-Object System.Windows.Forms.Form
+     $logselectform.Text = 'Table Plan'
+ 
+     # Get the primary screen
+     $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
+ 
+     # Set the form size and position
+     $formWidth = $primaryScreen.WorkingArea.Width * 0.2  # Adjust the form width as desired (80% of screen width in this example)
+     $formHeight = $primaryScreen.WorkingArea.Height * 0.2  # Adjust the form height as desired (80% of screen height in this example)
+     $formSize = New-Object System.Drawing.Size($formWidth, $formHeight)
+     $logselectform.ClientSize = $formSize
+ 
+     $logselectform.StartPosition = 'CenterScreen'
 
     $label = New-Object System.Windows.Forms.Label
-    $label.Location = New-Object System.Drawing.Point(10,20)
+    $label.Location = New-Object System.Drawing.Point(40,40)
     $label.Size = New-Object System.Drawing.Size(250,20)
     $label.Text = 'Do you want to continue?'
     $logselectform.Controls.Add($label)
@@ -455,6 +484,13 @@ function Get-Confirmation {
 #endregion
 
 #region DriverProgram
+
+# Check Powershell version, needs to be 5 or higher
+if ($host.Version.Major -lt 5) {
+    Write-Log "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
+    exit
+}
+
 $AzModulesQuestion = "Do you want to update required Az Modules to latest version?"
 $AzModulesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
 $AzModulesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
@@ -475,11 +511,6 @@ Get-RequiredModules("Az.OperationalInsights")
 $TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
 $LogFileName = '{0}_{1}.csv' -f "Sentinel_Long_Term_Retention", $TimeStamp
 
-# Check Powershell version, needs to be 5 or higher
-if ($host.Version.Major -lt 5) {
-    Write-Log "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
-    exit
-}
 
 #disconnect exiting connections and clearing contexts.
 Write-Log "Clearing existing Azure connection" -LogFileName $LogFileName -Severity Information
@@ -493,7 +524,7 @@ get-azcontext -ListAvailable | ForEach-Object{$_ | remove-azcontext -Force -Verb
 Write-Log "Clearing of existing connection and context completed." -LogFileName $LogFileName -Severity Information
 Try {
     #Connect to tenant with context name and save it to variable
-    Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop
+    $AzContext = Connect-AzAccount -Tenant $TenantID -ContextName 'MyAzContext' -Force -ErrorAction Stop
         
     #Select subscription to build
     $GetSubscriptions = Get-AzSubscription -TenantId $TenantID | Where-Object {($_.state -eq 'enabled') } | Out-GridView -Title "Select Subscription to Use" -PassThru       
@@ -501,6 +532,14 @@ Try {
 catch {    
     Write-Log "Error When trying to connect to tenant : $($_)" -LogFileName $LogFileName -Severity Error
     exit    
+}
+
+#Set API endpoints
+if ($AzContext.Context.Environment.Name.Trim() -eq "AzureUSGovernment") {
+    $APIEndpoint = "management.usgovcloudapi.net"
+}
+else {
+    $APIEndpoint = "management.azure.com"    
 }
 
 $AzureAccessToken = (Get-AzAccessToken).Token            
@@ -533,12 +572,12 @@ foreach($CurrentSubscription in $GetSubscriptions)
                     $tablePlan = Select-Plan
                     if ($tablePlan.Trim() -eq "Analytics") {
                         #Get all the tables from the selected Azure Log Analytics Workspace
-                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()
+                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim() -APIEndpoint $APIEndpoint
                         if($SelectedTables) {
                             $WorkspaceRetention = $SelectedTables[0].RetentionInWorkspace
                             $TotalRetentionInDays = Collect-AnalyticsPlanRetentionDays -WorkspaceLevelRetention $WorkspaceRetention -TableLevelRetentionLimit 2555
-                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()
-                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays                    
+                            $AnalyticsPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $APIEndpoint
+                            $UpdatedTables = Update-TablesRetention -TablesForRetention $AnalyticsPlanTables -TotalRetentionInDays $TotalRetentionInDays -APIEndpoint $APIEndpoint                   
                             $UpdatedTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru
                         }
                         else {
@@ -546,8 +585,8 @@ foreach($CurrentSubscription in $GetSubscriptions)
                         }
                     }
                     elseif ($tablePlan.Trim() -eq "Basic") {
-                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim()                    
-                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim()                                            
+                        $SelectedTables = Get-LATables -RetentionMethod $tablePlan.Trim() -APIEndpoint $APIEndpoint                   
+                        $BasicPlanTables = Set-TableConfiguration -QualifiedTables $SelectedTables -RetentionType $tablePlan.Trim() -APIEndpoint $APIEndpoint                                      
                         $BasicPlanTables | Sort-Object -Property TableName | Select-Object -Property TableName, RetentionInWorkspace, RetentionInArchive, TotalLogRetention, IngestionPlan | Out-GridView -Title "$($tablePlan.Trim()) Plan updated Tables" -PassThru                    
                     }
                     

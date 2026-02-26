@@ -6,7 +6,10 @@ This PowerShell utility first evaluates your Azure logic app and any API connect
 
 You can use this ARM template for your own business scenarios or customize the template to meet your requirements.  
 
-You can share it safely knowing that your organization’s information is stripped from the JSON and that it will work correctly in the recipient environment.
+You can share it safely knowing that your organization’s information is stripped from the JSON and that it will work correctly in the recipient environment.  
+> Blog: https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/export-microsoft-sentinel-playbooks-or-azure-logic-apps-with/ba-p/3275898  
+
+> Demo: https://www.youtube.com/watch?v=scTtVHVzrQw
 
 ## Download and run the PowerShell script
 

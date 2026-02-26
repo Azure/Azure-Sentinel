@@ -1,0 +1,70 @@
+id: 8ba897dc-dd9f-4d0a-85d6-188b283977e5
+Function:
+  Title: Parser for CymruScoutCorrelate
+  Version: "1.0.0"
+  LastUpdated: "2024-07-30"
+Category: Microsoft Sentinel Parser
+FunctionName: CymruScoutCorrelate
+FunctionAlias: CymruScoutCorrelate
+FunctionParams:
+  - Name: indicatorType
+    Type: dynamic
+    Default: dynamic([])
+  - Name: searchAlgo
+    Type: string
+    Default: ""
+  - Name: asimParsers
+    Type: dynamic
+    Default: dynamic([])
+FunctionQuery: |
+        let ThreatIntelligenceData = (indicatortype: string="")
+        {
+            ThreatIntelligenceIndicator
+            | extend ipIndicator = iff("*" == indicatortype  or "IP" == indicatortype, NetworkIP, ""),
+                domainIndicator = iff("*" == indicatortype  or "Domain" == indicatortype, DomainName, "")
+        };
+        let AsimParsersData = (indicatortype: string="", asimParsers: dynamic=dynamic([]))
+        {
+            union isfuzzy=true
+                (ASimNetworkSession| where "*" in (asimParsers) or "NetworkSession" in (asimParsers)|where EventVendor !contains "Cymru"| extend ip = pack_array(SrcIpAddr, DstIpAddr), domain = pack_array(SrcDomain, DstDomain)),
+                (ASimWebSession| where "*" in (asimParsers) or "WebSession" in (asimParsers)|where EventVendor !contains "Cymru"| extend ip = pack_array(SrcIpAddr, DstIpAddr), domain = pack_array(SrcDomain, DstDomain)),
+                (ASimDns| where "*" in (asimParsers) or "DNS" in (asimParsers)|where EventVendor !contains "Cymru"| extend ip = pack_array(SrcIpAddr, DstIpAddr), domain = pack_array(SrcDomain, DstDomain)),
+                (ASimDhcpEvent| where "*" in (asimParsers) or "DHCP" in (asimParsers)|where EventVendor !contains "Cymru"| extend ip = SrcIpAddr, domain = SrcDomain),
+                (ASimAuditEvent| where "*" in (asimParsers) or "Audit" in (asimParsers)|where EventVendor !contains "Cymru"| extend ip = pack_array(SrcIpAddr, TargetIpAddr), domain = pack_array(SrcDomain, TargetIpAddr)),
+                (ASimAuthentication| where "*" in (asimParsers) or "Authentication" in (asimParsers)|where EventVendor !contains "Cymru"| extend ip = pack_array(SrcIpAddr, TargetIpAddr), domain = pack_array(SrcDomain, TargetIpAddr))
+                | extend ipIndicator = iff( "*" == indicatortype  or "IP" == indicatortype, ip, ""),
+                    domainIndicator = iff("*" == indicatortype  or "Domain" == indicatortype, domain, "")
+        };
+        let OtherSourcesData = (indicatorType: string="", asimParsers: dynamic=dynamic([]), searchAlgo: string="")
+        {
+            union isfuzzy=true
+                (AsimParsersData(indicatortype=indicatorType, asimParsers=asimParsers)| where searchAlgo == "ASIM Parsers"),
+                (ThreatIntelligenceData(indicatortype=indicatorType)| where searchAlgo == "ThreatIntelligenceIndicator")
+        };
+        let ipdata = (indicatorType: string="", searchAlgo: string="", asimParsers: dynamic=dynamic([]))
+        {
+            OtherSourcesData(indicatorType=indicatorType, searchAlgo=searchAlgo, asimParsers=asimParsers)
+            | mv-expand todynamic(ipIndicator)
+            | where isnotempty(ipIndicator)
+            | extend ipIndicator = tostring(ipIndicator)
+            | join kind=inner (CymruScoutIP| distinct Indicator, IndicatorType) on $left.ipIndicator == $right.Indicator
+        };
+        let domaindata = (indicatorType: string="", searchAlgo: string="", asimParsers: dynamic=dynamic([]))
+        {
+            OtherSourcesData(indicatorType=indicatorType, searchAlgo=searchAlgo, asimParsers=asimParsers)
+            | mv-expand todynamic(domainIndicator)
+            | where isnotempty(domainIndicator)
+            | extend domainIndicator = tostring(domainIndicator)
+            | join kind=inner (CymruScoutDomain| distinct Indicator, IndicatorType) on $left.domainIndicator == $right.Indicator
+        };
+        let CymruScoutCorrelate = (indicatorType: string="", searchAlgo: string="", asimParsers: dynamic=dynamic([]))
+        {
+            union isfuzzy=true
+                (ipdata(indicatorType=indicatorType, searchAlgo=searchAlgo, asimParsers=asimParsers)| where "IP" == indicatorType or indicatorType has '*'),
+                (domaindata(indicatorType=indicatorType, searchAlgo=searchAlgo, asimParsers=asimParsers)| where "Domain" == indicatorType or indicatorType has '*')
+        };
+        CymruScoutCorrelate(
+            indicatorType=indicatorType,
+            searchAlgo=searchAlgo,
+            asimParsers=asimParsers
+        )

@@ -1,0 +1,422 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Cybersixgill-Alert-Status-Update",
+        "description": "This playbook will update status of Cybersixgill Alerts when respective incident status is updated in Microsoft Sentinel",
+        "prerequisites": "Cybersixgill Client ID and Client Secret should be stored in Azure KeyVault before deploying this playbook.",
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-03-23T18:18:05Z",
+        "entities": [],
+        "tags": [ "Incident", "Sync" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Loginsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CybersixgillAlertStatusUpdate",
+            "type": "string"
+        },
+        "Client ID key name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Client ID key name"
+            }
+        },
+        "Client Secret key name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Client Secret key name"
+            }
+        },
+        "Keyvault Name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Keyvault Name"
+            }
+        },
+        "Organization ID key name": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Organization ID key name"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Keyvault Name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Keyvault Name')]"
+                        },
+                        "Client ID key name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Client ID key name')]"
+                        },
+                        "Client Secret key name": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Client Secret key name')]"
+                        },
+                        "Organization ID key name": {
+                            "defaultValue": "[parameters('Organization ID key name')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Authenticate_Cybersixgill_API": {
+                            "runAfter": {
+                                "Get_Cybersixgill_Organization_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "client_id=@{body('Get_Cybersixgill_Client_ID')?['value']}&client_secret=@{body('Get_Cybersixgill_Client_Secret')?['value']}&grant_type=client_credentials",
+                                "headers": {
+                                    "Cache-Control": "no-cache",
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "uri": "https://api.cybersixgill.com/auth/token"
+                            }
+                        },
+                        "Build_Patch_body": {
+                            "runAfter": {
+                                "Switch": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alert_status_patch",
+                                        "type": "object",
+                                        "value": {
+                                            "status": {
+                                                "status": "@{variables('alert_status')}"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "Extract_Access_Token": {
+                            "runAfter": {
+                                "Authenticate_Cybersixgill_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Authenticate_Cybersixgill_API')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Extract_Alert_ID": {
+                            "runAfter": {
+                                "Initialize_status": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alert_object",
+                                        "type": "string",
+                                        "value": "@triggerBody()?['object']?['properties']?['description']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Get_Cybersixgill_Client_ID": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('Client ID key name'))}/value"
+                            }
+                        },
+                        "Get_Cybersixgill_Client_Secret": {
+                            "runAfter": {
+                                "Get_Cybersixgill_Client_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('Client Secret key name'))}/value"
+                            }
+                        },
+                        "Get_Cybersixgill_Organization_ID": {
+                            "runAfter": {
+                                "Get_Cybersixgill_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('Organization ID key name'))}/value"
+                            }
+                        },
+                        "Initialize_status": {
+                            "runAfter": {
+                                "Extract_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alert_status",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Extract_Alert_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@variables('alert_object')",
+                                "schema": {
+                                    "properties": {
+                                        "id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Switch": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Status_Active": {
+                                    "case": "Active",
+                                    "actions": {
+                                        "Status_-_in_treatment": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "alert_status",
+                                                "value": "in_treatment"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Status_Closed": {
+                                    "case": "Closed",
+                                    "actions": {
+                                        "Status_resolved": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "alert_status",
+                                                "value": "resolved"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Status_New": {
+                                    "case": "New",
+                                    "actions": {
+                                        "Status_treatment_required": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "alert_status",
+                                                "value": "treatment_required"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {}
+                            },
+                            "expression": "@triggerBody()?['object']?['properties']?['status']",
+                            "type": "Switch"
+                        },
+                        "Update_Alert_Status_": {
+                            "runAfter": {
+                                "Build_Patch_body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "@variables('alert_status_patch')",
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Extract_Access_Token')?['access_token']}",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "PATCH",
+                                "queries": {
+                                    "organization_id": "@body('Get_Cybersixgill_Organization_ID')?['value']"
+                                },
+                                "uri": "https://api.cybersixgill.com/alerts/actionable_alert/@{body('Parse_JSON')?['id']}"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "CybersixgillAlertStatusUpdate",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('Keyvault Name')]"
+                },
+                "nonSecretParameterValues": {
+                    "vaultName": "[parameters('Keyvault Name')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                }
+            }
+        }
+    ]
+}

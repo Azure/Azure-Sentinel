@@ -1,0 +1,81 @@
+Parser:
+  Title: DNS ASIM parser for CrowdStrike Falcon Data Replicator
+  Version: "0.1"
+  LastUpdated: Jun 1, 2023
+Product:
+  Name: Falcon Data Replicator
+Normalization:
+  Schema: DNS
+  Version: "0.1.7"
+References:
+  - Title: ASIM DNS Schema
+    Link: https://aka.ms/ASimDnsDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing CrowdStrike Falcon Data Replicator logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM DNS normalized schema.
+ParserName: ASimDnsMicrosoftCrowdStrikeFalcon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let DnsQueryTypeLookup = parse_json('{0: "Reserved",1: "A",2: "NS",3: "MD",4: "MF",5: "CNAME",6: "SOA",7: "MB",8: "MG",9: "MR",10: "NULL",11: "WKS",12: "PTR",13: "HINFO",14: "MINFO",15: "MX",16: "TXT",17: "RP",18: "AFSDB",19: "X25",20: "ISDN",21: "RT",22: "NSAP",23: "NSAP-PTR",24: "SIG",25: "KEY",26: "PX",27: "GPOS",28: "AAAA",29: "LOC",30: "NXT",31: "EID",32: "NIMLOC",33: "SRV",34: "ATMA",35: "NAPTR",36: "KX",37: "CERT",38: "A6",39: "DNAME",40: "SINK",41: "OPT",42: "APL",43: "DS",44: "SSHFP",45: "IPSECKEY",46: "RRSIG",47: "NSEC",48: "DNSKEY",49: "DHCID",50: "NSEC3",51: "NSEC3PARAM",52: "TLSA",53: "SMIMEA",55: "HIP",56: "NINFO",57: "RKEY",58: "TALINK",59: "CDS",60: "CDNSKEY",61: "OPENPGPKEY",62: "CSYNC",63: "ZONEMD",64: "SVCB",65: "HTTPS",99: "SPF",100: "UINFO",101: "UID",102: "GID",103: "UNSPEC",104: "NID",105: "L32",106: "L64",107: "LP",108: "EUI48",109: "EUI64",249: "TKEY",250: "TSIG",251: "IXFR",252: "AXFR",253: "MAILB",254: "MAILA",255: "*",256: "URI",257: "CAA",258: "AVC",259: "DOA",260: "AMTRELAY",32768: "TA",32769: "DLV",65535: "Reserved"}');
+    let EventResultDetailsLookup = parse_json('{0: "No Error",1: "Format Error",2: "Server Failure",3: "Non-Existent Domain",4: "Not Implemented",5: "Query Refused",6: "Name Exists when it should not",7: "RR Set Exists when it should not",8: "RR Set that should exist does not",9: "Not Authorized",10: "Name not contained in zone",11: "DSO-TYPE Not Implemented",16: "Bad OPT Version / TSIG Signature Failure",17: "Key not recognized",18: "Signature out of time window",19: "Bad TKEY Mode",20: "Duplicate key name",21: "Algorithm not supported",22: "Bad Truncation",23: "Bad/missing Server Cookie",65535: "Reserved, Can be allocated by Standards Action"}');
+    source
+    | extend
+        eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+        contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
+    | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
+    | project-rename
+        DvcIpAddr = aip,
+        DvcId = aid,
+        EventOriginalType = name,
+        EventProductVersion = ConfigBuild,
+        EventOriginalUid = id,
+        SrcProcessId = ContextProcessId,
+        DnsQuery = DomainName,
+        DstIpAddr = RespondingDnsServer
+    | extend
+        DvcOs = case(
+                event_platform == "Win",
+                "Windows", 
+                event_platform == "Mac",
+                "Macintosh",
+                event_platform == "Lin",
+                "Linux", 
+                ""
+            ),
+        EventCount = iff(isnotempty(DnsRequestCount), toint(DnsRequestCount), toint(1)),
+        DnsResponseCode = toint(QueryStatus),
+        DnsQueryType = toint(RequestType)
+    | extend 
+        EventStartTime = iff(isnotempty(contextDatetime), contextDatetime, TimeGenerated),
+        EventResultDetails = tostring(EventResultDetailsLookup[QueryStatus]),
+        DnsQueryTypeName = tostring(DnsQueryTypeLookup[RequestType]),
+        DnsResponseName = iff(isnotempty(IP4Records), IP4Records, "")
+    | extend
+        EventEndTime = EventStartTime,
+        EventSchemaVersion = "0.1.7",
+        EventVendor = "CrowdStrike",
+        EventProduct = "Falcon Data Replicator",
+        EventType = "Query",
+        EventSubType = case(
+                       event_simpleName == "SuspiciousDnsRequest",
+                       "request",
+                       "response"
+                   ),
+        EventResult = case(
+                      event_simpleName == "SuspiciousDnsRequest",
+                      "Failure",
+                      QueryStatus == "0",
+                      "Success", 
+                      "Failure"
+                  ),
+        EventSeverity = case(
+                        event_simpleName == "SuspiciousDnsRequest",
+                        "Medium",
+                        QueryStatus == "0",
+                        "Informational", 
+                        "Low"
+                    )                   

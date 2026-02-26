@@ -1,11 +1,10 @@
 ﻿id: fa2658fe-3714-4c55-bb12-2b7275c628e8
 name: Threat Essentials - Mass Cloud resource deletions Time Series Anomaly
 description: |
-  'This query generates baseline pattern of cloud resource deletions by an user and generated anomaly 
-  when any unusual spike is detected.
-  These anomalies from unusual or privileged users could be an indication of cloud infrastructure 
-  take-down by an adversary '
+  'This query generates baseline pattern of cloud resource deletions by an user and generated anomaly when any unusual spike is detected.
+  These anomalies from unusual or privileged users could be an indication of cloud infrastructure take-down by an adversary '
 severity: Medium
+status: Available
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
@@ -40,16 +39,21 @@ query: |
   TimeSeriesAlerts 
   | where TimeGenerated > (ago(endtime)) 
   | project TimeGenerated, Caller 
-  | join (AzureActivity 
+  | join kind = inner (AzureActivity 
   | where TimeGenerated > (ago(endtime)) 
   | where OperationNameValue endswith "delete" 
   | summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Caller
-
+  | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+  | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+  | extend AadUserId = iif(Caller !has '@',Caller,"")
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
+version: 1.0.2
 kind: Scheduled

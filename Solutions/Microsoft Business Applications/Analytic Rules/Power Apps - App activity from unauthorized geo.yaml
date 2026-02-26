@@ -1,0 +1,94 @@
+id: 7ec1e61d-f3b7-4f40-bb1a-357a63913c23
+kind: Scheduled
+name: Power Apps - App activity from unauthorized geo
+description: Identifies Power Apps activity from countries in a predefined list of
+  unauthorized countries.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+      - PowerPlatformAdminActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let unauthorized_country_codes = dynamic([
+      // Specify the disallowed two letter country codes
+      // example: disallowed_country_codes = dynamic(["RU", "KP", "IR"])
+      ]);
+  let query_frequency = 1h;
+  let query_lookback = 14d;
+  let powerapps_events = dynamic(["LaunchPowerApp", "AppDlpEvaluationResultChange", "UpdatePowerApp", "PublishPowerApp", "RecordScopesConsent", "CreatePowerApp", "PowerAppPermissionEdited", "PowerAppPermissionDeleted", "ImportExistingCanvasApp", "DeletePowerApp", "ImportNewCanvasApp", "PromotePowerAppVersion", "RemoveHeroApp", "DeletePowerAppVersion", "PublishSolutionCanvasAppVersion", "AdminModifyAppPermissions", "AdminModifyAppOwner", "AdminQuarantineApp", "AdminDeleteApp", "AdminSetAppBypassConsent", "PatchPowerApp"]);
+  PowerPlatformAdminActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where EventOriginalType in (powerapps_events)
+  | extend Properties = tostring(PropertyCollection)
+  | extend SrcIpAddr = extract(@'"enduser.ip_address","Value":"([^"]+)"', 1, Properties)
+  | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)
+  | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
+  | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+  | extend
+      AppName = extract(@'"powerplatform.analytics.resource.power_app.display_name","Value":"([^"]+)"', 1, Properties),
+      EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties),
+      EnvironmentName = extract(@'"powerplatform.analytics.resource.environment.name","Value":"([^"]+)"', 1, Properties)
+  | summarize FirstEvent = min(TimeGenerated) by ActorName, SrcIpAddr, AppName, AppId, EnvironmentId, EnvironmentName
+  | join kind=inner (
+      SigninLogs
+      | where TimeGenerated >= ago(query_lookback)
+      | where Location in (unauthorized_country_codes)
+      | summarize by IPAddress, Location)
+      on $left.SrcIpAddr == $right.IPAddress
+  | extend
+      PowerAppsEntityId = 27593,
+      DataverseId = 32780,
+      AccountName = tostring(split(ActorName, '@')[0]),
+      UPNSuffix = tostring(split(ActorName, '@')[1])
+  | project
+      FirstEvent,
+      ActorName,
+      SrcIpAddr,
+      Location,
+      AppName,
+      AppId,
+      EnvironmentId,
+      EnvironmentName,
+      PowerAppsEntityId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: PowerAppsEntityId
+      - identifier: Name
+        columnName: AppName
+alertDetailsOverride:
+  alertDisplayNameFormat: Power Apps activity from an unauthorized location
+  alertDescriptionFormat: 'User {{ActorName}} activity associated with app {{AppName}}
+    from an unauthorized geolocation: {{Location}}'
+customDetails:
+  Environment: EnvironmentId
+  App: AppId
+  EnvironmentName: EnvironmentName
+version: 3.2.0

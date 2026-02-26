@@ -1,0 +1,71 @@
+id: b1e11b8c-545a-4dea-a912-0008e160d183
+kind: Scheduled
+name: Power Automate - Departing employee flow activity
+description: Identifies instances where an employee who has been notified or is already
+  terminated, on the TerminatedEmployees watchlist, creates or modifies a Power Automate
+  flow.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: PowerAutomate
+    dataTypes:
+      - PowerAutomateActivity
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Impact
+relevantTechniques:
+  - T1567
+  - T1485
+  - T1491
+  - T0813
+  - T0879
+  - T0826
+query: |
+  let query_frequency = 1h;
+  PowerAutomateActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where EventOriginalType in ("CreateFlow", "EditFlow")
+  | join kind=inner (MSBizAppsTerminatedEmployees()) on $left.ActorName == $right.UserPrincipalName
+  | extend path = parse_url(FlowDetailsUrl).Path
+  | extend EnvironmentId = tostring(split(path, "/")[2])
+  | extend FlowId = tostring(split(path, "/")[-2])
+  | extend
+      AccountName = tostring(split(ActorName, "@")[0]),
+      UPNSuffix = tostring(split(ActorName, "@")[1]),
+      PowerAutomateAppId = 27592,
+      CloudAppId = 32780
+  | project
+      TimeGenerated,
+      EventOriginalType,
+      ActorName,
+      EnvironmentId,
+      AccountName,
+      UPNSuffix,
+      PowerAutomateAppId,
+      CloudAppId,
+      FlowId
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: PowerAutomateAppId
+alertDetailsOverride:
+  alertDisplayNameFormat: PowerAutomate - Terminated user {{EventOriginalType}} detected
+  alertDescriptionFormat: '{{ActorName}} is on the terminated employees watchlist
+    and carried out {{EventOriginalType}} in environment id {{EnvironmentId}}.'
+customDetails:
+  Environment: EnvironmentId
+  FlowDetails: FlowId
+version: 3.2.0

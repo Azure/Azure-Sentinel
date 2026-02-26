@@ -1,0 +1,441 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "functionAppName": {
+            "defaultValue": "[format('func-{0}', uniqueString(resourceGroup().id))]",
+            "type": "String",
+            "metadata": {
+                "description": "The name of the Azure Function app."
+            }
+        },
+        "storageAccountType": {
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_RAGRS"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Storage Account type"
+            }
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "appInsightsLocation": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Location for Application Insights"
+            }
+        },
+        "maximumInstanceCount": {
+            "defaultValue": 100,
+            "type": "Int"
+        },
+        "instanceMemoryMB": {
+            "defaultValue": 2048,
+            "allowedValues": [
+                512,
+                2048,
+                4096
+            ],
+            "type": "Int"
+        },
+        "WorkspaceId": {
+            "type": "string",
+            "defaultValue": "<WorkspaceId>"
+        },
+        "WorkspaceKey": {
+            "type": "securestring",
+            "defaultValue": "<workspaceKey>"
+        },
+        "AwsAccessKeyId": {
+            "type": "string",
+            "defaultValue": "<AwsAccessKeyId>"
+        },
+        "AwsSecretAccessKey": {
+            "type": "securestring",
+            "defaultValue": "<AwsSecretAccessKey>"
+        },
+        "FncAccountCode": {
+            "type": "string",
+            "defaultValue": "<enter the FortiNDR Cloud account code here>"
+        },
+        "FncEvents": {
+            "type": "string",
+            "defaultValue": "suricata,observation,detections"
+        },
+        "FncDaysToCollectEvents": {
+            "type": "int",
+            "defaultValue": 7
+        },
+        "FncIntervalMinutes": {
+            "type": "int",
+            "defaultValue": 5
+        },
+        "FncBucketName": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "FncApiToken": {
+            "type": "securestring",
+            "defaultValue": ""
+        },
+        "FncAccountUuid": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "FncApiDomain": {
+            "type": "string",
+            "defaultValue": ""
+        },
+        "IncludeEvents": {
+            "type": "bool",
+            "defaultValue": false
+        },
+        "IncludeDescription": {
+            "type": "bool",
+            "defaultValue": true
+        },
+        "IncludeSignature": {
+            "type": "bool",
+            "defaultValue": true
+        },
+        "PullMuted": {
+            "type": "string",
+            "defaultValue": "all"
+        },
+        "DetectionStatus": {
+            "type": "string",
+            "defaultValue": "all"
+        },
+        "FncDaysToCollectDetections": {
+            "type": "int",
+            "defaultValue": 0
+        },
+        "PollingDelay": {
+            "type": "int",
+            "defaultValue": 10
+        },
+        "PostingLimit": {
+            "type": "int",
+            "defaultValue": 3000
+        }
+    },
+    "variables": {
+        "hostingPlanName": "[parameters('functionAppName')]",
+        "applicationInsightsName": "[parameters('functionAppName')]",
+        "storageAccountName": "[format('{0}azfunctions', uniqueString(resourceGroup().id))]",
+        "resourceToken": "[toLower(uniqueString(subscription().id, resourceGroup().name, parameters('location')))]",
+        "deploymentStorageContainerName": "[concat('app-package-', take(parameters('functionAppName'), 32),'-', take(variables('resourceToken'), 7))]",
+        "LogAnalyticsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceId')), '.ods.opinsights'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-01-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot",
+                "allowSharedKeyAccess": true
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2023-01-01",
+            "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2023-01-01",
+            "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('deploymentStorageContainerName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2023-12-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "tier": "FlexConsumption",
+                "name": "FC1"
+            },
+            "kind": "functionapp",
+            "properties": {
+                "reserved": true
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('applicationInsightsName')]",
+            "location": "[parameters('appInsightsLocation')]",
+            "tags": {
+                "[format('hidden-link:{0}', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+            },
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2023-12-01",
+            "name": "[parameters('functionAppName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "functionAppConfig": {
+                    "deployment": {
+                        "storage": {
+                            "type": "blobContainer",
+                            "value": "[concat(reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))).primaryEndpoints.blob, variables('deploymentStorageContainerName'))]",
+                            "authentication": {
+                                "type": "SystemAssignedIdentity"
+                            }
+                        }
+                    },
+                    "scaleAndConcurrency": {
+                        "maximumInstanceCount": "[parameters('maximumInstanceCount')]",
+                        "instanceMemoryMB": "[parameters('instanceMemoryMB')]"
+                    },
+                    "runtime": {
+                        "name": "python",
+                        "version": "3.11"
+                    }
+                },
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage__accountName",
+                            "value": "[variables('storageAccountName')]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage__authentication",
+                            "value": "ManagedIdentity"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__extensions__durableTask__storageProvider__type",
+                            "value": "azureStorage"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__extensions__durableTask__storageProvider__managedIdentityAuth",
+                            "value": "true"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__extensions__durableTask__storageProvider__useDevelopmentStorage",
+                            "value": "false"
+                        },
+                        {
+                            "name": "AzureFunctionsJobHost__extensions__durableTask__storageProvider__accountName",
+                            "value": "[variables('storageAccountName')]"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', parameters('functionAppName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02').ConnectionString]"
+                        },
+                        {
+                            "name": "WorkspaceId",
+                            "value": "[parameters('WorkspaceID')]"
+                        },
+                        {
+                            "name": "WorkspaceKey",
+                            "value": "[parameters('WorkspaceKey')]"
+                        },
+                        {
+                            "name": "AwsAccessKeyId",
+                            "value": "[parameters('AwsAccessKeyId')]"
+                        },
+                        {
+                            "name": "AwsSecretAccessKey",
+                            "value": "[parameters('AwsSecretAccessKey')]"
+                        },
+                        {
+                            "name": "FncAccountCode",
+                            "value": "[parameters('FncAccountCode')]"
+                        },
+                        {
+                            "name": "FncEvents",
+                            "value": "[parameters('FncEvents')]"
+                        },
+                        {
+                            "name": "FncTerminateApp",
+                            "value": "false"
+                        },
+                        {
+                            "name": "FncDaysToCollectEvents",
+                            "value": "[parameters('FncDaysToCollectEvents')]"
+                        },
+                        {
+                            "name": "FncIntervalMinutes",
+                            "value": "[parameters('FncIntervalMinutes')]"
+                        },
+                        {
+                            "name": "FncBucketName",
+                            "value": "[parameters('FncBucketName')]"
+                        },
+                        {
+                            "name": "FncApiToken",
+                            "value": "[parameters('FncApiToken')]"
+                        },
+                        {
+                            "name": "FncAccountUuid",
+                            "value": "[parameters('FncAccountUuid')]"
+                        },
+                        {
+                            "name": "FncApiDomain",
+                            "value": "[parameters('FncApiDomain')]"
+                        },
+                        {
+                            "name": "IncludeEvents",
+                            "value": "[parameters('IncludeEvents')]"
+                        },
+                        {
+                            "name": "IncludeDescription",
+                            "value": "[parameters('IncludeDescription')]"
+                        },
+                        {
+                            "name": "IncludeSignature",
+                            "value": "[parameters('IncludeSignature')]"
+                        },
+                        {
+                            "name": "PullMuted",
+                            "value": "[parameters('PullMuted')]"
+                        },
+                        {
+                            "name": "DetectionStatus",
+                            "value": "[parameters('DetectionStatus')]"
+                        },
+                        {
+                            "name": "FncDaysToCollectDetections",
+                            "value": "[parameters('FncDaysToCollectDetections')]"
+                        },
+                        {
+                            "name": "PollingDelay",
+                            "value": "[parameters('PollingDelay')]"
+                        },
+                        {
+                            "name": "LogLevel",
+                            "value": "INFO"
+                        },
+                        {
+                            "name": "PostingLimit",
+                            "value": "[parameters('PostingLimit')]"
+                        },
+                        {
+                            "name": "logAnalyticsUri",
+                            "value": "[variables('LogAnalyticsUri')]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'blob-contributor')]",
+            "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'table-data-contributor')]",
+            "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), 'queue-contributor')]",
+            "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2016-08-01', 'Full').identity.principalId]"
+            }
+        },
+        { 
+            "type": "Microsoft.Resources/deploymentScripts",
+            "apiVersion": "2020-10-01",
+            "name": "WaitSection",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+            ],
+            "kind": "AzurePowerShell",
+            "properties": {
+                "azPowerShellVersion": "7.0",
+                "scriptContent": "start-sleep -Seconds 180",
+                "cleanupPreference": "Always",
+                "retentionInterval": "PT1H"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/extensions",
+            "apiVersion": "2022-09-01",
+            "name": "[format('{0}/{1}', parameters('functionAppName'), 'onedeploy')]",
+            "dependsOn": [
+                "WaitSection"
+            ],
+            "properties": {
+                "packageUri": "https://aka.ms/sentinel-FortinetFortiNDR-functionapp",
+                "remoteBuild": true
+            }
+        }
+    ]
+}

@@ -1,0 +1,46 @@
+id: 3bc01058-ce23-45ba-a7e9-409d844b12dc
+name: Insider Risk_Multiple Entity-Based Anomalies
+description: |
+  'This query returns entity counts by anomaly and user principal name including ranges for start/end time observed (watchlists configurable). For more information, see https://docs.microsoft.com/azure/sentinel/watchlists'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs  
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let UncommonActionVolume = BehaviorAnalytics
+  | extend UncommonActionVolume = tostring(ActivityInsights.UncommonHighVolumeOfActions)
+  | where UncommonActionVolume == "True"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ActivityType = make_set(ActivityType), make_set(ActionType), UncommonActionVolume = countif(UncommonActionVolume=="True") by UserPrincipalName;
+  let UncommonAction = BehaviorAnalytics
+  | extend UncommonAction = tostring(ActivityInsights.ActionUncommonlyPerformedByUser)
+  | where UncommonAction == "True"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ActivityType = make_set(ActivityType), make_set(ActionType), UncommonAction = countif(UncommonAction=="True") by UserPrincipalName;
+  let Uncommon = UncommonActionVolume | join kind = inner (UncommonAction) on UserPrincipalName;
+  let FirstTimeDeviceLogon = BehaviorAnalytics
+  | extend FirstTimeDeviceLogon = tostring(ActivityInsights.FirstTimeUserLoggedOnToDevice)
+  | where FirstTimeDeviceLogon == "True"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ActivityType = make_set(ActivityType), make_set(ActionType), FirstTimeDeviceLogon = countif(FirstTimeDeviceLogon=="True") by UserPrincipalName;
+  let FirstTimeUserAction = BehaviorAnalytics
+  | extend FirstTimeUserAction = tostring(ActivityInsights.FirstTimeUserPerformedAction)
+  | where FirstTimeUserAction == "True"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ActivityType = make_set(ActivityType), make_set(ActionType), FirstTimeUserAction = countif(FirstTimeUserAction=="True") by UserPrincipalName;
+  let FirstTime = FirstTimeUserAction | join(FirstTimeDeviceLogon) on UserPrincipalName;
+  Uncommon | join kind= inner (FirstTime) on UserPrincipalName
+  | where UserPrincipalName <> ""
+  | project UserPrincipalName, UncommonActionVolume, UncommonAction, FirstTimeUserAction, FirstTimeDeviceLogon, StartTime, EndTime, ActivityType,set_ActionType
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | sort by UncommonActionVolume desc
+  | limit 25
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity

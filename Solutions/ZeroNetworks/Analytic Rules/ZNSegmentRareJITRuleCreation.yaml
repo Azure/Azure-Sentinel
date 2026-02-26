@@ -1,0 +1,51 @@
+id: 58688058-68b2-4b39-8009-ac6dc4d81ea1
+name: Zero Networks Segment - Rare JIT Rule Creation
+description: |
+  'Identifies when a JIT Rule connection is new or rare by a given account today based on comparison with the previous 14 days.
+  JIT Rule creations are indicated by the Activity Type Id 20'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ZeroNetworksSegmentAuditFunction
+    dataTypes:
+      - ZNSegmentAudit_CL
+  - connectorId: ZeroNetworksSegmentAuditNativePoller
+    dataTypes:
+      - ZNSegmentAuditNativePoller_CL
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  ZNSegmentAudit
+  | where TimeGenerated >= ago(endtime)
+  | where AuditTypeId == 20
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()
+  by PerformedByName, tostring(DestinationEntityName)
+    // use left anti to exclude anything from the previous 14 days that is not rare
+  | join kind=leftanti (
+  ZNSegmentAudit
+  | where TimeGenerated between (ago(starttime) .. ago(endtime))
+  | where AuditTypeId == 20
+  | summarize by tostring(DestinationEntityName)
+  ) on DestinationEntityName
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)
+  by PerformedByName, DestinationEntityName
+  | extend TimeGenerated = StartTime
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: PerformedByName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationEntityName
+version: 1.0.2
+kind: Scheduled

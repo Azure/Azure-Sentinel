@@ -1,6 +1,6 @@
 # Azure Firewall ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for Azure Firewall.
+ARM template for ASIM NetworkSession schema parser for Azure Firewall.
 
 This ASIM parser supports filtering and normalizing Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
 
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/CHANGELOG/vimNetworkSessionAzureFirewall.md)
 
 <br>
 

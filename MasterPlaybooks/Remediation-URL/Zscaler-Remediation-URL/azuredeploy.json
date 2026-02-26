@@ -1,0 +1,260 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Zscaler - Block URL",
+        "description": "When this playbook gets triggered and it performs the below actions:\n 1. Gets a list of potentially malicious URLs.\n 2. For each URL in the list, adds it to the predefined category.",
+        "prerequisites": [
+            "1. Playbook leverages the Zscaler API. To use the Zscaler capabilities, you need a Zscaler API key. Refer this link: [API Developers Guide: Getting Started](https://help.zscaler.com/zia/api-getting-started)",
+            "2. Deploy the Zscaler Authentication playbook before the deployment of this playbook under the same subscription and same resource group. Capture the name of the Authentication playbook during deployment."
+        ],
+        "lastUpdateTime": "2022-08-26T07:00:00.000Z",
+        "entities": [
+            "url"
+        ],
+        "tags": [
+            "Remediation"
+        ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Zscaler-BlockURL",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "Zscaler Authentation Playbook": {
+            "defaultValue": "Zscaler-Authentication-Playbook",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Zscaler Authentication Playbook"
+            }
+        },
+        "Zscaler Admin Url": {
+            "defaultValue": "https://admin.<zscaler_instance_domain>.net",
+            "type": "string",
+            "metadata": {
+                "description": "Update to a valid Zscaler admin url."
+            }
+        },
+        "Block Category": {
+            "defaultValue": "OTHER_MISCELLANEOUS",
+            "type": "String",
+            "metadata": {
+                "description": "Zscaler block category"
+            }
+        }
+    },
+    "variables": {
+        "ZscalerAuthenticationFlow": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Zscaler Authentation Playbook'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "URLs": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Url"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['URLs']",
+                            "actions": {
+                                "Append_to_string_variable": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "response",
+                                        "value": "@{outputs('Compose')}\nUrl @{items('For_each')?['Url']} has been added to category @{variables('Category')}\n"
+                                    }
+                                },
+                                "Compose": {
+                                    "runAfter": {
+                                        "HTTP_Activate_Changes": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "<img src=\"https://www.zscaler.com//themes/custom/zscaler/logo.svg\" alt=\"Zscaler\">"
+                                },
+                                "HTTP_Activate_Changes": {
+                                    "runAfter": {
+                                        "HTTP_Add_Url": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                        "method": "POST",
+                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/status/activate')]"
+                                    }
+                                },
+                                "HTTP_Add_Url": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "configuredName": "@{variables('Category')}",
+                                            "urls": [
+                                                "@{items('For_each')?['Url']}"
+                                            ]
+                                        },
+                                        "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                        "headers": {
+                                            "Cache-Control": "no-cache",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "PUT",
+                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/urlCategories/@{variables(''Category'')}?action=ADD_TO_LIST')]"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Authentication_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP_Delete_Api_Session": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                "method": "DELETE",
+                                "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/authenticatedSession')]"
+                            }
+                        },
+                        "Initialize_variable_response": {
+                            "runAfter": {
+                                "Set_Zscaler_Block_Category": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "response",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Authentication_Response": {
+                            "runAfter": {
+                                "zscaler": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('zscaler')",
+                                "schema": {
+                                    "properties": {
+                                        "cookie": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "HTTP_Delete_Api_Session": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@variables('response')",
+                                "statusCode": 200
+                            }
+                        },
+                        "Set_Zscaler_Block_Category": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Category",
+                                        "type": "string",
+                                        "value": "[parameters('Block Category')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "zscaler": {
+                            "runAfter": {
+                                "Initialize_variable_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[variables('ZscalerAuthenticationFlow')]"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}

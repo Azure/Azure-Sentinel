@@ -1,0 +1,66 @@
+id: a9c7a4be-b7e7-4045-8028-0d1ffaa049af
+name: GCP Security Command Center - Detect DNSSEC disabled for DNS zones
+description: |
+  Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).
+  Disabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - CommandAndControl
+  - DefenseEvasion
+relevantTechniques:
+  - T1557
+  - T1071.004
+  - T1562.001
+tags:
+  - CIS GCP Foundation 3.0 3.3
+  - NIST 800-53 R5 AC-18, CM-2, CM-6, CM-7, CM-9
+  - PCI-DSS v4.0 1.1.1, 1.2.1, 1.2.6, 1.2.7, 1.4.2, 1.5.1, 2.1.1, 2.2.1
+  - ISO-27001 v2022 A.8.9
+  - Cloud Controls Matrix 4 IVS-04
+  - NIST Cybersecurity Framework 1.0 PR-IP-1
+  - SOC2 v2017 CC5.2.2
+  - CIS Controls 8.0 4.2
+query: |
+  GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingsJson = parse_json(Findings)
+  | extend FindingCategory = tostring(FindingsJson.category)
+  | where FindingCategory == "DNSSEC_DISABLED"
+  | extend ResourceName = tostring(FindingsJson.resourceName)
+  | extend
+    ResourceType = tostring(FindingsResource.type),
+    ExternalUri = tostring(FindingsJson.externalUri),
+    SourceProps = parse_json(tostring(FindingsJson.sourceProperties)),
+    GcpResource = parse_json(tostring(FindingsJson.resource))
+  // Extract project and managed zone from resourceName like //dns.googleapis.com/projects/PROJECT/managedZones/ZONE
+  | extend ProjectName = extract(@"projects/([^/]+)", 1, ResourceName)
+  | extend ManagedZone = extract(@"managedZones/([^/]+)", 1, ResourceName)
+  | extend Severity = tostring(FindingsJson.severity)
+  | summarize
+    TimeGenerated = max(TimeGenerated)
+    by ProjectName, ManagedZone, ResourceType, ResourceName, Severity, ExternalUri
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ResourceName
+customDetails:
+  ProjectName: ProjectName
+  ManagedZone: ManagedZone
+  ExternalUri: ExternalUri
+alertDetailsOverride:
+  alertDisplayNameFormat: "GCP DNS zone {{ManagedZone}} has DNSSEC disabled"
+  alertDescriptionFormat: |-
+    DNSSEC is disabled for managed zone {{ManagedZone}} in project {{ProjectName}}. Review the zone configuration and enable DNSSEC where appropriate.
+version: 1.0.0
+kind: Scheduled

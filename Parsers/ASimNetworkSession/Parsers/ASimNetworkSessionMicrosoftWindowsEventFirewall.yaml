@@ -1,19 +1,19 @@
 Parser:
   Title: Network Session ASIM  parser for Microsoft Windows Firewall Events
-  Version: '0.3'
-  LastUpdated: Jan 17, 2022
+  Version: '0.5.0'
+  LastUpdated: Jul 17, 2024
 Product:
   Name: Windows Firewall
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.2'
+  Version: '0.2.6'
 References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/MsASIM
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
+  This ASIM parser supports normalizing Microsoft Windows Firewall Events logs ingested in 'WindowsEvent' table to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
 ParserName: ASimNetworkSessionMicrosoftWindowsEventFirewall
 EquivalentBuiltInParser: _ASim_NetworkSession_MicrosoftWindowsEventFirewall
 ParserParams:
@@ -64,112 +64,49 @@ ParserQuery: |
     '%%14594', 'Forward',false,
     '%%14595', 'Bidirectional', false,
     '%%14609', 'Listen', false];
-  ///////////////////////////////////////////////////////
-  // this query extract data fields from EventData column from SecurityEvent table
-  ///////////////////////////////////////////////////////
-  let WindowsFirewall_SecurityEvent=(){ // Event IDs between (5151 .. 5159)
-  // will be extracting Event specific fields from 'EventData' field
-  let SecurityEvent_5152 = 
-    SecurityEvent | where not(disabled)
-    | where EventID==5152
-    | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>'
-        '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-        '\x0d\x0a  <Data Name="Direction">'DirectionCode'</Data>'
-        '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress'</Data>'
-        '\x0d\x0a  <Data Name="SourcePort">'SourcePort:int'</Data>'
-        '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
-        '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
-        '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-        '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-        '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-        '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*;
-  let SecurityEvent_5154_5155_5158_5159 =
-  SecurityEvent | where not(disabled)
-  | where EventID in (5154, 5155, 5158, 5159)
-  | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>' 
-    '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-    '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress'</Data>'
-    '\x0d\x0a  <Data Name="SourcePort">'SourcePort:int'</Data>'
-    '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-    '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-    '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-    '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
-  | extend DirectionCode = "%%14609";
-  let SecurityEvent_5156_5157 =
-      SecurityEvent | where not(disabled)
-      | where EventID in (5156, 5157)
-      | parse EventData with * '<Data Name="ProcessID">'ProcessID:string'</Data>'
-        '\x0d\x0a  <Data Name="Application">'Application:string'</Data>'
-        '\x0d\x0a  <Data Name="Direction">'DirectionCode:string'</Data>'
-        '\x0d\x0a  <Data Name="SourceAddress">'SourceAddress:string'</Data>'
-        '\x0d\x0a  <Data Name="SourcePort">'SourcePort:int'</Data>'
-        '\x0d\x0a  <Data Name="DestAddress">'DestAddress'</Data>'
-        '\x0d\x0a  <Data Name="DestPort">'DestPort:int'</Data>'
-        '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-        '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-        '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-        '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
-        '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
-        '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*
-      | project-away EventData;
-  union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
-      | lookup Directions on DirectionCode
-      | project-rename DvcHostname = Computer
-      | extend
-        SrcAppName = iff(isOutBound, Application, ""),
-        DstAppName = iff(not(isOutBound), Application, ""),
-        SrcIpAddr=SourceAddress,
-        DstIpAddr=DestAddress,
-        SrcHostId = iff(isOutBound, RemoteMachineID, ""),
-        DstHostId = iff(not(isOutBound), RemoteMachineID, ""),
-        SrcPortNumber=toint(SourcePort),
-        DestPortNumber=toint(DestPort),
-        SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
-        DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
-        DstUserId = iff(isOutBound, RemoteUserID, ""),
-        SrcUserId = iff(not(isOutBound), RemoteUserID, ""),
-        DstHostname = iff(isOutBound, "", DvcHostname),
-        SrcHostname = iff(isOutBound, DvcHostname, "")
-  };
   //////////////////////////////////////////////////////
   // this query extract the data from WindowsEvent table
   //////////////////////////////////////////////////////
+  let parser = (disabled: bool=false) {
   let WindowsFirewall_WindowsEvent=(){   
-            WindowsEvent | where not(disabled)
-            | where EventID between (5150 .. 5159)
-            | project-rename DvcHostname = Computer
-            | extend 
-                EventSeverity=tostring(EventData.Severity),
-                LayerCode = tostring(EventData.LayerName),
-                NetworkRuleNumber = toint(EventData.FilterRTID),
-                Protocol = toint(EventData.Protocol),
-                DirectionCode = iff(EventID in (5154, 5155, 5158, 5159), "%%14609",tostring(EventData.Direction))
-            | lookup Directions on DirectionCode 
-            | extend  SrcAppName = iff(isOutBound, tostring(EventData.Application), ""),
-                      DstAppName = iff(not(isOutBound), tostring(EventData.Application), ""),
-                      SrcIpAddr = tostring(EventData.SourceAddress),
-                      DstIpAddr = tostring(EventData.DestAddress),
-                      SrcHostId = iff(isOutBound, tostring(EventData.RemoteMachineID), ""),
-                      DstHostId = iff(not(isOutBound), tostring(EventData.RemoteMachineID), ""),
-                      SrcPortNumber=toint(EventData.SourcePort),
-                      DstPortNumber=toint(EventData.DestPort),
-                      SrcProcessId =  iff(isOutBound, tostring(EventData.ProcessId), ""),
-                      DstProcessId =  iff(not(isOutBound), tostring(EventData.ProcessId), ""),
-                      DstUserId = iff(isOutBound, tostring(EventData.RemoteUserID), ""),
-                      SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), ""),
-                      DstHostname = iff(isOutBound, "", DvcHostname),
-                      SrcHostname = iff(isOutBound, DvcHostname, "")
-            | project-away EventData
-        };
+        WindowsEvent | where not(disabled)
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Type
+        | where EventID between (5150 .. 5159)
+        | project-rename DvcHostname = Computer
+        | extend 
+            EventSeverity=tostring(EventData.Severity),
+            LayerCode = tostring(EventData.LayerName),
+            NetworkRuleNumber = toint(EventData.FilterRTID),
+            Protocol = toint(EventData.Protocol),
+            DirectionCode = iff(EventID in (5154, 5155, 5158, 5159), "%%14609",tostring(EventData.Direction))
+        | lookup Directions on DirectionCode 
+        | extend  SrcAppName = iff(isOutBound, tostring(EventData.Application), ""),
+                    DstAppName = iff(not(isOutBound), tostring(EventData.Application), ""),
+                    SrcIpAddr = tostring(EventData.SourceAddress),
+                    DstIpAddr = tostring(EventData.DestAddress),
+                    SrcDvcId = iff(isOutBound, tostring(EventData.RemoteMachineID), ""),
+                    DstDvcId = iff(not(isOutBound), tostring(EventData.RemoteMachineID), ""),
+                    SrcPortNumber=toint(EventData.SourcePort),
+                    DstPortNumber=toint(EventData.DestPort),
+                    SrcProcessId =  iff(isOutBound, tostring(EventData.ProcessId), ""),
+                    DstProcessId =  iff(not(isOutBound), tostring(EventData.ProcessId), ""),
+                    DstUserId = iff(isOutBound, tostring(EventData.RemoteUserID), ""),
+                    SrcUserId = iff(not(isOutBound), tostring(EventData.RemoteUserID), ""),
+                    DstHostname = iff(isOutBound, "", DvcHostname),
+                    SrcHostname = iff(isOutBound, DvcHostname, "")
+        | project-away EventData
+    };
   // Main query -> outputs both schemas as one normalized table
-  union WindowsFirewall_SecurityEvent, WindowsFirewall_WindowsEvent
+  WindowsFirewall_WindowsEvent 
        | extend 
               DvcAction = iff(EventID in (5154, 5156, 5158), "Allow", "Deny"),
               DvcOs = 'Windows',
               DstAppType = "Process",
-              DstUserIdType = "SID",
+              SrcUserIdType = iff (SrcUserId <> "S-1-0-0", "SID", ""),
+              SrcUserId = iff (SrcUserId <> "S-1-0-0", SrcUserId, ""),
+              DstUserIdType = iff (DstUserId <> "S-1-0-0", "SID", ""),
+              DstUserId = iff (DstUserId <> "S-1-0-0", DstUserId, ""),
               SrcAppType = "Process",
-              SrcUserIdType = "SID",
               EventType = "NetworkSession",
               EventSchema = "NetworkSession",
               EventSchemaVersion="0.2.0",
@@ -179,15 +116,20 @@ ParserQuery: |
               EventResult = iff(EventID in (5154, 5156, 5158), "Success", "Failure"),
               EventStartTime = TimeGenerated,
               EventEndTime = TimeGenerated,
-              EventOriginalUid = EventOriginId,
-              EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low")
+              EventSeverity = iff(EventID  in (5154, 5156, 5158), "Informational", "Low"),
+              EventOriginalType = tostring(EventID),
+              DstDvcIdType = iff (DstDvcId != "", "SID", ""),
+              SrcDvcIdType = iff (SrcDvcId != "", "SID", "")
      // aliases
       | extend
               Dvc = DvcHostname,
               Hostname = DstHostname,
               IpAddr = SrcIpAddr,
               Src = SrcIpAddr,
-              Dst = DstIpAddr
+              Dst = DstIpAddr,
+              Rule = tostring (NetworkRuleNumber)
       | lookup LayerCodeTable on LayerCode
       | lookup ProtocolTable on Protocol
-      | project-away LayerCode, DirectionCode, Protocol
+      | project-away LayerCode, DirectionCode, Protocol, isOutBound, LayerName, EventID,_ResourceId,_SubscriptionId
+      };                    
+      parser(disabled=disabled)

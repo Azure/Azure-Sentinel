@@ -1,0 +1,412 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.2.0.0",
+    "metadata": {
+        "title": "RFI-lookup-and-save-user",
+        "description": "This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data for further review and analysis.",
+        "prerequisites": [
+            "The custom connector RFI-CustomConnector-0-1-0 have to be deployed under the same subscription.",
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "../RFI-CustomConnector-0-1-0/azuredeploy.json",
+        "lastUpdateTime": "2024-06-11T14:25:00.000Z",
+        "entities": [],
+        "tags": [ "Identity protection" ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [ "Initial version" ]
+            },
+            {
+                "version": "1.1",
+                "title": "Updates",
+                "notes": [ "Solution update. Change PlaybookName prefix to RFI." ]
+            },
+            {
+                "version": "1.2",
+                "title": "Identity endpoint update",
+                "notes": [ "Updated lookup envpoint to new version. Structure of data in the lookup_results_log_analytics_custom_log_name " ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RFI-lookup-and-save-user",
+            "type": "string"
+        },
+        "IdentityCustomConnectorName": {
+            "defaultValue": "RFI-CustomConnector-0-1-0",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the logic app connector which performs Recorded Future Communication. Normaly this dont change from RFI-CustomConnector-0-1-0"
+            }
+        }
+    },
+    "variables": {
+        "IdentityconnectorupdateConnectionName": "RFI-CustomConnector-0-1-0",
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "lookup_results_log_analytics_custom_log_name_default": {
+                            "defaultValue": "RecordedFutureIdentity_UsersLookupResults_CL",
+                            "type": "String"
+                        },
+                        "lookup_lookback_days_default": {
+                            "defaultValue": -14,
+                            "type": "Int"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "lookup_lookback_days": {
+                                            "type": "integer"
+                                        },
+                                        "lookup_results_log_analytics_custom_log_name": {
+                                            "type": "string"
+                                        },
+                                        "risky_user_email": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Credential_Lookup_V2_-_Look_up_credential_data_for_one_or_more_users": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "filter": {
+                                        "first_downloaded_gte": "@{formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')}"
+                                    },
+                                    "subjects": [
+                                        "@triggerBody()?['risky_user_email']"
+                                    ]
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['IdentityConnectorUpdate']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/credentials/lookup"
+                            }
+                        },
+                        "Response_-_Failed_to_get_Lookup_data": {
+                            "runAfter": {
+                                "Credential_Lookup_V2_-_Look_up_credential_data_for_one_or_more_users": [
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')",
+                                        "lookup_results": "@body('Credential_Lookup_V2_-_Look_up_credential_data_for_one_or_more_users')",
+                                        "lookup_results_log_analytics_custom_log_name": "@if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])",
+                                        "parameters_passed": {
+                                            "lookup_lookback_days": "@triggerBody()?['lookup_lookback_days']",
+                                            "lookup_results_log_analytics_custom_log_name": "@triggerBody()?['lookup_results_log_analytics_custom_log_name']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        }
+                                    },
+                                    "reason": "Failed to get Lookup data.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "lookup_lookback_date": {
+                                                    "type": "string"
+                                                },
+                                                "lookup_results": {
+                                                    "type": "object"
+                                                },
+                                                "lookup_results_log_analytics_custom_log_name": {
+                                                    "type": "string"
+                                                },
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "lookup_lookback_days": {
+                                                            "type": "integer"
+                                                        },
+                                                        "lookup_results_log_analytics_custom_log_name": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 422
+                            }
+                        },
+                        "Response_-_Failed_to_save_Lookup_results": {
+                            "runAfter": {
+                                "Response_-_Successfully_saved_lookup_results_into_LogAnalytics": [
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')",
+                                        "lookup_results": "@body('Credential_Lookup_V2_-_Look_up_credential_data_for_one_or_more_users')",
+                                        "lookup_results_log_analytics_custom_log_name": "@if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])",
+                                        "parameters_passed": {
+                                            "lookup_lookback_days": "@triggerBody()?['lookup_lookback_days']",
+                                            "lookup_results_log_analytics_custom_log_name": "@triggerBody()?['lookup_results_log_analytics_custom_log_name']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        }
+                                    },
+                                    "reason": "Failed to save Lookup results into LogAnalytics.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "lookup_lookback_date": {
+                                                    "type": "string"
+                                                },
+                                                "lookup_results": {
+                                                    "type": "object"
+                                                },
+                                                "lookup_results_log_analytics_custom_log_name": {
+                                                    "type": "string"
+                                                },
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "lookup_lookback_days": {
+                                                            "type": "integer"
+                                                        },
+                                                        "lookup_results_log_analytics_custom_log_name": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 422
+                            }
+                        },
+                        "Response_-_Successfully_saved_lookup_results_into_LogAnalytics": {
+                            "runAfter": {
+                                "Send_Data_-_Save_Lookup_results_to_LogAnalytics_Custom_Log": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')",
+                                        "lookup_results": "@body('Credential_Lookup_V2_-_Look_up_credential_data_for_one_or_more_users')",
+                                        "lookup_results_log_analytics_custom_log_name": "@if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])",
+                                        "parameters_passed": {
+                                            "lookup_lookback_days": "@triggerBody()?['lookup_lookback_days']",
+                                            "lookup_results_log_analytics_custom_log_name": "@triggerBody()?['lookup_results_log_analytics_custom_log_name']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        }
+                                    },
+                                    "status": "Successfully saved risky user lookup results into LogAnalytics table."
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "lookup_lookback_date": {
+                                                    "type": "string"
+                                                },
+                                                "lookup_results": {
+                                                    "type": "object"
+                                                },
+                                                "lookup_results_log_analytics_custom_log_name": {
+                                                    "type": "string"
+                                                },
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "lookup_lookback_days": {
+                                                            "type": "integer"
+                                                        },
+                                                        "lookup_results_log_analytics_custom_log_name": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 200
+                            }
+                        },
+                        "Send_Data_-_Save_Lookup_results_to_LogAnalytics_Custom_Log": {
+                            "runAfter": {
+                                "Response_-_Failed_to_get_Lookup_data": [
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('Credential_Lookup_V2_-_Look_up_credential_data_for_one_or_more_users')}",
+                                "headers": {
+                                    "Log-Type": "@{if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])}",
+                                    "time-generated-field": "@{utcNow()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "IdentityConnectorUpdate": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('IdentityconnectorupdateConnectionName'))]",
+                                "connectionName": "[variables('IdentityconnectorupdateConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('IdentityCustomConnectorName'))]"
+                            },
+                            "azureloganalyticsdatacollector_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RFI-lookup-and-save-user",
+                "hidden-SentinelTemplateVersion": "1.2"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('IdentityconnectorupdateConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('IdentityconnectorupdateConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('IdentityconnectorupdateConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('IdentityCustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}

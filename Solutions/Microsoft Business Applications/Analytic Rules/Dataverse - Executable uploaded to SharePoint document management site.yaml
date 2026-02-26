@@ -1,0 +1,83 @@
+id: ba5e608f-7879-4927-8b0d-a9948b4fe6f3
+kind: Scheduled
+name: Dataverse - Executable uploaded to SharePoint document management site
+description: Identifies executable files and scripts uploaded to SharePoint sites
+  used for Dynamics document management, circumventing native file extension restrictions
+  in Dataverse.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (SharePoint)
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T0863
+  - T0873
+query: |
+  let file_extensions = dynamic(['com', 'exe', 'bat', 'cmd', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'msc', 'cpl', 'ps1', 'scr']);
+  let query_frequency = 1h;
+  DataverseSharePointSites
+  | join kind=inner (
+      OfficeActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where OfficeWorkload == "SharePoint" and Operation == "FileUploaded")
+      on $left.SharePointUrl == $right.Site_Url
+  | where SourceFileExtension in (file_extensions)
+  | extend
+      CloudAppId = int(32780),
+      SharePointId = int(20892),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIP,
+      InstanceUrl,
+      SourceFileName,
+      SharePointUrl,
+      CloudAppId,
+      SharePointId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceFileName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: SharePointId
+      - identifier: InstanceName
+        columnName: SharePointUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - Executable files uploaded in document management
+    for {{InstanceUrl}}
+  alertDescriptionFormat: Executable/script {{SourceFileName}} was uploaded by {{UserId}}
+    in SharePoint site {{SharePointUrl}}
+version: 3.2.0

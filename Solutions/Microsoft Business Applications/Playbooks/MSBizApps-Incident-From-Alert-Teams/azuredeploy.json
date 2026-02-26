@@ -1,0 +1,448 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Security workflow: alert verification with workload owners",
+        "description": "This playbook can reduce burden on the SOC by offloading alert verification to IT admins for specific analytics rules. It is triggered when a Microsoft Sentinel alert is generated, creates a message (and associated notification email) in the workload owner's Microsoft Teams channel containing details of the alert. If the workload owner responds that the activity is not authorized, the alert will be converted to an incident in Microsoft Sentinel for the SOC to handle.",
+        "prerequisites": [
+            "1. Take note of the Microsoft Teams channel URL (right click channel and 'Get link to channel').",
+            "2. An Exchange Online shared mailbox for the SOC.",
+            "3. Email address for the workload owners to send alert notifications.",
+            "4. Email address to send escalation notifications if workload owners do not respond.",
+            "5. Register a new provider at the [Actionable Email Developer Dashboard](https://learn.microsoft.com/outlook/actionable-messages/email-dev-dashboard) \n a. Add the SOC mailbox as the sender address. \n b. Add the Teams channel URL as the target URL. \n c. Select the workload owner and escalation email address as test users for validation. \n d. Take note of the Provider Id (originator)."
+        ],
+        "postDeployment": [
+            "1. In Logic Apps designer view, edit the 'Post adaptive card and wait for a reponse' action.",
+            "2. In the 'Team' and 'Channel' boxes, click on the 'X' to reveal the dropdown selector menu.",
+            "3. Select the appropriate Teams channel to receive notifications.",
+            "4. Assign Microsoft Sentinel Responder role to the playbook's managed identity on the Microsoft Sentinel workspace resource group."
+        ],
+        "entities": [
+            "Account"
+        ],
+        "tags": [
+            "Notification"
+        ],
+        "lastUpdateTime": "2022-11-01T00:00:00.000Z",
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "MSBizApps-Incident-From-Alert-Teams",
+            "type": "string"
+        },
+        "WorkloadOwnersAddress": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter value for WorkloadOwnersAddress"
+            }
+        },
+        "EscalationsAddress": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter value for EscalationsAddress"
+            }
+        },
+        "OriginatorId": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter value for OriginatorId"
+            }
+        },
+        "SharedMailboxAddress": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter value for SharedMailboxAddress"
+            }
+        },
+        "TeamsChannelLink": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter value for TeamsChannelLink"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Office365ConnectionName": "[concat('Office365-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "WorkloadOwnersAddress": {
+                            "defaultValue": "[parameters('WorkloadOwnersAddress')]",
+                            "type": "String"
+                        },
+                        "EscalationsAddress": {
+                            "defaultValue": "[parameters('EscalationsAddress')]",
+                            "type": "String"
+                        },
+                        "OriginatorId": {
+                            "defaultValue": "[parameters('OriginatorId')]",
+                            "type": "String"
+                        },
+                        "SharedMailboxAddress": {
+                            "defaultValue": "[parameters('SharedMailboxAddress')]",
+                            "type": "String"
+                        },
+                        "TeamsChannelLink": {
+                            "defaultValue": "[parameters('TeamsChannelLink')]",
+                            "type": "String"
+                        },
+                        "_PlaybookName": {
+                            "defaultValue": "[parameters('PlaybookName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Add_alert_to_incident": {
+                                    "runAfter": {
+                                        "Create_incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Create_incident')?['id']",
+                                            "relatedResourceId": "@triggerBody()?['SystemAlertId']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Relation/Create"
+                                    }
+                                },
+                                "Create_incident": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "description": "This alert was flagged as suspicious by the BizApps team:\n\n@{triggerBody()?['Description']}\n",
+                                            "severity": "@triggerBody()?['Severity']",
+                                            "status": "New",
+                                            "title": "@triggerBody()?['AlertDisplayName']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents/subscriptions/@{triggerBody()?['workspaceInfo']?['SubscriptionId']}/resourceGroups/@{triggerBody()?['workspaceInfo']?['ResourceGroupName']}/workspaces/@{triggerBody()?['workspaceInfo']?['WorkspaceName']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Post_adaptive_card_and_wait_for_a_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@outputs('Post_adaptive_card_and_wait_for_a_response')?['body']?['submitActionId']",
+                                                "Yes, this was authorized"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_OutlookMessage": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "OutlookMessage",
+                                        "type": "string",
+                                        "value": "<html>\n<head>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n    <script type=\"application/adaptivecard+json\">{\n    \"type\": \"AdaptiveCard\",\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"items\": [\n                                {\n                                    \"type\": \"Image\",\n                                    \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                                    \"size\": \"Small\",\n                                    \"horizontalAlignment\": \"Left\"\n                                }\n                            ]\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"stretch\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"text\": \"@{triggerBody()?['AlertDisplayName']}\",\n                                    \"wrap\": true,\n                                    \"horizontalAlignment\": \"Left\",\n                                    \"size\": \"Medium\",\n                                    \"weight\": \"Bolder\"\n                                }\n                            ],\n                            \"horizontalAlignment\": \"Left\",\n                            \"verticalContentAlignment\": \"Center\"\n                        }\n                    ]\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Microsoft Sentinel alert was generated:\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['Description']}\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Please respond to this message in Microsoft Teams:\",\n            \"wrap\": true,\n            \"color\": \"Attention\"\n        },\n        {\n            \"type\": \"ActionSet\",\n            \"actions\": [\n                {\n                    \"type\": \"Action.OpenUrl\",\n                    \"title\": \"Open in Teams\",\n                    \"url\": \"@{parameters('TeamsChannelLink')}\",\n                    \"style\": \"positive\"\n                }\n            ]\n        }\n    ],\n    \"originator\": \"@{parameters('OriginatorId')}\"\n}\n  </script>\n</head>\n<body>\n    Visit the <a href=\"https://learn.microsoft.com/outlook/actionable-messages\">Outlook Dev Portal</a> to learn more\n    about Actionable Messages.\n</body>\n</html>"
+                                    }
+                                ]
+                            }
+                        },
+                        "Post_adaptive_card_and_wait_for_a_response": {
+                            "runAfter": {
+                                "Send_an_email_from_a_shared_mailbox_(V2)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "limit": {
+                                "timeout": "PT24H"
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "body": {
+                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"ColumnSet\",\n\"width\": \"auto\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"width\": \"auto\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"small\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"Column\",\n                    \"width\": \"auto\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"large\",\n                            \"weight\": \"bolder\",\n                            \"text\": \"@{triggerBody()?['AlertDisplayName']}\",\n                            \"wrap\": true,\n                            \"horizontalAlignment\": \"left\"\n                        }\n                    ]\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Microsoft Sentinel alert was created: @{triggerBody()?['Description']}\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Is this activity legitmate?\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Yes, this was authorized\"\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"No, create an incident\"\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                                        "recipient": {
+                                            "channelId": "",
+                                            "groupId": ""
+                                        },
+                                        "updateMessage": "Thanks for your response!"
+                                    },
+                                    "notificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams_1']['connectionId']"
+                                    }
+                                },
+                                "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                            }
+                        },
+                        "Send_an_email_escalation_due_to_timeout": {
+                            "runAfter": {
+                                "Set_Escalation_Message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>@{variables('OutlookMessage')}</p>",
+                                    "Importance": "High",
+                                    "MailboxAddress": "@parameters('SharedMailboxAddress')",
+                                    "Subject": "ESCALATION: Security Process Impaired Due to Lack of Response",
+                                    "To": "@parameters('EscalationsAddress')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/SharedMailbox/Mail"
+                            }
+                        },
+                        "Send_an_email_from_a_shared_mailbox_(V2)": {
+                            "runAfter": {
+                                "Initialize_OutlookMessage": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>@{variables('OutlookMessage')}</p>",
+                                    "Importance": "High",
+                                    "MailboxAddress": "@parameters('SharedMailboxAddress')",
+                                    "Subject": "ACTION REQUIRED: Microsoft Sentinel Security Alert",
+                                    "To": "@parameters('WorkloadOwnersAddress')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/SharedMailbox/Mail"
+                            }
+                        },
+                        "Send_an_email_notification_of_failure": {
+                            "runAfter": {
+                                "Set_Failure_Message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>@{variables('OutlookMessage')}</p>",
+                                    "Importance": "High",
+                                    "MailboxAddress": "@parameters('SharedMailboxAddress')",
+                                    "Subject": "FAILURE: Security Process Impaired Due to Playbook Failure",
+                                    "To": "@parameters('SharedMailboxAddress')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/SharedMailbox/Mail"
+                            }
+                        },
+                        "Set_Escalation_Message": {
+                            "runAfter": {
+                                "Post_adaptive_card_and_wait_for_a_response": [
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "OutlookMessage",
+                                "value": "<html>\n<head>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n    <script type=\"application/adaptivecard+json\">{\n    \"type\": \"AdaptiveCard\",\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"items\": [\n                                {\n                                    \"type\": \"Image\",\n                                    \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                                    \"size\": \"Small\",\n                                    \"horizontalAlignment\": \"Left\"\n                                }\n                            ]\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"stretch\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"text\": \"@{triggerBody()?['AlertDisplayName']}\",\n                                    \"wrap\": true,\n                                    \"horizontalAlignment\": \"Left\",\n                                    \"size\": \"Medium\",\n                                    \"weight\": \"Bolder\"\n                                }\n                            ],\n                            \"horizontalAlignment\": \"Left\",\n                            \"verticalContentAlignment\": \"Center\"\n                        }\n                    ]\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Microsoft Sentinel alert was generated:\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['Description']}\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Please verify this change was legitimate and notify the SOC (@{parameters('SharedMailboxAddress')})\",\n            \"wrap\": true,\n            \"color\": \"Attention\",\n            \"weight\": \"Bolder\"\n        }\n    ],\n    \"originator\": \"@{parameters('OriginatorId')}\"\n}\n  </script>\n</head>\n<body>\n    Visit the <a href=\"https://learn.microsoft.com/outlook/actionable-messages\">Outlook Dev Portal</a> to learn more\n    about Actionable Messages.\n</body>\n</html>"
+                            }
+                        },
+                        "Set_Failure_Message": {
+                            "runAfter": {
+                                "Post_adaptive_card_and_wait_for_a_response": [
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "OutlookMessage",
+                                "value": "<html>\n<head>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n    <script type=\"application/adaptivecard+json\">{\n    \"type\": \"AdaptiveCard\",\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"items\": [\n                                {\n                                    \"type\": \"Image\",\n                                    \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                                    \"size\": \"Small\",\n                                    \"horizontalAlignment\": \"Left\"\n                                }\n                            ]\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"stretch\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"text\": \"@{triggerBody()?['AlertDisplayName']}\",\n                                    \"wrap\": true,\n                                    \"horizontalAlignment\": \"Left\",\n                                    \"size\": \"Medium\",\n                                    \"weight\": \"Bolder\"\n                                }\n                            ],\n                            \"horizontalAlignment\": \"Left\",\n                            \"verticalContentAlignment\": \"Center\"\n                        }\n                    ]\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Microsoft Sentinel alert was generated:\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['Description']}\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Playbook @{parameters('_PlaybookName')} failed to post a message in Microsoft Teams. Please investigate this failure.\",\n            \"wrap\": true,\n            \"color\": \"Attention\",\n            \"weight\": \"Bolder\"\n        }\n    ],\n    \"originator\": \"@{parameters('OriginatorId')}\"\n}\n  </script>\n</head>\n<body>\n    Visit the <a href=\"https://learn.microsoft.com/outlook/actionable-messages\">Outlook Dev Portal</a> to learn more\n    about Actionable Messages.\n</body>\n</html>"
+                            }
+                        },
+                        "Terminate_Failed": {
+                            "runAfter": {
+                                "Send_an_email_notification_of_failure": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runError": {
+                                    "code": "PlaybookFailed",
+                                    "message": "Playbook failed to post a message in Teams"
+                                },
+                                "runStatus": "Failed"
+                            }
+                        },
+                        "Terminate_Succeeded": {
+                            "runAfter": {
+                                "Send_an_email_escalation_due_to_timeout": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName": "[variables('Office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            },
+                            "teams_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "MSBizApps-Admin-Teams-Approval-AlertTrigger",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Office365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Office365ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

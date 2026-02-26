@@ -1,0 +1,1412 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Endpoint enrichment - Crowdstrike", 
+    "description": "When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs below actions:",
+    "mainSteps": [
+      "1. Fetches the device information from Crowdstrike", 
+      "2. Enrich the incident with device information from Crowdstrike"
+    ],
+    "prerequisites": [
+      "1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fquickstarts%2Fmicrosoft.keyvault%2Fkey-vault-secret-create%2Fazuredeploy.json)", 
+      "2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment", 
+      "3. CrowdStrike_Base playbook needs to be deployed prior to the deployment of this playbook under the same subscription and under the same resource group.", 
+      "4. CrowdStrike_Base playbook needs to be added in the access policy of the Key Vault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)"
+    ],
+    "lastUpdateTime": "2022-07-25T00:00:00.000Z", 
+    "entities": ["Host"], 
+    "tags": ["Remediation"], 
+    "support": {
+      "tier": "community" 
+    },
+    "source": {
+      "type": "solution",
+      "name": "CrowdStrike Falcon Endpoint Protection"
+    }, 
+    "postDeployment": [
+      "** a. Authorize connections **", 
+      "Once deployment is complete, you will need to authorize connections.", 
+      "1. Click the Microsoft Sentinel connection resource", 
+      "2. Click edit API connection", 
+      "3. Click Authorize", 
+      "4. Sign in", 
+      "5. Click Save", 
+      "** b. Configurations in Sentinel **", 
+      "1. In Microsoft sentinel analytical rules should be configured to trigger an incident with risky device", 
+      "2. Configure the automation rules to trigger this playbook"
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Endpoint enrichment - Crowdstrike",
+        "notes": [
+        "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+   
+      "PlaybookName": {
+        "defaultValue": "Crowdstrike-EndpointEnrichment",
+        "type": "String",
+        "metadata": {
+          "description": "Name of the Logic App/Playbook"
+        }
+      },
+
+      "CrowdStrike_Base_Playbook_Name": {
+        "defaultValue": "CrowdStrike_Base",
+        "type": "String"
+      }
+    },
+    "variables": { "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]" },
+    "resources": [
+      {
+        "properties": {
+          "state": "Enabled",
+          "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "actions": {
+              "Add_comment_to_incident_(V3)": {
+                "runAfter": {
+                  "Compose_image_to_add_in_the_incident": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                  "body": {
+                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                    "message": "<p>@{outputs('Compose_image_to_add_in_the_incident')}<span style=\"font-size: 14px\"><strong>Crowdstrike_Enrichment_GetDeviceInformation playbook run results:</strong></span><br>\n<br>\n@{variables('Comment')}<br>\n</p>"
+                  },
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "path": "/Incidents/Comment"
+                }
+              },
+              "Compose_image_to_add_in_the_incident": {
+                "type": "Compose",
+                "inputs": "<img src=\"https://uploads4.craft.co/uploads/company/logo/852xx/85212/normal_1171b7695370eb94.jpg\" alt=\"Lamp\" width=\"32\" height=\"32\">",
+                "runAfter": {
+                  "Condition__to_check_if_device_id_returns_results": [
+                    "Succeeded"
+                  ]
+                },
+                "description": "This composes crowdstrike image to comment in the incident"
+              },
+              "Condition__to_check_if_device_id_returns_results": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@body('Parse_JSON_Get_device_id_response')?['resources']?[0]",
+                          "@null"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "actions": {
+                  "Append_to_string_variable_comment_for_device_information": {
+                    "type": "AppendToStringVariable",
+                    "inputs": {
+                      "name": "Comment",
+                      "value": "Device information:\n@{body('Create_HTML_table_for_device_information')}"
+                    },
+                    "runAfter": {
+                      "Create_HTML_table_for_device_information": [
+                        "Succeeded"
+                      ]
+                    },
+                    "description": "Appends device information to comment variable"
+                  },
+                  "Condition_if_detections_are_present_for_the_host": {
+                    "type": "If",
+                    "expression": {
+                      "and": [
+                        {
+                          "not": {
+                            "equals": [
+                              "@body('Parse_JSON_search_detections_response')?['resources']?[0]",
+                              "@null"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Append_to_string_variable_detection_information": {
+                        "type": "AppendToStringVariable",
+                        "inputs": {
+                          "name": "Comment",
+                          "value": "Detection Information:\n@{body('Select_detection_information')}"
+                        },
+                        "runAfter": {
+                          "Select_detection_information": [
+                            "Succeeded"
+                          ]
+                        },
+                        "description": "This appends detection information to comment variable"
+                      },
+                      "HTTP-Get_detection_information": {
+                        "type": "Http",
+                        "inputs": {
+                          "method": "POST",
+                          "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/detects/entities/summaries/GET/v1",
+                          "headers": {
+                            "Accept": "application/json",
+                            "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                            "Content-Type": "application/json"
+                          },
+                          "body": {
+                            "ids": "@body('Parse_JSON_search_detections_response')?['resources']"
+                          }
+                        },
+                        "runAfter": {},
+                        "description": "This gets the detection information from the crowdstrike"
+                      },
+                      "Parse_JSON_detection_information_response": {
+                        "type": "ParseJson",
+                        "inputs": {
+                          "content": "@body('HTTP-Get_detection_information')",
+                          "schema": {
+                            "properties": {
+                              "errors": {
+                                "type": "array"
+                              },
+                              "meta": {
+                                "properties": {
+                                  "powered_by": {
+                                    "type": "string"
+                                  },
+                                  "query_time": {
+                                    "type": "number"
+                                  },
+                                  "trace_id": {
+                                    "type": "string"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "resources": {
+                                "items": {
+                                  "properties": {
+                                    "behaviors": {
+                                      "items": {
+                                        "properties": {
+                                          "alleged_filetype": {
+                                            "type": "string"
+                                          },
+                                          "behavior_id": {
+                                            "type": "string"
+                                          },
+                                          "cmdline": {
+                                            "type": "string"
+                                          },
+                                          "confidence": {
+                                            "type": "integer"
+                                          },
+                                          "control_graph_id": {
+                                            "type": "string"
+                                          },
+                                          "device_id": {
+                                            "type": "string"
+                                          },
+                                          "display_name": {
+                                            "type": "string"
+                                          },
+                                          "filename": {
+                                            "type": "string"
+                                          },
+                                          "filepath": {
+                                            "type": "string"
+                                          },
+                                          "ioc_description": {
+                                            "type": "string"
+                                          },
+                                          "ioc_source": {
+                                            "type": "string"
+                                          },
+                                          "ioc_type": {
+                                            "type": "string"
+                                          },
+                                          "ioc_value": {
+                                            "type": "string"
+                                          },
+                                          "md5": {
+                                            "type": "string"
+                                          },
+                                          "objective": {
+                                            "type": "string"
+                                          },
+                                          "parent_details": {
+                                            "properties": {
+                                              "parent_cmdline": {
+                                                "type": "string"
+                                              },
+                                              "parent_md5": {
+                                                "type": "string"
+                                              },
+                                              "parent_process_graph_id": {
+                                                "type": "string"
+                                              },
+                                              "parent_sha256": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "pattern_disposition": {
+                                            "type": "integer"
+                                          },
+                                          "pattern_disposition_details": {
+                                            "properties": {
+                                              "bootup_safeguard_enabled": {
+                                                "type": "boolean"
+                                              },
+                                              "critical_process_disabled": {
+                                                "type": "boolean"
+                                              },
+                                              "detect": {
+                                                "type": "boolean"
+                                              },
+                                              "fs_operation_blocked": {
+                                                "type": "boolean"
+                                              },
+                                              "handle_operation_downgraded": {
+                                                "type": "boolean"
+                                              },
+                                              "inddet_mask": {
+                                                "type": "boolean"
+                                              },
+                                              "indicator": {
+                                                "type": "boolean"
+                                              },
+                                              "kill_parent": {
+                                                "type": "boolean"
+                                              },
+                                              "kill_process": {
+                                                "type": "boolean"
+                                              },
+                                              "kill_subprocess": {
+                                                "type": "boolean"
+                                              },
+                                              "operation_blocked": {
+                                                "type": "boolean"
+                                              },
+                                              "policy_disabled": {
+                                                "type": "boolean"
+                                              },
+                                              "process_blocked": {
+                                                "type": "boolean"
+                                              },
+                                              "quarantine_file": {
+                                                "type": "boolean"
+                                              },
+                                              "quarantine_machine": {
+                                                "type": "boolean"
+                                              },
+                                              "registry_operation_blocked": {
+                                                "type": "boolean"
+                                              },
+                                              "rooting": {
+                                                "type": "boolean"
+                                              },
+                                              "sensor_only": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "scenario": {
+                                            "type": "string"
+                                          },
+                                          "severity": {
+                                            "type": "integer"
+                                          },
+                                          "sha256": {
+                                            "type": "string"
+                                          },
+                                          "tactic": {
+                                            "type": "string"
+                                          },
+                                          "tactic_id": {
+                                            "type": "string"
+                                          },
+                                          "technique": {
+                                            "type": "string"
+                                          },
+                                          "technique_id": {
+                                            "type": "string"
+                                          },
+                                          "timestamp": {
+                                            "type": "string"
+                                          },
+                                          "triggering_process_graph_id": {
+                                            "type": "string"
+                                          },
+                                          "user_id": {
+                                            "type": "string"
+                                          },
+                                          "user_name": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "device_id",
+                                          "timestamp",
+                                          "behavior_id",
+                                          "filename",
+                                          "filepath",
+                                          "alleged_filetype",
+                                          "cmdline",
+                                          "scenario",
+                                          "objective",
+                                          "tactic",
+                                          "tactic_id",
+                                          "technique",
+                                          "technique_id",
+                                          "display_name",
+                                          "severity",
+                                          "confidence",
+                                          "ioc_type",
+                                          "ioc_value",
+                                          "ioc_source",
+                                          "ioc_description",
+                                          "user_name",
+                                          "user_id",
+                                          "control_graph_id",
+                                          "triggering_process_graph_id",
+                                          "sha256",
+                                          "md5",
+                                          "parent_details",
+                                          "pattern_disposition",
+                                          "pattern_disposition_details"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "behaviors_processed": {
+                                      "items": {
+                                        "type": "string"
+                                      },
+                                      "type": "array"
+                                    },
+                                    "cid": {
+                                      "type": "string"
+                                    },
+                                    "created_timestamp": {
+                                      "type": "string"
+                                    },
+                                    "detection_id": {
+                                      "type": "string"
+                                    },
+                                    "device": {
+                                      "properties": {
+                                        "agent_load_flags": {
+                                          "type": "string"
+                                        },
+                                        "agent_local_time": {
+                                          "type": "string"
+                                        },
+                                        "agent_version": {
+                                          "type": "string"
+                                        },
+                                        "bios_manufacturer": {
+                                          "type": "string"
+                                        },
+                                        "bios_version": {
+                                          "type": "string"
+                                        },
+                                        "cid": {
+                                          "type": "string"
+                                        },
+                                        "config_id_base": {
+                                          "type": "string"
+                                        },
+                                        "config_id_build": {
+                                          "type": "string"
+                                        },
+                                        "config_id_platform": {
+                                          "type": "string"
+                                        },
+                                        "device_id": {
+                                          "type": "string"
+                                        },
+                                        "external_ip": {
+                                          "type": "string"
+                                        },
+                                        "first_seen": {
+                                          "type": "string"
+                                        },
+                                        "groups": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "hostname": {
+                                          "type": "string"
+                                        },
+                                        "last_seen": {
+                                          "type": "string"
+                                        },
+                                        "local_ip": {
+                                          "type": "string"
+                                        },
+                                        "mac_address": {
+                                          "type": "string"
+                                        },
+                                        "machine_domain": {
+                                          "type": "string"
+                                        },
+                                        "major_version": {
+                                          "type": "string"
+                                        },
+                                        "minor_version": {
+                                          "type": "string"
+                                        },
+                                        "modified_timestamp": {
+                                          "type": "string"
+                                        },
+                                        "os_version": {
+                                          "type": "string"
+                                        },
+                                        "ou": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "platform_id": {
+                                          "type": "string"
+                                        },
+                                        "platform_name": {
+                                          "type": "string"
+                                        },
+                                        "product_type": {
+                                          "type": "string"
+                                        },
+                                        "product_type_desc": {
+                                          "type": "string"
+                                        },
+                                        "site_name": {
+                                          "type": "string"
+                                        },
+                                        "status": {
+                                          "type": "string"
+                                        },
+                                        "system_manufacturer": {
+                                          "type": "string"
+                                        },
+                                        "system_product_name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "email_sent": {
+                                      "type": "boolean"
+                                    },
+                                    "first_behavior": {
+                                      "type": "string"
+                                    },
+                                    "hostinfo": {
+                                      "properties": {
+                                        "active_directory_dn_display": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "domain": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "last_behavior": {
+                                      "type": "string"
+                                    },
+                                    "max_confidence": {
+                                      "type": "integer"
+                                    },
+                                    "max_severity": {
+                                      "type": "integer"
+                                    },
+                                    "max_severity_displayname": {
+                                      "type": "string"
+                                    },
+                                    "seconds_to_resolved": {
+                                      "type": "integer"
+                                    },
+                                    "seconds_to_triaged": {
+                                      "type": "integer"
+                                    },
+                                    "show_in_ui": {
+                                      "type": "boolean"
+                                    },
+                                    "status": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "cid",
+                                    "created_timestamp",
+                                    "detection_id",
+                                    "device",
+                                    "behaviors",
+                                    "email_sent",
+                                    "first_behavior",
+                                    "last_behavior",
+                                    "max_confidence",
+                                    "max_severity",
+                                    "max_severity_displayname",
+                                    "show_in_ui",
+                                    "status",
+                                    "hostinfo",
+                                    "seconds_to_triaged",
+                                    "seconds_to_resolved",
+                                    "behaviors_processed"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          }
+                        },
+                        "runAfter": {
+                          "HTTP-Get_detection_information": [
+                            "Succeeded"
+                          ]
+                        },
+                        "description": "prepares json message for detection information"
+                      },
+                      "Select_detection_information": {
+                        "type": "Select",
+                        "inputs": {
+                          "from": "@body('Parse_JSON_detection_information_response')?['resources']",
+                          "select": {
+                            "detection_id": "@item()?['detection_id']",
+                            "device_id": "@item()?['device']?['device_id']",
+                            "domain": "@item()?['hostinfo']?['domain']",
+                            "local_ip": "@item()?['device']?['local_ip']"
+                          }
+                        },
+                        "runAfter": {
+                          "Parse_JSON_detection_information_response": [
+                            "Succeeded"
+                          ]
+                        },
+                        "description": "compose detection information"
+                      }
+                    },
+                    "runAfter": {
+                      "Parse_JSON_search_detections_response": [
+                        "Succeeded"
+                      ]
+                    },
+                    "else": {
+                      "actions": {
+                        "Append_to_string_variable_comment_if_no_detections_are_present": {
+                          "type": "AppendToStringVariable",
+                          "inputs": {
+                            "name": "Comment",
+                            "value": "There are no detections present for this device."
+                          },
+                          "runAfter": {},
+                          "description": "this appends text to comments if no detections are present"
+                        }
+                      }
+                    },
+                    "description": "This checks if detections are present for the host"
+                  },
+                  "Create_HTML_table_for_device_information": {
+                    "type": "Table",
+                    "inputs": {
+                      "from": "@body('Parse_JSON_device_information_response')?['resources']",
+                      "format": "HTML",
+                      "columns": [
+                        {
+                          "header": "device_id",
+                          "value": "@item()?['device_id']"
+                        },
+                        {
+                          "header": "external_ip",
+                          "value": "@item()?['external_ip']"
+                        },
+                        {
+                          "header": "mac_address",
+                          "value": "@item()?['mac_address']"
+                        },
+                        {
+                          "header": "hostname",
+                          "value": "@item()?['hostname']"
+                        },
+                        {
+                          "header": "first_seen",
+                          "value": "@item()?['first_seen']"
+                        },
+                        {
+                          "header": "last_seen",
+                          "value": "@item()?['last_seen']"
+                        },
+                        {
+                          "header": "local_ip",
+                          "value": "@item()?['local_ip']"
+                        },
+                        {
+                          "header": "machine_domain",
+                          "value": "@item()?['machine_domain']"
+                        },
+                        {
+                          "header": "os_version",
+                          "value": "@item()?['os_version']"
+                        }
+                      ]
+                    },
+                    "runAfter": {
+                      "Parse_JSON_device_information_response": [
+                        "Succeeded"
+                      ]
+                    },
+                    "description": "prepares HTML table for device information"
+                  },
+                  "HTTP_-Search_for_detections": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "GET",
+                      "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/detects/queries/detects/v1?filter=first_behavior:>'@{variables('Timestamp')}'&device_id:'@{body('Parse_JSON_Get_device_id_response')?['resources']?[0]}'&sort=first_behavior.desc",
+                      "headers": {
+                        "Accept": "application/json",
+                        "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                        "Content-Type": "application/json"
+                      }
+                    },
+                    "runAfter": {
+                      "Set_variable_timestamp_for_past_3_days": [
+                        "Succeeded"
+                      ]
+                    },
+                    "description": "searches the detections based on the filters from crowdstrike"
+                  },
+                  "HTTP_-_Get_device_information_": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "GET",
+                      "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/devices/entities/devices/v1?ids=@{body('Parse_JSON_Get_device_id_response')?['resources']?[0]}",
+                      "headers": {
+                        "Accept": "application/json",
+                        "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                        "Content-Type": "application/json"
+                      }
+                    },
+                    "runAfter": {},
+                    "description": "This gets the device information from crowdstrike"
+                  },
+                  "Parse_JSON_device_information_response": {
+                    "type": "ParseJson",
+                    "inputs": {
+                      "content": "@body('HTTP_-_Get_device_information_')",
+                      "schema": {
+                        "properties": {
+                          "errors": {
+                            "type": "array"
+                          },
+                          "meta": {
+                            "properties": {
+                              "powered_by": {
+                                "type": "string"
+                              },
+                              "query_time": {
+                                "type": "number"
+                              },
+                              "trace_id": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "resources": {
+                            "items": {
+                              "properties": {
+                                "agent_load_flags": {
+                                  "type": "string"
+                                },
+                                "agent_local_time": {
+                                  "type": "string"
+                                },
+                                "agent_version": {
+                                  "type": "string"
+                                },
+                                "bios_manufacturer": {
+                                  "type": "string"
+                                },
+                                "bios_version": {
+                                  "type": "string"
+                                },
+                                "build_number": {
+                                  "type": "string"
+                                },
+                                "cid": {
+                                  "type": "string"
+                                },
+                                "config_id_base": {
+                                  "type": "string"
+                                },
+                                "config_id_build": {
+                                  "type": "string"
+                                },
+                                "config_id_platform": {
+                                  "type": "string"
+                                },
+                                "cpu_signature": {
+                                  "type": "string"
+                                },
+                                "device_id": {
+                                  "type": "string"
+                                },
+                                "device_policies": {
+                                  "properties": {
+                                    "device_control": {
+                                      "properties": {
+                                        "applied": {
+                                          "type": "boolean"
+                                        },
+                                        "applied_date": {
+                                          "type": "string"
+                                        },
+                                        "assigned_date": {
+                                          "type": "string"
+                                        },
+                                        "policy_id": {
+                                          "type": "string"
+                                        },
+                                        "policy_type": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "firewall": {
+                                      "properties": {
+                                        "applied": {
+                                          "type": "boolean"
+                                        },
+                                        "applied_date": {
+                                          "type": "string"
+                                        },
+                                        "assigned_date": {
+                                          "type": "string"
+                                        },
+                                        "policy_id": {
+                                          "type": "string"
+                                        },
+                                        "policy_type": {
+                                          "type": "string"
+                                        },
+                                        "rule_set_id": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "global_config": {
+                                      "properties": {
+                                        "applied": {
+                                          "type": "boolean"
+                                        },
+                                        "applied_date": {
+                                          "type": "string"
+                                        },
+                                        "assigned_date": {
+                                          "type": "string"
+                                        },
+                                        "policy_id": {
+                                          "type": "string"
+                                        },
+                                        "policy_type": {
+                                          "type": "string"
+                                        },
+                                        "settings_hash": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "prevention": {
+                                      "properties": {
+                                        "applied": {
+                                          "type": "boolean"
+                                        },
+                                        "applied_date": {
+                                          "type": "string"
+                                        },
+                                        "assigned_date": {
+                                          "type": "string"
+                                        },
+                                        "policy_id": {
+                                          "type": "string"
+                                        },
+                                        "policy_type": {
+                                          "type": "string"
+                                        },
+                                        "rule_groups": {
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "type": "array"
+                                        },
+                                        "settings_hash": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "remote_response": {
+                                      "properties": {
+                                        "applied": {
+                                          "type": "boolean"
+                                        },
+                                        "applied_date": {
+                                          "type": "string"
+                                        },
+                                        "assigned_date": {
+                                          "type": "string"
+                                        },
+                                        "policy_id": {
+                                          "type": "string"
+                                        },
+                                        "policy_type": {
+                                          "type": "string"
+                                        },
+                                        "settings_hash": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    },
+                                    "sensor_update": {
+                                      "properties": {
+                                        "applied": {
+                                          "type": "boolean"
+                                        },
+                                        "applied_date": {
+                                          "type": "string"
+                                        },
+                                        "assigned_date": {
+                                          "type": "string"
+                                        },
+                                        "policy_id": {
+                                          "type": "string"
+                                        },
+                                        "policy_type": {
+                                          "type": "string"
+                                        },
+                                        "settings_hash": {
+                                          "type": "string"
+                                        },
+                                        "uninstall_protection": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "type": "object"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "external_ip": {
+                                  "type": "string"
+                                },
+                                "first_seen": {
+                                  "type": "string"
+                                },
+                                "group_hash": {
+                                  "type": "string"
+                                },
+                                "groups": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "hostname": {
+                                  "type": "string"
+                                },
+                                "last_seen": {
+                                  "type": "string"
+                                },
+                                "local_ip": {
+                                  "type": "string"
+                                },
+                                "mac_address": {
+                                  "type": "string"
+                                },
+                                "machine_domain": {
+                                  "type": "string"
+                                },
+                                "major_version": {
+                                  "type": "string"
+                                },
+                                "meta": {
+                                  "properties": {
+                                    "version": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "minor_version": {
+                                  "type": "string"
+                                },
+                                "modified_timestamp": {
+                                  "type": "string"
+                                },
+                                "os_version": {
+                                  "type": "string"
+                                },
+                                "ou": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "platform_id": {
+                                  "type": "string"
+                                },
+                                "platform_name": {
+                                  "type": "string"
+                                },
+                                "pointer_size": {
+                                  "type": "string"
+                                },
+                                "policies": {
+                                  "items": {
+                                    "properties": {
+                                      "applied": {
+                                        "type": "boolean"
+                                      },
+                                      "applied_date": {
+                                        "type": "string"
+                                      },
+                                      "assigned_date": {
+                                        "type": "string"
+                                      },
+                                      "policy_id": {
+                                        "type": "string"
+                                      },
+                                      "policy_type": {
+                                        "type": "string"
+                                      },
+                                      "rule_groups": {
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "type": "array"
+                                      },
+                                      "settings_hash": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "policy_type",
+                                      "policy_id",
+                                      "applied",
+                                      "settings_hash",
+                                      "assigned_date",
+                                      "applied_date",
+                                      "rule_groups"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                },
+                                "product_type": {
+                                  "type": "string"
+                                },
+                                "product_type_desc": {
+                                  "type": "string"
+                                },
+                                "provision_status": {
+                                  "type": "string"
+                                },
+                                "reduced_functionality_mode": {
+                                  "type": "string"
+                                },
+                                "serial_number": {
+                                  "type": "string"
+                                },
+                                "service_pack_major": {
+                                  "type": "string"
+                                },
+                                "service_pack_minor": {
+                                  "type": "string"
+                                },
+                                "site_name": {
+                                  "type": "string"
+                                },
+                                "slow_changing_modified_timestamp": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "system_manufacturer": {
+                                  "type": "string"
+                                },
+                                "system_product_name": {
+                                  "type": "string"
+                                },
+                                "tags": {
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "device_id",
+                                "cid",
+                                "agent_load_flags",
+                                "agent_local_time",
+                                "agent_version",
+                                "bios_manufacturer",
+                                "bios_version",
+                                "build_number",
+                                "config_id_base",
+                                "config_id_build",
+                                "config_id_platform",
+                                "cpu_signature",
+                                "external_ip",
+                                "mac_address",
+                                "hostname",
+                                "first_seen",
+                                "last_seen",
+                                "local_ip",
+                                "major_version",
+                                "minor_version",
+                                "os_version",
+                                "platform_id",
+                                "platform_name",
+                                "policies",
+                                "reduced_functionality_mode",
+                                "device_policies",
+                                "groups",
+                                "group_hash",
+                                "product_type",
+                                "product_type_desc",
+                                "provision_status",
+                                "serial_number",
+                                "service_pack_major",
+                                "service_pack_minor",
+                                "pointer_size",
+                                "status",
+                                "system_manufacturer",
+                                "system_product_name",
+                                "tags",
+                                "modified_timestamp",
+                                "slow_changing_modified_timestamp",
+                                "meta"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "runAfter": {
+                      "HTTP_-_Get_device_information_": [
+                        "Succeeded"
+                      ]
+                    },
+                    "description": "prepares json for device information"
+                  },
+                  "Parse_JSON_search_detections_response": {
+                    "type": "ParseJson",
+                    "inputs": {
+                      "content": "@body('HTTP_-Search_for_detections')",
+                      "schema": {
+                        "properties": {
+                          "errors": {
+                            "type": "array"
+                          },
+                          "meta": {
+                            "properties": {
+                              "pagination": {
+                                "properties": {
+                                  "limit": {
+                                    "type": "integer"
+                                  },
+                                  "offset": {
+                                    "type": "integer"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "type": "object"
+                              },
+                              "powered_by": {
+                                "type": "string"
+                              },
+                              "query_time": {
+                                "type": "number"
+                              },
+                              "trace_id": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "resources": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "runAfter": {
+                      "HTTP_-Search_for_detections": [
+                        "Succeeded"
+                      ]
+                    },
+                    "description": "prepares json for search detections"
+                  },
+                  "Set_variable_timestamp_for_past_3_days": {
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "Timestamp",
+                      "value": "@{getPastTime(3, 'Day')}"
+                    },
+                    "runAfter": {
+                      "Append_to_string_variable_comment_for_device_information": [
+                        "Succeeded"
+                      ]
+                    },
+                    "description": "set variable timestamp for past 3 days to filter detections"
+                  }
+                },
+                "runAfter": {
+                  "Parse_JSON_Get_device_id_response": [
+                    "Succeeded"
+                  ]
+                },
+                "else": {
+                  "actions": {
+                    "Append_to_string_variable_if_no_devices_are_present": {
+                      "type": "AppendToStringVariable",
+                      "inputs": {
+                        "name": "Comment",
+                        "value": "There are no devices present"
+                      },
+                      "runAfter": {},
+                      "description": "This appends text to string variable if no devices are present"
+                    }
+                  }
+                },
+                "description": "This checks if device is present in falcon host or not"
+              },
+              "CrowdStrike_Base": {
+                "runAfter": {
+                  "Initialize_variable_comment": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "Workflow",
+                "inputs": {
+                  "host": {
+                    "triggerName": "manual",
+                    "workflow": {
+                      "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', parameters('CrowdStrike_Base_Playbook_Name'))]"
+                    }
+                  }
+                },
+                "description": "This is to call the base logic app to get the access token and falcon host URL"
+              },
+              "Entities_-_Get_Hosts": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                  "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                  },
+                  "method": "post",
+                  "path": "/entities/host"
+                }
+               
+              },
+              "HTTP_-_Get_device_id": {
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/devices/queries/devices/v1?filter=hostname:'@{body('Entities_-_Get_Hosts')?['Hosts']?[0]?['HostName']}'",
+                  "headers": {
+                    "Accept": "application/json",
+                    "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                    "Content-Type": "application/json"
+                  }
+                },
+                "runAfter": {
+                  "CrowdStrike_Base": [
+                    "Succeeded"
+                  ]
+                },
+                "description": "This filters the device id by hostname"
+              },
+              "Initialize_variable_comment": {
+                "type": "InitializeVariable",
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Comment",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_variable_timestamp": [
+                    "Succeeded"
+                  ]
+                },
+                "description": "This holds the variable comment to include in the incident"
+              },
+              "Initialize_variable_timestamp": {
+                "type": "InitializeVariable",
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Timestamp",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Entities_-_Get_Hosts": [
+                    "Succeeded"
+                  ]
+                },
+                "description": "Initialize timestamp variable to hold the timestamp"
+              },
+              "Parse_JSON_Get_device_id_response": {
+                "type": "ParseJson",
+                "inputs": {
+                  "content": "@body('HTTP_-_Get_device_id')",
+                  "schema": {
+                    "errors": [],
+                    "meta": {
+                      "pagination": {
+                        "limit": 100,
+                        "offset": 1,
+                        "total": 1
+                      },
+                      "powered_by": "device-api",
+                      "query_time": 0.005041315,
+                      "trace_id": "aa7b84f5-3e81-4980-ad9f-c14b6d8ca577"
+                    },
+                    "resources": [
+                      "cdc977a72a8c49528bb82f89dde2c2e9"
+                    ]
+                  }
+                },
+                "runAfter": {
+                  "HTTP_-_Get_device_id": [
+                    "Succeeded"
+                  ]
+                },
+                "description": "prepares json for the device id response"
+              }
+            },
+            "parameters": {
+              "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+              }
+            },
+            "triggers": {
+              "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+                "type": "ApiConnectionWebhook",
+                "inputs": {
+                  "body": {
+                    "callback_url": "@{listCallbackUrl()}"
+                  },
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                    }
+                  },
+                  "path": "/incident-creation"
+                }
+              }
+            },
+            "contentVersion": "1.0.0.0",
+            "outputs": {}
+           
+          },
+          "parameters": {
+            "$connections": {
+              "value": {
+                "azuresentinel": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                  "connectionName": "[variables('AzureSentinelConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                  "connectionProperties": {
+                    "authentication": {
+                        "type": "ManagedServiceIdentity"
+                    }
+                }
+                }
+              }
+            }
+          }
+        },
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[parameters('PlaybookName')]",
+        "location": "[resourceGroup().location]",
+        "identity": {
+          "type": "SystemAssigned"
+      },
+        "tags": {
+          "hidden-SentinelTemplateName": "EndpointEnrichment-Crowdstrike",
+          "hidden-SentinelTemplateVersion": "1.0"
+      },
+        "dependsOn": [
+
+          "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+
+        ]
+      },
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('AzureSentinelConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "kind": "V1",
+        "properties": {
+            "displayName": "[variables('AzureSentinelConnectionName')]",
+            "customParameterValues": {},
+            "parameterValueType": "Alternative",
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+            }
+        }
+    }
+    ],
+    "outputs": {}
+  }

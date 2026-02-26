@@ -4,6 +4,7 @@ description: |
   'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.
   Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
 severity: High
+status: Available
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -21,7 +22,7 @@ tags:
 query: |
   AuditLogs
   | where Category =~ "RoleManagement"
-  | where AADOperationType in ("Assign", "AssignEligibleRole")
+  | where AADOperationType in~ ("Assign", "AssignEligibleRole")
   | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
   | mv-expand TargetResources
   | mv-expand TargetResources.modifiedProperties
@@ -33,15 +34,20 @@ query: |
   | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))
   | extend Target = tostring(TargetResources.userPrincipalName)
   | summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result
-  | extend AccountCustomEntity = Target
+  | extend InitiatorName=split(Initiator, "@")[0], InitiatorUPNSuffix=split(Initiator, "@")[1]
+  | extend TargetName=split(Target, "@")[0], TargetUPNSuffix=split(Target, "@")[1]
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Initiator
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorUPNSuffix
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.1
-kind: scheduled
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+version: 1.0.3
+kind: Scheduled

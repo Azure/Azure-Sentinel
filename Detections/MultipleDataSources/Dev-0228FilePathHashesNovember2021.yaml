@@ -1,7 +1,7 @@
 id: 3b443f22-9be9-4c35-ac70-a94757748439
 name: Dev-0228 File Path Hashes November 2021
 description: |
-   'This hunting query looks for  file paths/hashes related to observed activity by Dev-0228. The actor is known to use custom version of popular tool like PsExec, Procdump etc. to carry its activity.
+   'This hunting query looks for file paths/hashes related to observed activity by Dev-0228. The actor is known to use custom version of popular tool like PsExec, Procdump etc. to carry its activity.
     The risk score associated with each result is based on a number of factors, hosts with higher risk events should be investigated first.'
 severity: High
 requiredDataConnectors:
@@ -20,6 +20,7 @@ tactics:
   - Execution
 relevantTechniques:
   - T1569
+  - T1003
 query: | 
     let files1 = dynamic(["C:\\Windows\\TAPI\\lsa.exe", "C:\\Windows\\TAPI\\pa.exe", "C:\\Windows\\TAPI\\pc.exe", "C:\\Windows\\TAPI\\Rar.exe"]);
     let files2 = dynamic(["svchost.exe","wdmsvc.exe"]);
@@ -38,19 +39,39 @@ query: |
     | extend AlertRiskScore = iif(ThreatName has_any ("Backdoor:MSIL/ShellClient.A", "Backdoor:MSIL/ShellClient.A!dll", "Trojan:MSIL/Mimikatz.BA!MTB"), 1.0, 0.5)
     | project DvcId, AlertRiskScore) on DvcId
     | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0, AlertRiskScore)
-    | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName, AccountCustomEntity = AccountName
+    | extend InitiatingProcessAccount = strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName)
+    | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+    | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
+    | extend timestamp = TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingProcessAccount
       - identifier: Name
-        columnName: AccountCustomEntity
+        columnName: InitiatingProcessAccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
   - entityType: File
     fieldMappings:
       - identifier: Name
         columnName: FileName
-version: 1.0.0
+version: 1.1.2
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - 0-day Vulnerability" ]

@@ -1,0 +1,424 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Sophos",
+    "comments": "Solution template for Sophos Cloud Optix"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "sophos.sophos_cloud_optix_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "SophosCloudOptix",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "SophosCloudOptix",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Sophos Cloud Optix data connector with template",
+        "displayName": "Sophos Cloud Optix template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Sophos Cloud Optix data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Sophos Cloud Optix",
+                  "publisher": "Sophos",
+                  "descriptionMarkdown": "The [Sophos Cloud Optix](https://www.sophos.com/products/cloud-optix.aspx) connector allows you to easily connect your Sophos Cloud Optix logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's cloud security and compliance posture and improves your cloud security operation capabilities.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "SophosCloudOptix_CL",
+                      "baseQuery": "SophosCloudOptix_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Optix alerts raised for your cloud environment(s)",
+                      "query": "SophosCloudOptix_CL\n | summarize count() by alertDescription_s\n | top 10 by count_"
+                    },
+                    {
+                      "description": "Top 5 environments with High severity Optix alerts raised",
+                      "query": "SophosCloudOptix_CL\n | where severity_s == 'HIGH'\n | summarize count() by accountId_s\n | top 5 by count_"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "SophosCloudOptix_CL",
+                      "lastDataReceivedQuery": "SophosCloudOptix_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "SophosCloudOptix_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Copy the Workspace ID and Primary Key for your workspace.\n",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ],
+                      "title": "1. Get the Workspace ID and the Primary Key"
+                    },
+                    {
+                      "description": "In Sophos Cloud Optix go to [Settings->Integrations->Microsoft Sentinel](https://optix.sophos.com/#/integrations/sentinel) and enter the Workspace ID and Primary Key copied in Step 1.\n",
+                      "title": "2. Configure the Sophos Cloud Optix Integration"
+                    },
+                    {
+                      "description": "In Alert Levels, select which Sophos Cloud Optix alerts you want to send to Microsoft Sentinel.\n",
+                      "title": "3. Select Alert Levels"
+                    },
+                    {
+                      "description": "To turn on the integration, select Enable, and then click Save.\n",
+                      "title": "4. Turn on the integration"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "a3646b81-9e6a-4f4b-beb1-9d2eba8ab669",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Sophos"
+                    },
+                    "support": {
+                      "name": "Sophos",
+                      "link": "https://secure2.sophos.com/en-us/support.aspx",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Sophos Cloud Optix",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Sophos"
+                },
+                "support": {
+                  "tier": "Partner",
+                  "name": "Sophos",
+                  "link": "https://www.sophos.com/en-us/support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Sophos Cloud Optix",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Sophos"
+        },
+        "support": {
+          "tier": "Partner",
+          "name": "Sophos",
+          "link": "https://www.sophos.com/en-us/support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Sophos Cloud Optix",
+          "publisher": "Sophos",
+          "descriptionMarkdown": "The [Sophos Cloud Optix](https://www.sophos.com/products/cloud-optix.aspx) connector allows you to easily connect your Sophos Cloud Optix logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives you more insight into your organization's cloud security and compliance posture and improves your cloud security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "SophosCloudOptix_CL",
+              "baseQuery": "SophosCloudOptix_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "SophosCloudOptix_CL",
+              "lastDataReceivedQuery": "SophosCloudOptix_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "SophosCloudOptix_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Optix alerts raised for your cloud environment(s)",
+              "query": "SophosCloudOptix_CL\n | summarize count() by alertDescription_s\n | top 10 by count_"
+            },
+            {
+              "description": "Top 5 environments with High severity Optix alerts raised",
+              "query": "SophosCloudOptix_CL\n | where severity_s == 'HIGH'\n | summarize count() by accountId_s\n | top 5 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Copy the Workspace ID and Primary Key for your workspace.\n",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ],
+              "title": "1. Get the Workspace ID and the Primary Key"
+            },
+            {
+              "description": "In Sophos Cloud Optix go to [Settings->Integrations->Microsoft Sentinel](https://optix.sophos.com/#/integrations/sentinel) and enter the Workspace ID and Primary Key copied in Step 1.\n",
+              "title": "2. Configure the Sophos Cloud Optix Integration"
+            },
+            {
+              "description": "In Alert Levels, select which Sophos Cloud Optix alerts you want to send to Microsoft Sentinel.\n",
+              "title": "3. Select Alert Levels"
+            },
+            {
+              "description": "To turn on the integration, select Enable, and then click Save.\n",
+              "title": "4. Turn on the integration"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Sophos Cloud Optix",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Sophos"
+        },
+        "support": {
+          "name": "Sophos",
+          "tier": "Partner",
+          "link": "https://www.sophos.com/en-us/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-02",
+        "providers": [
+          "Sophos"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection",
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

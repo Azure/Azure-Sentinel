@@ -1,0 +1,73 @@
+id: f7c3f5c8-71ea-49ff-b8b3-148f0e346291
+name: Anomalous Single Factor Signin
+description: |
+  'Detects successful signins using single factor authentication where the device, location, and ASN are abnormal.
+   Single factor authentications pose an opportunity to access compromised accounts, investigate these for anomalous occurrencess.
+   Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-devices#non-compliant-device-sign-in'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let known_locations = (SigninLogs
+    | where TimeGenerated between(ago(7d)..ago(1d))
+    | where ResultType == 0
+    | extend LocationDetail = strcat(Location, "-", LocationDetails.state)
+    | summarize by LocationDetail);
+  let known_asn = (SigninLogs
+    | where TimeGenerated between(ago(7d)..ago(1d))
+    | where ResultType == 0
+    | summarize by AutonomousSystemNumber);
+  SigninLogs
+  | where TimeGenerated > ago(1d)
+  | where ResultType == 0
+  | where isempty(DeviceDetail.deviceId)
+  | where AuthenticationRequirement == "singleFactorAuthentication"
+  | extend LocationParsed = parse_json(LocationDetails), DeviceParsed = parse_json(DeviceDetail)
+  | extend City = tostring(LocationParsed.city), State = tostring(LocationParsed.state)
+  | extend LocationDetail = strcat(Location, "-", State)
+  | extend DeviceId = tostring(DeviceParsed.deviceId), DeviceName=tostring(DeviceParsed.displayName), OS=tostring(DeviceParsed.operatingSystem), Browser=tostring(DeviceParsed.browser)
+  | where AutonomousSystemNumber !in (known_asn) and LocationDetail !in (known_locations)
+  | project TimeGenerated, Type, UserId, UserDisplayName, UserPrincipalName, IPAddress, Location, State, City, ResultType, ResultDescription, AppId, AppDisplayName, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, ClientAppUsed, Identity, HomeTenantId, ResourceTenantId, Status, UserAgent, DeviceId, DeviceName, OS, Browser, MfaDetail
+  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: AppId
+      - identifier: Name
+        columnName: AppDisplayName
+version: 1.0.4
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

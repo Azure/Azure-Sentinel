@@ -1,6 +1,6 @@
 # VMConnection ASIM NetworkSession Normalization Parser
 
-This template deploys the ASIM NetworkSession schema parser for VMConnection.
+ARM template for ASIM NetworkSession schema parser for VMConnection.
 
 This ASIM parser supports normalizing VM connection logs collected using the Log Analytics agent to the ASIM Network Session normalized schema.
 
@@ -12,6 +12,9 @@ For more information, see:
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM NetworkSession normalization schema reference](https://aka.ms/ASimNetworkSessionDoc)
+
+For the changelog, see:
+- [CHANGELOG](https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/ASimNetworkSession/CHANGELOG/ASimNetworkSessionVMConnection.md)
 
 <br>
 

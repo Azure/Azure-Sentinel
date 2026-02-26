@@ -1,7 +1,7 @@
 Parser:
   Title: DNS ASIM parser for Vectra AI Steams
-  Version: '0.1'
-  LastUpdated: Mar 8 2022
+  Version: '0.1.1'
+  LastUpdated: Dec 26 2022
 Product:
   Name: Vectra AI Streams
 Normalization:
@@ -14,9 +14,11 @@ References:
   Link: https://aka.ms/AboutASIM
 Exceptions:
 - Field: DnsQuery 
+  Warning: Invalid value
   Exception: May have values such as "1164-ms-7.1440-9fdc2aab.3b2bd806-978e-11ec-8bb3-aad815b5cd42" which are not valid domains names. Those are are related to TKEY RR requests.
 - Field: DnsQuery
-  Exception: May be empty for requests for root servers and for requests for RR type DNSKEY
+  Warning: Empty value in mandatory field
+  Exception: May be empty for requests for root servers and for requests for RR type DNSKEY- 
 - Field: EventOriginalUid
   Exception: Is empty for events of subtype request. 
 - Field: DvcId
@@ -47,6 +49,7 @@ ParserQuery: |
     ];
     let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
     VectraStream_CL
+    | project-away MG, ManagementGroupName, RawData, SourceSystem, Computer
     | where metadata_type_s == 'metadata_dns'
     | project-rename
         DvcDescription = hostname_s,
@@ -80,7 +83,7 @@ ParserQuery: |
         DstPortNumber = toint(id_resp_p_d),
         EventCount = toint(1),
         EventEndTime = unixtime_milliseconds_todatetime(ts_d),
-        EventOriginalSubType = split(metadata_type_s, '_')[1],
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
         EventProduct = 'Vectra Stream',
         EventResult = case(tolong(rcode_d) > 0, "Failure", "Success"),
         EventSchema = 'Dns', 
@@ -108,4 +111,4 @@ ParserQuery: |
     | project-away
         *_d, *_s, *_b, *_g
       };
-  parser(disabled)
+  parser (disabled)

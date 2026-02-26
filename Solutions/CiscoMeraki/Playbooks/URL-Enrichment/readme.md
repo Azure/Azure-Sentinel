@@ -3,7 +3,7 @@
 ![meraki](../../Connector/MerakiConnector/logo.jpg)
 
 ## Summary
- When a new Azure Sentinel incident is created, this playbook gets triggered and performs the below actions:
+ When a new Microsoft Sentinel incident is created, this playbook gets triggered and performs the below actions:
  1. Fetches a list of potentially malicious URLs.
  2. For each URL in the list, checks if the URL is blocked by any of the networks of the organization.
   - If URL is allowed by the network, then incident comment is created saying URL is allowed.
@@ -23,8 +23,8 @@
  ## Deployment Instructions
  1. Deploy the playbook by clicking on the "Deploy to Azure" button. This will take you to deploy an ARM Template wizard.
 
- [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FPlaybooks%2FURL-Enrichment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCiscoMeraki%2FPlaybooks%2FURL-Enrichment%2Fazuredeploy.json)
+ [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoMeraki%2FPlaybooks%2FURL-Enrichment%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCiscoMeraki%2FPlaybooks%2FURL-Enrichment%2Fazuredeploy.json)
 
 
  2. Fill in the required parameters for deploying the playbook.
@@ -45,12 +45,12 @@
 4.  Click Save
 
 ## b. Configurations in Sentinel
-- In Azure sentinel analytical rules should be configured to trigger an incident with URLs. 
+- In Microsoft sentinel analytical rules should be configured to trigger an incident with URLs. 
 - Configure the automation rules to trigger the playbook.
 
 
 # Playbook steps explained
-## When Azure Sentinel incident creation rule is triggered
+## When Microsoft Sentinel incident creation rule is triggered
 Captures potentially malicious or malware URL incident information.
 
 ## Entities - Get URLs

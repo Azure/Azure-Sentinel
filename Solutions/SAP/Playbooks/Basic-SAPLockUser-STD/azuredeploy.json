@@ -1,0 +1,169 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "environmentName": {
+        "type": "string",
+        "defaultValue": "sap-sentinel-soar-env"
+      },
+      "projectName": {
+        "type": "string",
+        "defaultValue": "sap-sentinel-soar-project"
+      },
+      "logicAppName": {
+        "type": "string",
+        "defaultValue": "sapblockuserlogicapp"
+      },
+      "appServicePlanName": {
+        "type": "string",
+        "defaultValue": "sapblockuserappserviceplan"
+      },
+      "storageName": {
+        "type": "string",
+        "defaultValue": "sapblockuserstorage",
+        "minLength": 3,
+        "maxLength": 24
+      },
+      "kind": {
+        "type": "string",
+        "defaultValue": "StorageV2"
+      },
+      "skuName": {
+        "type": "string",
+        "defaultValue": "Standard_LRS"
+      },
+      "skuTier": {
+        "type": "string",
+        "defaultValue": "Standard"
+      }
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Storage/storageAccounts",
+        "apiVersion": "2019-06-01",
+        "sku": {
+          "name": "[parameters('skuName')]",
+          "tier": "[parameters('skuTier')]"
+        },
+        "kind": "[parameters('kind')]",
+        "name": "[parameters('storageName')]",
+        "location": "[resourceGroup().location]",
+        "tags": {
+          "Environment": "[parameters('environmentName')]",
+          "Project": "[parameters('projectName')]"
+        }
+      },
+      {
+        "type": "Microsoft.Web/serverfarms",
+        "apiVersion": "2018-02-01",
+        "name": "[parameters('appServicePlanName')]",
+        "location": "[resourceGroup().location]",
+        "tags": {
+          "Environment": "[parameters('environmentName')]",
+          "Project": "[parameters('projectName')]"
+        },
+        "sku": {
+          "name": "WS1",
+          "tier": "WorkflowStandard"
+        },
+        "kind": "windows"
+      },
+      {
+        "type": "Microsoft.Web/sites",
+        "apiVersion": "2018-11-01",
+        "name": "[parameters('logicAppName')]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+          "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+        ],
+        "kind": "workflowapp,functionapp",
+        "identity": {
+          "type": "SystemAssigned"
+        },
+        "tags": {
+          "Environment": "[parameters('environmentName')]",
+          "Project": "[parameters('projectName')]"
+        },
+        "properties": {
+          "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+          "siteConfig": {
+            "netFrameworkVersion": "v4.6",
+            "appSettings": [
+              {
+                "name": "APP_KIND",
+                "value": "workflowApp"
+              },
+              {
+                "name": "AzureFunctionsJobHost__extensionBundle__id",
+                "value": "Microsoft.Azure.Functions.ExtensionBundle.Workflows"
+              },
+              {
+                "name": "AzureFunctionsJobHost__extensionBundle__version",
+                "value": "[1.*, 2.0.0)"
+              },
+              {
+                "name": "AzureWebJobsStorage",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageName'),';AccountKey=',concat(listKeys(concat(resourceGroup().id,'/providers/Microsoft.Storage/storageAccounts/', parameters('storageName')),'2019-06-01').keys[0].value),';EndpointSuffix=core.windows.net')]"
+              },
+              {
+                "name": "FUNCTIONS_EXTENSION_VERSION",
+                "value": "~4"
+              },
+              {
+                "name": "FUNCTIONS_V2_COMPATIBILITY_MODE",
+                "value": "true"
+              },
+              {
+                "name": "FUNCTIONS_WORKER_RUNTIME",
+                "value": "node"
+              },
+              {
+                "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',parameters('storageName'),';AccountKey=',concat(listKeys(concat(resourceGroup().id,'/providers/Microsoft.Storage/storageAccounts/', parameters('storageName')),'2019-06-01').keys[0].value),';EndpointSuffix=core.windows.net')]"
+              },
+              {
+                "name": "WEBSITE_CONTENTSHARE",
+                "value": "[parameters('logicAppName')]"
+              },
+              {
+                "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                "value": "~12"
+              }, 
+              {
+                "name": "WORKFLOWS_SUBSCRIPTION_ID", 
+                "value": "[subscription().subscriptionId]"
+              },
+              {
+                "name": "WORKFLOWS_LOCATION_NAME", 
+                "value": "[resourceGroup().location]"
+              },
+              {
+                "name": "WORKFLOWS_RESOURCE_GROUP_NAME", 
+                "value": ""
+              },
+              {
+                "name": "BLOB_CONNECTION_RUNTIMEURL", 
+                "value": ""
+              }              
+            ]
+          },
+          "clientAffinityEnabled": false
+        }
+      }
+    ],
+    "outputs": {
+      "logicAppSystemAssignedIdentityTenantId": {
+        "type": "string",
+        "value": "[subscription().tenantid]"
+      },
+      "logicAppSystemAssignedIdentityObjectId": {
+        "type": "string",
+        "value": "[reference(resourceId('Microsoft.Web/sites', parameters('logicAppName')),'2019-08-01', 'full').identity.principalId]"
+      },
+      "LAname": {
+        "type": "string",
+        "value": "[parameters('logicAppName')]"
+      }
+    }
+  }

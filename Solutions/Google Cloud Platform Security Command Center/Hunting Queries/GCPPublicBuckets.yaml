@@ -1,0 +1,47 @@
+id: 86b3c2e5-9f44-4f7a-9d2d-2f1a3b4c5d6e
+name: Identify Public GCP Storage Buckets
+description: |
+  Identifies Google Cloud Storage buckets that are publicly accessible using Security Command Center findings (PUBLIC_BUCKET_ACL).
+description-detailed: |
+  This query surfaces Cloud Storage buckets that have public ACLs. Public buckets can expose sensitive data to the Internet. Use this hunting query to find affected buckets and investigate IAM bindings, ACLs, and project ownership.
+requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+      - GoogleCloudSCC
+tactics:
+  - Exfiltration
+  - Discovery
+relevantTechniques:
+  - T1537
+  - T1083
+tags:
+  - CIS GCP Foundation 3.0 5.1
+  - NIST 800-53 R5 AC-3, AC-5, AC-6, MP-2
+  - PCI-DSS v4.0 1.3.1
+  - ISO-27001 v2022 A.5.10, A.5.15, A.8.3, A.8.4
+  - Cloud Controls Matrix 4 DSP-17
+  - NIST Cybersecurity Framework 1.0 PR-AC-4
+  - SOC2 v2017 CC5.2.3, CC6.1.3, CC6.1.7
+  - HIPAA 164.308(a)(3)(i), 164.308(a)(3)(ii), 164.312(a)(1)
+  - CIS Controls 8.0 3.3
+query: |
+  GoogleCloudSCC
+  | where tostring(Findings.state) == "ACTIVE"
+  | extend FindingCategory = tostring(Findings.category)
+  | where FindingCategory == "PUBLIC_BUCKET_ACL"
+  // Parse embedded finding JSON if the connector serialized it
+  | extend FindingsJson = todynamic(Findings)
+  | extend ResourceName = coalesce(tostring(FindingsJson.resource.name), tostring(Findings.resourceName))
+  // Extract bucket name from resource path like //storage.googleapis.com/<bucket>
+  | extend
+    BucketName = extract(@'//storage.googleapis.com/([^/\"]+)', 1, ResourceName),
+    ResourceType = tostring(FindingsResource.type)
+  | summarize TimeGenerated = max(TimeGenerated) by BucketName, ResourceType, ResourceName
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: BucketName
+      - identifier: InstanceName
+        columnName: ResourceName
+version: 1.0.0

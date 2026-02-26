@@ -1,0 +1,52 @@
+id: ce32b7f7-27b4-4d77-8a40-4a21acc0be46
+Function:
+  Title: Parser for Veeam Security VBR Events
+  Version: '1.0.0'
+  LastUpdated: '2024-08-12'
+Category: Microsoft Sentinel Parser
+FunctionName: Veeam_GetSecurityEvents
+FunctionAlias: Veeam_GetSecurityEvents
+FunctionQuery: |
+    let watchlist = union isfuzzy=true 
+        (datatable(ID:string, Severity:string, Type1:string, ["Event Name"]:string)[]),
+        (_GetWatchlist("vbr_events_lookup")); 
+    Syslog
+    | where SyslogMessage has "instanceId"
+    | extend instanceId = extract("instanceId=(\\d+)", 1, SyslogMessage)  
+    | filter instanceId in ("115", "21224", "23090", "23420", "23630", "23631", "23632", "23633", "24020", "24030", "24040", "24050", "24060", "24070", "24080", "24114", "24131", "24140", "24142", "24143", "24160", "24170", "25000", "25210", "25220", "25400", "25500", "25700", "25800", "26000", "26100", "26110", "26600", "26700", "26800", "26900", "27000", "27200", "27300", "27500", "27600", "27900", "28100", "28200", "28400", "28500", "28800", "28850", "28920", "28940", "28950", "28970", "28980", "29110", "29120", "29140", "29150", "29800", "29900", "30100", "30200", "30400", "30500", "30700", "30800", "31000", "31200", "31210", "31400", "31500", "31600", "31700", "31800", "31900", "32100", "32120", "32200", "32400", "32800", "36013", "40201", "40202", "40204", "40205", "40206", "40400", "40500", "40600", "41200", "41401", "41402", "41600", "41610", "41800", "41810", "42210", "42220", "42230", "42260", "42270", "42280", "42290", "42301", "42302", "42401", "42402", "42404", "42405", "42500")
+    | lookup kind=leftouter (watchlist) 
+        on $left.instanceId == $right.ID
+    | extend UserName = extract("UserName=\"(?<UserName>[^\"]*)\"", 1, SyslogMessage)
+    | extend fullName = extract("fullName=\"(?<fullName>[^\"]*)\"", 1, SyslogMessage)
+    | extend param3 = extract("param3=\"(?<param3>[^\"]*)\"", 1, SyslogMessage)
+    | extend param6 = extract("param6=\"(?<param6>[^\"]*)\"", 1, SyslogMessage)
+    | extend Result = extract("Result=\"(?<Result>[^\"]*)\"", 1, SyslogMessage)
+    | extend user =  extract("user=\"(?<user>[^\"]*)\"", 1, SyslogMessage)
+    | extend InitiatorName =  extract("InitiatorName=\"(?<InitiatorName>[^\"]*)\"", 1, SyslogMessage)
+    | extend Description =  extract("Description=\"(?<Description>[^\"]*)\"", 1, SyslogMessage)
+    | extend src =  extract("src=\"(?<src>[^\"]*)\"", 1, SyslogMessage)
+    | extend user = case(
+        isnotnull(user) and user != "", 
+            user, 
+        instanceId in ("40201","42402","42404","42405","40204","40400","40500","40600","40700","42400","42401","42403"), 
+            iff(isnull(fullName) or fullName == "", "unknown", fullName), 
+        instanceId in ("36013"), 
+            iff(isnull(InitiatorName) or InitiatorName == "", "unknown", InitiatorName), 
+        instanceId in ("41800","41810"), 
+            iff(isnull(param3) or param3 == "", "unknown", param3), 
+        instanceId in ("23090","23420","41402"), 
+            iff(isnull(param6) or param6 == "", "unknown", param6), 
+        instanceId in ("40205","40206","41610","42301","24080","28200","28500","28920","28950","29120","29150","29900","30200","30500","32120","32200","25500","28100","29800","31600","31700","31800","31900","42260","42270","42280","42302","30100","30400","31500","31210","31400","41600","31200","28970","28980","42230","42220","42290"), 
+            iff(isnull(UserName) or UserName == "", "unknown", UserName),
+        "unknown" 
+    )
+    | extend src = iff(isnull(src) or src == "", 
+        iff(isnull(Description) or Description == "", "unknown", Description), 
+        src)
+    | extend SeverityDescription = case(Severity=="critical","Critical",
+        Severity=="high","High",
+        Severity=="medium","Medium",
+        Severity=="information","Information", 
+        "Unknown")
+    | extend event_module = Type1, original_host = Computer 
+    | project TimeGenerated, Description, event_module, instanceId, original_host, Severity, src, user, SeverityDescription, ["Event Name"], SyslogMessage

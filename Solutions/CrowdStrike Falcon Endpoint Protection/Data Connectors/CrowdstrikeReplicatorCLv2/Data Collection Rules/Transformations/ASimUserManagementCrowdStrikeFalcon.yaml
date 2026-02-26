@@ -1,0 +1,54 @@
+  Parser:
+    Title: User Management ASIM parser for CrowdStrike Falcon Data Replicator
+    Version: '0.1'
+    LastUpdated: Jun 9, 2023
+  Product:
+    Name: Falcon Data Replicator
+  Normalization:
+    Schema: UserManagement
+    Version: '0.1.1'
+  References:
+    - Title: ASIM User Management Schema
+      Link: https://aka.ms/ASimUserManagementDoc
+    - Title: ASIM
+      Link: https://aka.ms/AboutASIM
+  Description: |
+    This ASIM parser supports normalizing CrowdStrike Falcon Data Replicator logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM User Management normalized schema.
+  ParserName: ASimUserManagementCrowdStrikeFalcon
+  ParserParams:
+    - Name: disabled
+      Type: bool
+      Default: false
+  ParserQuery: |
+      let EventTypeLookup = parse_json('{"UserAccountDeleted": "UserCreated","UserAccountCreated": "UserDeleted","UserAccountAddedToGroup": "UserAddedToGroup"}');
+      source
+      | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+               contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
+      | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
+      | project-rename
+          DvcIpAddr = aip,
+          DvcId = aid,
+          ActorUsername = UserName,
+          EventOriginalType = name,
+          EventOriginalUid = id,
+          DvcInterfaceGuid = InterfaceGuid,
+          EventProductVersion = ConfigBuild,
+          TargetUserId = UserRid,
+          GroupId = GroupRid
+      | extend 
+          AdditionalFields = todynamic(AdditionalFields),
+          DvcOs = case(event_platform == "Win", "Windows", 
+                      event_platform == "Mac", "Macintosh",
+                      event_platform == "Lin", "Linux", 
+                      ""),    
+          EventStartTime = iff(isnotempty(contextDatetime),contextDatetime,TimeGenerated),
+          TargetUserIdType = "RID",
+          GroupIdType = "RID"
+      | extend EventEndTime = EventStartTime,
+              EventType = tostring(EventTypeLookup[event_simpleName]),
+              EventCount = toint(1),
+              EventSchemaVersion = "0.1.1",
+              EventVendor = "CrowdStrike",
+              EventProduct = "Falcon Data Replicator",
+              EventResult = "Success",
+              EventSeverity = "Informational"

@@ -1,0 +1,50 @@
+id: 63142c12-5d8b-48cf-a0f6-b523c855497c
+name: Local Admin Group Changes
+description: 
+  This hunting query searches for changes to the local administrators group.
+description-detailed: |
+  This hunting query searches for changes to the local administrators group.
+  Blogpost: https://www.verboon.info/2020/09/hunting-for-local-group-membership-changes.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - IdentityInfo
+      - DeviceEvents
+tactics:
+  - Persistence
+query: |
+  let ADAZUsers =  IdentityInfo 
+  | extend DirectoryDomain = AccountDomain 
+  | extend DirectoryAccount = AccountName 
+  | extend OnPremSid = AccountSID
+  | distinct DirectoryDomain , DirectoryAccount , OnPremSid , AccountCloudSID, AccountUPN, GivenName, Surname;
+   // check for any new created or modified local accounts 
+  let NewUsers =  DeviceEvents
+  | where ActionType contains "UserAccountCreated"  // or ActionType contains "UserAccountModified"
+  | extend lUserAdded = AccountName
+  | extend NewUserSID = AccountSid
+  | extend laccountdomain = AccountDomain
+  | distinct NewUserSID, lUserAdded,laccountdomain;
+  // Check for any local group changes and enrich the data with the account name obtained from the previous query
+  DeviceEvents 
+  | where ActionType == 'UserAccountAddedToLocalGroup' 
+  | extend AddedAccountSID = tostring(parse_json(AdditionalFields).MemberSid)
+  | extend LocalGroup = AccountName
+  | extend LocalGroupSID = AccountSid
+  | extend Actor = trim(@"[^\w]+",InitiatingProcessAccountName)
+  // limit to local administrators group
+  //  | where LocalGroupSID contains "S-1-5-32-544"
+  | join kind= leftouter    (NewUsers)
+  on $left.AddedAccountSID == $right.NewUserSID
+  | project TimeGenerated, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, lUserAdded , Actor, ActionType , laccountdomain 
+  | join kind= leftouter        (ADAZUsers)
+  on $left.AddedAccountSID == $right.OnPremSid
+  | extend UserAdded = iff(isnotempty(lUserAdded),strcat(laccountdomain,"\\", lUserAdded), strcat(DirectoryDomain,"\\", DirectoryAccount))
+  | project TimeGenerated, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, UserAdded , Actor, ActionType  
+  | where DeviceName !contains Actor 
+  // Provide details on actors that added users
+  // | summarize count()  by Actor 
+  // | join ADAZUsers
+  // on $left.Actor == $right.DirectoryAccount 
+  // | render piechart 
+version: 1.0.0

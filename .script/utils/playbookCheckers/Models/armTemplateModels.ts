@@ -1,4 +1,4 @@
-import { StringMap } from "../playbookARMTemplateUtils";
+import { StringMap } from "../playbookARMTemplateUtils.js";
 
 export interface ArmTemplate<TMetadata> {
   metadata: TMetadata;

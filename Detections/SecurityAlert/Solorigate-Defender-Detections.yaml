@@ -1,7 +1,7 @@
 id: e70fa6e0-796a-4e85-9420-98b17b0bb749
 name: Solorigate Defender Detections
 description: |
-  'Surfaces any Defender Alert for Solorigate Events. In Microsoft Sentinel the SecurityAlerts table includes only the Device Name of the affected device, this query joins the DeviceInfo table to clearly connect other information such as 
+  'Surfaces any Defender Alert for Solorigate Events. In Microsoft Sentinel the SecurityAlerts table includes only the Device Name of the affected device, this query joins the DeviceInfo table to clearly connect other information such as
    Device group, ip, logged on users etc. This way, the Microsoft Sentinel user can have all the pertinent device info in one view for all the the Solarigate Defender alerts.'
 severity: High
 requiredDataConnectors:
@@ -23,26 +23,38 @@ tags:
   - Solorigate
   - NOBELIUM
 query: |
-
   DeviceInfo
   | extend DeviceName = tolower(DeviceName)
   | join (SecurityAlert
   | where ProviderName =~ "MDATP"
   | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
   | where ThreatName has "Solorigate"
-  | extend HostCustomEntity = tolower(CompromisedEntity)
-  ) on $left.DeviceName == $right.HostCustomEntity
-  | project TimeGenerated, DisplayName, ThreatName, CompromisedEntity, PublicIP, MachineGroup, AlertSeverity, Description, LoggedOnUsers, DeviceId, TenantId, HostCustomEntity
-  | extend timestamp = TimeGenerated, IPCustomEntity = PublicIP
-  
+  ) on $left.DeviceName == $right.CompromisedEntity
+  | project TimeGenerated, DisplayName, ThreatName, CompromisedEntity, PublicIP, MachineGroup, AlertSeverity, Description, LoggedOnUsers, DeviceId, TenantId
+  | extend HostName = tostring(split(CompromisedEntity, ".")[0]), DomainIndex = toint(indexof(CompromisedEntity, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(CompromisedEntity, DomainIndex + 1), CompromisedEntity)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: CompromisedEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: PublicIP
+version: 1.0.5
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - 0-day Vulnerability" ]

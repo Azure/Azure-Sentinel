@@ -1,0 +1,128 @@
+Parser:
+  Title: Network Session  ASIM filtering parser for Microsoft Sentinel native Network Session table
+  Version: '0.3'
+  LastUpdated: Jan 25 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filters and normalizing the native Microsoft Sentinel Network Session table (ASimNetworkSessionLogs) to the ASIM NetworkSession normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: vimNetworkSessionNative
+EquivalentBuiltInParser: _Im_NetworkSession_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+    dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+    ipaddr_has_any_prefix:dynamic=dynamic([]), 
+    dstportnumber:int=int(null), 
+    hostname_has_any:dynamic=dynamic([]), 
+    dvcaction:dynamic=dynamic([]), 
+    eventresult:string='*', 
+    disabled:bool=false)
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    ASimNetworkSessionLogs  
+    | where (isnull(starttime) or TimeGenerated>=starttime)
+      and (isnull(endtime) or TimeGenerated<=endtime)
+      and not(disabled)
+      and (isnull(dstportnumber) or DstPortNumber==dstportnumber)
+      and (array_length(dvcaction) == 0 or DvcAction in (dvcaction))
+      and (eventresult == "*" or eventresult==EventResult)
+    | extend temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any)
+           , temp_DstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+    | extend ASimMatchingIpAddr=case(
+        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+        temp_SrcMatch and temp_DstMatch, "Both",
+        temp_SrcMatch, "SrcIpAddr",
+        temp_DstMatch, "DstIpAddr",
+        "No match"
+      )
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
+    |extend ASimMatchingHostname = case(
+        array_length(hostname_has_any) == 0 ,"",
+        SrcHostname has_any(hostname_has_any), "SrcHostname",
+        DstHostname has_any(hostname_has_any), "DstHostname",
+        "No match"
+      )
+    | where ASimMatchingHostname != "No match"
+    | project-rename
+          EventUid = _ItemId
+    | extend 
+        EventSchema = "NetworkSession",
+        DvcScopeId = iff(isempty(DvcSubscriptionId), _SubscriptionId, DvcSubscriptionId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = case(EventType == 'L2NetworkSession',
+                coalesce (DvcFQDN, DvcHostname, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct)),
+                coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct))
+        ),
+        Dst = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),
+        Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+        DvcInterface = iff(isempty(DvcInterface), coalesce(DvcInboundInterface, DvcOutboundInterface), DvcInterface),
+        Hostname = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), SrcHostname, DstHostname),
+        IpAddr = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), DstIpAddr, SrcIpAddr),
+        Rule = coalesce(NetworkRuleName, tostring(NetworkRuleNumber)),
+        Duration = NetworkDuration,
+        SessionId = NetworkSessionId,
+        User = DstUsername,
+        InnerVlanId = SrcVlanId,
+        OuterVlanId = DstVlanId
+    | project-away
+          TenantId, SourceSystem, DvcSubscriptionId, _SubscriptionId, _ResourceId
+  };
+  parser (
+    starttime=starttime, 
+    endtime=endtime, 
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+    dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
+    ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+    dstportnumber=dstportnumber, 
+    hostname_has_any=hostname_has_any, 
+    dvcaction=dvcaction,
+    eventresult=eventresult,
+    disabled=disabled
+  )

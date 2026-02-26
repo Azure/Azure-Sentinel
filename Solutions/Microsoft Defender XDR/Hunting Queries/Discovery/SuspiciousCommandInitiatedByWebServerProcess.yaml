@@ -1,0 +1,39 @@
+id: fa2f7d8a-6726-465a-aa72-6f6e3d4c99d7
+name: Detect Suspicious Commands Initiated by Webserver Processes
+description: | 
+  Detect suspicious commands initiated by web server processes used for network discovery and user/owner discovery.
+description-detailed: |
+  This query was originally published in the threat analytics report, Operation Soft Cell.
+  Operation Soft Cell is a series of campaigns targeting users' call logs at telecommunications providers throughout the world. These attacks date from as early as 2012.
+  Operation Soft Cell operators sometimes use legitimate web server processes to launch commands, especially for network discovery and user/owner discovery. The following query detects activity of this kind.
+  Reference - https://www.cybereason.com/blog/operation-soft-cell-a-worldwide-campaign-against-telecommunications-providers
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - Execution
+  - DefenseEvasion
+  - Discovery
+query: |
+  // Suspicious commands launched by web server processes
+  DeviceProcessEvents 
+  | where TimeGenerated > ago(7d)
+  // Pivoting on parents or grand parents
+  and (((InitiatingProcessParentFileName in("w3wp.exe", "beasvc.exe",
+  "httpd.exe") or InitiatingProcessParentFileName startswith "tomcat")
+  or InitiatingProcessFileName in("w3wp.exe", "beasvc.exe", "httpd.exe") or
+  InitiatingProcessFileName startswith "tomcat"))
+      and FileName in~('cmd.exe','powershell.exe')
+  | where ProcessCommandLine contains '%temp%'
+      or ProcessCommandLine has 'wget'
+      or ProcessCommandLine has 'whoami'
+      or ProcessCommandLine has 'certutil'
+      or ProcessCommandLine has 'systeminfo'
+      or ProcessCommandLine has 'ping'
+      or ProcessCommandLine has 'ipconfig'
+      or ProcessCommandLine has 'timeout'
+  | summarize take_any(TimeGenerated), take_any(TimeGenerated), take_any(FileName),
+  make_set(ProcessCommandLine, 100000), take_any(InitiatingProcessFileName),
+  take_any(InitiatingProcessParentFileName) by DeviceId
+version: 1.0.0

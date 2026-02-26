@@ -1,0 +1,3 @@
+| **Version**   | **Date Modified (DD-MM-YYYY)**   | **Change History**                                                                                  |
+|---------------|----------------------------------|-----------------------------------------------------------------------------------------------------|
+| 3.0.0         | 17-12-2024                       | Modified the Phishing Investigation application in **Data Connector** Function App. <br/> Added new **Playbook** Phishing Incident Investigation. |

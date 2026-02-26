@@ -4,75 +4,129 @@ const azureService = require("./azure-service");
 exports.runSync = function runSync(context) {
 
     context.log(`trying to fetch vulnerabilities from Synack`)
-    synackService.fetchSynackVulns(context)
-        .then((synackVulns) => {
+    return new Promise((resolve, reject) => {
+        synackService.fetchSynackVulns(context)
+            .then((synackVulns) => {
+                let numberOfVulns = synackVulns.length
+                context.log(`fetched total ${numberOfVulns} vulnerabilities from Synack`)
+                azureService.getAzureAuthenticationToken(context)
+                    .then((accessToken) => {
+                        context.log('got azure access token for synchronization')
 
-            context.log(`fetched total ${synackVulns.length} vulnerabilities from Synack`)
-            azureService.getAzureAuthenticationToken(context)
-                .then((accessToken) => {
-                    context.log('got azure access token for synchronization')
+                        let processedIncidents = 0
+                        for (let i = 0; i < numberOfVulns; i++) {
+                            let vulnJson = synackVulns[i]
+                            let title = vulnJson.title
+                            let incidentDescription = compileIncidentDescription(vulnJson)
+                            let incidentStatus = getIncidentStatus(vulnJson['vulnerability_status'])
+                            let severity = getSentinelSeverity(vulnJson);
 
-                    for (let i = 0; i < synackVulns.length; i++) {
-                        let vulnJson = synackVulns[i]
-                        let title = vulnJson.title
-                        let incidentDescription = compileIncidentDescription(vulnJson)
-                        let incidentStatus = getIncidentStatus(vulnJson['vulnerability_status'])
-                        let severity = getSentinelSeverity(vulnJson);
+                            let incidentDto = {
+                                title: title,
+                                severity: severity,
+                                description: incidentDescription,
+                                status: incidentStatus
+                            }
 
-                        let incidentDto = {
-                            title: title,
-                            severity: severity,
-                            description: incidentDescription,
-                            status: incidentStatus
+                            try {
+                                processIncident(context, vulnJson, incidentDto, accessToken)
+                                    .then((incidentId) => {
+                                        processedIncidents++;
+                                        context.log(`processed incident ${incidentId} - ${processedIncidents}/${numberOfVulns}`)
+                                        if (processedIncidents === numberOfVulns) {
+                                            let message = `Finished synchronisation of ${numberOfVulns} vulns!`;
+                                            context.log(message)
+                                            resolve(message)
+                                        }
+                                    })
+                                    .catch((error) => {
+                                        context.log.error('error occurred while trying to create/update a Sentinel incident')
+                                        context.log.error(error)
+                                        reject(error)
+                                    })
+                            } catch (error) {
+                                context.log.error('error occurred while trying to create/update a Sentinel incident')
+                                context.log.error(error)
+                                reject(error)
+                            }
                         }
+                    })
+                    .catch((error) => {
+                        context.log.error(`error occurred while trying to get Azure authentication token \n ${error}`)
+                        reject(error)
+                    })
+            })
+            .catch((error) => {
+                context.log.error(`The synchronization failed. Error occurred while trying to fetch vulnerabilities from Synack: ${error}`)
+                reject(error)
+            })
+    })
+}
 
-                        azureService.createOrUpdateIncident(context, vulnJson, incidentDto, accessToken)
-                            .then((incidentOperationResult) => {
-                                context.log(`${incidentOperationResult.status} incident ${incidentOperationResult.name}`)
-                                let incidentId = incidentOperationResult.name
+function processIncident(context, vulnJson, incidentDto, accessToken) {
 
-                                synackService.fetchComments(context, vulnJson['id'])
-                                    .then((synackCommentsJsonArray) => {
-                                        azureService.fetchComments(context, incidentId, accessToken)
-                                            .then((incidentCommentsJsonArray) => {
-                                                let incidentCommentsIds = []
-                                                for (let incidentComment of incidentCommentsJsonArray) {
-                                                    incidentCommentsIds.push(incidentComment['name'])
-                                                }
-                                                for (let synackComment of synackCommentsJsonArray) {
-                                                    let sentinelCommentId = `${incidentId}_${synackComment.id}`
-                                                    if (!incidentCommentsIds.includes(sentinelCommentId)) {
-                                                        let synackAuthorName = synackComment['User']['name']
-                                                        let sentinelCommentBody = `**${synackAuthorName}** **(Synack):** ${synackComment.body}`
-                                                        azureService.createComment(context, incidentId, sentinelCommentId, sentinelCommentBody, accessToken)
-                                                            .then((commentOperationResult) => {
-                                                                context.log(`${commentOperationResult.status} comment ${commentOperationResult.name}`)
-                                                            })
-                                                            .catch((error) => {
-                                                                context.error(`Failed to create comment for incident ${incidentId}`)
-                                                                context.error(error)
-                                                            })
-                                                    } else {
-                                                        context.log(`comment ${sentinelCommentId} already exists`)
-                                                    }
+    let vulnId = vulnJson['id'];
+    return new Promise((resolve, reject) => {
+        azureService.createOrUpdateIncident(vulnJson, accessToken, incidentDto, context)
+            .then((incidentOperationResult) => {
+                context.log(`${incidentOperationResult.status} incident ${incidentOperationResult.name}`)
+                let incidentId = incidentOperationResult.name
+                synackService.fetchComments(context, vulnId)
+                    .then((synackCommentsJsonArray) => {
+                        if (synackCommentsJsonArray === null || synackCommentsJsonArray.length === 0) {
+                            resolve(incidentId)
+                        }
+                        azureService.fetchComments(context, incidentId, accessToken)
+                            .then((incidentCommentsJsonArray) => {
+                                let incidentCommentsIds = []
+                                for (let incidentComment of incidentCommentsJsonArray) {
+                                    incidentCommentsIds.push(incidentComment['name'])
+                                }
+                                let commentsProcessed = 0
+                                for (let synackComment of synackCommentsJsonArray) {
+                                    let sentinelCommentId = `${incidentId}_${synackComment.id}`
+                                    let synackCommentsNumber = synackCommentsJsonArray.length;
+                                    if (!incidentCommentsIds.includes(sentinelCommentId)) {
+                                        let synackAuthorName = synackComment['User']['name']
+                                        let sentinelCommentBody = `**${synackAuthorName}** **(Synack):** ${synackComment.body}`
+                                        azureService.createComment(context, incidentId, sentinelCommentId, sentinelCommentBody, accessToken)
+                                            .then((commentOperationResult) => {
+                                                context.log(`${commentOperationResult.status} comment ${commentOperationResult.name}`)
+                                                commentsProcessed++
+                                                context.log(`processed comment ${commentsProcessed}/${synackCommentsNumber} for incident ${incidentId} vuln ${vulnId}`)
+                                                if (commentsProcessed >= synackCommentsNumber) {
+                                                    resolve(incidentId)
                                                 }
                                             })
-
-                                    })
+                                            .catch((error) => {
+                                                let message = `Failed to create comment for incident ${incidentId}`;
+                                                context.log.error(message)
+                                                context.log.error(error)
+                                                reject(`${message}. ${error}`)
+                                            })
+                                    } else {
+                                        context.log(`comment ${sentinelCommentId} already exists`)
+                                        commentsProcessed++
+                                        context.log(`processed comment ${commentsProcessed}/${synackCommentsNumber} for incident ${incidentId} vuln ${vulnId}`)
+                                        if (commentsProcessed >= synackCommentsNumber) {
+                                            resolve(incidentId)
+                                        }
+                                    }
+                                }
                             })
-                            .catch((error) => {
-                                context.error('error occurred while trying to create/update a Sentinel incident')
-                                context.error(error)
-                            })
-                    }
-                })
-                .catch((error) => {
-                    context.error(`error occurred while trying to get Azure authentication token \n ${error}`)
-                })
-        })
-        .catch((error) => {
-            context.error(`The synchronization failed. Error occurred while trying to fetch vulnerabilities from Synack: ${error}`)
-        })
+                            .catch((error => {
+                                reject(`Could not get comments for Sentinel incident ${incidentId}. ${error}`)
+                            }))
+                    })
+                    .catch((error => {
+                        reject(`Could not get comments for Synack vuln ${vulnId}. ${error}`)
+                    }))
+                return incidentOperationResult
+            })
+            .catch((error => {
+                reject(`Failed to process vuln ${vulnId}: ${error}`)
+            }))
+    })
 }
 
 function getIncidentStatus(synackStatusJson) {
@@ -178,7 +232,7 @@ function getSentinelSeverity(vulnJson) {
         severity = 'Medium'
     } else if (cvssScore > 0) {
         severity = 'Low'
-    } else if (cvssScore === 0){
+    } else if (cvssScore === 0) {
         severity = 'Informational'
     }
     return severity

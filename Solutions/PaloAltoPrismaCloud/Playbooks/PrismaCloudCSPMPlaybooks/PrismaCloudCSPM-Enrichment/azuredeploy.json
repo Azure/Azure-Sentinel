@@ -1,0 +1,1649 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Fetch Security Posture from Prisma Cloud",
+        "description": "This playbook provides/updates the compliance security posture details of asset in comments section of triggered incident so that SOC analysts can directly take corrective measure to prevent the attack",
+        "prerequisites": [
+            "1. PrismaCloudCSPM Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.",
+            "2. API Key and User ID . To get this, login into your Prisma cloud instance dashboard and navigate to Settings --> Access Control --> Access Keys --> Add",
+	    "3. [Important step]Store the API secret key in Key vault then provide the keyvault name and key name of the stored secret during deployment"
+        ],
+        "postDeployment": [
+		"1. During deployment you need to provide your Key vault name , User ID and API key name of stored secret key."
+		],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/PrismaCloudCSPMCustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2023-02-03T00:00:00.000Z",
+        "entities": ["host"],
+        "tags": ["Enrichment", "Notification", "CSPM", "PrismaCloud", "Compliance", "Posture"],
+        "support": {
+            "tier": "Microsoft",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "PrismaCloudCSPM-Enrichment",
+            "type": "string"
+        },
+		"Keyvault name": {
+            "type": "String",
+            "metadata": {
+                "description": "Enter the key vault name where secret key is stored"
+            }
+        },
+		"PrismaSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for Prisma Secret Key Name"
+            }
+        },
+        "PrismaUserID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for PrismaUserID"
+            }
+        },		
+		"CustomConnectorName": {
+            "defaultValue": "PrismaCloudCSPMCustomConnector",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the custom connector, if you want to change the default name, make sure to use the same in all Prisma Cloud automation playbooks as well"
+            }
+        }
+    },
+    "variables": {
+        "PrismacloudcspmcustomconnectorConnectionName": "[concat('Prismacloudcspmcustomconnector-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "PrismaSecretName": {
+                            "defaultValue": "[parameters('PrismaSecretName')]",
+                            "type": "string"
+                        },
+                        "PrismaUserID": {
+                            "defaultValue": "[parameters('PrismaUserID')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_2_-_check_if_triggered_has_entities": {
+                            "actions": {
+                                "Assets_Resource_Scan": {
+                                    "runAfter": {
+                                        "Login_Generate_Token": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "headers": {
+                                            "x-redlock-auth": "@body('Login_Generate_Token')?['token']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['PrismaCloudCSPMCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/resource/scan_info",
+                                        "queries": {
+                                            "cloud.type": "azure",
+                                            "scan.status": "all",
+                                            "timeType": "to_now"
+                                        }
+                                    }
+                                },
+                                "Condition_2_-_checking_if_provided_entities_are_there_in_Prisma_cloud": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)_3": {
+                                            "runAfter": {
+                                                "Create_HTML_table_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>Assets Enrichment information :<br>\n@{body('Create_HTML_table_2')}<br>\n<br>\n---------------------------------------------------------------------------------------<br>\nAlerts details<br>\n<br>\n@{body('Create_HTML_table')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Create_HTML_table": {
+                                            "runAfter": {
+                                                "For_each_-_storing_alert_info_in_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('alerts_detail')"
+                                            }
+                                        },
+                                        "Create_HTML_table_2": {
+                                            "runAfter": {
+                                                "Create_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('collect_asset_scan_details')"
+                                            }
+                                        },
+                                        "For_each_-_collect_alerts_id_in_array": {
+                                            "foreach": "@body('Parse_JSON_-_parsing_collected_assets_details')",
+                                            "actions": {
+                                                "Assets_Enrichment": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "assetId": "@items('For_each_-_collect_alerts_id_in_array')['unifiedAssetId']",
+                                                            "type": "ALERTS"
+                                                        },
+                                                        "headers": {
+                                                            "content-type": "application/json",
+                                                            "x-redlock-auth": "@body('Login_Generate_Token')?['token']"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['PrismaCloudCSPMCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/uai/v1/asset"
+                                                    }
+                                                },
+                                                "For_each_2": {
+                                                    "foreach": "@body('Parse_JSON_-_Parsing_output_of_assets_Enrichment')?['data']?['asset']?['alerts']",
+                                                    "actions": {
+                                                        "Append_to_array_variable_3": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "collect_alerts",
+                                                                "value": "@items('For_each_2')?['id']"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_Parsing_output_of_assets_Enrichment": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "Parse_JSON_-_Parsing_output_of_assets_Enrichment": {
+                                                    "runAfter": {
+                                                        "Assets_Enrichment": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Assets_Enrichment')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "data": {
+                                                                    "properties": {
+                                                                        "asset": {
+                                                                            "properties": {
+                                                                                "alerts": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "id": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "severity": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "id",
+                                                                                            "severity"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "errors": {
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "For_each_-_storing_asset_scan_selected_data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_-_storing_alert_info_in_variable": {
+                                            "foreach": "@variables('collect_alerts')",
+                                            "actions": {
+                                                "Append_to_array_variable_4_-_alert_details": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_get_alert_info_result": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "alerts_detail",
+                                                        "value": {
+                                                            "Alert ID": "@body('Parse_JSON_-_get_alert_info_result')?['id']",
+                                                            "Alert status": "@body('Parse_JSON_-_get_alert_info_result')?['status']",
+                                                            "Alert_policy": "@body('Parse_JSON_-_get_alert_info_result')?['policy']?['name']",
+                                                            "Alert_severity": "@body('Parse_JSON_-_get_alert_info_result')?['policy']?['severity']",
+                                                            "Asset Owner": "@join(body('Parse_JSON_-_get_alert_info_result')?['resource']?['cloudAccountOwners'],' ')",
+                                                            "Cloud account Group": "@join(body('Parse_JSON_-_get_alert_info_result')?['resource']?['cloudAccountGroups'],' ')",
+                                                            "Labels": "@join(body('Parse_JSON_-_get_alert_info_result')?['policy']?['labels'],' ')",
+                                                            "Policy Type": "@body('Parse_JSON_-_get_alert_info_result')?['policy']?['policyType']",
+                                                            "Recommendation": "@body('Parse_JSON_-_get_alert_info_result')?['policy']?['recommendation']",
+                                                            "Resource Name": "@body('Parse_JSON_-_get_alert_info_result')?['resource']?['name']",
+                                                            "Resource account": "@body('Parse_JSON_-_get_alert_info_result')?['resource']?['account']"
+                                                        }
+                                                    }
+                                                },
+                                                "Get_Alert_Info": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "x-redlock-auth": "@body('Login_Generate_Token')?['token']"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['PrismaCloudCSPMCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/alert/@{encodeURIComponent(items('For_each_-_storing_alert_info_in_variable'))}",
+                                                        "queries": {
+                                                            "detailed": "true"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_JSON_-_get_alert_info_result": {
+                                                    "runAfter": {
+                                                        "Get_Alert_Info": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_Alert_Info')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "alertRules": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "alertRuleNotificationConfig": {
+                                                                                "type": "array"
+                                                                            },
+                                                                            "allowAutoRemediate": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "enabled": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "notifyOnDismissed": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "notifyOnOpen": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "notifyOnResolved": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "notifyOnSnoozed": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "policyScanConfigId": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "scanAll": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "target": {
+                                                                                "properties": {
+                                                                                    "accountGroups": {
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "excludedAccounts": {
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "regions": {
+                                                                                        "type": "array"
+                                                                                    },
+                                                                                    "tags": {
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "policyScanConfigId",
+                                                                            "name",
+                                                                            "enabled",
+                                                                            "scanAll",
+                                                                            "target",
+                                                                            "alertRuleNotificationConfig",
+                                                                            "allowAutoRemediate",
+                                                                            "notifyOnOpen",
+                                                                            "notifyOnSnoozed",
+                                                                            "notifyOnDismissed",
+                                                                            "notifyOnResolved"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "alertTime": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "firstSeen": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "history": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "modifiedBy": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "modifiedOn": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "reason": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "status": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "modifiedBy",
+                                                                            "modifiedOn",
+                                                                            "status",
+                                                                            "reason"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "investigateOptions": {
+                                                                    "properties": {
+                                                                        "alertId": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "lastSeen": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "metadata": {
+                                                                    "properties": {
+                                                                        "saveSearchId": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "networkAnomaly": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "policy": {
+                                                                    "properties": {
+                                                                        "complianceMetadata": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "complianceId": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "customAssigned": {
+                                                                                        "type": "boolean"
+                                                                                    },
+                                                                                    "policyId": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "requirementId": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "requirementName": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "requirementViewOrder": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "sectionDescription": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sectionId": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sectionLabel": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "sectionViewOrder": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "standardDescription": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "standardName": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "systemDefault": {
+                                                                                        "type": "boolean"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "standardName",
+                                                                                    "standardDescription",
+                                                                                    "requirementId",
+                                                                                    "requirementName",
+                                                                                    "sectionId",
+                                                                                    "sectionDescription",
+                                                                                    "policyId",
+                                                                                    "complianceId",
+                                                                                    "sectionLabel",
+                                                                                    "sectionViewOrder",
+                                                                                    "requirementViewOrder",
+                                                                                    "systemDefault",
+                                                                                    "customAssigned"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "deleted": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "description": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "labels": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "lastModifiedBy": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "lastModifiedOn": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "policyId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "policyType": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "recommendation": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "remediable": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "severity": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "systemDefault": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "reason": {
+                                                                    "type": "string"
+                                                                },
+                                                                "resource": {
+                                                                    "properties": {
+                                                                        "account": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "accountId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "additionalInfo": {
+                                                                            "properties": {},
+                                                                            "type": "object"
+                                                                        },
+                                                                        "cloudAccountGroups": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "cloudAccountOwners": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "cloudServiceName": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "cloudType": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "data": {
+                                                                            "properties": {
+                                                                                "Extensions": {
+                                                                                    "properties": {
+                                                                                        "MDE.Linux": {
+                                                                                            "properties": {
+                                                                                                "autoUpgradeMinorVersion": {
+                                                                                                    "type": "boolean"
+                                                                                                },
+                                                                                                "forceUpdateTag": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "protectedSettings": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "provisioningState": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "publisher": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "settings": {
+                                                                                                    "properties": {
+                                                                                                        "azureResourceId": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "forceReOnboarding": {
+                                                                                                            "type": "boolean"
+                                                                                                        },
+                                                                                                        "vNextEnabled": {
+                                                                                                            "type": "boolean"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "type": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "typeHandlerVersion": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "virtualMachineExtensionType": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "OmsAgentForLinux": {
+                                                                                            "properties": {
+                                                                                                "autoUpgradeMinorVersion": {
+                                                                                                    "type": "boolean"
+                                                                                                },
+                                                                                                "enableAutomaticUpgrade": {
+                                                                                                    "type": "boolean"
+                                                                                                },
+                                                                                                "protectedSettings": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "provisioningState": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "publisher": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "settings": {
+                                                                                                    "properties": {
+                                                                                                        "workspaceId": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "type": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "typeHandlerVersion": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "virtualMachineExtensionType": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "enablevmaccess": {
+                                                                                            "properties": {
+                                                                                                "autoUpgradeMinorVersion": {
+                                                                                                    "type": "boolean"
+                                                                                                },
+                                                                                                "protectedSettings": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "provisioningState": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "publisher": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "settings": {
+                                                                                                    "properties": {},
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "type": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "typeHandlerVersion": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "virtualMachineExtensionType": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "id": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "location": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "locks": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "powerState": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "properties.networkProfile": {
+                                                                                    "properties": {
+                                                                                        "networkInterfaces": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "id": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "ipConfigurations": {
+                                                                                                        "items": {
+                                                                                                            "properties": {
+                                                                                                                "id": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "name": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "primary": {
+                                                                                                                    "type": "boolean"
+                                                                                                                },
+                                                                                                                "privateIpAddress": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "publicIpAddress": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "publicIpAddressId": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "subnet": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "required": [
+                                                                                                                "id",
+                                                                                                                "name",
+                                                                                                                "subnet",
+                                                                                                                "primary",
+                                                                                                                "publicIpAddress",
+                                                                                                                "privateIpAddress",
+                                                                                                                "publicIpAddressId"
+                                                                                                            ],
+                                                                                                            "type": "object"
+                                                                                                        },
+                                                                                                        "type": "array"
+                                                                                                    },
+                                                                                                    "privateIpAddress": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "publicIpAddress": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "publicIpAddressId": {
+                                                                                                        "type": "string"
+                                                                                                    }
+                                                                                                },
+                                                                                                "required": [
+                                                                                                    "id",
+                                                                                                    "publicIpAddress",
+                                                                                                    "ipConfigurations",
+                                                                                                    "privateIpAddress",
+                                                                                                    "publicIpAddressId"
+                                                                                                ],
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "properties.osProfile": {
+                                                                                    "properties": {
+                                                                                        "adminUsername": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "allowExtensionOperations": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "computerName": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "linuxConfiguration": {
+                                                                                            "properties": {
+                                                                                                "disablePasswordAuthentication": {
+                                                                                                    "type": "boolean"
+                                                                                                },
+                                                                                                "provisionVMAgent": {
+                                                                                                    "type": "boolean"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "secrets": {
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "properties.storageProfile": {
+                                                                                    "properties": {
+                                                                                        "dataDisks": {
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "imageReference": {
+                                                                                            "properties": {
+                                                                                                "offer": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "publisher": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "sku": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "version": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "osDisk": {
+                                                                                            "properties": {
+                                                                                                "caching": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "createOption": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "deleteOption": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "diskSizeGB": {
+                                                                                                    "type": "integer"
+                                                                                                },
+                                                                                                "managedDisk": {
+                                                                                                    "properties": {
+                                                                                                        "storageAccountType": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "osType": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "tags": {
+                                                                                    "properties": {},
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "vmId": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "internalResourceId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "region": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "regionId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "resourceApiName": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "resourceConfigJsonAvailable": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "resourceDetailsAvailable": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "resourceTs": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "resourceType": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "rrn": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "unifiedAssetId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "url": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "saveSearchId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "status": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "For_each_-_collect_alerts_id_in_array": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_-_storing_asset_scan_selected_data": {
+                                            "foreach": "@variables('collect_unifiedid')",
+                                            "actions": {
+                                                "Append_to_array_variable_4_-_storing_the_data_in_variable": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_-_parsing_selected_asset_scan_data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "collect_asset_scan_details",
+                                                        "value": {
+                                                            "Asset Name": "@body('Parse_JSON_-_parsing_selected_asset_scan_data')?['name']",
+                                                            "Breached Policies": "@replace(string(body('Parse_JSON_-_parsing_selected_asset_scan_data')?['scannedPolicies']),'\"',' ')",
+                                                            "Vulnerability Status": "@replace(string(body('Parse_JSON_-_parsing_selected_asset_scan_data')?['vulnerabilityStatus']),'\\\"','')",
+                                                            "assetType": "@body('Parse_JSON_-_parsing_selected_asset_scan_data')?['assetType']"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_JSON_-_parsing_selected_asset_scan_data": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@items('For_each_-_storing_asset_scan_selected_data')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "accountId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "accountName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "alertStatus": {
+                                                                    "properties": {
+                                                                        "critical": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "high": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "informational": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "low": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "medium": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "appNames": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "assetType": {
+                                                                    "type": "string"
+                                                                },
+                                                                "cloudType": {
+                                                                    "type": "string"
+                                                                },
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "overallPassed": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "regionId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "regionName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "resourceConfigJsonAvailable": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "resourceDetailsAvailable": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "rrn": {
+                                                                    "type": "string"
+                                                                },
+                                                                "scannedPolicies": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "labels": {
+                                                                                "items": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "passed": {
+                                                                                "type": "boolean"
+                                                                            },
+                                                                            "severity": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "id",
+                                                                            "name",
+                                                                            "severity",
+                                                                            "labels",
+                                                                            "passed"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "unifiedAssetId": {
+                                                                    "type": "string"
+                                                                },
+                                                                "vulnerabilityStatus": {
+                                                                    "properties": {
+                                                                        "critical": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "high": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "low": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "medium": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_-_parsing_collected_assets_details": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Parse_JSON_-_parsing_collected_assets_details": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@variables('collect_unifiedid')",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "accountId": {
+                                                                "type": "string"
+                                                            },
+                                                            "accountName": {
+                                                                "type": "string"
+                                                            },
+                                                            "alertStatus": {
+                                                                "properties": {
+                                                                    "critical": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "high": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "informational": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "low": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "medium": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "appNames": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "assetType": {
+                                                                "type": "string"
+                                                            },
+                                                            "cloudType": {
+                                                                "type": "string"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "overallPassed": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "regionId": {
+                                                                "type": "string"
+                                                            },
+                                                            "regionName": {
+                                                                "type": "string"
+                                                            },
+                                                            "resourceConfigJsonAvailable": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "resourceDetailsAvailable": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "rrn": {
+                                                                "type": "string"
+                                                            },
+                                                            "scannedPolicies": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "labels": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "passed": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "severity": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "id",
+                                                                        "name",
+                                                                        "severity",
+                                                                        "labels",
+                                                                        "passed"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "unifiedAssetId": {
+                                                                "type": "string"
+                                                            },
+                                                            "vulnerabilityStatus": {
+                                                                "properties": {
+                                                                    "critical": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "high": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "low": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "medium": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "name",
+                                                            "accountId",
+                                                            "accountName",
+                                                            "regionId",
+                                                            "regionName",
+                                                            "cloudType",
+                                                            "rrn",
+                                                            "overallPassed",
+                                                            "scannedPolicies",
+                                                            "alertStatus",
+                                                            "appNames",
+                                                            "unifiedAssetId",
+                                                            "resourceDetailsAvailable",
+                                                            "resourceConfigJsonAvailable",
+                                                            "assetType"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_2_-_collecting_assetID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>Provided entites are not available in Prisma Cloud</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(variables('collect_unifiedid'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each_2_-_collecting_assetID": {
+                                    "foreach": "@body('Assets_Resource_Scan')?['resources']",
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Append_to_array_variable_2": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "collect_unifiedid",
+                                                        "value": "@items('For_each_2_-_collecting_assetID')"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@variables('collect_entities')",
+                                                            "@items('For_each_2_-_collecting_assetID')?['name']"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Assets_Resource_Scan": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Login_Generate_Token": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "password": "@body('Get_secret')?['value']",
+                                            "username": "@parameters('PrismaUserID')"
+                                        },
+                                        "headers": {
+                                            "content-type": "application/json; charset=UTF-8"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['PrismaCloudCSPMCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/login"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3)": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p>No entities mapped to host asset field.</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('collect_entities'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each_-_collecting_entities_in_one_array": {
+                            "foreach": "@body('Parse_JSON_-_entities')",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "collect_entities",
+                                        "value": "@items('For_each_-_collecting_entities_in_one_array')?['properties']?['hostName']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_collecting_entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "For_each_-_collecting_entities_in_one_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent(parameters('PrismaSecretName'))}/value"
+                            }
+                        },
+                        "Initialize_variable-_collecting_unified_id's": {
+                            "runAfter": {
+                                "Initialize_variable_-_collect_asset_scan_details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "collect_unifiedid",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_collect_alerts": {
+                            "runAfter": {
+                                "Parse_JSON_-_entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "collect_alerts",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_collect_alerts_details_": {
+                            "runAfter": {
+                                "Initialize_variable_-_collect_alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "alerts_detail",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_collect_asset_scan_details": {
+                            "runAfter": {
+                                "Initialize_variable_-_collect_alerts_details_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "collect_asset_scan_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_collecting_entities": {
+                            "runAfter": {
+                                "Initialize_variable-_collecting_unified_id's": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "collect_entities",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_entities": {
+                            "runAfter": {},
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "properties": {
+                                                "properties": {
+                                                    "friendlyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "hostName": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "id",
+                                            "kind",
+                                            "properties",
+                                            "type"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "PrismaCloudCSPMCustomConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('PrismacloudcspmcustomconnectorConnectionName'))]",
+                                "connectionName": "[variables('PrismacloudcspmcustomconnectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "PrismaCloudCSPM-Enrichment",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('PrismacloudcspmcustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('PrismacloudcspmcustomconnectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('PrismacloudcspmcustomconnectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/Connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'keyvault')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('keyvault name')]"
+                },
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "nonSecretParameterValues": {
+                    "vaultName": "[parameters('keyvault name')]"
+                }
+            }
+        }
+    ]
+}

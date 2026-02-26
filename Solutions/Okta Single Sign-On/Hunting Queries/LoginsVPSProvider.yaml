@@ -1,0 +1,41 @@
+id: f262fc3a-0acc-4c8b-9a73-fdc09f55fff2
+name: Logins originating from VPS Providers
+description: |
+  'This query searches for successful logons from known VPS provider network ranges.
+   This is not an exhaustive list of VPS provider ranges but covers some of the most prevalent providers observed.'
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+  - connectorId: OktaSSOv2
+    dataTypes:
+      - OktaSSO
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - Okta
+query: |
+  let IP_Data = (externaldata(network:string)
+  [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/VPS_Networks.csv"] with (format="csv"));
+  OktaSSO
+  | where eventType_s =~ "user.session.start"
+  | where outcome_result_s =~ "SUCCESS"
+  | evaluate ipv4_lookup(IP_Data, client_ipAddress_s, network, return_unmatched = false)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,
+  outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s
+  | extend Account_0_Name = actor_displayName_s
+  | extend IP_0_Address = client_ipAddress_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: client_ipAddress_s
+version: 1.0.0

@@ -1,0 +1,130 @@
+Parser:
+  Title: Network Session ASIM parser for WatchGuard Fireware OS
+  Version: '0.1.4'
+  LastUpdated: Aug 29th, 2022
+Product:
+  Name: WatchGuard Fireware OS
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.4'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing WatchGuard Fireware OS logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionWatchGuardFirewareOS
+EquivalentBuiltInParser: _ASim_NetworkSession_WatchGuardFirewareOS
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Parser=(disabled:bool=false){
+    let EventLookup=datatable(DvcAction:string,EventResult:string,EventSeverity:string)
+    [
+        "Allow","Success","Informational"
+        , "Deny","Failure","Low"
+    ];
+    let SyslogParser = (T:(SyslogMessage:string)) {
+        T
+        | parse-kv SyslogMessage as (geo_src:string
+        , geo_dst:string
+        , src_user:string
+        , dst_user:string
+        , duration:int
+        , sent_bytes:long
+        , rcvd_bytes:long
+        , fqdn_src_match:string
+        , fqdn_dst_match:string) with (pair_delimiter=' ', kv_delimiter='=', quote='"')
+        | project-rename SrcGeoCountry = geo_src
+        , DstGeoCountry = geo_dst
+        , SrcUsername = src_user
+        , DstUsername = dst_user
+        , NetworkDuration = duration
+        , SrcBytes = sent_bytes
+        , DstBytes = rcvd_bytes
+        , DstDomain = fqdn_dst_match
+        , SrcDomain = fqdn_src_match
+        | extend DvcAction = extract(@'" (Allow|Deny) ', 1, SyslogMessage)
+        | lookup EventLookup on DvcAction
+        | extend DstDomainType = iif(isnotempty(DstDomain),"FQDN","")
+        | extend SrcDomainType = iif(isnotempty(SrcDomain),"FQDN","")
+        | extend NetworkProtocol = extract(@" (tcp|udp|icmp|igmp) ", 1, SyslogMessage)
+        | extend SrcUsernameType = case(isempty(SrcUsername), ""
+          , countof(SrcUsername, "@") == 1, "UPN"
+          , "Simple"
+        )
+        | extend DstUsernameType = case(isempty(DstUsername), ""
+          , countof(DstUsername, "@") == 1, "UPN"
+          , "Simple"
+        )
+        | parse SyslogMessage with * "repeated " EventCount:int " times" *
+        | extend EventCount = iif(isnotempty(EventCount), EventCount, toint(1))
+        | project-away SyslogMessage
+    };
+    let AllSyslog = 
+    Syslog
+    | where not(disabled)
+    | where SyslogMessage has_any('msg_id="3000-0148"' 
+        , 'msg_id="3000-0149"' 
+        , 'msg_id="3000-0150"'
+        , 'msg_id="3000-0151"'
+        , 'msg_id="3000-0173"'
+    ) and SyslogMessage !has 'msg="DNS Forwarding" '
+    | project TimeGenerated, SyslogMessage, HostName
+    ;
+    let Parse1 = 
+    AllSyslog
+    | where SyslogMessage !has "icmp" and SyslogMessage !has "igmp" and SyslogMessage !has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} (tcp|udp) \d{2,5} \d{2,5} " SrcIpAddr " " DstIpAddr " " SrcPortNumber:int @" " DstPortNumber:int @" " *
+    | invoke SyslogParser()
+    ;
+    let Parse2 = 
+    AllSyslog
+    | where SyslogMessage !has "icmp" and SyslogMessage !has "igmp" and SyslogMessage has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" (tcp|udp) " SrcIpAddr " " DstIpAddr " " SrcPortNumber:int @" " DstPortNumber:int @" " *
+    | invoke SyslogParser()
+    ;
+    let Parse3 = 
+    AllSyslog
+    | where SyslogMessage has "icmp" and SyslogMessage !has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} icmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " * 
+    | invoke SyslogParser()
+    ;
+    let Parse4 = 
+    AllSyslog
+    | where SyslogMessage has "icmp" and SyslogMessage has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" icmp " SrcIpAddr " " DstIpAddr " " * 
+    | invoke SyslogParser()
+    ;
+    let Parse5 = 
+    AllSyslog
+    | where SyslogMessage has "igmp" and SyslogMessage !has "3000-0151"
+    | parse kind=regex flags=U SyslogMessage with * @'" (Allow|Deny) ' RuleName @" \d{2,5} igmp \d{2,5} \d{1,5} " SrcIpAddr " " DstIpAddr " " * 
+    | invoke SyslogParser()
+    ;
+    union isfuzzy=false Parse1, Parse2, Parse3, Parse4, Parse5
+    | extend EventSchema = "NetworkSession"
+        , EventSchemaVersion = "0.2.4"
+        , EventVendor = "WatchGuard"
+        , EventProduct = "Fireware"
+        , EventType = "NetworkSession"
+        , DvcHostname = HostName
+        , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+            , DstIpAddr contains ":", "IPv6"
+            , "")
+        , NetworkProtocol = toupper(NetworkProtocol)
+        , NetworkDuration = toint(NetworkDuration * toint(1000))
+        , NetworkBytes = SrcBytes + DstBytes
+        , EventEndTime = TimeGenerated
+        , EventStartTime = TimeGenerated
+        , Src = SrcIpAddr
+        , Dst = DstIpAddr
+        , Duration = NetworkDuration
+        , User = DstUsername
+        , IpAddr = SrcIpAddr
+    | project-rename Dvc = HostName
+  };
+  Parser (disabled)

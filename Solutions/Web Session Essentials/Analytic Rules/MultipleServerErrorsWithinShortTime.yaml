@@ -1,0 +1,70 @@
+id: a59ba76c-0205-4966-948e-3d5640140688
+name: Detect instances of multiple server errors occurring within a brief period of time (ASIM Web Session)
+description: |
+  'This detection mechanism identifies situations where multiple server errors originate from a single source within a limited time frame.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Impact
+relevantTechniques:
+  - T1190
+  - T1133
+  - T1498
+query: |
+  // HTTP response status codes indicate whether a specific HTTP request has been successfully completed.
+  // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+  let threshold = 100; // You can update threshold value as per your environment
+  _Im_WebSession(starttime=ago(1h))
+  | where toint(EventResultDetails) between (500 .. 599)
+  | summarize
+      TotalErrorCount = count(),
+      URLs=make_set(Url, 100),
+      EventStartTime = min(TimeGenerated),
+      EventEndTime = max(TimeGenerated),
+      EventResultDetailsSet=make_set(EventResultDetails,10)
+      by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname
+  | where TotalErrorCount > threshold
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), ""), Threshold=threshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  TotalErrorCount: TotalErrorCount
+  RequestURLs: URLs
+  ErrorThreshold: Threshold
+  EventResultSet: EventResultDetailsSet
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+alertDetailsOverride:
+  alertDisplayNameFormat: "High number of server errors originated by user '{{SrcUsername}}' from IP address '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "The client has made a total of '{{TotalErrorCount}}' requests to URLs '{{URLs}}', 
+                            which have resulted in server errors. It is recommended to thoroughly investigate this alert to determine the underlying cause behind this 
+                            significant number of errors. For detailed information regarding the specific errors encountered, please refer to the following link:
+                            https://developer.mozilla.org/en-US/docs/Web/HTTP/Status."
+version: 1.0.0
+kind: Scheduled

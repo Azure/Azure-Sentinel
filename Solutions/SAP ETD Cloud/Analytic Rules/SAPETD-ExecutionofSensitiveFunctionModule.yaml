@@ -1,0 +1,72 @@
+id: c6111e06-11e2-45eb-86ef-28313a06db35
+kind: Scheduled
+name: SAP ETD - Execution of Sensitive Function Module
+description: |
+  Identifies execution of a sensitive ABAP Function Module using the watchlists provided by the Microsoft Sentinel Solution for SAP
+  
+  Source Action: Execute a sensitive function module directly using SE37.
+  
+  *Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPETDAlerts
+    dataTypes:
+      - SAPETDAlerts_CL
+queryFrequency: 5m
+queryPeriod: 60m
+triggerOperator: gt
+triggerThreshold: 0
+tactics: 
+  - Discovery
+relevantTechniques: []
+query: |
+  let AuditTimeAgo = 60m;
+  let minThreshold= 1;
+  let minScore= 50;
+  let SenseModules = _GetWatchlist('SAP - Sensitive Function Modules')
+  | project trimmedFunctionModule = trim(@"\s+", FunctionModule);
+  SAPETDAlerts_CL
+  | where TimeGenerated > ago(AuditTimeAgo)
+  | where Threshold >= minThreshold and Score >= minScore
+  | where PatternName == "Critical Function module call in Test framework calls"
+  | mv-expand NormalizedTriggeringEvents
+  | extend sapOriginalEvent = tostring(NormalizedTriggeringEvents.OriginalEvent)
+  | extend Id_ = NormalizedTriggeringEvents.Id
+  | extend extracted_user_ip = tostring(NormalizedTriggeringEvents.NetworkIPAddressInitiator)
+  | extend extracted_sap_user = tostring(NormalizedTriggeringEvents.UserAccountActing)
+  | extend extracted_sid = tostring(NormalizedTriggeringEvents.SystemIdActor)
+  | extend extracted_instance_name = tostring(NormalizedTriggeringEvents.NetworkHostnameActor)
+  | extend extracted_instance_host = tostring(NormalizedTriggeringEvents.ServiceInstanceName)
+  | extend extracted_function_module = trim(@"\s+", tostring(NormalizedTriggeringEvents.ServiceFunctionName))
+  | extend extracted_system_role = tostring(NormalizedTriggeringEvents.SystemRoleReporter)
+  | where extracted_function_module in (SenseModules)
+  | extend AlertName = strcat("SAP ETD - Sensitive Function Module ", extracted_function_module," was executed by user ", extracted_sap_user, 
+  " in a ", tolower(extracted_system_role), " system"), Dummy = " "
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: extracted_sid
+      - identifier: InstanceName
+        columnName: extracted_instance_name
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: extracted_instance_host
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: extracted_user_ip
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP ETD - {{PatternName}} '
+  alertDescriptionFormat: |
+    {{PatternDescription}}
+
+    Source: SAP ETD
+customDetails:
+  SAP_User: extracted_sap_user
+  ETD_AlertNumber: AlertId
+version: 1.0.0

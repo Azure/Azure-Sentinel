@@ -18,29 +18,19 @@
   },
   "resources": [
     {
-      "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2017-03-15-preview",
-      "name": "[parameters('Workspace')]",
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimDnsInfobloxNIOS')]",
       "location": "[parameters('WorkspaceRegion')]",
-      "resources": [
-        {
-          "type": "savedSearches",
-          "apiVersion": "2020-08-01",
-          "name": "ASimDnsInfobloxNIOS",
-          "dependsOn": [
-            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
-          ],
-          "properties": {
-            "etag": "*",
-            "displayName": "DNS activity ASIM parser for Infoblox NIOS",
-            "category": "ASIM",
-            "FunctionAlias": "ASimDnsInfobloxNIOS",
-            "query": "let Sources_by_SourceType=(sourcetype:string){_GetWatchlist('ASimSourceType') | where SearchKey == tostring(sourcetype) | extend Source=column_ifexists('Source','') | where isnotempty(Source)| distinct Source };\nlet Infoblox=(disabled:bool=false){\n  let RawData = Syslog | where not(disabled) | where ProcessName == \"named\" and SyslogMessage has \"client\"\n    | where Computer in (Sources_by_SourceType('InfobloxNIOS'))\n    | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\n    | extend ResponseTime = todatetime(Parser[0]),\n             Log_Type = tostring(Parser[1]),\n             RawData_subString = tostring(Parser[3])\n    | where Log_Type == \"client\"\n    | project-away Parser;\n  RawData \n  | extend dnsdata=tostring(extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0][3])\n  | extend EventSubType=iff(dnsdata has \"response:\", \"response\", \"request\")\n  | extend dnsclient=iff(EventSubType==\"response\"\n              //<client ip>#port <UDP or TCP>: [view: DNS view] query: <queried domain name> <class name> <type name> response: <rcode> <flags> [<RR in text format>; [<RR in text format>;] ...]\n              , extract_all(@\"^(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+):? (UDP|TCP):? (view: DNS view)?query: (\\S+) ([A-Z]+) (\\S+) response:? ([A-Z]+) (\\S+)(([^;]+;\\s*)*)\",dnsdata)[0]\n              //<client IP>#<port> query: <query_Domain name> <class name> <type name> <- or +>[SETDC] <(name server ip)>\n              , extract_all(@\"^(\\@[a-z0-9]+\\s)?([0-9\\.]+)\\#(\\d+):? query: (\\S+) (\\S+) (\\S+) ([+-]) \\(([0-9.]+)\\)\",dnsdata)[0])\n  | project-away SyslogMessage\n  | extend\n  // ******************* Mandatory\n       EventCount=int(1),\n       EventStartTime=todatetime(TimeGenerated),\n       EventEndTime=todatetime(TimeGenerated),\n       EventProduct=\"NIOS\",\n       EventVendor=\"Infoblox\",\n       EventSchema=\"Dns\",\n       EventSchemaVersion=\"0.1.3\",\n       EventType=\"Query\", \n      EventResult=iff(EventSubType==\"request\" or tostring(dnsclient[8])==\"NOERROR\",\"Success\",\"Failure\"),\n       EventResultDetails=iff (EventSubType==\"response\",tostring(dnsclient[8]),\"\"),\n       // TimeGenerated, // not handled by schema, but we need to preserve it\n       SrcIpAddr = tostring(dnsclient[1]),\n       EventSubType=iff(dnsclient has \"response:\", \"response\",\"request\"), \n      // \n      SrcPortNumber = toint(dnsclient[2]),\n      NetworkProtocol = iff (EventSubType==\"response\", tostring(dnsclient[3]),\"\"),        \n      DnsQuery = iff (EventSubType==\"response\",tostring(dnsclient[5]), tostring(dnsclient[3])),\n      DnsQueryClassName = iff (EventSubType==\"response\",tostring(dnsclient[6]),tostring(dnsclient[4])),\n      DnsQueryTypeName = iff (EventSubType==\"response\",tostring(dnsclient[7]),tostring(dnsclient[5])),\n      DnsResponseCodeName = iff (EventSubType==\"response\",tostring(dnsclient[8]),\"\"),\n      DnsFlags =iff (EventSubType==\"response\", tostring(dnsclient[9]),tostring(dnsclient[6])),\n      // \n      DnsResponseName = iff (EventSubType==\"response\",tostring(dnsclient[-2]),\"\"),\n      DstIpAddr=iff(EventSubType==\"response\",\"\",dnsclient[-1])\n | project-rename\n     // * Added in version 0.1.1\n       DvcHostname=Computer\n       , DvcIpAddr=HostIP\n     // *\n     // **************Aliases\n  | extend\n    Dvc=DvcHostname,\n    Domain=DnsQuery,\n    IpAddr=SrcIpAddr,\n    Src=SrcIpAddr,\n    Dst=DstIpAddr,\n  // Backward Compatibility\n    Query=DnsQuery\n    , QueryTypeName=DnsQueryTypeName\n    , ResponseCodeName=DnsResponseCodeName\n    , QueryClassName=DnsQueryClassName\n    , Flags=DnsFlags\n  };\n  Infoblox(disabled)",
-            "version": 1,
-            "functionParameters": "disabled:bool=False"
-          }
-        }
-      ]
+      "properties": {
+        "etag": "*",
+        "displayName": "DNS activity ASIM parser for Infoblox NIOS",
+        "category": "ASIM",
+        "FunctionAlias": "ASimDnsInfobloxNIOS",
+        "query": "let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;\nlet response = (disabled: boolean=false) {\n   SyslogProjected\n   | where not(disabled)\n   | where ProcessName == \"named\" and SyslogMessage has_all (\"client\", \"query:\", \"response:\")\n   | parse SyslogMessage with *\n       \"client \" SrcIpAddr: string\n       \"#\" SrcPortNumber: string\n       \" \" NetworkProtocol: string\n       \": query: \" DnsQuery: string\n       \" \" DnsQueryClassName: string\n       \" \" DnsQueryTypeName: string\n       \" response: \" DnsResponseCodeName: string\n       \" \" DnsFlags: string\n   | extend DnsResponseNameIndex= indexof(DnsFlags, \" \")\n   | extend DnsResponseName =iif(DnsResponseNameIndex != \"-1\", substring(DnsFlags, DnsResponseNameIndex+1), \"\")\n   | extend DnsFlags =iif(DnsResponseNameIndex != \"-1\", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)\n   | extend SrcPortNumber = iif(SrcPortNumber has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)\n   | extend SrcPortNumber = toint(SrcPortNumber)\n   | extend EventSubType = \"response\"\n   | project-away SyslogMessage, ProcessName, DnsResponseNameIndex\n };\n let request = (disabled: boolean=false) {\n   SyslogProjected \n   | where not(disabled)\n   | where ProcessName == \"named\" and SyslogMessage has_all (\"client\", \"query:\") and SyslogMessage !has \"response:\"\n   | extend SyslogMessage = (split(SyslogMessage,\"client \"))[1]\n   | extend SyslogMessage = iif(SyslogMessage startswith \"@\", (substring(SyslogMessage, indexof(SyslogMessage, \" \")+1)), SyslogMessage)\n   | extend SyslogMessage = replace_string(SyslogMessage,\"\\\\ \",\"@@@\")\n   | parse SyslogMessage with \n       SrcIpAddr: string\n       \"#\" SrcPortNumber: int *\n       \"query: \" DnsQuery: string\n       \" \" DnsQueryClassName: string\n       \" \" DnsQueryTypeName: string\n       \" \" DnsFlags: string\n   | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')\n   | extend DnsFlags= tostring((split(DnsFlags,\" \"))[0])\n   | extend \n       EventSubType = \"request\",\n       DnsResponseCodeName = \"NA\"\n   | project-away SyslogMessage, ProcessName\n };\n let parser = (disabled:boolean=false) {\n   union response (disabled), request (disabled)\n   | extend\n       EventCount=int(1),\n       EventStartTime=todatetime(TimeGenerated),\n       EventEndTime=todatetime(TimeGenerated),\n       EventProduct=\"NIOS\",\n       EventVendor=\"Infoblox\",\n       EventSchema=\"Dns\",\n       EventSchemaVersion=\"0.1.3\",\n       EventType=\"Query\", \n       EventResult=iff(EventSubType==\"request\" or DnsResponseCodeName==\"NOERROR\",\"Success\",\"Failure\"),\n       DvcIpAddr=iff (HostIP == \"Unknown IP\", \"\", HostIP)\n   // -- Aliases\n   | invoke _ASIM_ResolveDvcFQDN (\"Computer\")\n   | project-away Computer\n   | extend\n       Dvc=DvcHostname,\n       Domain=DnsQuery,\n       IpAddr=SrcIpAddr,\n       Src=SrcIpAddr,\n       EventResultDetails = DnsResponseCodeName\n   | project-away HostIP\n };\n parser (disabled)",
+        "version": 1,
+        "functionParameters": "disabled:bool=False"
+      }
     }
   ]
 }

@@ -1,17 +1,17 @@
 Parser:
   Title: Web Session ASIM filtering parser for Zscaler ZIA
-  Version: '0.4'
-  LastUpdated: Jan 13, 2022
+  Version: '0.6.1'
+  LastUpdated: Nov 3, 2025
 Product:
   Name: Zscaler ZIA Proxy
 Normalization:
   Schema: WebSession
-  Version: '0.1.0'
+  Version: '0.2.6'
 References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Zscaler Connector
   Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#zscaler
 - Title: Zscaler Sentinel deployment guide
@@ -99,7 +99,8 @@ ParserQuery: |
       * "rulelabel=" RuleName:string ";"
       "ruletype=" ruletype:string ";"
       "urlclass=" urlclass:string ";"
-      "devicemodel=" * 
+      "devicemodel=;" devicemodel:string "," * 
+    // "devicemodel=" * 
    // -- Post filtering
   | extend
     // -- Adjustment to support both old and new CSL fields.
@@ -121,7 +122,7 @@ ParserQuery: |
       extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
     ),
     ThreatRiskLevel = coalesce(
-      toint(column_ifexists("fieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("FieldDeviceCustomNumber1", int(null))),
       toint(column_ifexists("DeviceCustomNumber1",int(null)))
     ),
     EventCount=int(1), 
@@ -129,7 +130,7 @@ ParserQuery: |
     EventVendor = "Zscaler", 
     EventProduct = "ZIA Proxy", 
     EventSchema = "WebSession", 
-    EventSchemaVersion="0.1.0", 
+    EventSchemaVersion="0.2.3", 
     EventType = 'HTTPsession',
     EventEndTime=TimeGenerated
   // -- Field mapping
@@ -148,7 +149,9 @@ ParserQuery: |
     SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
     UrlCategory = DeviceCustomString2,
     ThreatName = DeviceCustomString5,
-    FileMD5 = DeviceCustomString6
+    FileMD5 = DeviceCustomString6,
+    EventOriginalSeverity = LogSeverity,
+    EventMessage = Message
   // -- Calculated fields
   | extend
     Url = iff (RequestURL == "", "", strcat (tolower(NetworkApplicationProtocol), "://", url_decode(RequestURL))),
@@ -160,8 +163,8 @@ ParserQuery: |
     DstAppName = iff (DstAppName == "General Browsing", "", DstAppName),
     DstFQDNparts = split (DstFQDN, "."),
     DstHostnameNotAddr = DstIpAddr != DstFQDN,
-    DstBytes = toint(ReceivedBytes),
-    SrcBytes = toint(SentBytes),
+    DstBytes = tolong(ReceivedBytes),
+    SrcBytes = tolong(SentBytes),
     DvcHostname = tostring(Computer)
   | extend
     DstHostname = iff (DstHostnameNotAddr, tostring(DstFQDNparts[0]), DstFQDN),
@@ -176,6 +179,7 @@ ParserQuery: |
   // -- Aliases
   | extend
     Dvc = DvcHostname,
+    Hostname = DstHostname,
     UserAgent = HttpUserAgent,
     User = SrcUsername,
     HttpStatusCode = EventResultDetails,
@@ -183,10 +187,10 @@ ParserQuery: |
     Src = SrcNatIpAddr,
     Dst = DstFQDN,
     Hash = FileMD5,
-    Hostname = DstHostname,
-    FileHashType = iff(FileMD5 == "", "", "MD5")
-  | project-away 
-    DstFQDNparts, AdditionalExtensions, DeviceCustom*
+    Rule = RuleName,
+    HashType = iff(FileMD5 == "", "", "MD5")
+  | project-away DstFQDNparts
+  | project-away AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, Activity, EventOutcome, FieldDevice*, ExtID, Reason, ReportReferenceLink, urlclass, ruletype, DstHostnameNotAddr
   };
   parser (starttime, endtime
      , srcipaddr_has_any_prefix, ipaddr_has_any_prefix

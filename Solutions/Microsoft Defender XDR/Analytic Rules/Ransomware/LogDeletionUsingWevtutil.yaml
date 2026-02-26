@@ -1,0 +1,37 @@
+id: 515d0bba-b297-4f83-8280-20ff7f27ecb1
+name: Clearing of forensic evidence from event logs using wevtutil
+description: |
+  This query checks for attempts to clear at least 10 log entries from event logs using wevtutil. Clearing event logs can be a sign of ransomware activity, as ransomware often attempts to cover its tracks by deleting logs.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1070
+query: |
+  // Look for use of wevtutil to clear multiple logs
+  DeviceProcessEvents
+  | where ProcessCommandLine has "WEVTUTIL" and ProcessCommandLine has "CL"
+  | summarize LogClearCount = dcount(tostring(ProcessCommandLine)), ClearedLogList = make_set(ProcessCommandLine, 100000) by DeviceId, DeviceName, bin(TimeGenerated, 5m)
+  | where LogClearCount > 10
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0
+kind: Scheduled

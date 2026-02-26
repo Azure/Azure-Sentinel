@@ -27,20 +27,40 @@ Workbooks and Hunting queries deployed by Solutions may miss correct metadata in
 A central option to uninstall all content associated with an Microsoft Sentinel Solution is not available. Content associated with a Solution can be deleted by exercising the delete option available in the respective galleries for each content type in alignment with the feature gallery UX support (some feature galleries may not provide a content delete option by design). 
 
 ## Known Issue #6 - CSP Program Enablement
-Few Microsoft Sentinel solutions are selectively enabled for CSP Program (Cloud Service Providers) in Content hub. 
+All Microsoft Sentinel solutions are now enabled for CSP Program (Cloud Service Providers) in Content hub. If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription and encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers', please contact Microsoft Support.
 
-* Following solutions in Microsoft Sentinel Content hub have been enabled for CSP Program and should work as expected while installing the solution from a CSP subscription.  
-1. Cloudflare
-2. Log4j Vulnerability Detection
-3. Training Lab
-4. RiskIQ Illuminate
-5. Crowdstrike Falcon Endpoint Protection
-6. Palo Alto Prisma
-7. Imperva WAF Cloud
-8. Cybersecurity Maturity Model Certification CMMC
-9. Sophos Endpoint Protection
-
-* If you try to install (Create) a Microsoft Sentinel solution in a CSP subscription for those solutions not yet enabled for CSP Program (not from the list above), you'll encounter the error message 'This offer is not available for subscriptions from Microsoft Azure Cloud Solution Providers'. 
 
 ## Known Issue #7 - Private solutions in Content hub
 Private solutions or [Azure Marketplace private offers](https://docs.microsoft.com/azure/marketplace/private-plans) are not currently supported in Microsoft Sentinel Content hub. 
+
+## Known Issue #8 - Error "Detected multiple functions with the same name:"
+**Background:** As part of the consolidation of content as solutions in content hub, corresponding parsers are also packaged as part of the solutions. If a customer has used the data connector before, the installation instructions guided them to create a parser manually. Now, when customers install the solution, it will cause the problem as parser with the same name exists in their workspace. 
+
+**Cause of the error:** Log Analytics throws this error when more than one Function [parser] is created with the same name.
+
+**Resolution Steps:** 
+Delete the installed Functions manually and reinstall the solution by following the steps below 
+1.	Go to your Sentinel workspace and select logs from the left menu.
+2.	Click on Functions and search for the name of the parser (part of the error text) and once it is visible hover over the name and click on delete.
+NOTE: After Deleting the parser it will take 5-10 min to reflect.
+3.	Repeat step 2 for all the parsers that exist for the name that is shown in the error.
+4.	Reinstall the solution
+5.	Verify that there is only one instance of parser installed.
+   
+![image](https://github.com/Azure/Azure-Sentinel/assets/142014775/a921cb67-a124-46f8-b116-9fbfe5a89d0a)
+
+The Data Connectors blade performs a connectivity check of all connectors on-load - that connectivity check is based on a Sentinel (Log Analytics) Workspace Function (not a Function App Resource in Sentinel’s Resource Group.)
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/142014775/34f5bc92-6ad1-4f96-8d99-e19eea512172)
+
+To delete an existing Kusto Function (or Parser), click and hover over the function name, a flyover panel appears with the delete option:
+
+![image](https://github.com/Azure/Azure-Sentinel/assets/142014775/5c46754d-964f-4edd-8010-c38fd4b51589)
+
+Note after deleting the function named in the workspace error message, re-searching for it should find the duplicate function again. If manually recreating it is necessary, many Data Connectors deployed from the Content Hub will directly link to the 'Kusto Function' Parser KQL source code. These can also be found by browsing the [source repository](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions) for Content Hub solution packages:  Drill down under the solution's folder > Data Connectors > Parsers. 
+
+## Known Issue #9 - Limitations of unified system in Oracle Database Audit data connector"
+However, there are limitations with Oracle database unified and syslog limitations, which may require to make changes at the Oracle side. For example, you might need to create and enable an audit policy to log all the events, restart the database, and add the syslog config.
+
+If the rule is not giving appropriate results, it might be due to the complexity of the SQL injection patterns or the configuration of the Oracle servers. It’s recommended to revalidate the SQL injection patterns rule and adjust it according to the specific needs and configurations of the Oracle servers.
+

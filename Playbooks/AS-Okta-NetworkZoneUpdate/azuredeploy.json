@@ -1,0 +1,463 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Okta-NetworkZoneUpdate", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will add the IP address from Microsoft Sentinel Incidents to an Okta Network Zone of your choosing.",
+        "prerequisites": "1. An Okta admin account is needed, along with an API token. 2. The id of an Okta network zone is also needed. 3. A Microsoft Azure key vault containing the Okta API token must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Okta-NetworkZoneUpdate",
+        "lastUpdateTime": "2022-09-29T18:18:05Z",
+        "entities": ["IP"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Okta", "Network Zone"], 
+        "support": {
+            "tier": "developer"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Okta-NetworkZoneUpdate",
+            "type": "string"
+        },
+        "OktaSubdomain": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the subdomain (tenant) in the Okta Org URL"
+            }
+        },
+        "OktaNetworkZone": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Okta Network Zone that the Sentinel IPs will be added to"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the Okta API token"
+            }
+        },
+        "SecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the value of the Okta API token"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Incident_Contains_IPs": {
+                            "actions": {
+                                "For_Each_-_Network_Zone": {
+                                    "foreach": "@body('Parse_JSON_-_Network_Zone_Response')",
+                                    "actions": {
+                                        "Condition_-_Check_for_Network_Zone_Name_Match": {
+                                            "actions": {
+                                                "Condition_-_Check_for_Existing_Gateways": {
+                                                    "actions": {
+                                                        "For_Each_-_Existing_Gateway": {
+                                                            "foreach": "@items('For_Each_-_Network_Zone')['gateways']",
+                                                            "actions": {
+                                                                "Append_to_string_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToStringVariable",
+                                                                    "inputs": {
+                                                                        "name": "Gateways",
+                                                                        "value": "\n{\n         \"type\": \"@{items('For_Each_-_Existing_Gateway')?['type']}\",\n          \"value\": \"@{items('For_Each_-_Existing_Gateway')?['value']}\"\n },"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Variable_-_Gateways": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_Each_-_Network_Zone')['gateways']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "For_Each_-_Incident_IP": {
+                                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                                    "actions": {
+                                                        "Append_New_Values_to_Gateways": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "Gateways",
+                                                                "value": "\n{\n         \"type\": \"CIDR\",\n          \"value\": \"@{concat(items('For_Each_-_Incident_IP')?['Address'], '/32')}\"\n },"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Condition_-_Check_for_Existing_Gateways": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "HTTP_-_Update_Network_Zone": {
+                                                    "runAfter": {
+                                                        "For_Each_-_Incident_IP": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "gateways": "@json(concat(substring(variables('Gateways'), 0, sub(length(variables('Gateways')), 1)), ']'))",
+                                                            "id": "@{items('For_Each_-_Network_Zone')['id']}",
+                                                            "name": "@{items('For_Each_-_Network_Zone')['name']}",
+                                                            "status": "@{items('For_Each_-_Network_Zone')['status']}",
+                                                            "type": "@{items('For_Each_-_Network_Zone')['type']}",
+                                                            "usage": "@{items('For_Each_-_Network_Zone')['usage']}"
+                                                        },
+                                                        "headers": {
+                                                            "Accept": "application/json",
+                                                            "Authorization": "SSWS @{body('Get_Secret')?['value']}",
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "method": "PUT",
+                                                        "uri": "[concat('https://', parameters('OktaSubdomain') ,'.okta.com/api/v1/zones/@{items(''For_Each_-_Network_Zone'')[''id'']}')]"
+                                                    }
+                                                },
+                                                "Set_Variable_-_Gateways": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Gateways",
+                                                        "value": "["
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@items('For_Each_-_Network_Zone')['name']",
+                                                            "[parameters('OktaNetworkZone')]"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_-_Network_Zone_Response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "HTTP_-_Get_Network_Zones": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Accept": "application/json",
+                                            "Authorization": "SSWS @{body('Get_Secret')?['value']}",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "GET",
+                                        "uri": "[concat('https://', parameters('OktaSubdomain') ,'.okta.com/api/v1/zones')]"
+                                    }
+                                },
+                                "Parse_JSON_-_Network_Zone_Response": {
+                                    "runAfter": {
+                                        "HTTP_-_Get_Network_Zones": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Get_Network_Zones')",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "_links": {
+                                                        "properties": {
+                                                            "deactivate": {
+                                                                "properties": {
+                                                                    "hints": {
+                                                                        "properties": {
+                                                                            "allow": {
+                                                                                "items": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "href": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "self": {
+                                                                "properties": {
+                                                                    "hints": {
+                                                                        "properties": {
+                                                                            "allow": {
+                                                                                "items": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "href": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "created": {
+                                                        "type": "string"
+                                                    },
+                                                    "gateways": {},
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastUpdated": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "proxies": {},
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "system": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "type": {
+                                                        "type": "string"
+                                                    },
+                                                    "usage": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "type",
+                                                    "id",
+                                                    "name",
+                                                    "status",
+                                                    "usage",
+                                                    "created",
+                                                    "lastUpdated",
+                                                    "system",
+                                                    "gateways",
+                                                    "proxies",
+                                                    "_links"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Variable_-_Gateways": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Get_Secret": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Initialize_Variable_-_Gateways": {
+                            "runAfter": {
+                                "Get_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Gateways",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

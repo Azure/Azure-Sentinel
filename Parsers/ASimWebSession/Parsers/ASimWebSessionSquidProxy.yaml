@@ -1,17 +1,17 @@
 Parser:
   Title: Web Session ASIM parser for Squid Proxy
-  Version: '0.2'
-  LastUpdated: Jan 13, 2022
+  Version: '0.4.0'
+  LastUpdated: Jun 05, 2025
 Product:
   Name: Squid Proxy
 Normalization:
   Schema: WebSession
-  Version: '0.1.0'
+  Version: '0.2.6'
 References:
 - Title: ASIM Web Session Schema
   Link: https://aka.ms/ASimWebSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Squid Proxy Connector
   Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#squid-proxy-preview
 - Title: Squid native access log format
@@ -28,13 +28,16 @@ ParserQuery: |
   let parser=(disabled:bool=false){
   SquidProxy_CL | where not(disabled)
     | extend AccessRawLog = extract_all(@"^(\d+\.\d+)\s+(\d+)\s(\S+)\s([A-Z_]+)\/(\d+)\s(\d+)\s([A-Z]+)\s(\S+)\s(\S+)\s([A-Z_]+)\/(\S+)\s(\S+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12]),RawData)[0]
+    | extend Computer = columnifexists("Computer", "")
+    | project-rename
+      Dvc = Computer
     | extend
       EventEndTime = unixtime_milliseconds_todatetime(todouble(tostring(AccessRawLog[0]))*1000), 
       NetworkDuration = toint(AccessRawLog[1]), 
       SrcIpAddr = tostring(AccessRawLog[2]), 
       EventOriginalResultDetails = strcat (tostring(AccessRawLog[3]), ";", PeerStatus = tostring(AccessRawLog[9])), 
       EventResultDetails = tostring(AccessRawLog[4]), 
-      DstBytes = toint(AccessRawLog[5]), 
+      DstBytes = tolong(AccessRawLog[5]), 
       HttpRequestMethod = tostring(AccessRawLog[6]), 
       // -- Squid URL might be shortened by including ellipsis (...) instead of a section in the middle. This may impact the hostname part as well.
       Url = tostring(AccessRawLog[7]), 
@@ -47,25 +50,21 @@ ParserQuery: |
       EventProduct = 'Squid Proxy', 
       EventVendor = 'Squid', 
       EventSchema = 'WebSession', 
-      EventSchemaVersion = '0.1.0', 
+      EventSchemaVersion = '0.2.3', 
       EventType = 'HTTPsession' 
     // -- Value normalization
     | extend
-      UsernameType = "Unknown",
+      SrcUsernameType = "Simple",
       SrcUsername = iff (SrcUsername == "-", "", SrcUsername), 
       HttpContentType = iff (HttpContentType in (":", "-"), "", HttpContentType), 
       EventResult = iff (EventOriginalResultDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or toint(EventResultDetails) >= 400, "Failure", "Success"),
       DstIpAddrIsHost = DstIpAddr matches regex @"^[^\:]*[a-zA-Z]$"
     | extend 
-      DstFQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
+      FQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)["Host"])),
       DstIpAddr = iif (DstIpAddr == "-" or DstIpAddrIsHost, "", DstIpAddr)
     | extend 
-      EventSeverity = iff(EventResult == "Success", "Informational", "Low"),
-      DstFQDNparts = split (DstFQDN, ".")
-    | extend    
-      DstHostname = tostring(DstFQDNparts[0]),
-      DstDomain = strcat_array(array_slice(DstFQDNparts,1,-1),"."),
-      DstDomainType = "FQDN"
+      EventSeverity = iff(EventResult == "Success", "Informational", "Low")
+    | invoke _ASIM_ResolveDstFQDN ('FQDN')
    // -- aliases
     | extend 
       EventStartTime = EventEndTime,
@@ -76,6 +75,6 @@ ParserQuery: |
       Src = SrcIpAddr,
       Dst = DstHostname,
       Hostname = DstHostname
-    | project-away AccessRawLog, RawData
+    | project-away AccessRawLog, RawData, *_s, DstIpAddrIsHost
   };
-  parser (disabled)
+  parser (disabled=disabled)

@@ -1,0 +1,34 @@
+id: 674547ea-1823-4a88-b2fc-b5ac53b3ccdd
+Function:
+  Title: Parser for NetwrixAuditor
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: NetwrixAuditor
+FunctionAlias: NetwrixAuditor
+FunctionQuery: |
+    CommonSecurityLog
+    | where DeviceVendor == 'Netwrix'
+    | extend EventVendor = 'Netwrix'
+    | extend EventProduct = 'Netwrix Auditor'
+    | extend EventSchemaVersion = 0.2
+    | extend EventCount = 1
+    | project-rename EventProductVersion=DeviceVersion
+                    , EventSubType=DeviceProduct
+                    , EventOriginalType=DeviceEventClassID
+                    , EventSeverity=LogSeverity
+                    , EventMessage=Message
+                    , SrcHostname=SourceHostName
+                    , EventResult= Activity
+                    , Object = FilePath
+                    , ActorUsername = SourceUserName
+    | mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z0-9-_]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><" ]+)', dynamic(["key","value"]), AdditionalExtensions) on (
+        project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
+        | summarize bag = make_bag(packed1)
+    )
+    | evaluate bag_unpack(bag)
+    | extend EventStartTime = coalesce(column_ifexists("StartTime",datetime(null)),todatetime(start))
+    | extend EventOriginalResultDetails = coalesce(column_ifexists("DeviceEventCategory",""),cat)
+    | project-away start,
+                   cat,
+                   AdditionalExtensions

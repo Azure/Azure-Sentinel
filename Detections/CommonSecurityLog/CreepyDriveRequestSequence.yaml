@@ -1,0 +1,59 @@
+id: eda260eb-f4a1-4379-ad98-452604da9b3e
+name: CreepyDrive request URL sequence
+description: |
+  'CreepyDrive uses OneDrive for command and control, however, it makes regular requests to predicatable paths.
+  This detecton will alert when over 20 sequences are observed in a single day.'
+severity: High
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1567.002
+  - T1102.002
+tags:
+  - POLONIUM
+query: |
+  let eventsThreshold = 20;
+  CommonSecurityLog
+  | where isnotempty(RequestURL)
+  | project TimeGenerated, RequestURL, RequestMethod, SourceIP, SourceHostName
+  | evaluate sequence_detect(TimeGenerated, 5s, 8s, login=(RequestURL has "login.microsoftonline.com/consumers/oauth2/v2.0/token"), graph=(RequestURL has "graph.microsoft.com/v1.0/me/drive/"), SourceIP, SourceHostName)
+  | summarize Events=count() by SourceIP, SourceHostName
+  | where Events >= eventsThreshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHostName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Thomas McElroy
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

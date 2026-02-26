@@ -1,0 +1,338 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "MISP project & cudeso.be - info@cudeso.be",
+    "comments": "Solution template for MISP2Sentinel"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "info@cudeso.be",
+    "_email": "[variables('email')]",
+    "_solutionName": "MISP2Sentinel",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-misp2sentinel",
+    "_solutionId": "[variables('solutionId')]",
+    "uiConfigId1": "MISP2SentinelConnector",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "MISP2SentinelConnector",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
+    "dataConnectorVersion1": "1.0.0",
+    "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "MISP2Sentinel data connector with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "MISP2Sentinel",
+                  "publisher": "MISP project & cudeso.be",
+                  "descriptionMarkdown": "This solution installs the MISP2Sentinel connector that allows you to automatically push threat indicators from MISP to Microsoft Sentinel via the Upload Indicators REST API. After installing the solution, configure and enable this data connector by following guidance in Manage solution view.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total indicators received",
+                      "legend": "Connection Events",
+                      "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem == 'MISP'"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All Threat Intelligence APIs Indicators",
+                      "query": "ThreatIntelligenceIndicator | where SourceSystem == 'MISP'| sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ThreatIntelligenceIndicator",
+                      "lastDataReceivedQuery": "ThreatIntelligenceIndicator| where isnotempty(TimeGenerated) and SourceSystem == 'MISP' | summarize Time = max(TimeGenerated)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ThreatIntelligenceIndicator| where SourceSystem == 'MISP' | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.SecurityInsights/threatintelligence/write",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Use the documentation from this GitHub repository to install and configure the MISP to Microsoft Sentinel connector: \n\nhttps://github.com/cudeso/misp2sentinel",
+                      "title": "Installation and setup instructions"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2023-04-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "MISP2Sentinel",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "MISP project & cudeso.be",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Community",
+                  "email": "info@cudeso.be",
+                  "tier": "Community",
+                  "link": "https://github.com/cudeso/misp2sentinel"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "contentKind": "DataConnector",
+        "displayName": "MISP2Sentinel",
+        "contentProductId": "[variables('_dataConnectorcontentProductId1')]",
+        "id": "[variables('_dataConnectorcontentProductId1')]",
+        "version": "[variables('dataConnectorVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "MISP2Sentinel",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "MISP project & cudeso.be",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Community",
+          "email": "info@cudeso.be",
+          "tier": "Community",
+          "link": "https://github.com/cudeso/misp2sentinel"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "MISP2Sentinel",
+          "publisher": "MISP project & cudeso.be",
+          "descriptionMarkdown": "This solution installs the MISP2Sentinel connector that allows you to automatically push threat indicators from MISP to Microsoft Sentinel via the Upload Indicators REST API. After installing the solution, configure and enable this data connector by following guidance in Manage solution view.",
+          "graphQueries": [
+            {
+              "metricName": "Total indicators received",
+              "legend": "Connection Events",
+              "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem == 'MISP'"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ThreatIntelligenceIndicator",
+              "lastDataReceivedQuery": "ThreatIntelligenceIndicator| where isnotempty(TimeGenerated) and SourceSystem == 'MISP' | summarize Time = max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ThreatIntelligenceIndicator| where SourceSystem == 'MISP' | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All Threat Intelligence APIs Indicators",
+              "query": "ThreatIntelligenceIndicator | where SourceSystem == 'MISP'| sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.SecurityInsights/threatintelligence/write",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Use the documentation from this GitHub repository to install and configure the MISP to Microsoft Sentinel connector: \n\nhttps://github.com/cudeso/misp2sentinel",
+              "title": "Installation and setup instructions"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "MISP2Sentinel",
+        "publisherDisplayName": "Community",
+        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The MISP2Sentinel solution allows you to automatically push threat indicators from <a href=\"https://www.misp-project.org/\">MISP</a> to Microsoft Sentinel via the Upload Indicators REST API.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/misp-logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "MISP2Sentinel",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "MISP project & cudeso.be",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Community",
+          "email": "info@cudeso.be",
+          "tier": "Community",
+          "link": "https://github.com/cudeso/misp2sentinel"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-07-29",
+        "lastPublishDate": "2023-07-29",
+        "providers": [
+          "MISP project"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Intelligence",
+            "Security - Threat Protection"
+          ],
+          "verticals": [
+            "Aeronautics",
+            "Education",
+            "Finance",
+            "Healthcare",
+            "Manufacturing",
+            "Retail"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

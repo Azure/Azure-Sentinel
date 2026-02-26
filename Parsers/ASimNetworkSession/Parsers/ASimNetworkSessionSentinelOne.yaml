@@ -1,0 +1,153 @@
+Parser:
+  Title: Network Session ASIM filtering parser for SentinelOne
+  Version: '0.1.0'
+  LastUpdated: Sep 18 2023
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: SentinelOne Documentation
+- Link: https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview
+Description: |
+  This ASIM parser supports normalizing SentinelOne logs to the ASIM Network Session normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
+ParserName: ASimNetworkSessionSentinelOne
+EquivalentBuiltInParser: _ASim_NetworkSession_SentinelOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let NetworkDirectionLookup = datatable (
+      alertInfo_netEventDirection_s: string, 
+      NetworkDirection: string
+  )[
+      "OUTGOING", "Outbound",
+      "INCOMING", "Inbound",
+  ];
+  let DeviceTypeLookup = datatable (
+      agentDetectionInfo_machineType_s: string,
+      SrcDeviceType: string
+  )
+      [
+      "desktop", "Computer",
+      "server", "Computer",
+      "laptop", "Computer",
+      "kubernetes node", "Other",
+      "unknown", "Other"
+  ];
+  let ThreatConfidenceLookup_undefined = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_undefined: int
+  )
+      [
+      "FALSE_POSITIVE", 5,
+      "Undefined", 15,
+      "SUSPICIOUS", 25,
+      "TRUE_POSITIVE", 33 
+  ];
+  let ThreatConfidenceLookup_suspicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_suspicious: int
+  )
+      [
+      "FALSE_POSITIVE", 40,
+      "Undefined", 50,
+      "SUSPICIOUS", 60,
+      "TRUE_POSITIVE", 67 
+  ];
+  let ThreatConfidenceLookup_malicious = datatable(
+      alertInfo_analystVerdict_s: string,
+      ThreatConfidence_malicious: int
+  )
+      [
+      "FALSE_POSITIVE", 75,
+      "Undefined", 80,
+      "SUSPICIOUS", 90,
+      "TRUE_POSITIVE", 100 
+  ];
+  let parser = (disabled: bool=false) {
+      let alldata = SentinelOne_CL
+          | where not(disabled) 
+              and event_name_s == "Alerts." 
+              and alertInfo_eventType_s == "TCPV4"
+          | lookup NetworkDirectionLookup on alertInfo_netEventDirection_s
+          | lookup DeviceTypeLookup on agentDetectionInfo_machineType_s;
+      let undefineddata = alldata
+          | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+          | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+      let suspiciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Suspicious"
+          | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+      let maliciousdata = alldata
+          | where ruleInfo_treatAsThreat_s == "Malicious"
+          | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+      union undefineddata, suspiciousdata, maliciousdata
+      | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
+      | extend 
+          DstPortNumber = toint(alertInfo_dstPort_s),
+          SrcPortNumber = toint(alertInfo_srcPort_s),
+          ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious)
+      | project-rename
+          EventStartTime = sourceProcessInfo_pidStarttime_t,
+          DstIpAddr = alertInfo_dstIp_s,
+          EventUid = _ItemId,
+          SrcIpAddr = alertInfo_srcIp_s,
+          DvcId = agentDetectionInfo_uuid_g,
+          DvcOs = agentDetectionInfo_osName_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
+          EventOriginalSeverity = ruleInfo_severity_s,
+          EventOriginalUid = alertInfo_dvEventId_s,
+          SrcProcessName = sourceProcessInfo_name_s,
+          SrcProcessId = sourceProcessInfo_pid_s,
+          SrcUsername = sourceProcessInfo_user_s,
+          ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
+      | extend
+          EventEndTime = EventStartTime,
+          Dst = DstIpAddr,
+          DvcIpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          SrcHostname = DvcHostname,
+          SrcDvcId = DvcId,
+          IpAddr = SrcIpAddr,
+          EventSeverity = iff(EventOriginalSeverity == "Critical", "High", EventOriginalSeverity),
+          SrcDvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType = _ASIM_GetUserType(SrcUsername, "")
+      | extend
+          Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr),
+          Hostname = SrcHostname
+      | extend
+          EventCount = int(1),
+          EventProduct = "SentinelOne",
+          EventResult = "Success",
+          DvcAction = "Allow",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventResultDetails = "NA",
+          EventType = "EndpointNetworkSession",
+          EventVendor = "SentinelOne",
+          NetworkProtocol = "TCP",
+          NetworkProtocolVersion = "IPv4"
+      | project-away
+          *_d,
+          *_s,
+          *_g,
+          *_t,
+          *_b,
+          _ResourceId,
+          TenantId,
+          RawData,
+          Computer,
+          MG,
+          ManagementGroupName,
+          SourceSystem,
+          ThreatConfidence_*
+  };
+  parser(disabled = disabled)

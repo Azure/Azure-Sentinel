@@ -1,0 +1,443 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Sign-Out-Google-User", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up the Google Users associated with the Incident Account Entities and sign them out of all Google web and device sessions. This action also resets user sign-in cookies and forces them reauthenticate. A comment noting the affected Google Users will be added to the Incident.",
+        "prerequisites": "1. A Google Service Account with proper roles and scopes. 2. A private key for the Google Service Account Must be generated. 3. An Azure Key Vault Secret. 4. Deploy the 'CreateGoogleJWT' Azure Function.  Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Sign-Out-Google-User",
+        "postDeployment": ["Access to the Azure Key Vault must be granted to the playbook","The Microsoft Sentinel Contributor role must be applied to the playbook"],
+        "lastUpdateTime": "2023-08-03T18:27:33Z",
+        "entities": ["Account"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Google API", "Sign Out User"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Sign-Out-Google-User",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App resource to be created"
+            }
+        },
+        "FunctionAppName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Azure Function App housing the 'CreateGoogleJWT' Function"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the GitHub App's encoded private key"
+            }
+        },
+        "SecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the GitHub App's encoded private key"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Incident_has_Accounts": {
+                            "actions": {
+                                "Condition_-_Google_Users_Successfully_Signed_Out": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)_-_Affected_Google_Users": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><strong>Signed Out the Following Google Users:<br>\n</strong><strong>@{variables('Affected Google Users')}</strong><strong></strong></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_-_Account": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_-_No_Affected_Google_Users": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>No Google Users were successfully signed out during this playbook run</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(variables('Affected Google Users'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each_-_Account": {
+                                    "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                                    "actions": {
+                                        "Condition_-_Sign_Out_Successful": {
+                                            "actions": {
+                                                "Append_to_string_variable_-_Affected_Users": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "Affected Google Users",
+                                                        "value": "@{concat(items('For_each_-_Account')?['name'], '@', items('For_each_-_Account')?['UPNSuffix'])}\n"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_Sign_Out_User": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@outputs('HTTP_-_Sign_Out_User')['statusCode']",
+                                                            204
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_Sign_Out_User": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('Parse_JSON_-_Access_Token')?['access_token']}",
+                                                    "Host": "https://admin.googleapis.com/"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://admin.googleapis.com/admin/directory/v1/users/@{concat(items('For_each_-_Account')?['name'], '@', items('For_each_-_Account')?['UPNSuffix'])}/signOut"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Affected_Google_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_Accounts')?['Accounts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "CreateGoogleJWT": {
+                            "runAfter": {
+                                "Parse_JSON-_Google_Service_Account_Private_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": {
+                                    "aud": "https://oauth2.googleapis.com/token",
+                                    "iss": "@body('Parse_JSON-_Google_Service_Account_Private_Key')?['client_email']",
+                                    "private_key": "@body('Parse_JSON-_Google_Service_Account_Private_Key')?['private_key']",
+                                    "private_key_id": "@body('Parse_JSON-_Google_Service_Account_Private_Key')?['private_key_id']",
+                                    "scope": "https://www.googleapis.com/auth/admin.directory.user.security"
+                                },
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Web/sites/', parameters('FunctionAppName'), '/functions/CreateGoogleJWT')]"
+                                }
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Get_secret_-_Google_Service_Account_Private_Key": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
+                            }
+                        },
+                        "HTTP_-_Access_Token": {
+                            "runAfter": {
+                                "CreateGoogleJWT": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=@{body('CreateGoogleJWT')}",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded",
+                                    "Host": "oauth2.googleapis.com"
+                                },
+                                "method": "POST",
+                                "uri": "https://oauth2.googleapis.com/token"
+                            }
+                        },
+                        "Initialize_variable_-_Affected_Google_Users": {
+                            "runAfter": {
+                                "Parse_JSON_-_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Affected Google Users",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON-_Google_Service_Account_Private_Key": {
+                            "runAfter": {
+                                "Get_secret_-_Google_Service_Account_Private_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_secret_-_Google_Service_Account_Private_Key')?['value']",
+                                "schema": {
+                                    "properties": {
+                                        "auth_provider_x509_cert_url": {
+                                            "type": "string"
+                                        },
+                                        "auth_uri": {
+                                            "type": "string"
+                                        },
+                                        "client_email": {
+                                            "type": "string"
+                                        },
+                                        "client_id": {
+                                            "type": "string"
+                                        },
+                                        "client_x509_cert_url": {
+                                            "type": "string"
+                                        },
+                                        "private_key": {
+                                            "type": "string"
+                                        },
+                                        "private_key_id": {
+                                            "type": "string"
+                                        },
+                                        "project_id": {
+                                            "type": "string"
+                                        },
+                                        "token_uri": {
+                                            "type": "string"
+                                        },
+                                        "type": {
+                                            "type": "string"
+                                        },
+                                        "universe_domain": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_-_Access_Token": {
+                            "runAfter": {
+                                "HTTP_-_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Access_Token')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

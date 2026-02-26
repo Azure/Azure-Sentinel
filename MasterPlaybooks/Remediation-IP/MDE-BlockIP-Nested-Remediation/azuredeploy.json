@@ -1,0 +1,227 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Restrict MDE Ip Address",
+        "description": "This playbook will take IP entities and generate alert and block threat indicators for each IP in MDE for 90 days.",
+        "prerequisites": "You will need to grant Ti.ReadWrite permissions to the managed identity.",
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": [ "Ip" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Restrict-MDEIpAddress-Nested-Remediation",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "Restrict-MDEIPAddress",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                "parameters": {
+                    "$connections": {
+                        "defaultValue": {},
+                        "type": "Object"
+                    },
+                    "PlaybookName": {
+                        "defaultValue": "Restrict-MDEIpAddress",
+                        "type": "String"
+                    }
+            },
+            "triggers": {
+                "manual": {
+                    "type": "Request",
+                    "kind": "Http",
+                    "inputs": {
+                        "method": "POST",
+                        "schema": {
+                            "properties": {
+                                "IPs": {
+                                    "items": {
+                                        "properties": {
+                                            "Address": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "Address"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "actions": {
+                "For_each": {
+                    "foreach": "@triggerBody()?['IPs']",
+                    "actions": {
+                        "Append_to_string_variable": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "Comments",
+                                "value": "@{items('For_each')?['Address']} was added to MDE Indicators with action: AlertandBlock via playbook."
+                            }
+                        },
+                        "HTTP": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "body": {
+                                    "action": "AlertAndBlock",
+                                    "application": "Azure Sentinel",
+                                    "expirationTime": "@{addDays(utcNow(), 90)}",
+                                    "indicatorType": "IpAddress",
+                                    "indicatorValue": "@{items('For_each')?['Address']}",
+                                    "title": "@{guid()}"
+                                },
+                                "headers": {
+                                    "Content-type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "https://api.securitycenter.windows.com/api/indicators"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach"
+                },
+                "Initialize_variable": {
+                    "runAfter": {
+                        "Initialize_variable_IPs": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "Comments",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_IPs": {
+                    "runAfter": {},
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "IPs",
+                                "type": "array",
+                                "value": "@triggerBody()?['IPs']"
+                            }
+                        ]
+                    }
+                },
+                "Response": {
+                    "runAfter": {
+                        "For_each": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                        "body": "Restrict-MDEIpAddress run playbook summary.\n@{variables('Comments')}",
+                        "statusCode": 200
+                    }
+                }
+            },
+            "outputs": {}
+        },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "metadata":{
+        "title": "Restrict-MDEIpAddress",
+        "description": "This playbook will take IP entities and generate alert and block threat indicators for each IP in MDE for 90 days.",
+        "prerequisites": "**For Gov Only** You will need to update the HTTP action URL to the correct URL documented [here](https://docs.microsoft.com/microsoft-365/security/defender-endpoint/gov?view=o365-worldwide#api)",
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": ["ip"],
+        "tags": ["Remediation", "Incident management"],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "microsoft"
+        }
+    }
+}

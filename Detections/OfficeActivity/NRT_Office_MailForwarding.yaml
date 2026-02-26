@@ -17,45 +17,21 @@ relevantTechniques:
 query: |
   OfficeActivity
   | where OfficeWorkload =~ "Exchange"
-  | where Parameters has "ForwardingSmtpAddress"
-  | extend parsed = parse_json(Parameters)
-  | mv-expand parsed
-  | where parsed.Name == "ForwardingSmtpAddress"
-  | extend parameterName = tostring(parsed.Name), fwdingDestination = tostring(parsed.Value)
-  | where isnotempty(fwdingDestination)
-  | extend ClientIPOnly = case(
-  ClientIP has "." and ClientIP has ':', tostring(split(ClientIP,":")[0]),
-  ClientIP has "." and ClientIP has '-', tostring(split(ClientIP,"-")[0]),
-  ClientIP has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
-  ClientIP has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
-  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has ':', tostring(split(ClientIP_,":")[0]),
-  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has '-', tostring(split(ClientIP_,"-")[0]),
-  isempty(ClientIP) and ClientIP_ has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP_,"]")[0]))),
-  isempty(ClientIP) and ClientIP_ has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP_,"]")[0]))),
-  isnotempty(ClientIP), ClientIP,
-  isnotempty(ClientIP_), ClientIP_,
-  "IP Not Available"
-  )
-  | extend Port = case(
-  ClientIP has "." and ClientIP has ':', tostring(split(ClientIP,":")[1]),
-  ClientIP has "." and ClientIP has '-', tostring(split(ClientIP,"-")[1]),
-  ClientIP has ']-', tostring(split(ClientIP,"]-")[1]),
-  ClientIP has ']:', tostring(split(ClientIP,"]:")[1]),
-  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has ':', tostring(split(ClientIP_,":")[1]),
-  isempty(ClientIP) and ClientIP_ has "." and ClientIP_ has '-', tostring(split(ClientIP_,"-")[1]),
-  isempty(ClientIP) and ClientIP_ has ']-', tostring(split(ClientIP_,"]-")[1]),
-  isempty(ClientIP) and ClientIP_ has ']:', tostring(split(ClientIP_,"]:")[1]),
-  isnotempty(ClientIP), ClientIP,
-  isnotempty(ClientIP_), ClientIP_,
-  "IP Not Available"
-  )
-  | extend UserId = iff(isempty(UserId), UserId_, UserId)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId),
-  Ports = make_set(Port), EventCount = count() by fwdingDestination, ClientIP = ClientIPOnly
+  | where Parameters has_any ("ForwardTo", "RedirectTo", "ForwardingSmtpAddress")
+  | mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))
+  | evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')
+  | extend DestinationMailAddress = tolower(case(
+      isnotempty(column_ifexists("ForwardTo", "")), column_ifexists("ForwardTo", ""),
+      isnotempty(column_ifexists("RedirectTo", "")), column_ifexists("RedirectTo", ""),
+      isnotempty(column_ifexists("ForwardingSmtpAddress", "")), trim_start(@"smtp:", column_ifexists("ForwardingSmtpAddress", "")),
+      ""))
+  | where isnotempty(DestinationMailAddress)
+  | mv-expand split(DestinationMailAddress, ";")
+  | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+  | extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId, 250), Ports = make_set(Port, 250), EventCount = count() by tostring(DestinationMailAddress), ClientIP
   | where DistinctUserCount > 1
-  | mv-expand UserId
-  | extend UserId = tostring(UserId), Ports = tostring(Ports)
-  | distinct StartTimeUtc, EndTimeUtc, UserId, DistinctUserCount, ClientIP, Ports, fwdingDestination, EventCount
+  | mv-expand UserId to typeof(string)
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -65,5 +41,14 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ClientIP
-version: 1.0.1
+version: 1.0.3
 kind: NRT
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

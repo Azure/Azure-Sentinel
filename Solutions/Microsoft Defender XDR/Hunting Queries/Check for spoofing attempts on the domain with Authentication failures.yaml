@@ -1,0 +1,36 @@
+id: cdac93ef-56c0-45bf-9e7f-9cbf0ad034234
+name: Spoofing attempts from Specific Domains
+description: |
+  This query identifies potential phishing or spoofing attempts originating from specific domains with authentication failures.
+requiredDataConnectors:
+- connectorId: OfficeATP
+  dataTypes:
+  - EmailEvents
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1566
+query: |
+  // Add the list of domains to search for.
+  let DomainList = dynamic(["contoso.com"]); 
+  EmailEvents 
+  | where TimeGenerated > ago (1d) and DetectionMethods has "spoof" and SenderFromDomain in~ (DomainList)
+  | project TimeGenerated, AR=parse_json(AuthenticationDetails) , NetworkMessageId, EmailDirection, Subject, SenderFromAddress, SenderIPv4, ThreatTypes, DetectionMethods, ThreatNames  
+  | evaluate bag_unpack(AR)  
+  | where column_ifexists('SPF','') =~ "fail" or  column_ifexists('DMARC','') =~ "fail" or column_ifexists('DKIM','') =~ "fail" or column_ifexists('CompAuth','') =~ "fail"
+  | extend Name = tostring(split(SenderFromAddress, '@', 0)[0]), UPNSuffix = tostring(split(SenderFromAddress, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = SenderIPv4
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SenderIPv4
+version: 1.1.0
