@@ -51,7 +51,7 @@ def fetch_key_vault_secrets(key_vault_url, token_ids_secret_name, token_keys_sec
     Note: This function does not handle exceptions. The caller is responsible for
     catching and logging any errors that occur during secret retrieval.
     """
-    credential = DefaultAzureCredential()
+    credential = DefaultAzureCredential()         # CodeQL [SM05139] CCF based data connector is in development. This will be retired once CCF based data connector is generally available.
     secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
     
     token_ids = secret_client.get_secret(token_ids_secret_name).value

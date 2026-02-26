@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Okta
-  Version: '0.3.0'
-  LastUpdated: May 20, 2024
+  Version: '0.4.0'
+  LastUpdated: Jan 08, 2026
 Product:
   Name: Okta
 Normalization:
@@ -48,7 +48,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let OktaSignin = (
+  let parser=(
     starttime: datetime=datetime(null), 
     endtime: datetime=datetime(null), 
     username_has_any: dynamic = dynamic([]),
@@ -58,124 +58,179 @@ ParserQuery: |
     eventtype_in: dynamic = dynamic([]),
     eventresultdetails_in: dynamic = dynamic([]),
     eventresult: string = '*',
-    disabled: bool=false) {
+    disabled: bool=false
+  ) {
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
     let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED', 'DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
-    let emptyOctV1Table = datatable(TimeGenerated: datetime)[];
-      // https://developer.okta.com/docs/reference/api/event-types/#catalog
-      let OktaV1 = union isfuzzy=true emptyOctV1Table, Okta_CL 
-          | where not(disabled)
-          // ************************************************************************* 
-          //       <Prefiltering>
-          // *************************************************************************
-          | extend 
-              outcome_result_s=column_ifexists('outcome_result_s', ""),
-              eventType_s=column_ifexists('eventType_s', ""),
-              legacyEventType_s=column_ifexists('legacyEventType_s', ""),
-              client_geographicalContext_geolocation_lat_d = column_ifexists('client_geographicalContext_geolocation_lat_d', ""),
-              client_geographicalContext_geolocation_lon_d = column_ifexists('client_geographicalContext_geolocation_lon_d', ""),
-              actor_alternateId_s = column_ifexists('actor_alternateId_s', ""),
-              client_ipAddress_s = column_ifexists('client_ipAddress_s', "")
-          | where 
-              (isnull(starttime) or TimeGenerated >= starttime) 
-              and (isnull(endtime) or TimeGenerated <= endtime)
-              and ((array_length(username_has_any) == 0) or actor_alternateId_s has_any (username_has_any))
-              and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
-              and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(client_ipAddress_s, srcipaddr_has_any_prefix)))
-              and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
-              // eventtype_in filtering done later in the parser
-              and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source
-          // eventresult filtering done later in the parser
-          // ************************************************************************* 
-          //       </Prefiltering>
-          // ************************************************************************* 
-          | where eventType_s in (OktaSigninEvents)
-          | extend 
-              EventProduct='Okta'
-              ,
-              EventVendor='Okta'
-              ,
-              EventSchema = 'Authentication'
-              ,
-              EventCount=int(1)
-              ,
-              EventSchemaVersion='0.1.0'
-              ,
-              EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success', outcome_result_s in (OktaFailedOutcome), 'Failure', 'Partial')
-              ,
-              EventStartTime=TimeGenerated
-              ,
-              EventEndTime=TimeGenerated
-              ,
-              EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
-              ,
-              EventSubType=legacyEventType_s
-              ,
-              EventMessage=column_ifexists('displayMessage_s', "")
-              ,
-              EventOriginalResultDetails=column_ifexists('outcome_reason_s', "")
-              ,
-              EventOriginalUid = column_ifexists('uuid_g', "")
-              ,
-              TargetUserIdType='OktaId'
-              ,
-              TargetUsernameType='UPN'
-              ,
-              TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s', "")
-              ,
-              TargetUserId=column_ifexists('actor_id_s', "")
-              ,
-              TargetUsername=column_ifexists('actor_alternateId_s', "")
-              ,
-              TargetUserType=column_ifexists('actor_type_s', "")
-              ,
-              SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d)
-              ,
-              SrcGeoLongitude=toreal(client_geographicalContext_geolocation_lon_d)
-              ,
-              SrcDvcOs=column_ifexists('client_userAgent_os_s', "")
-              ,
-              SrcIsp=column_ifexists('securityContext_isp_s', "")
-              ,
-              SrcGeoCity=column_ifexists('client_geographicalContext_city_s', "")
-              ,
-              SrcGeoCountry=column_ifexists('client_geographicalContext_country_s', "")
-              ,
-              SrcIpAddr = column_ifexists('client_ipAddress_s', "")
-              ,
-              ActingAppName=column_ifexists('client_userAgent_browser_s', "")
-              ,
-              ActingAppType="Browser"
-              ,
-              LogonMethod=column_ifexists('authenticationContext_credentialType_s', "")
-              ,
-              HttpUserAgent=column_ifexists('client_userAgent_rawUserAgent_s', "")
-          // Filtering on 'eventresult' and 'eventtype_in'
-          | where (eventresult == "*" or (EventResult == eventresult))
-              and ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
-          // mapping ASimMatchingUsername
-          | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
-          // ActorUsername not coming from source. Hence, not mapped.
-          | extend ASimMatchingUsername = case
-              (
-                                      array_length(username_has_any) == 0,
-                                      "-",
-                                      temp_isMatchTargetUsername,
-                                      "TargetUsername",
-                                      "No match"
-                                  )
-          // ** Aliases
-          | extend 
-              User=TargetUsername
-              ,
-              Dvc=EventVendor
-              ,
-              IpAddr=SrcIpAddr
-          | project-away *_s, *_d, *_b, *_g, *_t;
-      OktaV1
+    let OutcomeReasonLookup = datatable(outcome_reason_s: string, EventResultDetails: string)
+    [
+        "LOCKED_OUT", "User locked",
+        "INVALID_CREDENTIALS", "Incorrect password",
+        "UNKNOWN_USER", "No such user",
+        "VERIFICATION_ERROR", "Incorrect key",
+        "SSO_AUTHENTICATION_FAILURE", "Logon violates policy",
+        "PASSWORD_EXPIRED", "Password expired",
+        "USER_ACCOUNT_EXPIRED", "Account expired",
+        "DEL_AUTH_TIMEOUT", "Session expired",
+        "PASSWORD_BASED_LOGIN_DISALLOWED", "Logon violates policy"
+    ];
+    let SrcDeviceTypeLookup = datatable(client_device_s: string, SrcDeviceType: string)
+    [
+        "Computer", "Computer",
+        "Mobile", "Mobile Device",
+        "Tablet", "Mobile Device"
+    ];
+    let ActorUserTypeLookup = datatable(ActorOriginalUserType: string, ActorUserType: string)
+    [
+        "User", "Regular",
+        "SystemPrincipal", "System"
+    ];
+    let emptyOktaTable = datatable(
+        TimeGenerated: datetime,
+        outcome_result_s: string,
+        eventType_s: string,
+        legacyEventType_s: string,
+        client_geographicalContext_geolocation_lat_d: double,
+        client_geographicalContext_geolocation_lon_d: double,
+        displayMessage_s: string,
+        outcome_reason_s: string,
+        uuid_g: string,
+        actor_id_s: string,
+        actor_alternateId_s: string,
+        authenticationContext_externalSessionId_s: string,
+        actor_type_s: string,
+        client_userAgent_os_s: string,
+        securityContext_isp_s: string,
+        client_geographicalContext_city_s: string,
+        client_geographicalContext_country_s: string,
+        client_ipAddress_s: string,
+        client_userAgent_browser_s: string,
+        authenticationContext_credentialType_s: string,
+        client_userAgent_rawUserAgent_s: string,
+        client_geographicalContext_state_s: string,
+        client_device_s: string
+    )[];
+    let OktaTable = union isfuzzy=true emptyOktaTable, Okta_CL;
+    OktaTable
+    | where not(disabled)
+    | where 
+        (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and ((array_length(username_has_any) == 0) or actor_alternateId_s has_any (username_has_any))
+        and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+        and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(client_ipAddress_s, srcipaddr_has_any_prefix)))
+        and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+    | extend EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success', outcome_result_s in (OktaFailedOutcome), 'Failure', 'Partial')
+    | where (eventresult == "*" or (EventResult == eventresult))
+    | extend EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
+    | where ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
+    | lookup OutcomeReasonLookup on outcome_reason_s
+    | extend EventResultDetails = iif(outcome_result_s in (OktaFailedOutcome), coalesce(EventResultDetails, "Other"), "")
+    | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+    | extend
+        Type = "Okta_CL",
+        EventProduct='Okta',
+        EventVendor='Okta',
+        EventSchema = 'Authentication',
+        EventCount=int(1),
+        EventSchemaVersion='0.1.3',
+        EventStartTime=TimeGenerated,
+        EventEndTime=TimeGenerated,
+        TargetUserIdType = "OktaId",
+        ActingAppType = "Browser"
+    | project-rename
+        EventOriginalSubType=legacyEventType_s,
+        EventMessage=displayMessage_s,
+        EventOriginalResultDetails=outcome_reason_s,
+        EventOriginalUid=uuid_g,
+        TargetUserId = actor_id_s,
+        TargetUsername = actor_alternateId_s,
+        TargetSessionId = authenticationContext_externalSessionId_s,
+        ActorOriginalUserType = actor_type_s,
+        SrcGeoLatitude = client_geographicalContext_geolocation_lat_d,
+        SrcGeoLongitude = client_geographicalContext_geolocation_lon_d,
+        SrcDvcOs = client_userAgent_os_s,
+        SrcIsp = securityContext_isp_s,
+        SrcGeoCity = client_geographicalContext_city_s,
+        SrcGeoCountry = client_geographicalContext_country_s,
+        SrcIpAddr = client_ipAddress_s,
+        ActingAppName = client_userAgent_browser_s,
+        LogonMethod = authenticationContext_credentialType_s,
+        HttpUserAgent = client_userAgent_rawUserAgent_s,
+        SrcGeoRegion = client_geographicalContext_state_s
+    | extend
+        ActorUserId = TargetUserId,
+        ActorUsername = TargetUsername,
+        ActorUserIdType = TargetUserIdType
+    | lookup ActorUserTypeLookup on ActorOriginalUserType
+    | extend
+        TargetUserType = ActorUserType,
+        TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+    | lookup SrcDeviceTypeLookup on client_device_s
+    | extend SrcDeviceType = coalesce(SrcDeviceType, "Other")
+    // mapping ASimMatchingUsername
+    | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+    // ActorUsername not coming from source. Hence, not mapped.
+    | extend ASimMatchingUsername = case
+        (
+            array_length(username_has_any) == 0,
+            "-",
+            temp_isMatchTargetUsername,
+            "TargetUsername",
+            "No match"
+        )
+    | extend 
+        User=TargetUsername,
+        Dvc=EventVendor,
+        IpAddr=SrcIpAddr
+    | project
+        TimeGenerated,
+        Type,
+        EventResultDetails,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventCount,
+        EventSchemaVersion,
+        EventResult,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventOriginalSubType,
+        EventMessage,
+        EventOriginalResultDetails,
+        EventOriginalUid,
+        TargetUserIdType,
+        TargetUserId,
+        TargetUsername,
+        TargetSessionId,
+        ActorOriginalUserType,
+        SrcGeoLatitude,
+        SrcGeoLongitude,
+        SrcDvcOs,
+        SrcIsp,
+        SrcGeoCity,
+        SrcGeoCountry,
+        SrcIpAddr,
+        ActingAppType,
+        LogonMethod,
+        HttpUserAgent,
+        ActorUserId,
+        ActorUsername,
+        ActorUserIdType,
+        ActorUserType,
+        TargetUserType,
+        TargetUsernameType,
+        ActorUsernameType,
+        SrcDeviceType,
+        ASimMatchingUsername,
+        User,
+        Dvc,
+        IpAddr
   };
-  OktaSignin (
+  parser (
       starttime=starttime,
       endtime=endtime,
       username_has_any=username_has_any,

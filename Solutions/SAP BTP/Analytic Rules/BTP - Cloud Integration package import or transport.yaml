@@ -1,0 +1,97 @@
+id: c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f
+kind: Scheduled
+name: BTP - Cloud Integration package import or transport
+description: |
+  Identifies import and transport operations for integration packages and artifacts in
+  SAP Cloud Integration. Packages contain integration flows, mappings, scripts, and other
+  artifacts that can be imported from external sources or transported between tenants.
+  
+  Unauthorized package operations could indicate:
+  - Supply chain attack through malicious package import
+  - Lateral movement between environments via artifact transport
+  - Introduction of backdoors or rogue integration logic
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+      - SAPBTPAuditLog_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1195
+  - T1546
+query: |
+  let packageActions = dynamic(["Package_Import_Started", "Package_Import_Completed", "Package_Transport_Started", "Package_Transport_Completed", "Artifact_Transport_Started", "Artifact_Transport_Completed"]);
+  SAPBTPAuditLog_CL
+  | where Category == "audit.security-events"
+  | extend data_s = tostring(Message.data),
+           ipAddress = tostring(Message.ip)
+  | extend parsedData = parse_json(data_s)
+  | extend action = tostring(parsedData.action),
+           objectType = tostring(parsedData.objectType),
+           objectId = tostring(parsedData.objectId)
+  | where action in (packageActions)
+  | extend operationType = case(
+      action contains "Import", "Import",
+      action contains "Transport", "Transport",
+      "Unknown"
+  ),
+  operationStatus = case(
+      action endswith "Started", "Started",
+      action endswith "Completed", "Completed",
+      "Unknown"
+  )
+  | extend MessageText = strcat(objectType, " '", objectId, "' ", tolower(operationType), " ", tolower(operationStatus))
+  | project
+      UpdatedOn,
+      UserName,
+      MessageText,
+      ObjectType = objectType,
+      ObjectId = objectId,
+      Action = action,
+      OperationType = operationType,
+      OperationStatus = operationStatus,
+      Tenant,
+      ipAddress,
+      CloudApp = "SAP Cloud Integration"
+  | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName, "@")[1]
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP Cloud Integration: {{MessageText}}'
+  alertDescriptionFormat: |
+    {{MessageText}} by {{UserName}} from IP {{ipAddress}}.
+    
+    This could indicate:
+    - Legitimate package management and deployment
+    - Import of malicious integration content from untrusted sources
+    - Unauthorized transport of artifacts between environments
+customDetails:
+  ObjectType: ObjectType
+  ObjectId: ObjectId
+  Action: Action
+  OperationType: OperationType
+  OperationStatus: OperationStatus
+  SourceIP: ipAddress
+version: 1.0.0
