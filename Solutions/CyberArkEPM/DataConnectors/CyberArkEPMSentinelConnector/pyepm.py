@@ -1,47 +1,27 @@
 import json, requests, urllib3
 
-def _build_auth_headers(epm_token, auth_type):
-    hdr = {'Content-Type': 'application/json'}
-    if auth_type == 'EPM':
-        hdr['Authorization'] = 'basic ' + epm_token
-    elif auth_type == 'OAUTH':
-        hdr['Authorization'] = 'Bearer ' + epm_token
-    else:
-        hdr['VFUser'] = epm_token
-    return hdr
 
-def epmAuth(dispatcher, username, password):
-    """
-        EPM Authentication
-        This method authenticates the user to EPM using username and password and returns
-        a token that can be used in subsequent Rest API calls.
-        After the configured timeout expires, users have to logon again using their
-        username and password.
-        The session timeout for all APIs is part of the session token and is defined by the
-        Timeoutforinactivesession Server Configuration parameter.
-        Args:
-            diapatcher (str): The EPM SaaS site to get version information from and perform the initial logon
-            username (str): Valid User ID with access to the Set(s)
-            password (str): Password for the User ID logging into the Rest API
+urllib3.disable_warnings()
 
-        Returns:
-            list: Json list containing the EPMAuthenticationResult, ManagerURL, IsPasswordExpired (True/False)
-    """
-    # build the body of the request containing the credentials
-    body = {}
-    body['Username'] = username
-    body['Password'] = password
-    body['ApplicationID'] = 'Irrelevent'
-    logonBody = json.dumps(body)
 
-    # build the header and url
-    myURL = dispatcher + "/EPM/API/Auth/EPM/Logon"
-    hdr = {'Content-Type': 'application/json'}
+def _build_bearer_headers(bearer_token):
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + bearer_token,
+    }
 
-    # make the Rest API call
-    urllib3.disable_warnings()
 
-    return requests.post(myURL, headers=hdr, data=logonBody)
+def _request(method, url, headers=None, data=None, params=None):
+    if method == 'GET':
+        return requests.get(url, headers=headers, params=params)
+    if method == 'POST':
+        return requests.post(url, headers=headers, data=data, params=params)
+    raise ValueError('Unsupported method')
+
+
+def _build_auth_headers(epm_token, auth_type=None):
+    return _build_bearer_headers(epm_token)
+
 
 def getVersion(dispatcher, version=None):
     """
@@ -55,11 +35,10 @@ def getVersion(dispatcher, version=None):
         myURL = dispatcher + "/EPM/API/" + version + "/Server/Version"
 
     # make the Rest API call
-    urllib3.disable_warnings()
     return requests.get(myURL)
 
 
-def getSetsList(epmserver, epmToken, authType, version=None):
+def getSetsList(epmserver, epmToken, version=None):
     """
         Get Sets list
         This method enables the user to retrieve the list of Sets.
@@ -71,15 +50,14 @@ def getSetsList(epmserver, epmToken, authType, version=None):
         myURL = epmserver + "/EPM/API/" + version + "/Sets"
 
     # build the header
-    hdr = _build_auth_headers(epmToken, authType)
+    hdr = _build_bearer_headers(epmToken)
     hdr['x-cybr-telemetry'] = 'aW49TWljcm9zb2Z0IFNlbnRpbmVsIEVQTSZpdj0yLjAmdm49TWljcm9zb2Z0Jml0PVNJRU0='
 
     # make the Rest API call
-    urllib3.disable_warnings()
-    return requests.get(myURL, headers=hdr)
+    return _request('GET', myURL, headers=hdr)
 
 
-def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
+def getAggregatedEvents(epmserver, epmToken, setid, data, next_cursor="start", limit=1000, **kwargs):
     """
         Get aggregated events
         This method enables the user to retrieve aggregated events from EPM according
@@ -94,20 +72,19 @@ def getAggregatedEvents(epmserver, epmToken, authType, setid, data, next_cursor=
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/events/aggregations/search?limit=" + str(limit)
 
     # build the header
-    hdr = _build_auth_headers(epmToken, authType)
+    hdr = _build_bearer_headers(epmToken)
 
     # make the Rest API call
-    urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, data=data, params=kwargs)
+        return _request('POST', myURL, headers=hdr, data=data, params=kwargs)
     else:
-        return requests.post(myURL, headers=hdr, data=data)
+        return _request('POST', myURL, headers=hdr, data=data)
 
 
-def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
+def getDetailedRawEvents(epmserver, epmToken, setid, data, next_cursor="start", limit=1000, **kwargs):
     """
         Get detailed raw events
         This method enables the user to retrieve raw events from EPM according
@@ -122,21 +99,20 @@ def getDetailedRawEvents(epmserver, epmToken, authType, setid, data, next_cursor
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/Events/Search?limit=" + str(limit)
 
     # build the header
-    hdr = _build_auth_headers(epmToken, authType)
+    hdr = _build_bearer_headers(epmToken)
 
     # make the Rest API call
-    urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
+        return _request('POST', myURL, headers=hdr, data=data, params=kwargs)
     else:
-        return requests.post(myURL, headers=hdr, data=data)
+        return _request('POST', myURL, headers=hdr, data=data)
 
 
-def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000, **kwargs):
+def getAggregatedPolicyAudits(epmserver, epmToken, setid, data, next_cursor="start", limit=1000, **kwargs):
     """
             Get aggregated policy audits
             This method enables the user to retrieve aggregated policy audits from EPM according
@@ -150,21 +126,20 @@ def getAggregatedPolicyAudits(epmserver, epmToken, authType, setid, data, next_c
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/aggregations/search?limit=" + str(limit)
 
     # build the header
-    hdr = _build_auth_headers(epmToken, authType)
+    hdr = _build_bearer_headers(epmToken)
 
     # make the Rest API call
-    urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
+        return _request('POST', myURL, headers=hdr, data=data, params=kwargs)
     else:
-        return requests.post(myURL, headers=hdr, data=data)
+        return _request('POST', myURL, headers=hdr, data=data)
 
 
-def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, next_cursor="start", limit=1000,
+def getPolicyAuditRawEventDetails(epmserver, epmToken, setid, data, next_cursor="start", limit=1000,
                                   **kwargs):
     """
             Get policy audit raw event details
@@ -179,30 +154,28 @@ def getPolicyAuditRawEventDetails(epmserver, epmToken, authType, setid, data, ne
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/policyaudits/search?limit=" + str(limit)
 
     # build the header
-    hdr = _build_auth_headers(epmToken, authType)
+    hdr = _build_bearer_headers(epmToken)
 
     # make the Rest API call
-    urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
 
     if len(kwargs) > 0:
-        return requests.post(myURL, headers=hdr, params=kwargs, data=data)
+        return _request('POST', myURL, headers=hdr, data=data, params=kwargs)
     else:
-        return requests.post(myURL, headers=hdr, data=data)
+        return _request('POST', myURL, headers=hdr, data=data)
 
-def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_time, limit=100):
+def getAdminAuditEvents(epmserver, epmToken, setid, start_time, end_time, limit=100):
     """
         Get Admin Audit Data
         This method enables the user to retrieve Admin Audit Data from EPM according
         to a range of time (between start_time and end_time)
     """
     # build the header
-    hdr = _build_auth_headers(epmToken, authType)
+    hdr = _build_bearer_headers(epmToken)
 
     # make the Rest API call
-    urllib3.disable_warnings()
     # this url can take a query, the parameters for the query should be in kwargs
     # check to see if there are any keyword arguments passed in to this function
     # if so, use them
@@ -214,7 +187,7 @@ def getAdminAuditEvents(epmserver, epmToken, authType, setid, start_time, end_ti
     while True:
         #build the URL
         myURL = epmserver + "/EPM/API/Sets/" + setid + "/AdminAudit?DateFrom=" + start_time + "&DateTo=" + end_time + "&limit=" + str(limit) + "&offset=" + str(offset)
-        r = requests.get(myURL, headers=hdr).json()
+        r = _request('GET', myURL, headers=hdr).json()
         events_json += r["AdminAudits"]
         #Get TotalCount from JSON
         total_count = r["TotalCount"]

@@ -116,7 +116,6 @@ def _fetch_set_events(fetch_func, token: str, filter_date: str, set_id: dict, ne
     response_json = fetch_func(
         epmserver=dispatcher_url,
         epmToken=token,
-        authType='OAUTH',
         setid=set_id['Id'],
         data=filter_date,
         next_cursor=next_cursor,
@@ -151,7 +150,7 @@ def collect_events() -> list:
     filter_date = '{"filter": "arrivalTime GE ' + str(start_time) + ' AND arrivalTime LE ' + end_time + '"}'
 
     try:
-        sets_list = getSetsList(epmserver=dispatcher_url, epmToken=token, authType='OAUTH')
+        sets_list = getSetsList(epmserver=dispatcher_url, epmToken=token)
         sets = sets_list.json().get('Sets') or []
     except Exception:
         logging.error('CyberArkEPMServerURL is invalid')
@@ -188,7 +187,6 @@ def collect_events() -> list:
             admin_events = getAdminAuditEvents(
                 epmserver=dispatcher_url,
                 epmToken=token,
-                authType='OAUTH',
                 setid=set_id['Id'],
                 start_time=start_time,
                 end_time=end_time,
