@@ -7,7 +7,7 @@ Category: Microsoft Sentinel Parser
 FunctionName: ZNSegmentAudit
 FunctionAlias: ZNSegmentAudit
 FunctionQuery: |
-    let AuditTypesTable = datatable(auditType_d: double, AuditType: string) [
+    let AuditTypesTable = datatable(auditType: int, AuditType: string) [
         0, "Unspecified",
         1, "Asset is being segmented (network)",
         2, "Asset segmented (network)",
@@ -318,66 +318,38 @@ FunctionQuery: |
         322, "Members added to custom group",
         323, "Members removed from custom group"
     ];
-    let EnforcementSourceTypeTable = datatable (enforcementSource_d: double, EnforcementSource: string) [
+    let EnforcementSourceTypeTable = datatable (enforcementSource: int, Platform: string) [
         1, "Reactive Policy",
         2, "Automated",
         3, "Access Portal",
         4, "Admin Portal",
-        5, "AI",
+        5, "Automation Engine",
         6, "API",
         7, "Setup"
     ];
-    let UserRoleTypeTable = datatable (userRole_d: double, UserRole: string) [
-        1, "Admin",
-        2, "Viewer",
-        3, "Regular",
-        4, "API - Full Access",
-        5, "API - Read Only",
-        6, "Self Service",
-        7, "CloudConnectorProvisioning",
-        8, "JAMF Asset",
-        9, "Asset Manager",
-        10, "Operator",
-        11, "Service Now Token"
-    ];
-    union isfuzzy=true ZNSegmentAuditNativePoller_CL, ZNSegmentAudit_CL
+    ZNSegmentAuditNativePoller_CL
     | project-away TimeGenerated
-    | lookup kind=leftouter AuditTypesTable on auditType_d
-    | lookup kind=leftouter EnforcementSourceTypeTable on enforcementSource_d
-    | lookup kind=leftouter UserRoleTypeTable on userRole_d
-    | extend entity=parse_json(destinationEntitiesList_s)
+    | lookup kind=leftouter AuditTypesTable on auditType
+    | lookup kind=leftouter EnforcementSourceTypeTable on enforcementSource
+    | extend InitiatedBy=performedBy,
+        AffectedEntity=destinationEntitiesList[0],
+        Details=details,
+        ReportedObjectId=reportedObjectId,
+        TimeGenerated=todatetime(isoTimestamp)
+    | project-away performedBy,
+        destinationEntitiesList,
+        details,
+        reportedObjectId,
+        timestamp,
+        isoTimestamp,
+        auditType,
+        userRole,
+        enforcementSource,
+        reportedObjectGeneration
+    | union isfuzzy=true ZNAudit_CL
+    | project-away TimestampEpoch,
+        TimestampIso8601
     | extend EventVendor="Zero Networks",
-        EventProduct="Segment Audit",
-        AuditTypeId=column_ifexists('auditType_d', ''),
-        TimeGenerated=unixtime_milliseconds_todatetime(timestamp_d),
-        EnforcementSourceId=column_ifexists('enforcementSource_d', ''),
-        UserRoleId=column_ifexists('userRole_d', ''),
-        DestinationEntityName = ['entity'][0].name,
-        DestinationEntityId = ['entity'][0].id,
-        Details=column_ifexists('details_s', ''),
-        PerformedById=column_ifexists('performedBy_id_s', ''),
-        PerformedByName=column_ifexists('performedBy_name_s', ''),
-        PerformedByGuid=column_ifexists('performedBy_id_g', ''),
-        ReportedObjectGuid=column_ifexists('reportedObjectId_g', ''),
-        ReportedObjectId=column_ifexists('reportedObjectId_s', '')
+        EventProduct="Segment Audit"
     | extend Rule=parse_json(Details).rule,
         ReactivePolicy=parse_json(Details).rp
-    | project
-        TimeGenerated,
-        EventVendor,
-        EventProduct,
-        AuditTypeId,
-        AuditType,
-        DestinationEntityId,
-        DestinationEntityName,
-        EnforcementSourceId,
-        EnforcementSource,
-        PerformedByGuid,
-        PerformedById,
-        PerformedByName,
-        ReportedObjectGuid,
-        ReportedObjectId,
-        UserRoleId,
-        UserRole,
-        Rule,
-        ReactivePolicy
