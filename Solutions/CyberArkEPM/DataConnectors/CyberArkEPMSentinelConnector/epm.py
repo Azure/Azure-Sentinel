@@ -29,15 +29,15 @@ def _get_env(*names: str, default=None):
 client_id = _get_env('OAUTH_USERNAME', 'OAuthUsername')
 client_secret = _get_env('OAUTH_PASSWORD', 'OAuthPassword')
 identity_endpoint = _get_env('IDENTITY_ENDPOINT', 'IdentityEndpoint')
+epm_host = _get_env('EPM_HOST', 'EPMHost')
 webapp_id = _get_env('WEBAPP_ID', 'WebAppID')
-scope = _get_env('OAUTH_SCOPE', 'OAuthScope', default=None)
 
-dispatcher_url = _get_env('CYBERARK_EPM_SERVER_URL', 'CyberArkEPMServerURL')
 fetch_interval_minutes = int(_get_env('FETCH_INTERVAL', 'FetchInterval', default='60'))
 
 storage = LocalStorage() if _get_env('STORAGE', 'Storage') == 'LocalStorage' else AzureBlobStorage()
 
 TOKEN_FILE_NAME = 'token.json'
+EPM_TENANT_URL_FILE_NAME = 'epm_tenant_url.json'
 TIME_FRAME_FILE_NAME = 'time_frame.json'
 
 
@@ -61,8 +61,6 @@ def _get_oauth_token() -> Optional[str]:
         'client_id': client_id,
         'client_secret': client_secret
     }
-    if scope:
-        body['scope'] = scope
 
     token_data = storage.load(file_name=TOKEN_FILE_NAME)
     if token_data and not _is_token_expired(token_data):
@@ -112,7 +110,7 @@ def _get_time_window() -> tuple[str, str]:
     return start_time_str, current_time_str
 
 
-def _fetch_set_events(fetch_func, token: str, filter_date: str, set_id: dict, next_cursor: str = 'start') -> list:
+def _fetch_set_events(fetch_func, dispatcher_url: str, token: str, filter_date: str, set_id: dict, next_cursor: str = 'start') -> list:
     response_json = fetch_func(
         epmserver=dispatcher_url,
         epmToken=token,
@@ -134,14 +132,41 @@ def _fetch_set_events(fetch_func, token: str, filter_date: str, set_id: dict, ne
     return events
 
 
-def collect_events() -> list:
-    if not dispatcher_url:
-        logging.error('CyberArkEPMServerURL is missing')
-        return []
+def _get_dispatcher_url(auth_token: str):
+    url = f'{epm_host}/EPM/API/accounts/tenanturl'
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'basic {auth_token}'
+    }
+    tenant_url = storage.load(file_name=EPM_TENANT_URL_FILE_NAME)
+    if tenant_url:
+        return tenant_url.get('tenantUrl')
 
+    try:
+        logging.info('Getting tenant URL')
+        response = requests.get(url=url, headers=headers)
+        res_content = response.json()
+        if 200 <= response.status_code <= 299:
+            tenant_url = res_content['tenantUrl']
+            storage.save(
+                data={'tenant_url': tenant_url},
+                file_name=EPM_TENANT_URL_FILE_NAME,
+            )
+            return tenant_url
+        if response.status_code == 400:
+            logging.error(f"{res_content.get('error')} {res_content.get('error_description')}")
+        else:
+            logging.error(f'error fetching tenant URL: {response.status_code} {response.text}')
+    except Exception as err:
+        logging.error(f'Something went wrong. Exception error text: {err}')
+    return None
+
+
+def collect_events() -> list:
     token = _get_oauth_token()
-    if not token:
-        logging.error('Failed to obtain OAuth token')
+    dispatcher_url = _get_dispatcher_url(token)
+    if not token or not dispatcher_url:
+        logging.error('Failed to obtain OAuth token or dispatcher URL')
         return []
 
     start_time, end_time = _get_time_window()
@@ -150,7 +175,7 @@ def collect_events() -> list:
     filter_date = '{"filter": "arrivalTime GE ' + str(start_time) + ' AND arrivalTime LE ' + end_time + '"}'
 
     try:
-        sets_list = get_sets_list(epmserver=dispatcher_url, epm_token=token)
+        sets_list = get_sets_list(epm_server=dispatcher_url, epm_token=token)
         sets = sets_list.json().get('Sets') or []
     except Exception:
         logging.error('CyberArkEPMServerURL is invalid')
@@ -185,9 +210,9 @@ def collect_events() -> list:
         logging.info(f"Collecting Admin Audit Data from {set_id.get('Name')}")
         try:
             admin_events = get_admin_audit_events(
-                epmserver=dispatcher_url,
+                epm_server=dispatcher_url,
                 epm_token=token,
-                setid=set_id['Id'],
+                set_id=set_id['Id'],
                 start_time=start_time,
                 end_time=end_time,
                 limit=100,
