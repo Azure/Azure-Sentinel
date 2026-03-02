@@ -36,6 +36,13 @@ param (
 . ".\Utils\AwsSentinelTag.ps1"
 . ".\Enviornment\EnviornmentConstants.ps1"
 
+# Verify that powershell version 7 is being used
+if ($PSVersionTable.PSVersion.Major -lt 7) 
+{ 
+    Write-Error "This script requires PowerShell 7 or higher. You are running version $($PSVersionTable.PSVersion). Please install the latest version of PowerShell from https://aka.ms/powershell and try again."
+    exit
+}
+
 # Verify that the AWS CLI is available
 if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 
 { 

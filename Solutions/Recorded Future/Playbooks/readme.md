@@ -185,7 +185,7 @@ The Recorded Future Solutions contains the following Workbooks. Note that workbo
 # Analytic Rules
 Recorded Future Solution includes Threat Hunt Analytic Rule templates. Which can be used in conjunction with Microsoft's out of the box analytic rules. The Analytic Rules can be configured to trigger alerts related to our imported risk lists and threat hunts.
 
-To operationalize  Recorded Future threat intelligence, we recommend deploying Microsoft's out of the box threat TI analytic rules, which Recorded Future is fully compatible with. You can find these rules in your Sentinel instance under `Configuration -> Analytics -> Rule Templates`. Searching for rules that start with "TI Map" will bring up all Microsoft out of the box intelligence rules. You should search for rules that use tables that contain relevant log data and then deploy them. Once deployed, this rules will automatically correlate Recorded Future Threat Intelligence against your internal telemetry.
+To operationalize  Recorded Future threat intelligence, we recommend deploying Microsoft's out of the box threat TI analytic rules, which Recorded Future is fully compatible with. You can find these rules in your Sentinel instance under `Configuration -> Analytics -> Rule Templates`. Searching for rules that start with "TI Map" will bring up all Microsoft out of the box intelligence rules. You should search for rules that use tables that contain relevant log data and then deploy them. Once deployed, these rules will automatically correlate Recorded Future Threat Intelligence against your internal telemetry.
 
 <details>
 <summary>Expand image</summary>

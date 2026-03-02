@@ -1,0 +1,48 @@
+kind: Scheduled
+name: CyberArk - High-Risk Actions Outside Business Hours
+description: >
+  Detects privileged or destructive actions (delete/disable/rotate/elevate/etc.)
+  occurring outside standard business hours. Useful for insider misuse or
+  compromised admin detection.
+severity: High
+tactics:
+  - DefenseEvasion
+queryFrequency: 10M
+queryPeriod: 1D
+triggerOperator: GreaterThan
+triggerThreshold: 0
+query: |
+  let risky = dynamic(["Delete","Remove","Rotate","Elevate","Disable","Grant","Policy","Safe","Vault","Key"]);
+  CyberArk_AuditEvents_CL
+  | where isnotempty(action) or isnotempty(actionType) or isnotempty(auditType) or isnotempty(message)
+  | where hourofday(TimeGenerated) < 7 or hourofday(TimeGenerated) > 20
+  | where action has_any (risky) or actionType has_any (risky) or auditType has_any (risky) or message has_any (risky)
+  | extend cd = parse_json(customData)
+  | extend cd_username = tostring(cd.username),
+           cd_auth_method = tostring(cd.authentication_method),
+           cd_client_ip = tostring(cd.client_ip_address),
+           cd_source_ip = tostring(cd.source_ip_address),
+           cd_device_os = tostring(cd.device_os),
+           cd_browser = tostring(cd.browser_name),
+           cd_geo_city = tostring(cd.geoip_city_name),
+           cd_geo_country = tostring(cd.geoip_country_name),
+           cd_target = coalesce(tostring(cd.target), tostring(cd.target_resource), tostring(cd.new_target))
+  | project TimeGenerated, CyberArkTenantId, username, cd_username, identityType, action, actionType, auditType,
+            target, targetAccount, safe, source, cd_source_ip, cd_client_ip, cd_auth_method, cd_device_os,
+            cd_browser, cd_geo_city, cd_geo_country, cd_target, component, serviceName, message
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: username
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: target
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: source
+suppressionEnabled: false
+version: 1.0.0

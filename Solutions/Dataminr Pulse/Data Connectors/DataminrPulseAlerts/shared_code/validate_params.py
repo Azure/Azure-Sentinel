@@ -3,6 +3,7 @@ from . import consts
 from .logger import applogger
 from .dataminrpulse_exception import DataminrPulseException
 
+
 def validate_params(azure_function_name):
     """To validate parameters of function app."""
     __method_name = inspect.currentframe().f_code.co_name

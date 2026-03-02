@@ -6,11 +6,20 @@ using Varonis.Sentinel.Functions.LogAnalytics;
 using Varonis.Sentinel.Functions.DatAlert;
 using System.Linq;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Varonis.Sentinel.Functions.State;
 
 namespace Varonis.Sentinel.Functions
 {
     public class FetchDataFunction
     {
+        private readonly IConfiguration _config;
+
+        public FetchDataFunction(IConfiguration config)
+        {
+            _config = config;
+        }
+
         [FunctionName("VaronisSaaS")]
         public async Task Run([TimerTrigger("0 * * * * *")]TimerInfo timer, ILogger log)
         {
@@ -35,35 +44,23 @@ namespace Varonis.Sentinel.Functions
 
                 var client = new DatAlertClient(baseUri, datalertApiKey, log);
                 var storage = new LogAnalyticsCollector(logAnalyticsKey, logAnalyticsWorkspace, log);
+                var stateService = new BlobStateSaver(_config["AzureWebJobsStorage"]);
+                await stateService.Init();
 
                 if (timer.IsPastDue)
                 {
                     log.LogWarning("Timer is running late!");
                 }
 
-                var last = timer.ScheduleStatus.Last.ToUniversalTime();
-                var lastUpdated = timer.ScheduleStatus.LastUpdated.ToUniversalTime();
-                var next = timer.ScheduleStatus.Next.ToUniversalTime().AddSeconds(-1);
-
-                log.LogInformation($"Schedule status: {last}, {lastUpdated}, {next}");
-
-                if (firstFetchTime > 0)
-                {
-                    var firstDate = DateTime.UtcNow.AddDays(-firstFetchTime);
-
-                    if (last <= firstDate)
-                    {
-                        lastUpdated = firstDate;
-                        next = DateTime.Now;
-                    }
-                }
-
                 log.LogInformation($"Varonis host name: {hostname}; LogAnalytics Key: {logAnalyticsKey.Substring(0, 5)}...;" +
                     $" LogAnalytics Workspace: {logAnalyticsWorkspace}; Time: {DateTime.Now}");
 
-                var interval = timer.ScheduleStatus.Next - timer.ScheduleStatus.Last;
+                var from = await stateService.GetLastDate();
+                var parameters = GetParams(from, firstFetchTime, severities, threatModelName, status);
+                log.LogInformation($"Fetching alerts with params: start - {parameters.Start}. end - {parameters.End}" +
+                                   $" severity - {parameters.AlertSeverity}. policies - {parameters.ThreatDetectionPolicies}." +
+                                   $" status - {parameters.AlertStatus}");
 
-                var parameters = new DatAlertParams(lastUpdated, next, severities, threatModelName, status, maxAlerts);
                 var alerts = await client.GetDataAsync(parameters);
 
                 if (!alerts.Any())
@@ -71,6 +68,17 @@ namespace Varonis.Sentinel.Functions
                     log.LogInformation("Request was successful, but data is empty");
                     return;
                 }
+
+                var dateTimeToSave = DateTime.MinValue;
+                foreach (var alert in alerts)
+                {
+                    if (alert.IngestTime > dateTimeToSave)
+                    {
+                        dateTimeToSave = alert.IngestTime;
+                    }
+                }
+
+                await stateService.SaveLastDate(dateTimeToSave.AddSeconds(1));
 
                 var data = JsonSerializer.Serialize(alerts);
 
@@ -82,6 +90,27 @@ namespace Varonis.Sentinel.Functions
                 log.LogError($"{ex.Message} {ex.InnerException?.Message}");
                 throw;
             }
+        }
+
+        private static DatAlertParams GetParams(DateTime? from, int firstFetchTime, string severities,
+            string threatModelName, string status)
+        {
+            const int maxAlerts = 1000;
+            var next = DateTime.UtcNow;
+            const int maxGap = 7;
+            if (from != null)
+            {
+                if (next - from > TimeSpan.FromDays(maxGap))
+                {
+                    from = next.AddDays(-maxGap);
+                }
+            }
+            else
+            {
+                from = next.AddDays(-firstFetchTime);
+            }
+
+            return new DatAlertParams(from.Value, next, severities, threatModelName, status, maxAlerts);
         }
     }
 }

@@ -16,6 +16,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
             $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
             $ccpBaseFolderPath = (Split-Path -Path $currentFileDCPath -Parent) -replace '\\', '/'
+            # Resolve to absolute path for proper comparison later
+            $ccpBaseFolderPath = (Resolve-Path -Path $ccpBaseFolderPath).Path -replace '\\', '/'
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
             #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
             
@@ -297,6 +299,15 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                             }
                                             
                                             break
+                                        }
+
+                                        if ($null -eq $dataFlowOutputStreamName) {
+                                            # if standard table
+                                            . "$PSScriptRoot/standardLogStreams.ps1" # load standard data connector poller and dcr mapper
+                                            $dcPollerStreamNameValue = GetKeyValue -key $ccpPollerFile.DCPollerStreamName
+                                            if ($dcPollerStreamNameValue -eq $dataFlowStreamName) {
+                                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                            }
                                         }
                                     }
                                 }

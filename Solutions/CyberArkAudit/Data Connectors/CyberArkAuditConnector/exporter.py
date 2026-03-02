@@ -46,7 +46,7 @@ def send_dcr_data(data: list):
     endpoint = os.environ.get('DATA_COLLECTION_ENDPOINT')
     rule_id = os.environ.get('LOGS_DCR_RULE_ID')
     try:
-        credential = DefaultAzureCredential()
+        credential = DefaultAzureCredential()       # CodeQL [SM05139] This data connector (Function app based) is deprecated.
         client = LogsIngestionClient(endpoint=endpoint, credential=credential, logging_enable=True)
         dcr_events = _transform_schema(data)
         client.upload(rule_id=rule_id, stream_name=os.environ.get('LOGS_DCR_STREAM_NAME'), logs=dcr_events)

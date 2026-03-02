@@ -1,0 +1,54 @@
+id: 4776281c-6c49-46ac-8444-4dd8ba2f4565
+name: Lumen TI IPAddress in WindowsEvents
+displayName: Lumen TI IPAddress in WindowsEvents
+description: |
+  This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in WindowsEvents.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: LumenThreatFeedConnector
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceUploadIndicatorsAPI
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvents
+queryFrequency: 4h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: 5h
+suppressionEnabled: true
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1d;  // Data lookback for WindowsEvents
+  let ioc_lookBack = 14d; // TI lookback
+  let IP_Indicators = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem == 'Lumen'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';
+  IP_Indicators
+  | join kind=innerunique (
+      WindowsEvent
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend WE_ipEntity = tostring(EventData.IpAddress)
+      | extend WindowsEvent_TimeGenerated = TimeGenerated
+    ) on $left.TI_ipEntity == $right.WE_ipEntity
+  | where WindowsEvent_TimeGenerated < ValidUntil
+  | summarize arg_max(WindowsEvent_TimeGenerated, *), StartTime = min(WindowsEvent_TimeGenerated), EndTime = max(WindowsEvent_TimeGenerated) by Id, WE_ipEntity
+  | project timestamp = EndTime, StartTime, EndTime, Computer, EventID, Channel, Id, Tags, ValidUntil, Confidence, TI_ipEntity, WE_ipEntity, Type
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: WE_ipEntity
+version: 1.0.0
+kind: Scheduled

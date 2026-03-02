@@ -89,6 +89,7 @@ ii. Click on the DataminrPulseAlerts, connector page will open.
 
 iii. Click on Deploy to Azure 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-DataminrPulseAlerts-azuredeploy)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-DataminrPulseAlerts-azuredeploy-gov)
 
 
 It will lead to a custom deployment page where user need to select **Subscription**, **Resource Group** and **Location**.

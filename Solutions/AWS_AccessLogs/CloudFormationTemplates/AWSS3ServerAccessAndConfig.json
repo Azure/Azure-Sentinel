@@ -1,0 +1,303 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This stack integrates Microsoft Sentinel by creating an IAM role with minimal permissions for accessing S3 server access logs stored in a specified S3 bucket and sending log events to an SQS queue.",
+    "Parameters": {
+        "AwsRoleName": {
+            "Type": "String",
+            "Description": "Enter the ARN name for the role. The name must start with 'OIDC_', otherwise the connector will not function properly.",
+            "AllowedPattern": "OIDC_[-_a-zA-Z0-9]+",
+            "ConstraintDescription": "The role name must be empty or start with 'OIDC_'"
+        },
+        "BucketName": {
+            "Type": "String",
+            "MinLength": "3",
+            "MaxLength": "63",
+            "AllowedPattern": "^[a-z0-9][a-z0-9-.]{1,61}[a-z0-9]$",
+            "ConstraintDescription": "S3 bucket name is required. Must be 3-63 characters, lowercase letters, numbers, dots, and hyphens only. Must start and end with letter or number.",
+            "Description": "Enter a unique S3 bucket name for storing server access logs. Bucket name must be globally unique."
+        },
+        "SentinelSQSQueueName": {
+            "Type": "String",
+            "MinLength": "1",
+            "MaxLength": "80",
+            "ConstraintDescription": "SQS queue name is required. Must be 1-80 characters.",
+            "Description": "Enter a unique SQS queue name."
+        },
+        "SentinelWorkspaceId": {
+            "Type": "String",
+            "Description": "Enter the Microsoft Sentinel Workspace ID"
+        },
+        "CreateNewBucket": {
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "true",
+            "Description": "Set to false to use an existing S3 Bucket for server access logs.",
+            "Type": "String"
+        }
+    },
+    "Conditions": {
+        "CreateNewBucketCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNewBucket"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "SentinelWebIdentityBasedRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Ref": "AwsRoleName"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Fn::Sub": "{\"Version\": \"2012-10-17\",\"Statement\": [{\"Effect\": \"Allow\",\"Principal\": {\"Federated\": \"arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/\"},\"Action\": \"sts:AssumeRoleWithWebIdentity\",\"Condition\": {\"StringEquals\": {\"sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud\": \"api://1462b192-27f7-4cb9-8523-0f4ecb54b47e\",\"sts:RoleSessionName\": \"MicrosoftSentinel_${SentinelWorkspaceId}\"}}}]}"
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "S3ServerAccessLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${BucketName}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${BucketName}/*"
+                                        }
+                                    ],
+                                    "Effect": "Allow"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "CreateNewBucketCondition",
+            "DeletionPolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Ref": "BucketName"
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "BucketName"
+                    },
+                    "LogFilePrefix": "server-logs/"
+                },
+                "NotificationConfiguration": {
+                    "QueueConfigurations": [
+                        {
+                            "Queue": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueue",
+                                    "Arn"
+                                ]
+                            },
+                            "Event": "s3:ObjectCreated:*",
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": "server-logs/"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "S3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Condition": "CreateNewBucketCondition",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logging.s3.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "S3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        "/*"
+                                    ]
+                                ]
+                            },
+                            "Condition": {
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::GetAtt": [
+                                            "S3Bucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow Arn read access S3 bucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/${AwsRoleName}"
+                                }
+                            },
+                            "Action": "s3:GetObject",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "S3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        "/*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SentinelSQSQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Ref": "SentinelSQSQueueName"
+                }
+            }
+        },
+        "SentinelSQSQueuePolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Version": "2008-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowS3ToSendToQueue",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": "SQS:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueue",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                },
+                                "ArnLike": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:s3:::*"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowSentinelRoleToReadFromQueue",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "SentinelWebIdentityBasedRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "SQS:ReceiveMessage",
+                                "SQS:DeleteMessage",
+                                "SQS:ChangeMessageVisibility",
+                                "SQS:GetQueueUrl"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SentinelSQSQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Queues": [
+                    {
+                        "Ref": "SentinelSQSQueue"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "SentinelRoleArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelWebIdentityBasedRole",
+                    "Arn"
+                ]
+            },
+            "Description": "Role ARN for Sentinel Role that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal."
+        },
+        "S3BucketName": {
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Description": "S3 Bucket name where server access logs are stored.",
+            "Condition": "CreateNewBucketCondition"
+        },
+        "SentinelSQSQueueURL": {
+            "Description": "AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.",
+            "Value": {
+                "Ref": "SentinelSQSQueue"
+            }
+        },
+        "SentinelSQSQueueArn": {
+            "Description": "Log destination ARN to be used when setting up other accounts to export logs.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SentinelSQSQueue",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}
