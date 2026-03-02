@@ -199,10 +199,12 @@ def gen_chunks(data: list[dict[str, Any]], logs_client: LogsIngestionClient):
         filtered = [row for row in data if row]
     else:
         filtered = [
-            row
-            for row in data
-            if row and row.get("EventCode") in target_event_codes
+            row for row in data if row and row.get("EventCode") in target_event_codes
         ]
+
+    logging.info(
+        f"Total events after filtering: {len(filtered)}. showAllEvents={showAllEvents}"
+    )
 
     if filtered:
         upload_to_sentinel(logs_client, filtered)
@@ -260,16 +262,17 @@ def read_blob(connection_string, container_name, blob_name):
 
 
 def normalize_event(event: dict[str, Any]) -> dict[str, Any]:
+    client_entity = event.get("clientEntity") or {}
     return {
-        "EventId": event.get("id"),
-        "OccurrenceTime": event.get("timeSource"),
-        "Severity": event.get("severity"),
-        "Computer": event.get("clientEntity", {}).get("clientName"),
-        "Program": event.get("subsystem"),
-        "EventCode": event.get("eventCodeString") or event.get("eventCode"),
-        "Description": event.get("description"),
-        "CommcellName": event.get("clientEntity", {}).get("displayName"),
-        "UTCTimestamp": event.get("timeSource"),
+        "EventId": str(event.get("id", "")),
+        "OccurrenceTime": str(event.get("timeSource", "")),
+        "Severity": str(event.get("severity", "")),
+        "Computer": client_entity.get("clientName") or "",
+        "Program": event.get("subsystem") or "",
+        "EventCode": event.get("eventCodeString") or "",
+        "Description": event.get("description") or "",
+        "CommcellName": client_entity.get("displayName") or "",
+        "UTCTimestamp": str(event.get("timeSource", "")),
     }
 
 
