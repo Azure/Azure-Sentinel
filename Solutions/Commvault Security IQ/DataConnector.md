@@ -57,7 +57,7 @@ This guide provides instructions to configure the **Commvault Cloud Data Connect
  - Go to the **Access Control (IAM)** section of the Key Vault.
  - Click **Add Role Assignment**.
 	 - In the **Role** dropdown, select **Key Vault Secrets Officer**.
-	 - In the **Assign Access To** dropdown, select **Azure AD User, Group, or Service Principal**.
+	 - In the **Assign Access To** dropdown, select **User, Group, or Service Principal**.
 	 - Search for the **Function App's managed identity** (it will have the same name as the Function App).
 	 - Select the Function App and click **Save**.
 
