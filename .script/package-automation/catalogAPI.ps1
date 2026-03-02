@@ -151,7 +151,7 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
     {
         $userInputMajor,$userInputMinor,$userInputBuild,$userInputRevision = $userInputPackageVersion.split(".")
         $defaultMajor,$defaultMinor,$defaultBuild,$defaultRevision = $defaultPackageVersion.split(".")
-
+    
         # Convert to integers for proper numeric comparison
         [int]$userInputMajor = $userInputMajor
         [int]$userInputMinor = $userInputMinor
@@ -162,12 +162,12 @@ function GetPackageVersion($defaultPackageVersion, $offerId, $offerDetails, $pac
 
         if ($userInputMajor -ge 3) {
             # Version 3.x.x or higher: use user input if minor and build are greater than default
-            if ($userInputMinor -ge $defaultMinor -and $userInputBuild -gt $defaultBuild) {
+            if ($userInputMinor -gt $defaultMinor -or ($userInputMinor -ge $defaultMinor -and $userInputBuild -gt $defaultBuild)) {
                 $setPackageVersion = $userInputPackageVersion
-                if ($null -eq $offerDetails) {
-                    Write-Host "Package version set to $setPackageVersion"
-                    return $setPackageVersion
-                }
+                
+                Write-Host "Package version set to $setPackageVersion"
+                return $setPackageVersion
+                
             } elseif ($null -eq $offerDetails) {
                 Write-Host "Package version set to $userInputPackageVersion"
                 return $userInputPackageVersion
