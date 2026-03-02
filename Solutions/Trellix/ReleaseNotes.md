@@ -1,3 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
 |-------------|--------------------------------|--------------------------------------------------------|
-| 3.0.0       | 26-02-2026                     | Initial Solution Release                               |
+| 3.0.0       | 26-02-2026                     | Introduce the Trellix solution with a **CCF Data Connector** and parser       |
