@@ -63,7 +63,6 @@ def main(myTimer: func.TimerRequest) -> None:
     access_token = credential.get_token(AZURE_SCOPE).token
     if access_token:
         logging.info("\nAccess Token Retrieved\n")
-        logging.info(access_token)
     else:
         logging.error("\nFailed to retrieve access token\n")
 

@@ -1,0 +1,79 @@
+id: 4ef07345-5d89-4f5b-9c64-a180d81a6176
+name: GSA - TI Domain Entity
+description: |
+  This query identifies Domain indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in GSA NetworkAccessTraffic.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - NetworkAccessTrafficLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let NetworkAccessTraff_ = NetworkAccessTraffic
+  | where TimeGenerated >= ago(dt_lookBack)
+  | where TrafficType == "internet"
+  | where isnotempty(DestinationFqdn)
+  | extend Domain = extract(@'([^.]+\.[^.]+)$', 1, DestinationFqdn)
+  | project-rename GSANetworkAccessTraffic_TimeGenerated = TimeGenerated;
+  let NetworkAccessTraffiDomains =
+      NetworkAccessTraff_
+      | distinct Domain;
+  ThreatIntelIndicators
+    | extend IndicatorType = replace(@'\[|\]|"""', "", tostring(split(ObservableKey, ":", 0)))
+    | where IndicatorType == "domain-name"
+    | extend DomainName = tolower(ObservableValue)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | extend IndicatorId = tostring(split(Id, "--")[2])
+    | where DomainName in (NetworkAccessTraffiDomains)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+    | extend Description = tostring(parse_json(Data).description)
+    | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+    | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
+    | join kind=innerunique (NetworkAccessTraff_) on $left.DomainName == $right.Domain
+    | extend GSAThreatType = ThreatType
+    | summarize GSANetworkAccessTraffic_TimeGenerated = arg_max(GSANetworkAccessTraffic_TimeGenerated, *) by Id, DestinationFqdn
+    | project-reorder *,
+      Tags,
+      TrafficLightProtocolLevel,
+      Type,
+      DomainName,
+      UserPrincipalName,
+      UserId,
+      DeviceId,
+      InitiatingProcessName,
+      GSAThreatType,
+      DestinationUrl,
+      DestinationPort,
+      SourceIp,
+      SourcePort,
+      HttpUserAgent
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: DestinationFqdn
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessName
+kind: Scheduled

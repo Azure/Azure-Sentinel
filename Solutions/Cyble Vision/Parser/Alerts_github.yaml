@@ -1,0 +1,68 @@
+id: 6d3af3e2-0f3b-4c8c-94cb-2c6117dd59aa
+Function:
+  Title: Parser to extract GitHub alerts from Cyble Vision Alerts
+  Version: '1.0.0'
+  LastUpdated: '2025-12-09'
+Category: Microsoft Sentinel Parser
+FunctionName: Alerts_github
+FunctionAlias: Alerts_github
+FunctionQuery: |
+  CybleVisionAlerts_CL
+  | extend Risk_Score = pack("s", RiskScore_s, "e", RiskScore_e, "c", RiskScore_c)
+  | where Service == "github"
+  | extend AlertID = ID
+  | extend Data = parse_json(Data)
+  | extend
+      git_url        = tostring(Data.data.git_url),
+      html_url       = tostring(Data.data.html_url),
+      file_name      = tostring(Data.data.name),
+      file_path      = tostring(Data.data.path),
+      api_url        = tostring(Data.data.url),
+      score          = toint(Data.data.score),
+      sha            = tostring(Data.data.sha)
+  | extend
+      repo_id              = toint(Data.data.repository.id),
+      repo_full_name       = tostring(Data.data.repository.full_name),
+      repo_html_url        = tostring(Data.data.repository.html_url),
+      repo_description     = tostring(Data.data.repository.description),
+      repo_language        = tostring(Data.data.repository.language),
+      repo_fork            = tostring(Data.data.repository.fork),
+      repo_forks_count     = toint(Data.data.repository.forks_count),
+      repo_stars           = toint(Data.data.repository.stargazers_count),
+      repo_private         = tostring(Data.data.repository.private),
+      repo_size            = toint(Data.data.repository.size),
+      repo_updated_at      = tostring(Data.data.repository.updated_at),
+      repo_pushed_at       = tostring(Data.data.repository.pushed_at)
+  | extend
+      owner                = Data.data.repository.owner,
+      owner_login          = tostring(Data.data.repository.owner.login),
+      owner_id             = toint(Data.data.repository.owner.id),
+      owner_html_url       = tostring(Data.data.repository.owner.html_url),
+      owner_avatar_url     = tostring(Data.data.repository.owner.avatar_url),
+      owner_type           = tostring(Data.data.repository.owner.type)
+  | mv-apply textMatch = Data.data.text_matches on ( 
+        summarize 
+            text_fragment   = make_list(textMatch.fragment),
+            object_type     = make_list(textMatch.object_type),
+            object_url      = make_list(textMatch.object_url),
+            property        = make_list(textMatch.property),
+            matches         = make_list(textMatch.matches)
+    )
+  | mv-apply MatchItem = matches on (
+        summarize TM_AllMatchWords = make_set(MatchItem.text)
+    )
+  | project
+      TimeGenerated, AlertID, git_url, html_url, file_name, file_path, api_url, score, sha,
+      repo_id, repo_full_name, repo_html_url, repo_description, repo_language, repo_fork,
+      repo_forks_count, repo_stars, repo_private, repo_size, repo_updated_at, repo_pushed_at,
+      owner_login, owner_id, owner_html_url, owner_avatar_url, owner_type,
+      text_fragment, matches, object_type, object_url, property, Risk_Score,
+      Created_At, Updated_At, Deleted_At, DataID, EntityID, KeywordName, EntityType, Service,
+      CompanyID, Description, Status, AssigneeID, AssignmentDate, ArchiveDate, Severity,
+      UpdatedBy, CreatedBy, UserSeverity, BucketID, Filename, RepositoryName, OwnerName,
+      BucketName, TruePositive, LLMProcessed, LLMExplanation, Tags, ID, Asset, Last_Detected_At,
+      Extension, Compromised_Date, Article_Name, Breach_Source, Breach_Date, Channel_Name,
+      Server_Name, Content_Updated_On, Discussion_Date, Discussion_By, Source_Name, Topic_Name,
+      Source, Alert_Type, Content_Added_On, IOC, First_Seen_On, Last_Seen_On, Old_Risk_Score,
+      New_Risk_Score, IP, Host, Port, Application_Name, Market_Source, Uploaded_At, CVE,
+      Subdomain, Domain, Chat_Title, Username, Search_Engine, Category, Sentiment

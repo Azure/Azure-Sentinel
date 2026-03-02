@@ -38,3 +38,10 @@ LOG_FORMAT = "Armis Alerts Activities Connector: (method = {}) : {}"
 REQUEST_TIMEOUT = 300
 CHECKPOINT_TABLE_NAME = "ArmisAlertActivityCheckpoint"
 FUNCTION_APP_TIMEOUT_SECONDS = 570
+
+DCR_RULE_ID = os.environ.get("DCR_RULE_ID")
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ.get("AZURE_DATA_COLLECTION_ENDPOINT")
+SCOPE = os.environ.get("SCOPE")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")

@@ -1,0 +1,189 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "TacitRed to CrowdStrike IOC Automation",
+    "description": "This playbook fetches compromised credential findings from TacitRed threat intelligence and creates corresponding IOC indicators in CrowdStrike Falcon for automated threat response.",
+    "prerequisites": ["1. TacitRed API Key (obtain from https://app.tacitred.com)\n2. CrowdStrike Falcon OAuth2 API credentials (Client ID and Client Secret) with IOC management permissions"],
+    "postDeployment": [
+      "1. Configure the TacitRed API Key parameter",
+      "2. Configure the CrowdStrike Client ID and Client Secret parameters",
+      "3. Enable the Logic App and configure the recurrence trigger as needed"
+    ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2026-01-22T00:00:00.000Z",
+    "entities": [],
+    "tags": ["ThreatIntelligence", "IOC", "CrowdStrike", "TacitRed"],
+    "support": {
+      "tier": "partner"
+    },
+    "author": {
+      "name": "Data443 Risk Mitigation, Inc."
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "pb-tacitred-to-crowdstrike"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]"
+    },
+    "TacitRed_ApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "TacitRed API Key for authentication"
+      }
+    },
+    "CrowdStrike_ClientId": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "CrowdStrike OAuth2 Client ID"
+      }
+    },
+    "CrowdStrike_ClientSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "CrowdStrike OAuth2 Client Secret"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "TacitRed_ApiKey": {
+            "value": "[parameters('TacitRed_ApiKey')]"
+          },
+          "CrowdStrike_ClientId": {
+            "value": "[parameters('CrowdStrike_ClientId')]"
+          },
+          "CrowdStrike_ClientSecret": {
+            "value": "[parameters('CrowdStrike_ClientSecret')]"
+          }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "TacitRed_ApiUrl": {
+              "type": "string",
+              "defaultValue": "https://app.tacitred.com/api/v1/findings"
+            },
+            "TacitRed_ApiKey": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "CrowdStrike_BaseUrl": {
+              "type": "string",
+              "defaultValue": "https://api.us-2.crowdstrike.com"
+            },
+            "CrowdStrike_TokenPath": {
+              "type": "string",
+              "defaultValue": "/oauth2/token"
+            },
+            "CrowdStrike_IocPath": {
+              "type": "string",
+              "defaultValue": "/iocs/entities/indicators/v1"
+            },
+            "CrowdStrike_ClientId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "CrowdStrike_ClientSecret": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Hour",
+                "interval": 6,
+                "timeZone": "UTC"
+              }
+            }
+          },
+          "actions": {
+            "Get_TacitRed_Findings": {
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "@{parameters('TacitRed_ApiUrl')}?types[]=compromised_credentials&page=1&page_size=50",
+                "headers": {
+                  "accept": "application/json",
+                  "Authorization": "@{parameters('TacitRed_ApiKey')}"
+                }
+              },
+              "runAfter": {}
+            },
+            "Get_CrowdStrike_Token": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "@{parameters('CrowdStrike_BaseUrl')}@{parameters('CrowdStrike_TokenPath')}",
+                "headers": {
+                  "Content-Type": "application/x-www-form-urlencoded"
+                },
+                "body": "client_id=@{parameters('CrowdStrike_ClientId')}&client_secret=@{parameters('CrowdStrike_ClientSecret')}"
+              },
+              "runAfter": {
+                "Get_TacitRed_Findings": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "For_each_Finding": {
+              "type": "Foreach",
+              "foreach": "@body('Get_TacitRed_Findings')?['results']",
+              "runAfter": {
+                "Get_CrowdStrike_Token": [
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "Post_IOC_to_CrowdStrike": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('CrowdStrike_BaseUrl')}@{parameters('CrowdStrike_IocPath')}?ignore_warnings=true",
+                    "headers": {
+                      "Content-Type": "application/json",
+                      "Authorization": "Bearer @{body('Get_CrowdStrike_Token')?['access_token']}"
+                    },
+                    "body": {
+                      "indicators": [
+                        {
+                          "type": "domain",
+                          "value": "@{coalesce(item()?['finding']?['supporting_data']?['site_domain'], item()?['finding']?['supporting_data']?['domain'])}",
+                          "action": "detect",
+                          "severity": "medium",
+                          "description": "TacitRed: @{coalesce(item()?['finding']?['supporting_data']?['stealer'], 'Unknown Stealer')} | Credential: @{coalesce(item()?['finding']?['supporting_data']?['credential'], 'N/A')} | Compromised: @{coalesce(item()?['finding']?['supporting_data']?['date_compromised'], item()?['time'])} | Machine: @{coalesce(item()?['finding']?['supporting_data']?['machine_name'], 'Unknown')} (@{coalesce(item()?['finding']?['supporting_data']?['os'], 'Unknown OS')}) | URL: @{coalesce(item()?['finding']?['supporting_data']?['compromised_url'], 'N/A')} | UID: @{coalesce(item()?['finding']?['uid'], string(item()?['activity_id']))}",
+                          "source": "TacitRed",
+                          "tags": ["compromised_credential", "@{coalesce(item()?['finding']?['supporting_data']?['stealer'], 'stealer')}", "tacitred"],
+                          "platforms": ["windows", "mac", "linux"],
+                          "applied_globally": true
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}

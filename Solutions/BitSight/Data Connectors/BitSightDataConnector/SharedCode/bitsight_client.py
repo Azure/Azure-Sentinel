@@ -239,9 +239,9 @@ class BitSight:
         try:
             # Determine appropriate Azure credentials
             if ".us" in SCOPE:
-                creds = DefaultAzureCredential(authority=AzureAuthorityHosts.AZURE_GOVERNMENT)
+                creds = DefaultAzureCredential(authority=AzureAuthorityHosts.AZURE_GOVERNMENT)      # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
             else:
-                creds = DefaultAzureCredential()
+                creds = DefaultAzureCredential()                                                    # CodeQL [SM05139] CCF based data connector is in development. This will be retired once that data connector is GA.
 
             azure_client = LogsIngestionClient(
                 AZURE_DATA_COLLECTION_ENDPOINT,

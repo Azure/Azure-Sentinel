@@ -135,7 +135,7 @@ ParserQuery: |
           and ((array_length(username_has_any) == 0) or (tostring(EventData.TargetUserName) has_any (username_has_any)) or (tostring(EventData.TargetDomainName) has_any (username_has_any)) or (strcat(tostring(EventData.TargetDomainName), '\\', tostring(EventData.TargetUserName)) has_any (username_has_any)) or (tostring(EventData.SubjectUserName) has_any (username_has_any)) or (tostring(EventData.SubjectDomainName) has_any (username_has_any)) or (strcat(tostring(EventData.SubjectDomainName), '\\', tostring(EventData.SubjectUserName)) has_any (username_has_any)))
           and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
           and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(tostring(EventData.IpAddress), srcipaddr_has_any_prefix)))
-          and (array_length(srchostname_has_any) == 0 or tostring(EventData.WorkstationName) has_any (srchostname_has_any))
+          and (array_length(srchostname_has_any) == 0 or tostring(EventData.WorkstationName) has_any (srchostname_has_any) or Computer has_any (srchostname_has_any))
       // eventtype_in filtering done later in the parser
       // eventresultdetails_in filtering done later in the parser
       // eventresult filtering done later in the parser
@@ -181,8 +181,10 @@ ParserQuery: |
                                       "No match"
                                   )
       | extend 
-          SrcHostname = tostring(EventData.WorkstationName),
+          SrcHostname = tostring(iff(EventData.WorkstationName in ('-', ''), Computer, EventData.WorkstationName)),
           EventProduct = "Security Events"
+      // Filtering on SrcHostname
+      | where (array_length(srchostname_has_any) == 0 or SrcHostname has_any (srchostname_has_any))
       | extend EventStatus= iff(SubStatus == '0x0', Status, SubStatus)
       // -- creating EventMessage matching EventMessage in SecurityEvent table
       | extend
@@ -246,12 +248,10 @@ ParserQuery: |
       | lookup LogonTypes on LogonType
       /// ** Aliases 
       | extend
-          User=TargetUsername
-          ,
-          LogonTarget=TargetDvcHostname
-          ,
-          Dvc=SrcHostname
-          ,
+          User=TargetUsername,
+          LogonTarget=TargetDvcHostname,
+          Dvc=SrcHostname,
+          DvcHostName=SrcHostname,
           IpAddr=SrcIpAddr
       | project-away
           EventData,
@@ -285,7 +285,7 @@ ParserQuery: |
           and ((array_length(username_has_any) == 0) or (TargetUserName has_any (username_has_any)) or (TargetDomainName has_any (username_has_any)) or (strcat(TargetDomainName, '\\', TargetUserName) has_any (username_has_any)) or (SubjectUserName has_any (username_has_any)) or (SubjectDomainName has_any (username_has_any)) or (strcat(SubjectDomainName, '\\', SubjectUserName) has_any (username_has_any)))
           and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
           and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(IpAddress, srcipaddr_has_any_prefix))
-          and ((array_length(srchostname_has_any) == 0) or (WorkstationName has_any (srchostname_has_any)))
+          and ((array_length(srchostname_has_any) == 0) or (WorkstationName has_any (srchostname_has_any)) or (Computer has_any (srchostname_has_any)))
       // eventtype_in filtering done later in the parser
       // eventresultdetails_in filtering done later in the parser
       // eventresult filtering done later in the parser
@@ -329,8 +329,6 @@ ParserQuery: |
           ,
           TargetUserId =TargetUserSid
           ,
-          SrcHostname = WorkstationName
-          ,
           TargetDvcHostname = Computer
           ,
           EventOriginalUid = EventOriginId
@@ -373,6 +371,8 @@ ParserQuery: |
           ,
           SrcDvcOs = 'Windows'
           ,
+          SrcHostname = iff (WorkstationName in ('-', ''), TargetDvcHostname, WorkstationName)
+          ,
           EventStatus= iff(SubStatus == '0x0', Status, SubStatus)
       // mapping ASimMatchingUsername
       | extend
@@ -408,12 +408,10 @@ ParserQuery: |
       | lookup LogonTypes on LogonType
       /// ** Aliases 
       | extend
-          User=TargetUsername
-          ,
-          LogonTarget=TargetDvcHostname
-          ,
-          Dvc=SrcHostname
-          ,
+          User=TargetUsername,
+          LogonTarget=TargetDvcHostname,
+          Dvc=SrcHostname,
+          DvcHostName = SrcHostname,
           IpAddr=SrcIpAddr
       | project-away
           EventStatus,
