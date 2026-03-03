@@ -1,0 +1,39 @@
+id: c3d4e5f6-a7b8-49c0-d1e2-f3a4b5c6d7e8
+name: Copilot - File Uploads Disabled
+description: |
+  'Detects when file uploads are disabled in Copilot. Attackers often disable logging or file upload capabilities to avoid evidence collection and cover their tracks.
+  This rule identifies potential data exfiltration cover-up scenarios where security controls are being disabled.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: CopilotActivity
+    dataTypes:
+      - CopilotActivity
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+query: |
+  CopilotActivity
+  | where RecordType == "DisableCopilotPlugin"
+  | extend Property = extractjson("$.Resource[0].Property", LLMEventData)
+  | extend Old = extractjson("$.Resource[0].OriginalValue", LLMEventData)
+  | extend New = extractjson("$.Resource[0].NewValue", LLMEventData)
+  | where Property == "FileUploads" and Old == "Enabled" and New == "Disabled"
+  | project TimeGenerated, ActorName, SrcIpAddr, Property, Old, New
+  | extend AccountCustomEntity = ActorName, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
