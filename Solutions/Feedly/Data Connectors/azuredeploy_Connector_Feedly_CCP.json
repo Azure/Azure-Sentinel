@@ -1,0 +1,333 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources. Defaults to the resource group location."
+            }
+        },
+        "workspace": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Log Analytics workspace where Microsoft Sentinel is set up."
+            }
+        },
+        "feedlyApiKey": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Your Feedly API token. Generate one at https://feedly.com/i/team/api"
+            }
+        },
+        "feedlyStreamIds": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Comma-separated list of Feedly Stream IDs to ingest IoCs from (e.g. streamId1,streamId2)."
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+        "dataCollectionEndpointId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Insights/dataCollectionEndpoints/', parameters('workspace'))]",
+        "connectorDefinitionName": "FeedlyCCPDefinition",
+        "connectorName": "[concat('FeedlyCCPPolling-', uniqueString(resourceGroup().id))]",
+        "dcrName": "feedlyDCR1",
+        "tableName": "feedly_indicators_CL",
+        "streamName": "Custom-feedly_indicators_CL"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2022-10-01",
+            "name": "[concat(parameters('workspace'), '/', variables('tableName'))]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "totalRetentionInDays":365,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "[variables('tableName')]",
+                    "description": "Feedly IoC data collected from the Feedly API",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "DateTime"
+                        },
+                        {
+                            "name": "indicatorType",
+                            "type": "String",
+                            "description": "Type of indicator (e.g. ipv4-addr, domain-name, url)"
+                        },
+                        {
+                            "name": "indicatorSubType",
+                            "type": "String",
+                            "description": "Subtype classification of the indicator"
+                        },
+                        {
+                            "name": "value",
+                            "type": "String",
+                            "description": "The IoC value — IP address, domain, URL, hash, or email"
+                        },
+                        {
+                            "name": "articleTitle",
+                            "type": "String",
+                            "description": "Title of the source article in Feedly"
+                        },
+                        {
+                            "name": "articleUrl",
+                            "type": "String",
+                            "description": "URL to the source article in Feedly"
+                        },
+                        {
+                            "name": "source",
+                            "type": "String",
+                            "description": "Source publication name"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[variables('dcrName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), variables('tableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                    "Custom-feedly_indicators_CL": {
+                        "columns": [
+                            {
+                                "name": "subtype",
+                                "type": "string"
+                            },
+                            {
+                                "name": "value",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_name",
+                                "type": "string"
+                            },
+                            {
+                                "name": "type",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_entry_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "source_entry_title",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "clv2ws1"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('streamName')]"
+                        ],
+                        "destinations": [
+                            "clv2ws1"
+                        ],
+                        "outputStream": "[variables('streamName')]",
+                        "transformKql": "source | extend TimeGenerated = now(), value = ['value'], indicatorType = ['type'], indicatorSubType = ['subtype'], source = ['source_name'], articleUrl = strcat('https://feedly.com/i/entry/', ['source_entry_id']), articleTitle = ['source_entry_title'] | project TimeGenerated, value, indicatorType, indicatorSubType, source, articleUrl, articleTitle"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectorDefinitionName'))]",
+            "location": "[parameters('location')]",
+            "kind": "Customizable",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+            ],
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "FeedlyCCPDefinition",
+                    "title": "Feedly IoC",
+                    "publisher": "Feedly",
+                    "descriptionMarkdown": "The [Feedly](https://feedly.com/) IoC data connector ingests Indicators of Compromise (IoCs) from the Feedly API into Microsoft Sentinel.",
+                    "graphQueriesTableName": "feedly_indicators_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Feedly IoCs",
+                            "baseQuery": "feedly_indicators_CL\n| summarize count() by bin(TimeGenerated, 1h)"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All IoCs collected",
+                            "query": "feedly_indicators_CL\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "IP addresses",
+                            "query": "feedly_indicators_CL\n| where indicatorType == \"ipv4-addr\"\n| sort by TimeGenerated desc"
+                        },
+                        {
+                            "description": "Domain names",
+                            "query": "feedly_indicators_CL\n| where indicatorType == \"domain-name\"\n| sort by TimeGenerated desc"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "feedly_indicators_CL",
+                            "lastDataReceivedQuery": "feedly_indicators_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "availability": {
+                        "isPreview":false
+                    },
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write":true,
+                                    "read":true,
+                                    "delete":true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Feedly API access",
+                                "description": "A Feedly API token with access to the desired IoC streams. Generate one at https://feedly.com/i/team/api"
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Feedly to Microsoft Sentinel",
+                            "description": "1) Go to https://feedly.com/i/team/api and generate a new API token.\n2) Provide your Feedly API Key and Stream IDs below, then click Connect.",
+                            "instructions": [
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "Feedly API Key",
+                                        "placeholder": "Enter your Feedly API token",
+                                        "type": "password",
+                                        "name": "feedlyApiKey",
+                                        "required":true
+                                    }
+                                },
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "Feedly Stream IDs",
+                                        "placeholder": "streamId1,streamId2,streamId3",
+                                        "type": "text",
+                                        "name": "feedlyStreamIds",
+                                        "required":true
+                                    }
+                                },
+                                {
+                                    "type": "ConnectionToggleButton",
+                                    "parameters": {
+                                        "connectLabel": "Connect",
+                                        "name": "connect"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "apiVersion": "2023-02-01-preview",
+            "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectorName'))]",
+            "location": "[parameters('location')]",
+            "kind": "RestApiPoller",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('connectorDefinitionName'))]"
+            ],
+            "properties": {
+                "connectorDefinitionName": "FeedlyCCPDefinition",
+                "dataType": "feedly_indicators_CL",
+                "dcrConfig": {
+                    "dataCollectionEndpoint": "[variables('dataCollectionEndpointId')]",
+                    "dataCollectionRuleImmutableId": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]",
+                    "streamName": "[variables('streamName')]"
+                },
+                "auth": {
+                    "type": "APIKey",
+                    "ApiKey": "[parameters('feedlyApiKey')]",
+                    "ApiKeyName": "Authorization",
+                    "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                    "apiEndpoint": "https://api.feedly.com/v3/enterprise/ioc",
+                    "httpMethod": "GET",
+                    "rateLimitQPS":10,
+                    "queryWindowInMin":30,
+                    "queryWindowDelayInMin":60,
+                    "queryTimeFormat": "UnixTimestampInMills",
+                    "retryCount":3,
+                    "timeoutInSeconds":90,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    "queryParameters": {
+                        "streamId": "[parameters('feedlyStreamIds')]",
+                        "newerThan": "{_QueryWindowStartTime}",
+                        "olderThan": "{_QueryWindowEndTime}",
+                        "format": "sentinel"
+                    }
+                },
+                "response": {
+                    "eventsJsonPaths": [
+                        "$.objects[*]"
+                    ],
+                    "format": "json"
+                },
+                "paging": {
+                    "pagingType": "LinkHeader"
+                },
+                "isActive":true
+            }
+        }
+    ],
+    "outputs": {
+        "dataConnectorName": {
+            "type": "string",
+            "value": "[variables('connectorName')]"
+        },
+        "dcrImmutableId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]"
+        }
+    }
+}
