@@ -1,0 +1,172 @@
+Parser:
+  Title: Audit Event ASIM parser for Azure SQL Security Audit
+  Version: '0.1.0'
+  LastUpdated: Mar 03, 2026
+Product:
+  Name: Azure SQL Database
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.2'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Azure SQL Security Audit events from the SQLSecurityAuditEvents table and the AzureDiagnostics table (with Category 'SQLSecurityAuditEvents') to the ASIM Audit Event schema.
+ParserName: ASimAuditEventSQLSecurityAudit
+EquivalentBuiltInParser: _ASim_AuditEvent_SQLSecurityAudit
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false){
+    let SqlAuditEventTypeLookup = datatable (ActionType:string, EventType:string)
+    [
+      "SELECT", "Read",
+      "EXECUTE", "Execute",
+      "INSERT", "Create",
+      "UPDATE", "Set",
+      "DELETE", "Delete",
+      "CREATE", "Create",
+      "ALTER", "Set",
+      "DROP", "Delete",
+      "GRANT", "Set",
+      "DENY", "Set",
+      "REVOKE", "Set",
+      "BATCH", "Execute",
+      "LOGIN", "Execute",
+      "LOGOUT", "Execute",
+      "ENABLE", "Enable",
+      "DISABLE", "Disable",
+      "BACKUP", "Read",
+      "RESTORE", "Set",
+      "RENAME", "Set",
+      "TRUNCATE", "Delete",
+      "OPEN", "Execute",
+      "CLOSE", "Execute",
+      "FETCH", "Read",
+      "RECEIVE", "Read"
+    ];
+    let SqlSecurityAuditDedicated = 
+      SQLSecurityAuditEvents
+      | where not(disabled)
+      | project-rename
+          SrcIpAddr = ClientIp,
+          EventOriginalType = ActionName
+      | extend
+          EventOriginalUid = tostring(EventId),
+          ActorUsername = ServerPrincipalName,
+          ActorUserId = tostring(ServerPrincipalId),
+          Object = ObjectName,
+          Operation = EventOriginalType,
+          ActorSessionId = tostring(SessionId),
+          EventResult = iff(Succeeded == true, "Success", "Failure"),
+          TargetAppName = strcat(LogicalServerName, "/", DatabaseName),
+          AdditionalInfo = bag_pack(
+              "Statement", Statement,
+              "SchemaName", SchemaName,
+              "DurationMs", DurationMs,
+              "AffectedRows", AffectedRows,
+              "ResponseRows", ResponseRows,
+              "ApplicationName", ApplicationName,
+              "ClassTypeDescription", ClassTypeDescription,
+              "HostName", HostName
+          )
+      ;
+    let SqlSecurityAuditDiag =
+      AzureDiagnostics
+      | where not(disabled)
+      | where Category == "SQLSecurityAuditEvents"
+      | project-rename
+          SrcIpAddr = client_ip_s,
+          EventOriginalType = action_name_s
+      | extend
+          EventOriginalUid = tostring(event_id_g),
+          ActorUsername = server_principal_name_s,
+          ActorUserId = tostring(server_principal_id_d),
+          Object = object_name_s,
+          Operation = EventOriginalType,
+          ActorSessionId = tostring(session_id_d),
+          EventResult = iff(succeeded_s == "true", "Success", "Failure"),
+          TargetAppName = strcat(LogicalServerName_s, "/", database_name_s),
+          AdditionalInfo = bag_pack(
+              "Statement", statement_s,
+              "SchemaName", schema_name_s,
+              "DurationMs", duration_milliseconds_d,
+              "AffectedRows", affected_rows_d,
+              "ResponseRows", response_rows_d,
+              "ApplicationName", application_name_s,
+              "ClassTypeDescription", class_type_description_s,
+              "HostName", host_name_s
+          )
+      ;
+    union isfuzzy=true SqlSecurityAuditDedicated, SqlSecurityAuditDiag
+    | extend
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventProduct = "Azure SQL Database",
+        EventVendor = "Microsoft",
+        EventSchemaVersion = "0.1.2",
+        EventSchema = "AuditEvent",
+        TargetAppType = "SaaS",
+        ObjectType = "Cloud Resource",
+        ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+        ActorUserIdType = iff(isnotempty(ActorUserId), "Other", ""),
+        EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+    // Map EventType from action name
+    | extend ActionType = toupper(tostring(split(Operation, " ")[0]))
+    | lookup SqlAuditEventTypeLookup on ActionType
+    | extend EventType = iff(isempty(EventType), "Other", EventType)
+    // Recommended fields
+    | extend
+        EventUid = EventOriginalUid,
+        EventResultDetails = iff(EventResult == "Failure", "Other", "")
+    // Aliases
+    | extend
+        IpAddr = SrcIpAddr,
+        User = ActorUsername,
+        Application = TargetAppName,
+        Dst = TargetAppName,
+        Src = SrcIpAddr,
+        Dvc = EventProduct,
+        AdditionalFields = AdditionalInfo
+    | project
+        Type,
+        TimeGenerated,
+        EventOriginalUid,
+        EventUid,
+        EventResult,
+        EventResultDetails,
+        EventSeverity,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventProduct,
+        EventVendor,
+        EventSchemaVersion,
+        EventSchema,
+        EventType,
+        EventOriginalType,
+        Operation,
+        Object,
+        ObjectType,
+        TargetAppName,
+        TargetAppType,
+        ActorUsername,
+        ActorUsernameType,
+        ActorUserId,
+        ActorUserIdType,
+        ActorSessionId,
+        SrcIpAddr,
+        AdditionalFields,
+        IpAddr,
+        User,
+        Application,
+        Dst,
+        Src,
+        Dvc
+  };
+  parser(disabled=disabled)
