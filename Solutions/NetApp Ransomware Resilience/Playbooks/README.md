@@ -25,32 +25,32 @@ The playbooks are designed as **building blocks** that you can combine to create
 **You MUST deploy the playbooks in this specific order:**
 
 ### 1. Authentication Playbook (FIRST)
-Deploy the **NetApp-RansomwareResilience-Auth-Playbook** first. This creates the shared Key Vault and provides authentication services that all other playbooks depend on.
+Deploy the **NetApp-RansomwareResilience-Auth** first. This creates the shared Key Vault and provides authentication services that all other playbooks depend on.
 
 📖 [Auth Playbook Documentation](./NetApp-RansomwareResilience-Auth-Playbook/README.md)
 
 ### 2. Async Poll Playbook (SECOND)
-Deploy the **NetApp-RansomwareResilience-Async-Poll-Playbook** next. This monitors asynchronous operations and is used by most other playbooks.
+Deploy the **NetApp-RansomwareResilience-Async-Poll** next. This monitors asynchronous operations and is used by most other playbooks.
 
 📖 [Async Poll Playbook Documentation](./NetApp-RansomwareResilience_Async_Poll_Playbook/README.md)
 
 ### 3. Enrich IP Playbook (THIRD)
-Deploy the **NetApp-RansomwareResilience-Enrich-IP-Playbook** to enable IP address investigation capabilities.
+Deploy the **NetApp-RansomwareResilience-Enrich-IP** to enable IP address investigation capabilities.
 
 📖 [Enrich IP Playbook Documentation](./NetApp-RansomwareResilience_Enrich_IP_Playbook/README.md)
 
 ### 4. Enrich StorageVM Playbook (FOURTH)
-Deploy the **NetApp-RansomwareResilience-Enrich-StorageVM-Playbook** to enable storage configuration investigation.
+Deploy the **NetApp-RansomwareResilience-Enrich-StorageVM** to enable storage configuration investigation.
 
 📖 [Enrich StorageVM Playbook Documentation](./NetApp-RansomwareResilience_Enrich_StorageVM_Playbook/README.md)
 
 ### 5. Volume Snapshot Playbook (FIFTH)
-Deploy the **NetApp-RansomwareResilience-Volume-Snapshot-Playbook** to enable data protection through snapshots.
+Deploy the **NetApp-RansomwareResilience-Volume-Snapshot** to enable data protection through snapshots.
 
 📖 [Volume Snapshot Playbook Documentation](./NetApp-RansomwareResilience_Volume_Snapshot_Playbook/README.md)
 
 ### 6. Volume Offline Playbook (SIXTH)
-Deploy the **NetApp-RansomwareResilience-Volume-Offline-Playbook** to enable volume isolation capabilities.
+Deploy the **NetApp-RansomwareResilience-Volume-Offline** to enable volume isolation capabilities.
 
 📖 [Volume Offline Playbook Documentation](./NetApp-RansomwareResilience_Volume_Offline_Playbook/README.md)
 

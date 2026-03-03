@@ -1,4 +1,4 @@
-# NetApp Ransomware Resilience Volume Offline Playbook
+# NetApp-RansomwareResilience-Volume-Offline
 
 ## Overview
 This playbook takes NetApp volumes offline to immediately stop access and prevent further damage during a security incident. Taking a volume offline is a protective action that isolates compromised or at-risk storage.

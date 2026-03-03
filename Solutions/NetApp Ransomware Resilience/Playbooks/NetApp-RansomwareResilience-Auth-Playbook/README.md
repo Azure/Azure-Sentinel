@@ -1,4 +1,4 @@
-# NetApp Ransomware Resilience Authentication Playbook
+# NetApp-RansomwareResilience-Auth
 
 ## Overview
 This playbook provides authentication services for all NetApp Ransomware Resilience playbooks. It creates and manages a shared Azure Key Vault that securely stores your NetApp API credentials and handles OAuth2 token generation.

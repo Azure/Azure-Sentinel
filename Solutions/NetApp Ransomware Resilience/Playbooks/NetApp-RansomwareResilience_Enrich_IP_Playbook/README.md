@@ -1,4 +1,4 @@
-# NetApp Ransomware Resilience Enrich IP Playbook
+# NetApp-RansomwareResilience-Enrich-IP
 
 ## Overview
 This playbook enriches IP address information by retrieving detailed network interface data from the NetApp Ransomware Resilience API. It helps you investigate network-related security incidents by providing context about storage network interfaces.

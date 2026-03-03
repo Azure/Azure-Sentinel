@@ -1,4 +1,4 @@
-# NetApp Ransomware Resilience Enrich StorageVM Playbook
+# NetApp-RansomwareResilience-Enrich-StorageVM
 
 ## Overview
 This playbook enriches storage information by retrieving detailed configuration and status data for NetApp Storage Virtual Machines (SVMs). It provides valuable context when investigating incidents involving your NetApp storage infrastructure.

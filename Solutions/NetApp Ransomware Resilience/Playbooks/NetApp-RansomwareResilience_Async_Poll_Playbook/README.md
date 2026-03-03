@@ -1,4 +1,4 @@
-# NetApp Ransomware Resilience Async Poll Playbook
+# NetApp-RansomwareResilience-Async-Poll
 
 ## Overview
 This playbook monitors the status of asynchronous NetApp operations by polling job status until completion or timeout. It acts as a helper playbook for operations that take time to complete.

@@ -1,4 +1,4 @@
-# NetApp Ransomware Resilience Volume Snapshot Playbook
+# NetApp-RansomwareResilience-Volume-Snapshot
 
 ## Overview
 This playbook creates point-in-time snapshots of NetApp volumes to protect your data. When responding to a security incident, snapshots provide a clean recovery point and preserve evidence for investigation.
