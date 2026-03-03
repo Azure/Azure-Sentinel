@@ -24,8 +24,8 @@ SUBCRIPTION_ID = parts[2]
 RESOURCE_GROUP_NAME = parts[4]
 WORKSPACE_NAME = parts[8]
 
-DATA_COLLECTION_ENDPOINT_NAME = "ipinfo-logs-ingestion"
-COMPANY_DCR_NAME = "ipinfo_rule_for_company_table"
+DATA_COLLECTION_ENDPOINT_NAME = f"ipinfo-logs-ingestion-{WORKSPACE_NAME.lower()}"
+COMPANY_DCR_NAME = f"ipinfo_rule_for_company_table-{WORKSPACE_NAME.lower()}"
 COMPANY_TABLE_NAME = "Ipinfo_Company_CL"
 COMPANY_STREAM_DECLARATION = "Custom-Ipinfo_Company_CL"
 
