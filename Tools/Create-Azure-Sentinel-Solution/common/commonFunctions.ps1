@@ -3394,7 +3394,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                 $dict.Add('dataConnectorsApiVersion', '2021-03-01-preview')
                 $dict.Add('huntingOperationalInsightsWorkspacesApiVersion', '2021-06-01')
                 $dict.Add('parserOperationalInsightsWorkspacesApiVersion', '2020-08-01')
-                $dict.Add('savedSearchesApiVersion', '2022-10-01')
+                $dict.Add('savedSearchesApiVersion', '2025-07-01')
                 $dict.Add('alertRuleApiVersion', '2023-02-01-preview')
                 $dict.Add('commonResourceMetadataApiVersion', '2022-01-01-preview')
                 $dict.Add('insightsWorkbookApiVersion', '2021-08-01')

@@ -1,0 +1,200 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Zscaler OAuth2 Authentication",
+        "description": "This playbook obtains OAuth2 access tokens for Zscaler Internet Access (ZIA) integrations using Zscaler ZIdentity OAuth and returns the token response.",
+        "mainSteps": [
+            "1. Requests an access token from the Zscaler OAuth2 token endpoint using client credentials",
+            "2. Returns the token response to the caller"
+        ],
+        "prerequisites": [
+            "1. Zscaler Internet Access (ZIA) subscription with API access enabled",
+            "2. OAuth2 client credentials (Client ID and Client Secret) from the Zscaler admin portal"
+        ],
+        "lastUpdateTime": "2025-09-02T00:00:00.000Z",
+        "entities": [],
+        "tags": [
+            "Utilities"
+        ],
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Zscaler"
+        },
+        "source": {
+            "type": "solution",
+            "name": "Zscaler Internet Access"
+        },
+        "postDeployment": [
+            "**a. Validate**",
+            "Trigger the playbook and confirm a token is returned."
+        ],
+        "releaseNotes": [
+            {
+                "version": "2.0.0",
+                "title": "Zscaler OAuth2 Authentication - ZIdentity",
+                "notes": [
+                    "Updated to use Zscaler native OAuth (ZIdentity)",
+                    "Removed Azure Key Vault dependency",
+                    "Simplified authentication flow"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Zscaler-Oauth2-Authentication",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "OAuthClientId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "OAuth2 client ID for Zscaler API access"
+            }
+        },
+        "OAuthClientSecret": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "OAuth2 client secret for Zscaler API access"
+            }
+        },
+        "OAuthTokenUrl": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Zscaler OAuth2 token endpoint URL (e.g., https://admin.zscaler.net/api/v1/oauth/token or contact your Zscaler admin for the correct endpoint)"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "auth": "Oauth2",
+                "hidden-SentinelTemplateName": "Zscaler-Oauth2-Authentication",
+                "hidden-SentinelTemplateVersion": "2.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "clientId": {
+                            "defaultValue": "[parameters('OAuthClientId')]",
+                            "type": "String"
+                        },
+                        "clientSecret": {
+                            "defaultValue": "[parameters('OAuthClientSecret')]",
+                            "type": "SecureString"
+                        },
+                        "oauthUrl": {
+                            "defaultValue": "[parameters('OAuthTokenUrl')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {}
+                        }
+                    },
+                    "actions": {
+                        "HTTP_Get_OAuth_Token": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "body": "grant_type=client_credentials&client_id=@{encodeUriComponent(parameters('clientId'))}&client_secret=@{encodeUriComponent(parameters('clientSecret'))}",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "uri": "@parameters('oauthUrl')"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Parse_Token_Response": {
+                            "runAfter": {
+                                "HTTP_Get_OAuth_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_Get_OAuth_Token')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "Parse_Token_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": "@body('HTTP_Get_OAuth_Token')",
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "clientId": {
+                        "value": "[parameters('OAuthClientId')]"
+                    },
+                    "clientSecret": {
+                        "value": "[parameters('OAuthClientSecret')]"
+                    },
+                    "oauthUrl": {
+                        "value": "[parameters('OAuthTokenUrl')]"
+                    }
+                }
+            }
+        }
+    ]
+}

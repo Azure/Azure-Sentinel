@@ -1,3 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**         |
 |-------------|--------------------------------|----------------------------|
+| 3.0.2       | 23-02-2026                     | Fixed `SentinelOne_BaseUrl` parameter: default value was hardcoded to `https://usea1-001.sentinelone.net` (a non-existent placeholder URL) since v1.0.0. Customers deploying from Content Hub without changing this field would get a connection timeout on every playbook run. Default is now blank — customers must enter their actual SentinelOne console URL. Updated parameter description and README to guide customers. |
+| 3.0.1       | 17-02-2026                     | Fixed `InvalidResourceLocation` deployment error by removing non-standard `location` parameter from inner template, aligned with standard Content Hub variable pattern. Fixed metadata resource name bracket type. Removed `TacitRed_Domain` filter parameter from deployment UI. Added missing `hidden-SentinelTemplateName` and `hidden-SentinelTemplateVersion` tags for Content Hub template discovery. |
 | 3.0.0       | 09-12-2025                     | Initial Solution Release.  |
