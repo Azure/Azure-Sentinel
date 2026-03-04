@@ -30,6 +30,7 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
    - **All tables from Azure Monitor reference** (`tables_reference.csv`), even if not used by any solution.
    - "Discovered Via" column showing discovery sources (Connector, Content, Azure Monitor, Defender XDR, Sentinel API, Schema)
    - 📖 icon for tables with schema information
+   - 🔶 icon for Custom Log V1 (CLv1) tables with type-suffixed columns
 - **[Content Index](../connector-docs/content/content-index.md)** - All content items organized by type
 - **[Parsers Index](../connector-docs/parsers/parsers-index.md)** - All non-ASIM parsers organized by solution
 - **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema
@@ -133,7 +134,10 @@ connector-docs/
 │   ├── azure-function.md       # Azure Function-based connectors
 │   ├── native.md                # Native Microsoft integrations
 │   ├── rest-api.md              # REST API/webhook connectors
-│   └── unknown.md               # Connectors with unknown method
+│   ├── unknown.md               # Connectors with unknown method
+│   ├── log-ingestion-api.md     # Connectors using Log Ingestion API
+│   ├── http-data-collector-api.md # Connectors using HTTP Data Collector API
+│   └── undetermined.md             # Connectors with undetermined API (mixed signals)
 ├── content/                     # Content item documentation
 │   ├── content-index.md         # Main content index with type summary table
 │   ├── analytic-rules.md        # Analytics rules main index
@@ -185,7 +189,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors)
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), and Custom Log V1 (CLv1) indicator
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria
@@ -195,7 +199,7 @@ connector-docs/
 
 **Table Pages** include:
 - **Table description** from Azure Monitor documentation
-- **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, and documentation links
+- **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, Custom Log V1 (CLv1) indicator, and documentation links
 - **Schema** section with column definitions (name, type, description, source) from `table_schemas.csv`. Columns are deduplicated across sources; Description and Source columns are shown only when relevant data exists. Source attribution with links is shown at the top of the section
 - **Additional Information** section (from overrides, if configured)
 - **Solutions** section listing all solutions using this table
@@ -238,10 +242,18 @@ connector-docs/
 - **Statistics** with connector and solution counts
 - **Connectors Using This Method** table with connector title, solution, and support tier
 
+**Ingestion API Pages** (under `methods/` directory) include:
+- API name and description (Log Ingestion API, HTTP Data Collector API, Both)
+- **Documentation** links to Microsoft Learn
+- **Statistics** with total/active/deprecated/unpublished counts
+- **By Collection Method** breakdown showing which collection methods use this API
+- **Connectors Using This API** table with connector title, collection method, publisher, tables, and solution
+
 **Statistics Page** includes:
 - **Terminology** section with definitions for key concepts (Published, Deprecated, Discovered, Standalone, GitHub Only, etc.)
 - **Solutions** section with statistics by publication status, support tier, and content
 - **Connectors** section with statistics by collection method, deprecation status, and support tier cross-tabulation
+- **Ingestion API** subsection with API summary and by-collection-method breakdown for API-based connectors
 - **CCF Capabilities** subsection with connector kind distribution, authentication methods, and request features for CCF/CCF Push/CCF Legacy connectors
 - **Tables** section with statistics by source, category, and usage
 - **Content Items** section with statistics by type and source classification
