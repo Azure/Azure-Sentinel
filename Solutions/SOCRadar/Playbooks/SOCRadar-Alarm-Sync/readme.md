@@ -5,13 +5,13 @@ Syncs closed Microsoft Sentinel incidents back to SOCRadar with classification m
 ## Features
 
 - Monitors recently closed SOCRadar-tagged incidents
-- Maps Sentinel classification to SOCRadar status
+- Maps Microsoft Sentinel classification to SOCRadar status
 - Synced tag prevents duplicate sync operations
 - Configurable polling interval
 
 ## Classification Mapping
 
-| Sentinel Classification | SOCRadar Status |
+| Microsoft Sentinel Classification | SOCRadar Status |
 |------------------------|-----------------|
 | FalsePositive | FALSE_POSITIVE |
 | BenignPositive | MITIGATED |
@@ -28,4 +28,4 @@ You can also install this playbook via **Microsoft Sentinel Content Hub**.
 
 - SOCRadar XTI Platform API Key
 - Microsoft Sentinel workspace with SOCRadar incidents
-- Managed Identity with Sentinel Responder role (default, Contributor optional)
+- Managed Identity with Microsoft Sentinel Responder role (default, Contributor optional)

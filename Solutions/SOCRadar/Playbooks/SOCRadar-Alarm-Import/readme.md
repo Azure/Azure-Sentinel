@@ -5,7 +5,7 @@ Imports SOCRadar XTI platform alarms into Microsoft Sentinel as incidents.
 ## Features
 
 - Paginated alarm fetching (100 per page)
-- Duplicate detection via Sentinel API
+- Duplicate detection via Microsoft Sentinel API
 - Severity and status mapping
 - Optional closed alarm import with classification
 - Automatic tagging (SOCRadar, alarm type, sub type)
@@ -16,7 +16,7 @@ Imports SOCRadar XTI platform alarms into Microsoft Sentinel as incidents.
 
 - SOCRadar XTI Platform API Key
 - Microsoft Sentinel workspace
-- Managed Identity with Sentinel Responder role (default, Contributor optional)
+- Managed Identity with Microsoft Sentinel Responder role (default, Contributor optional)
 
 ## Deployment
 

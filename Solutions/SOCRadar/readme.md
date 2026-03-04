@@ -4,19 +4,19 @@
 
 ## Overview
 
-The SOCRadar solution for Microsoft Sentinel provides bidirectional integration between SOCRadar XTI Platform and Microsoft Sentinel. Import SOCRadar alarms as Sentinel incidents and sync closed incidents back to SOCRadar with classification mapping.
+The SOCRadar solution for Microsoft Sentinel provides bidirectional integration between SOCRadar XTI Platform and Microsoft Sentinel. Import SOCRadar alarms as Microsoft Sentinel incidents and sync closed incidents back to SOCRadar with classification mapping.
 
 ## Key Features
 
 **Alarm Import**
-- Automatically imports SOCRadar alarms as Sentinel incidents
+- Automatically imports SOCRadar alarms as Microsoft Sentinel incidents
 - Paginated fetching with duplicate prevention
 - Severity and status mapping
 - Tags for categorization (SOCRadar, alarm type, sub type)
 - Optional closed alarm import with classification
 
 **Bidirectional Sync**
-- Closed incidents in Sentinel update alarm status in SOCRadar
+- Closed incidents in Microsoft Sentinel update alarm status in SOCRadar
 - Classification mapping: TruePositive to Resolved, FalsePositive to False Positive, BenignPositive to Mitigated
 
 **Analytics**
@@ -43,8 +43,8 @@ Install the SOCRadar solution from the Microsoft Sentinel **Content Hub**.
 
 | Playbook | Description |
 |----------|-------------|
-| [SOCRadar-Alarm-Import](Playbooks/SOCRadar-Alarm-Import) | Imports SOCRadar alarms as Sentinel incidents |
-| [SOCRadar-Alarm-Sync](Playbooks/SOCRadar-Alarm-Sync) | Syncs closed Sentinel incidents back to SOCRadar |
+| [SOCRadar-Alarm-Import](Playbooks/SOCRadar-Alarm-Import) | Imports SOCRadar alarms as Microsoft Sentinel incidents |
+| [SOCRadar-Alarm-Sync](Playbooks/SOCRadar-Alarm-Sync) | Syncs closed Microsoft Sentinel incidents back to SOCRadar |
 
 Both playbooks use Managed Identity for authentication. Logic Apps start 3 minutes after deployment to allow Azure role propagation.
 
