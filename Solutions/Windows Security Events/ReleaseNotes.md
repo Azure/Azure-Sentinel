@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.0.12      | 18-02-2026                     | Removed external blog reference text from "Remote Scheduled Task Creation or Update using ATSVC Named Pipe" and " Scheduled Task Creation or Update from User Writable Directory" **hunting query** description | 
 | 3.0.11      | 28-01-2026                     | Updated **Analytic Rule** to fix the link from the description &  Update **Analytic Rule** NonDCActiveDirectoryReplication - to reduce false positive results |
 | 3.0.10      | 12-01-2026                     | Update **Analytic Rule** NonDCActiveDirectoryReplication - fix swapped fields   |
 | 3.0.9       | 01-10-2024                     | Removed kind from  **Hunting Query** [Service installation from user writable directory]   |
