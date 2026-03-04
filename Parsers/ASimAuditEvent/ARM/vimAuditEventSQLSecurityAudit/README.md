@@ -1,8 +1,9 @@
-# SQLSecurityAudit ASIM AuditEvent Normalization Parser
+# SQLSecurityAudit Logs ASIM AuditEvent Normalization Parser
 
-ARM template for ASIM AuditEvent schema parser for SQLSecurityAudit.
+ARM template for ASIM AuditEvent schema parser for SQLSecurityAudit Logs.
 
 This ASIM parser supports filtering and normalizing Azure SQL Security Audit events from the SQLSecurityAuditEvents table and the AzureDiagnostics table (with Category 'SQLSecurityAuditEvents') to the ASIM Audit Event schema.
+
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
 
