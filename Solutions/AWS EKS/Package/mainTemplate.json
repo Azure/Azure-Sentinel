@@ -1,0 +1,836 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for AWS EKS"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "AWS EKS",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-awseks",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "AWSEKSConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "AWSEKSConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "AWS EKS Data Connector (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "AWSEKSConnector",
+                  "title": "AWS EKS Data Connector (via Codeless Connector Framework)",
+                  "publisher": "Amazon Web Services",
+                  "descriptionMarkdown": "The AWS EKS data connector provides the capability to ingest logs from [Amazon Elastic Kubernetes Service](https://aws.amazon.com/eks/) into Microsoft Sentinel. This connector allows you to receive and process messages from your SQS queues, making them available for security monitoring and analysis. The connector supports both standard and FIFO queues and provides comprehensive message metadata including attributes, timestamps, and sender information.",
+                  "graphQueriesTableName": "AWSEKSLogs_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total messages received",
+                      "legend": "AWS EKS Messages",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "All AWS EKS messages",
+                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+                    },
+                    {
+                      "description": "Get sample of AWS EKS messages",
+                      "query": "{{graphQueriesTableName}}\n| take 10"
+                    },
+                    {
+                      "description": "Summary by cluster name",
+                      "query": "{{graphQueriesTableName}}\n| summarize count() by ClusterName"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "AWSEKSLogs_CL",
+                      "lastDataReceivedQuery": "AWSEKSLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Configuration",
+                      "description": "Configure the AWS EKS connector with your queue details and credentials.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "> [!NOTE]\n> This data connector requires AWS credentials with appropriate SQS permissions to receive messages from your queues."
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "> [!IMPORTANT]\n> Ensure your AWS credentials have the following SQS permissions:\n> - `sqs:ReceiveMessage`\n> - `sqs:DeleteMessage` (if deleteMessageAfterReceive is enabled)\n> - `sqs:GetQueueAttributes`"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Queue URL",
+                            "placeholder": "The full AWS EKS queue URL (e.g., https://sqs.region.amazonaws.com/account-id/queue-name)",
+                            "type": "text",
+                            "name": "queueUrl"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Role ARN",
+                            "placeholder": "The AWS IAM Role ARN for cross-account access (e.g., arn:aws:iam::123456789012:role/SentinelRole)",
+                            "type": "text",
+                            "name": "roleArn"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "2. Advanced Configuration (Optional)",
+                      "description": "Configure advanced SQS polling settings.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "**Optional Settings:**"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **Max Messages**: Number of messages to retrieve per polling operation (1-10, default: 10)"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **Visibility Timeout**: Duration (in seconds) that messages are hidden from other consumers (0-43200, default: 30)"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **Wait Time**: Long polling wait time in seconds (0-20, default: 20)"
+                          }
+                        },
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "- **Delete After Receive**: Whether to automatically delete messages after processing (default: true)"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "title": "3. Connect",
+                      "description": "Enable the AWS EKS connector.",
+                      "instructions": [
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "AWSEKSDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-AWSEKSLogs_CL": {
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "AwsAccountId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Region",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ClusterName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Verb",
+                        "type": "string"
+                      },
+                      {
+                        "name": "User",
+                        "type": "string"
+                      },
+                      {
+                        "name": "SourceIPs",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "UserAgent",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ObjectRef",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResponseCode",
+                        "type": "int"
+                      },
+                      {
+                        "name": "Stage",
+                        "type": "string"
+                      },
+                      {
+                        "name": "AuthDecision",
+                        "type": "string"
+                      },
+                      {
+                        "name": "RawEvent",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws2"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-AWSEKSLogs_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws2"
+                    ],
+                    "outputStream": "Custom-AWSEKSLogs_CL",
+                    "transformKql": "source | extend TimeGenerated = now() | project TimeGenerated , AwsAccountId , Region , ClusterName , Verb , User , SourceIPs , UserAgent , ObjectRef , ResponseCode , Stage , AuthDecision , RawEvent"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "AWSEKSLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "retentionInDays": 180,
+                "schema": {
+                  "name": "AWSEKSLogs_CL",
+                  "description": "AWS EKS Messages connector table for ingesting messages from Amazon EKS",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Time generated"
+                    },
+                    {
+                      "name": "AwsAccountId",
+                      "type": "string",
+                      "description": "Aws account id"
+                    },
+                    {
+                      "name": "Region",
+                      "type": "string",
+                      "description": "Region"
+                    },
+                    {
+                      "name": "ClusterName",
+                      "type": "string",
+                      "description": "Cluster name"
+                    },
+                    {
+                      "name": "Verb",
+                      "type": "string",
+                      "description": "Verb"
+                    },
+                    {
+                      "name": "User",
+                      "type": "string",
+                      "description": "User"
+                    },
+                    {
+                      "name": "SourceIPs",
+                      "type": "dynamic",
+                      "description": "Source i ps"
+                    },
+                    {
+                      "name": "UserAgent",
+                      "type": "string",
+                      "description": "User agent"
+                    },
+                    {
+                      "name": "ObjectRef",
+                      "type": "string",
+                      "description": "Object ref"
+                    },
+                    {
+                      "name": "ResponseCode",
+                      "type": "int",
+                      "description": "Response code"
+                    },
+                    {
+                      "name": "Stage",
+                      "type": "string",
+                      "description": "Stage"
+                    },
+                    {
+                      "name": "AuthDecision",
+                      "type": "string",
+                      "description": "Auth decision"
+                    },
+                    {
+                      "name": "RawEvent",
+                      "type": "dynamic",
+                      "description": "Raw event"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "AWSEKSConnector",
+          "title": "AWS EKS Data Connector (via Codeless Connector Framework)",
+          "publisher": "Amazon Web Services",
+          "descriptionMarkdown": "The AWS EKS data connector provides the capability to ingest logs from [Amazon Elastic Kubernetes Service](https://aws.amazon.com/eks/) into Microsoft Sentinel. This connector allows you to receive and process messages from your SQS queues, making them available for security monitoring and analysis. The connector supports both standard and FIFO queues and provides comprehensive message metadata including attributes, timestamps, and sender information.",
+          "graphQueriesTableName": "AWSEKSLogs_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total messages received",
+              "legend": "AWS EKS Messages",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "All AWS EKS messages",
+              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+            },
+            {
+              "description": "Get sample of AWS EKS messages",
+              "query": "{{graphQueriesTableName}}\n| take 10"
+            },
+            {
+              "description": "Summary by cluster name",
+              "query": "{{graphQueriesTableName}}\n| summarize count() by ClusterName"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "AWSEKSLogs_CL",
+              "lastDataReceivedQuery": "AWSEKSLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Configuration",
+              "description": "Configure the AWS EKS connector with your queue details and credentials.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "> [!NOTE]\n> This data connector requires AWS credentials with appropriate SQS permissions to receive messages from your queues."
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "> [!IMPORTANT]\n> Ensure your AWS credentials have the following SQS permissions:\n> - `sqs:ReceiveMessage`\n> - `sqs:DeleteMessage` (if deleteMessageAfterReceive is enabled)\n> - `sqs:GetQueueAttributes`"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Queue URL",
+                    "placeholder": "The full AWS EKS queue URL (e.g., https://sqs.region.amazonaws.com/account-id/queue-name)",
+                    "type": "text",
+                    "name": "queueUrl"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Role ARN",
+                    "placeholder": "The AWS IAM Role ARN for cross-account access (e.g., arn:aws:iam::123456789012:role/SentinelRole)",
+                    "type": "text",
+                    "name": "roleArn"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "2. Advanced Configuration (Optional)",
+              "description": "Configure advanced SQS polling settings.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "**Optional Settings:**"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **Max Messages**: Number of messages to retrieve per polling operation (1-10, default: 10)"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **Visibility Timeout**: Duration (in seconds) that messages are hidden from other consumers (0-43200, default: 30)"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **Wait Time**: Long polling wait time in seconds (0-20, default: 20)"
+                  }
+                },
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "- **Delete After Receive**: Whether to automatically delete messages after processing (default: true)"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "3. Connect",
+              "description": "Enable the AWS EKS connector.",
+              "instructions": [
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "AWS EKS Data Connector (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "AWS EKS Data Connector (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "queueUrl": {
+              "defaultValue": "queueUrl",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "roleArn": {
+              "defaultValue": "roleArn",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'sqsDataPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "AmazonWebServicesS3",
+              "properties": {
+                "sqsConfig": {
+                  "queueUrl": "[[parameters('queueUrl')]",
+                  "maxNumberOfMessages": 10,
+                  "visibilityTimeout": 30,
+                  "waitTimeSeconds": 20,
+                  "deleteMessageAfterReceive": true,
+                  "messageAttributeNames": [
+                    "All"
+                  ],
+                  "attributeNames": [
+                    "All"
+                  ]
+                },
+                "response": {
+                  "format": "json",
+                  "eventsJsonPaths": [
+                    "$[*]"
+                  ]
+                },
+                "roleArn": "[[parameters('roleArn')]",
+                "sqsUrls": [
+                  "[[parameters('queueUrl')]"
+                ],
+                "dataTypes": {
+                  "logs": {
+                    "state": "enabled"
+                  }
+                },
+                "destinationTable": "",
+                "dataFormat": {
+                  "Format": "Json",
+                  "IsCompressed": true,
+                  "compressType": "Gzip"
+                },
+                "connectorDefinitionName": "AWSEKSConnector",
+                "dataType": "AWSEKSLogs_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-AWSEKSLogs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "AWS EKS",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/AWS%20EKS/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The AWS EKS solution for Microsoft Sentinel allows you to ingest Amazon Elastic Kubernetes Service (EKS) audit logs into Microsoft Sentinel. This connector provides the capability to monitor and analyze Kubernetes cluster activities, API server calls, and security events from your EKS environments for comprehensive security monitoring and threat detection.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Aws.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "AWS EKS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-03-04",
+        "providers": [
+          "Amazon Web Services"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
