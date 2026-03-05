@@ -1,0 +1,43 @@
+id: 7a2b6c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
+name: AI Agents - HTTP Requests to Non-HTTPS Endpoints
+description: |
+  This query identifies Copilot Studio AI agents that send HTTP requests to endpoints using non-HTTPS schemes. 
+  Communication over unencrypted HTTP exposes sensitive data in transit and increases the risk of interception or tampering. 
+  Attackers could exploit this to capture credentials, session tokens, or other confidential information, leading to data breaches or unauthorized access.
+  Recommended Action: Review these agents and update all HTTP actions to use HTTPS endpoints. 
+  If non-secure communication is absolutely required for a specific business case, document the justification and apply compensating controls such as network-level encryption or IP restrictions.
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+  - CredentialAccess
+relevantTechniques:
+  - T1071
+  - T1040
+query: |
+  AIAgentsInfo 
+  | summarize arg_max(Timestamp, *) by AIAgentId 
+  | where AgentStatus != "Deleted" 
+  | mvexpand Topic = AgentTopicsDetails 
+  | where Topic has "HttpRequestAction" 
+  | extend TopicActions = Topic.beginDialog.actions 
+  | mvexpand action = TopicActions 
+  | where action['$kind'] == "HttpRequestAction" 
+  | extend Url = tostring(action.url.literalValue) 
+  | extend ParsedUrl = parse_url(Url) 
+  | extend Scheme = tostring(ParsedUrl["Scheme"]) 
+  | where isnotempty(Scheme) and Scheme != "https" 
+  | project-reorder AgentCreationTime, AIAgentId, AIAgentName, ParsedUrl, Url, AgentStatus, CreatorAccountUpn, OwnerAccountUpns, Topic
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatorAccountUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: AIAgentName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0

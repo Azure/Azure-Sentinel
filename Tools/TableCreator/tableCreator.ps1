@@ -1,16 +1,17 @@
 <#
 .SYNOPSIS
-    Creates a new Sentinel table with the same schema as an existing table.
+    Creates a new Sentinel table with the same schema as an existing table, or BYOS (bring-your-own-schema).
 
 .DESCRIPTION
     This script queries the schema of an existing Sentinel table and creates a new table with the same schema.
+    Alternatively, you can provide a JSON schema file (bring-your-own-schema).
     It supports Analytics, Auxiliary/Data Lake, and Basic table types, and allows for retention settings and conversion of dynamic columns to string for Auxiliary/Data Lake tables.
     The script prompts for any missing parameters and can be run interactively or with command-line arguments.
 
 .PARAMETER FullResourceId
     The full resource ID of the Sentinel/Log Analytics Workspace. If not provided, you will be prompted.
     Resource ID can be found in Log Analytics Workspace > JSON View > Copy button.
-    To hardcode the Resource ID for your environment, edit the $resourceId variable in the script (line 70).
+    To hardcode the Resource ID for your environment, edit the $resourceId variable in the script (line 78).
 
 .PARAMETER tableName
     The name of the existing table to copy the schema from (e.g., SecurityEvent).
@@ -32,27 +33,34 @@
     For Auxiliary/Data Lake tables, converts dynamic columns to string. 
     PRO TIP: If the copied table has dynamic columns, you may create it initially as Analytics, and then change to Data Lake later. This will preserve the dynamic types.
 
-.PARAMETER tenantId
+.PARAMETER TenantId
     Azure tenant ID. Required only if not running in Azure Cloud Shell.
     Requires the Az PowerShell module installed.
+
+.PARAMETER SchemaFile
+    Path to a JSON schema file (bring-your-own-schema). If provided, the schema will be read from this file instead of querying an existing table.
 
 .EXAMPLE
     .\tableCreator.ps1 -tableName MyTable -newTableName MyNewTable_CL -type analytics -retention 180 -totalRetention 365
 
 .EXAMPLE
-    .\tableCreator.ps1 -ConvertToString
+    .\tableCreator.ps1 -TenantId YOUR_TENANT_ID -FullResourceId /subscriptions/YOUR_SUBSCRIPTION_ID/resourcegroups/YOUR_RESOURCE_GROUP/providers/Microsoft.OperationalInsights/workspaces/YOUR_WORKSPACE_NAME
+
+.EXAMPLE
+    .\tableCreator.ps1 -SchemaFile mySchema.json -newTableName MyNewTable_CL -type datalake
 
 #>
 
 # Define parameters for the script
 param (
-    [string]$tenantId,
+    [string]$TenantId,
     [string]$tableName,
     [string]$newTableName,
     [string]$type,
     [int]$retention,
     [int]$totalRetention,
     [switch]$ConvertToString,
+    [string]$SchemaFile,                    # New: path to a JSON schema file (bring-your-own-schema)
     [ValidateScript({
         if ($_ -match '^/subscriptions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/resourcegroups/[a-zA-Z0-9-_]+/providers/microsoft.operationalinsights/workspaces/[a-zA-Z0-9-_]+$') {
             $true
@@ -75,14 +83,52 @@ if($FullResourceId){
 }
 ##################################################################################################################
 
+# Immediately read/validate SchemaFile (fail early)
+if ($SchemaFile) {
+    if (-not (Test-Path -Path $SchemaFile)) {
+        Write-Host "[Error] Schema file '$SchemaFile' not found." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "[Using schema from file: $SchemaFile]" -ForegroundColor Green
+
+    try {
+        $raw = Get-Content -Raw -Path $SchemaFile
+        $schemaArray = $raw | ConvertFrom-Json
+    } catch {
+        Write-Host "[Error] Failed to read/parse JSON schema file: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not ($schemaArray -is [System.Array])) {
+        Write-Host "[Error] Schema file must contain a JSON array of objects with 'name' and 'type' properties." -ForegroundColor Red
+        exit 1
+    }
+
+    # Normalize to the same structure the script expects from getschema
+    $queryResult = $schemaArray | ForEach-Object {
+        [pscustomobject]@{
+            ColumnName = $_.name
+            ColumnType = $_.type
+        }
+    }
+}
+# End SchemaFile handling
+
 # Connect Azure Account, no need to run in Cloud Shell, but you do need the Az module installed. 
-if ($tenantId) {
-    Connect-AzAccount -TenantId $tenantId
+if ($TenantId) {
+    try {
+        Connect-AzAccount -TenantId $TenantId -ErrorAction Stop
+    }
+    catch {
+        Write-Host "[Error] Failed to connect to Azure: $($_.Exception.Message)" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # Display the banner
 Write-Host " +=======================+" -ForegroundColor Green
-Write-Host " | tableCreator.ps1 v2.4 |" -ForegroundColor Green
+Write-Host " | tableCreator.ps1 v2.5 |" -ForegroundColor Green
 Write-Host " +=======================+" -ForegroundColor Green
 Write-Host ""
 
@@ -117,12 +163,15 @@ if ($resourceId -eq "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/YOUR_RES
 }
 
 # Prompt for input if necessary
-if (-not $tableName) {
-    $tableName = PromptForInput "Enter Table Name to get Schema from"
-} 
+# If SchemaFile is provided we don't need the source $tableName.
+if (-not $SchemaFile) {
+    if (-not $tableName) {
+        $tableName = PromptForInput "Enter table name to get schema from"
+    } 
+}
 
 if (-not $newTableName) {
-    $newTableName = PromptForInput "Enter new Table Name to be created with the same Schema (remember _CL -suffix)"
+    $newTableName = PromptForInput "Enter new table name to be created with the schema (remember _CL -suffix)"
 }
 
 # Prompt for table type, defaulting to 'analytics' if not provided
@@ -165,42 +214,47 @@ if (-not $totalRetention) {
 }
 
 # Set query to get the schema of the specified table
-$query = "$tableName | getschema | project ColumnName, ColumnType"
+# If $queryResult is already populated (from SchemaFile), skip querying the workspace.
+if ($queryResult) {
+    # Schema already loaded from file; nothing to do here.
+} else {
+    $query = "$tableName | getschema | project ColumnName, ColumnType"
 
-# Query the workspace to get the schema
-Write-Host "[Querying $tableName table schema...]"
+    # Query the workspace to get the schema
+    Write-Host "[Querying $tableName table schema...]"
 
-# Construct the request body
-$body = @{
-    query = $query
-} | ConvertTo-Json -Depth 2
+    # Construct the request body
+    $body = @{
+        query = $query
+    } | ConvertTo-Json -Depth 2
 
-$response = Invoke-AzRestMethod -Path "$resourceId/query?api-version=2017-10-01" -Method POST  -Payload $body
+    $response = Invoke-AzRestMethod -Path "$resourceId/query?api-version=2017-10-01" -Method POST  -Payload $body
 
-# Convert Content from JSON string to PowerShell object
-$data = $response.Content | ConvertFrom-Json
+    # Convert Content from JSON string to PowerShell object
+    $data = $response.Content | ConvertFrom-Json
 
-# Check if the response is successful
-if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 202) {
-    Write-Host "[Table schema successfully captured]"
-}
-else {
-    # Output error details if the creation failed
-    Write-Host "[Error] Failed to query the table '$TableName'. Status code: $($response.StatusCode)" -ForegroundColor Red
-
-    exit
-}
-
-# do the mapping to queryResult
-$columns = $data.tables[0].columns
-$rows = $data.tables[0].rows
-
-$queryResult = $rows | ForEach-Object {
-    $object = @{}
-    for ($i = 0; $i -lt $columns.Count; $i++) {
-        $object[$columns[$i].name] = $_[$i]
+    # Check if the response is successful
+    if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 202) {
+        Write-Host "[Table schema successfully captured]"
     }
-    [pscustomobject]$object
+    else {
+        # Output error details if the creation failed
+        Write-Host "[Error] Failed to query the table '$TableName'. Status code: $($response.StatusCode)" -ForegroundColor Red
+
+        exit
+    }
+
+    # do the mapping to queryResult
+    $columns = $data.tables[0].columns
+    $rows = $data.tables[0].rows
+
+    $queryResult = $rows | ForEach-Object {
+        $object = @{}
+        for ($i = 0; $i -lt $columns.Count; $i++) {
+            $object[$columns[$i].name] = $_[$i]
+        }
+        [pscustomobject]$object
+    }
 }
 
 ## Prepare an array to hold names of columns converted to string

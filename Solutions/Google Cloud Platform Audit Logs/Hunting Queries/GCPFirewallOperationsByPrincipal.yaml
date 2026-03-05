@@ -1,0 +1,81 @@
+id: 9c4b2f7e-6d8a-4e9b-8f5c-2a3d7e9f6b4a
+name: GCP Audit Logs - List All GCP Firewall Operations by Principal
+description: |
+  Lists all Google Cloud Platform firewall rule operations performed by principals (users and service accounts).
+description-detailed: |
+  This hunting query provides visibility into all firewall rule modifications across GCP projects by aggregating operations per principal.
+  Use this query to investigate firewall management activity, suspicious changes, and ensure firewall modifications are being performed by authorized personnel following proper change management procedures.
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+tactics:
+  - DefenseEvasion
+  - InitialAccess
+relevantTechniques:
+  - T1562.004
+  - T1133
+tags:
+  - Cloud Security
+  - Network Security
+  - Firewall Management
+query: |
+  GCPAuditLogs
+  | where ServiceName == "compute.googleapis.com"
+  | where MethodName has_any ("compute.firewalls.insert", "compute.firewalls.patch", "compute.firewalls.delete", "compute.firewalls.update")
+  | where GCPResourceType == "gce_firewall_rule"
+  | extend 
+      RequestMetadataJson = parse_json(RequestMetadata),
+      RequestJson = parse_json(Request)
+  | extend 
+      FirewallRuleName = coalesce(
+          extract(@"firewalls/([^/]+)$", 1, GCPResourceName),
+          tostring(RequestJson.name)),
+      SourceRanges = RequestJson.sourceRanges,
+      Direction = tostring(RequestJson.direction),
+      CallerIP = tostring(RequestMetadataJson.callerIp),
+      UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),
+      OperationType = case(
+          MethodName has "insert", "Created",
+          MethodName has "patch", "Modified",
+          MethodName has "update", "Updated",
+          MethodName has "delete", "Deleted",
+          "Other")
+  | summarize 
+      TotalOperations = count(),
+      OperationTypes = make_set(OperationType, 10),
+      FirewallRulesAffected = make_set(FirewallRuleName, 100),
+      Projects = make_set(ProjectId, 50),
+      SourceIPs = make_set(CallerIP, 20),
+      FirstOperation = min(TimeGenerated),
+      LastOperation = max(TimeGenerated)
+      by PrincipalEmail
+  | extend 
+      RuleCount = array_length(FirewallRulesAffected),
+      ProjectCount = array_length(Projects),
+      AccountName = tostring(split(PrincipalEmail, "@")[0]), 
+      AccountUPNSuffix = tostring(split(PrincipalEmail, "@")[1])
+  | project 
+      PrincipalEmail,
+      TotalOperations,
+      RuleCount,
+      ProjectCount,
+      OperationTypes,
+      FirewallRulesAffected,
+      Projects,
+      SourceIPs,
+      FirstOperation,
+      LastOperation,
+      AccountName,
+      AccountUPNSuffix
+  | sort by TotalOperations desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrincipalEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 1.0.0

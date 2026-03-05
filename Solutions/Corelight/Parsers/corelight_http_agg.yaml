@@ -1,0 +1,186 @@
+id: 204fc13c-53f1-42f8-a101-d68e653f216f
+Function:
+  Title: Corelight HTTP Aggregated Events
+  Version: '1.1.0'
+  LastUpdated: '2025-11-26'
+Category: Microsoft Sentinel Parser
+FunctionName: corelight_http_agg
+FunctionAlias: corelight_http_agg
+FunctionQuery: |
+  let StatusLookup = datatable(
+        status: string,
+        action: string
+    )[
+        "success","allowed",
+        "failure","blocked",
+        "200","success",
+        "204","success",
+        "206","success",
+        "207","success",
+        "301","success",
+        "302","success",
+        "303","success",
+        "304","success",
+        "307","success",
+        "400","failure",
+        "401","failure",
+        "403","failure",
+        "404","failure",
+        "408","failure",
+        "500","failure",
+        "503","failure",
+        "504","failure"
+    ];
+    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_http_agg = view () {
+        union isfuzzy=true
+            Corelight_v2_http_agg_CL,
+            dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter 
+            ( corelight_conn
+            | project uid, local_orig, local_resp    
+            ) on $left.uid_s == $right.uid
+        | project-away uid
+        | extend
+            path=column_ifexists("_path_s", ""),
+            system_name=column_ifexists("_system_name_s", ""),
+            id_orig_h=column_ifexists("id_orig_h_s", ""),
+            id_orig_p=column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h=column_ifexists("id_resp_h_s", ""),
+            id_resp_p=column_ifexists("id_resp_p_d", real(null)),
+            method = column_ifexists("method_s", ""),
+            host = column_ifexists("host_s", ""),
+            uid = column_ifexists("uid_s", ""),
+            uri = column_ifexists("uri_s", ""),
+            referrer = column_ifexists("referrer_s", ""),
+            status_code = column_ifexists("status_code_d", real(null)),
+            status_msg = column_ifexists("status_msg_s", ""),
+            request_body_len = column_ifexists("request_body_len_d", real(null)),
+            response_body_len = column_ifexists("response_body_len_d", real(null)),
+            tags = column_ifexists("tags_s", ""),
+            orig_mime_types = column_ifexists("orig_mime_types_s", ""),
+            resp_mime_types = column_ifexists("resp_mime_types_s", ""),
+            post_body = column_ifexists("post_body_s", ""),
+            orig_fuids = column_ifexists("orig_fuids_s", ""),
+            orig_filenames = column_ifexists("orig_filenames_s", ""),
+            resp_fuids = column_ifexists("resp_fuids_s", ""),
+            resp_filenames = column_ifexists("resp_filenames_s", ""),
+            version = column_ifexists("version_s", ""),
+            user_agent = column_ifexists("user_agent_s", ""),
+            username = column_ifexists("username_s", ""),
+            pwd = column_ifexists("password_s", ""),
+            proxied = column_ifexists("proxied_s", ""),
+            origin = column_ifexists("origin_s", ""),
+            info_code = column_ifexists("info_code_d", real(null)),
+            info_msg = column_ifexists("info_msg_s", "")
+        | extend status_code = tostring(toint(status_code))
+        | lookup StatusLookup on $left.status_code == $right.status
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "http_agg",
+            ts = TimeGenerated,
+            dest_host = host,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            http_method = method,
+            bytes_in = request_body_len,
+            bytes_out = response_body_len,
+            status = status_code,
+            vendor_action = status_msg,
+            uri_path = uri,
+            object = resp_filenames,
+            http_user_agent = user_agent,
+            http_referrer = referrer,
+            http_content_type = orig_mime_types,
+            sensor_name = coalesce(system_name, "unknown"),
+            http_version = version,
+            http_username = username
+        | extend
+            http_user_agent_length = strlen(http_user_agent),
+            bytes = bytes_in + bytes_out,
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"),"true","false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            host_header=dest_host,
+            referrer_domain_domain=parse_url(referrer).Host,
+            referrer_domain_ip=strcat(parse_url(referrer).Host, ":", parse_url(referrer).Port),
+            direction=case(local_orig=="true" and local_resp=="true", "internal", local_orig=="true" and local_resp=="false", "outbound", local_orig=="false" and local_resp=="false", "external", local_orig=="false" and local_resp=="true", "inbound", "unknown")
+        | extend 
+            url = strcat("http://",host_header,uri),
+            url_domain = host_header
+        | project
+            system_name,
+            path,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            method,
+            host,
+            uid,
+            uri,
+            referrer,
+            status_code,
+            status_msg,
+            request_body_len,
+            response_body_len,
+            tags,
+            orig_mime_types,
+            resp_mime_types,
+            post_body,
+            orig_fuids,
+            orig_filenames,
+            resp_fuids,
+            resp_filenames,
+            version,
+            user_agent,
+            username,
+            pwd,
+            proxied,
+            origin,
+            info_code,
+            info_msg,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            dest_host,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            http_method,
+            bytes_in,
+            bytes_out,
+            status,
+            vendor_action,
+            uri_path,
+            object,
+            http_user_agent,
+            http_referrer,
+            http_content_type,
+            sensor_name,
+            http_version,
+            http_username,
+            http_user_agent_length,
+            bytes,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            host_header,
+            referrer_domain_domain,
+            referrer_domain_ip,
+            direction,
+            url,
+            url_domain,
+            TimeGenerated
+    };
+    corelight_http_agg

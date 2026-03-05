@@ -1,16 +1,29 @@
 id: 43be2e48-86c5-4e72-9b33-5190a78e6cc3
 Function:
   Title: Parser for UbiquitiAuditEvent
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.0'
+  LastUpdated: '2025-12-10'
 Category: Microsoft Sentinel Parser
 FunctionName: UbiquitiAuditEvent
 FunctionAlias: UbiquitiAuditEvent
 FunctionQuery: |
     let EventData = Ubiquiti_CL
     | extend EventVendor = 'Ubiquiti'
-    | extend EventTime = extract(@'\<\d+\>(\w+\s+\w+\s+\d+:\d+:\d+)\s\w+,', 1, Message)
-    | extend DvcType = iif(extract(@'\d+\:\d+\:\d+\s(\w+),[A-Fa-f0-9]{12}', 1, Message)!="", extract(@'\d+\:\d+\:\d+\s(\w+),[A-Fa-f0-9]{12}', 1, Message), extract(@'\d+\:\d+\:\d+\s[A-Fa-f0-9]{12},([A-Za-z-]+)-', 1, Message))
+    | extend EventTime = extract(@'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2})', 1, Message)
+    | extend Hostname = extract(@'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2}\s+([^\s]+)', 1, Message)
+    | extend DvcType = iif(
+            extract(@'[A-Fa-f0-9]{12},([A-Za-z0-9_-]+)-', 1, Message) != "",
+                    extract(@'[A-Fa-f0-9]{12},([A-Za-z0-9_-]+)-', 1, Message),
+            iif(
+                    extract(@'\d+\:\d+\:\d+\s([A-Za-z0-9_-]+),[A-Fa-f0-9]{12}', 1, Message) != "",
+                            extract(@'\d+\:\d+\:\d+\s([A-Za-z0-9_-]+),[A-Fa-f0-9]{12}', 1, Message),
+                    iif(
+                            extract(@'([A-Za-z0-9_-]+),[A-Fa-f0-9]{12}', 1, Message) != "",
+                                    extract(@'([A-Za-z0-9_-]+),[A-Fa-f0-9]{12}', 1, Message),
+                            ""
+                    )
+            )
+    )
     | extend DvcMacAddr = replace(@'(:)$', @'', replace(@'(\w{2})', @'\1:', extract(@'([A-Fa-f0-9]{12}),' , 1, Message)))
     | extend FirmwareVersion = iif(extract(@'[A-Fa-f0-9]{12},v(.*?)\:', 1, Message)!="", extract(@'[A-Fa-f0-9]{12},v(.*?)\:', 1, Message), extract(@'[A-Fa-f0-9]{12},[A-Za-z-]+([\d\.\+]+)[\:\s]', 1, Message));
     let ubiquiti_dropbear_events =() {
@@ -34,17 +47,17 @@ FunctionQuery: |
     };
     let ubiquiti_firewall_events =() {
     EventData
-    | where Message matches regex @'kernel:\s+\[.+\]\s+IN=\w+\s+OUT=\w+\s+'
+    | where Message has "DESCR=" and Message has "IN=" and Message has "OUT=" and Message has "MAC=" and Message has "SRC=" and Message has "DST=" and Message has "LEN="
     | extend EventCategory = 'firewall'
+    | extend EventMessage = extract(@'DESCR="(.*?)"\s', 1, Message)
     | extend FlowId = extract(@'ID=(.*?)\s', 1, Message)
     | extend DvcInboundInterface = extract(@'IN=(.*?)\s', 1, Message)
     | extend DvcOutboundInterface = extract(@'OUT=(.*?)\s', 1, Message)
-    | extend dvc_action = extract(@'kernel:\s+\[\S+-(\w)\]', 1, Message)
-    | extend DvcAction = case(dvc_action == "A", "Accepted",
-                              dvc_action == "B", "Blocked",
-                              dvc_action == "R", "Rejected",
-                              "Other")
-    | extend NetworkRuleName = extract(@'kernel:\s+\[(\S+)-\w\]', 1, Message)
+    | extend DvcAction = case(EventMessage contains 'Block', "B",
+                                EventMessage contains 'Accept' or EventMessage contains 'Allow', "A",
+                                EventMessage contains 'Reject', "R",
+                                "Other")
+    | extend NetworkRuleName = extract(@'\[([^\]]+)\]\s+DESCR=', 1, Message)
     | extend DstMacAddr = extract(@'MAC=([a-fA-F0-9:]{17}):', 1, Message)
     | extend SrcMacAddr = extract(@'MAC=[a-fA-F0-9:]{17}:([a-fA-F0-9:]{17})\s', 1, Message)
     | extend SrcIpAddr = extract(@'SRC=(.*?)\s', 1, Message)
@@ -82,7 +95,6 @@ FunctionQuery: |
     };
     let ubiquiti_EVT_AP_STA_ASSOC_TRACKER_DBG =() {
     EventData
-    //| where Message contains 'libubnt'
     | where Message contains 'EVT_AP_STA_ASSOC_TRACKER_DBG'
     | extend EventCategory = 'libubnt'
     | extend WlanId = extract(@'vap:\s(.*?)', 1, Message)
@@ -92,14 +104,13 @@ FunctionQuery: |
     };
     let ubiquiti_EVENT_STA_ =() {
     EventData
-    //| where Message contains 'libubnt'
     | where Message contains 'EVENT_STA_'
     | extend EventCategory = 'libubnt'
     | extend WlanId = extract(@'EVENT_STA_(JOIN|LEAVE|IP)\s(\w+):', 2, Message)
     | extend DvcAction = extract(@'EVENT_STA_(JOIN|LEAVE|IP)', 1, Message)
     | extend EventMessage = case(DvcAction == 'JOIN', 'Client joined AP',
-                                 DvcAction == 'LEAVE', 'Client disconnected from AP',
-                                 'Client IP info')
+                                    DvcAction == 'LEAVE', 'Client disconnected from AP',
+                                    'Client IP info')
     | extend SrcMacAddr = extract(@':\s([A-Fa-f0-9:]{17})', 1, Message)
     | extend SrcIpAddr = extract(@'\/\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 1, Message)
     };
@@ -129,24 +140,172 @@ FunctionQuery: |
     let ubiquiti_kernel_events =() {
     EventData
     | where Message contains 'kernel'
-    | where Message contains 'FWLOG' or Message contains 'set_ratelimit'
+    | where Message contains 'FWLOG' or Message contains 'FW LOG' or Message contains 'set_ratelimit'
     | extend EventCategory = 'kernel'
-    | extend EventMessage = case(Message matches regex "kernel.*FWLOG", extract(@'FWLOG:\s\[\d+\]\s(.*)', 1, Message),
-                                 Message matches regex "kernel.*_set_ratelimit", extract(@'_set_ratelimit:\s(.*)', 1, Message),
-                                 "Check raw_message for details")
+    | extend EventMessage = case(
+            Message matches regex "kernel.*FW LOG", extract(@'FW LOG,\s*(.*)', 1, Message),
+            Message matches regex "kernel.*FWLOG", extract(@'FWLOG:\s*\[\d+\]\s*(.*)', 1, Message),
+            Message matches regex "kernel.*_set_ratelimit", extract(@'_set_ratelimit:\s*(.*)', 1, Message),
+            "Check raw_message for details"
+    )
     };
     let ubiquiti_dns_events =() {
     EventData
-    | where Message matches regex @'dnsmasq\[\d+\]:'
-    | extend DstMacAddr = extract(@'MAC=([a-fA-F0-9:]{17}):', 1, Message)
-    | extend SrcMacAddr = extract(@'MAC=[a-fA-F0-9:]{17}:([a-fA-F0-9:]{17})\s', 1, Message) 
-    | extend DnsQuery = extract(@'dnsmasq\[\d+\]:\s(.*?)\[\w+\]|\s(\S+)\sfrom\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', 2, Message)
-    | extend SrcIpAddr = extract(@'dnsmasq\[\d+\]:\s(.*?)\[\w+\]|\s(.*?)from\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 3, Message)
+    | where Message matches regex @'dnsmasq(-dhcp)?\[\d+\]:'
+    | extend EventCategory = 'dnsmasq'
+    | extend DstMacAddr = extract(@'MAC=([A-Fa-F0-9:]{17}):', 1, Message)
+    | extend SrcMacAddr = extract(@'MAC=[A-Fa-F0-9:]{17}:([A-Fa-F0-9:]{17})\s', 1, Message) 
+    | extend DnsQuery = extract(@'dnsmasq(-dhcp)?\[\d+\]:\s(.*?)\[\w+\]|\s(\S+)\sfrom\s\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', 3, Message)
+    | extend SrcIpAddr = extract(@'dnsmasq(-dhcp)?\[\d+\]:\s(.*?)\[\w+\]|\s(.*?)from\s(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', 4, Message)
     };
-    union isfuzzy=true ubiquiti_dropbear_events, ubiquiti_hostapd_events, ubiquiti_firewall_events, ubiquiti_dns_timeout_events, ubiquiti_stahtd_events, ubiquiti_EVT_AP_STA_ASSOC_TRACKER_DBG, ubiquiti_EVENT_STA_, ubiquiti_syswrapper_events, ubiquiti_logread_events, ubiquiti_stamgr_events, ubiquiti_kernel_events, ubiquiti_dns_events
+    let ubiquiti_mcad_events =() {
+    EventData
+    | where Message contains 'mcad['
+    | extend EventCategory = 'mcad'
+    | extend EventMessage = extract(@'mcad\[\d+\]:\s(.*)', 1, Message)
+    };
+    let ubiquiti_unifi_mq_broker_events =() {
+    EventData
+    | where Message contains 'unifi-mq-broker['
+    | extend EventCategory = 'unifi-mq-broker'
+    | extend EventMessage = extract(@'unifi-mq-broker\[\d+\]:\s(.*)', 1, Message)
+    };
+    let ubiquiti_ubios_udapi_server_events =() {
+    EventData
+    | where Message contains 'ubios-udapi-server['
+    | extend EventCategory = 'ubios-udapi-server'
+    | extend EventMessage = extract(@'ubios-udapi-server\[\d+\]:\s(.*)', 1, Message)
+    };
+    let ubiquiti_vpn_events =() {
+    EventData
+    | where Message contains "CEF:" and (Message has "VPN Client Connected" or Message has "VPN Client Disconnected")
+    | extend EventCategory = case(
+            Message has "VPN Client Connected", 'vpn_client_connected',
+            Message has "VPN Client Disconnected", 'vpn_client_disconnected',
+            'vpn_other')
+    | extend EventMessage = extract(@'msg=([^\n]*)', 1, Message)
+    | extend VpnUser = extract(@'suser=([^\s]+)', 1, Message)
+    | extend VpnClientIp = extract(@'UNIFIclientIp=([^\s]+)', 1, Message)
+    | extend VpnSourceIp = extract(@'src=([^\s]+)', 1, Message)
+    | extend VpnName = extract(@'UNIFIvpnName=([^\n]+?)\sUNIFIvpnType=', 1, Message)
+    | extend VpnType = extract(@'UNIFIvpnType=([^\s]+)', 1, Message)
+    | extend VpnServerAddress = extract(@'UNIFIvpnServerAddress=([^\s]+)', 1, Message)
+    | extend VpnSubnet = extract(@'UNIFIvpnSubnet=([^\s]+)', 1, Message)
+    | extend VpnWan = extract(@'UNIFIwanId=([^\s]+)', 1, Message)
+    | extend VpnUtcTime = extract(@'UNIFIutcTime=([^\s]+)', 1, Message)
+    | extend VpnDuration = extract(@'UNIFIduration=([^\s]+\s[^\s]+)', 1, Message)
+    | extend VpnUsageDown = extract(@'UNIFIusageDown=([^\s]+\s?MB|KB|B)', 1, Message)
+    | extend VpnUsageUp = extract(@'UNIFIusageUp=([^\s]+\s?MB|KB|B)', 1, Message)
+    };
+
+    let ubiquiti_wifi_client_events =() {
+    EventData
+    | where Message contains "CEF:" and (
+                    Message has "WiFi Client Connected" or
+                    Message has "WiFi Client Roamed" or
+                    Message has "WiFi Client Disconnected"
+            )
+    | extend EventCategory = case(
+                    Message has "WiFi Client Connected", 'wifi_client_connected',
+                    Message has "WiFi Client Roamed", 'wifi_client_roamed',
+                    Message has "WiFi Client Disconnected", 'wifi_client_disconnected',
+                    'wifi_client_other')
+    | extend EventMessage = extract(@'msg=([^\n]*)', 1, Message)
+    | extend WifiClientAlias = extract(@'UNIFIclientAlias=([^\s]+)', 1, Message)
+    | extend WifiClientHostname = extract(@'UNIFIclientHostname=([^\s]+)', 1, Message)
+    | extend WifiClientIp = extract(@'UNIFIclientIp=([^\s]+)', 1, Message)
+    | extend WifiClientMac = extract(@'UNIFIclientMac=([^\s]+)', 1, Message)
+    | extend WifiChannel = extract(@'UNIFIwifiChannel=([^\s]+)', 1, Message)
+    | extend WifiChannelWidth = extract(@'UNIFIwifiChannelWidth=([^\s]+)', 1, Message)
+    | extend WifiName = extract(@'UNIFIwifiName=([^\n]+?)\sUNIFIwifiBand=', 1, Message)
+    | extend WifiBand = extract(@'UNIFIwifiBand=([^\s]+)', 1, Message)
+    | extend WifiAuthMethod = extract(@'UNIFIauthMethod=([^\s]+)', 1, Message)
+    | extend WifiRssi = extract(@'UNIFIWiFiRssi=([^\s]+)', 1, Message)
+    | extend WifiLastDeviceName = extract(@'UNIFIlastConnectedToDeviceName=([^\s]+)', 1, Message)
+    | extend WifiLastDeviceIp = extract(@'UNIFIlastConnectedToDeviceIp=([^\s]+)', 1, Message)
+    | extend WifiLastDeviceMac = extract(@'UNIFIlastConnectedToDeviceMac=([^\s]+)', 1, Message)
+    | extend WifiLastDeviceModel = extract(@'UNIFIlastConnectedToDeviceModel=([^\s]+)', 1, Message)
+    | extend WifiConnectedDeviceName = extract(@'UNIFIconnectedToDeviceName=([^\s]+)', 1, Message)
+    | extend WifiConnectedDeviceIp = extract(@'UNIFIconnectedToDeviceIp=([^\s]+)', 1, Message)
+    | extend WifiConnectedDeviceMac = extract(@'UNIFIconnectedToDeviceMac=([^\s]+)', 1, Message)
+    | extend WifiConnectedDeviceModel = extract(@'UNIFIconnectedToDeviceModel=([^\s]+)', 1, Message)
+    | extend WifiDuration = extract(@'UNIFIduration=([^\s]+\s[^\s]+)', 1, Message)
+    | extend WifiUsageDown = extract(@'UNIFIusageDown=([^\s]+\s?MB|B)', 1, Message)
+    | extend WifiUsageUp = extract(@'UNIFIusageUp=([^\s]+\s?MB|B)', 1, Message)
+    | extend WifiNetworkName = extract(@'UNIFInetworkName=([^\s]+)', 1, Message)
+    | extend WifiNetworkSubnet = extract(@'UNIFInetworkSubnet=([^\s]+)', 1, Message)
+    | extend WifiNetworkVlan = extract(@'UNIFInetworkVlan=([^\s]+)', 1, Message)
+    | extend WifiUtcTime = extract(@'UNIFIutcTime=([^\s]+)', 1, Message)
+    | extend WifiLastConnectedToWiFiChannel = extract(@'UNIFIlastConnectedToWiFiChannel=([^\s]+)', 1, Message)
+    | extend WifiLastConnectedToWiFiChannelWidth = extract(@'UNIFIlastConnectedToWiFiChannelWidth=([^\s]+)', 1, Message)
+    | extend WifiLastConnectedToWiFiBand = extract(@'UNIFIlastConnectedToWiFiBand=([^\s]+)', 1, Message)
+    | extend WifiLastConnectedToWiFiRssi = extract(@'UNIFIlastConnectedToWiFiRssi=([^\s]+)', 1, Message)
+    };
+    let ubiquiti_wevent_events =() {
+    EventData
+    | where Message contains 'wevent['
+    | extend EventCategory = 'wevent'
+    | extend EventMessage = extract(@'wevent\[\d+\]:\s*(.*)', 1, Message)
+    };
+    let ubiquiti_wired_client_events =() {
+    EventData
+    | where Message contains "CEF:" and (
+                    Message has "Wired Client Connected" or
+                    Message has "Wired Client Disconnected"
+            )
+    | extend EventCategory = case(
+                    Message has "Wired Client Connected", 'wired_client_connected',
+                    Message has "Wired Client Disconnected", 'wired_client_disconnected',
+                    'wired_client_other')
+    | extend EventMessage = extract(@'msg=([^\n]*)', 1, Message)
+    | extend WiredClientAlias = extract(@'UNIFIclientAlias=([^\n]+?)\sUNIFIclientHostname=', 1, Message)
+    | extend WiredClientHostname = extract(@'UNIFIclientHostname=([^\s]+)', 1, Message)
+    | extend WiredClientIp = extract(@'UNIFIclientIp=([^\s]+)', 1, Message)
+    | extend WiredClientMac = extract(@'UNIFIclientMac=([^\s]+)', 1, Message)
+    | extend WiredConnectedDeviceName = extract(@'UNIFIconnectedToDeviceName=([^\n]+?)\sUNIFIconnectedToDevicePort=', 1, Message)
+    | extend WiredConnectedDevicePort = extract(@'UNIFIconnectedToDevicePort=([^\s]+)', 1, Message)
+    | extend WiredConnectedDeviceIp = extract(@'UNIFIconnectedToDeviceIp=([^\s]+)', 1, Message)
+    | extend WiredConnectedDeviceMac = extract(@'UNIFIconnectedToDeviceMac=([^\s]+)', 1, Message)
+    | extend WiredLinkSpeed = extract(@'UNIFIlinkSpeed=([^\s]+)', 1, Message)
+    | extend WiredDuration = extract(@'UNIFIduration=([^\s]+\s[^\s]+)', 1, Message)
+    | extend WiredUsageDown = extract(@'UNIFIusageDown=([^\s]+\s?MB|B)', 1, Message)
+    | extend WiredUsageUp = extract(@'UNIFIusageUp=([^\s]+\s?MB|B)', 1, Message)
+    | extend WiredNetworkName = extract(@'UNIFInetworkName=([^\n]+?)\sUNIFInetworkSubnet=', 1, Message)
+    | extend WiredNetworkSubnet = extract(@'UNIFInetworkSubnet=([^\s]+)', 1, Message)
+    | extend WiredNetworkVlan = extract(@'UNIFInetworkVlan=([^\s]+)', 1, Message)
+    | extend WiredUtcTime = extract(@'UNIFIutcTime=([^\s]+)', 1, Message)
+    };
+    let ubiquiti_earlyoom_events =() {
+    EventData
+    | where Message contains 'earlyoom['
+    | extend EventCategory = 'earlyoom'
+    | extend EventMessage = extract(@'earlyoom\[\d+\]:\s*(.*)', 1, Message)
+    };
+    let ubiquiti_dpi_flow_stats_events =() {
+    EventData
+    | where Message contains 'dpi-flow-stats['
+    | extend EventCategory = 'dpi-flow-stats'
+    | extend EventMessage = extract(@'dpi-flow-stats\[\d+\]:\s*(.*)', 1, Message)
+    };
+    let ubiquiti_coredns_events =() {
+    EventData
+    | where Message contains 'coredns['
+    | extend EventCategory = 'coredns'
+    | extend EventMessage = extract(@'coredns\[\d+\]:\s*(\{.*\})', 1, Message)
+    | extend DnsQuery = extract(@'"domain":"([^"]+)"', 1, EventMessage)
+    | extend SrcIpAddr = extract(@'"src_ip":"([^"]+)"', 1, EventMessage)
+    | extend SrcPortNumber = extract(@'"src_port":(\d+)', 1, EventMessage)
+    | extend DstIpAddr = extract(@'"dst_ip":"([^"]+)"', 1, EventMessage)
+    | extend DstPortNumber = extract(@'"dst_port":(\d+)', 1, EventMessage)
+    | extend NetworkProtocol = extract(@'"protocol":"([^"]+)"', 1, EventMessage)
+    | extend DstMacAddr = extract(@'"mac":"([^"]+)"', 1, EventMessage)
+    | extend SrcMacAddr = extract(@'"mac":"([^"]+)"', 1, EventMessage)
+    };
+    union isfuzzy=true ubiquiti_dropbear_events, ubiquiti_hostapd_events, ubiquiti_firewall_events, ubiquiti_dns_timeout_events, ubiquiti_stahtd_events, ubiquiti_EVT_AP_STA_ASSOC_TRACKER_DBG, ubiquiti_EVENT_STA_, ubiquiti_syswrapper_events, ubiquiti_logread_events, ubiquiti_stamgr_events, ubiquiti_kernel_events, ubiquiti_dns_events, ubiquiti_mcad_events, ubiquiti_unifi_mq_broker_events, ubiquiti_ubios_udapi_server_events, ubiquiti_vpn_events, ubiquiti_wifi_client_events, ubiquiti_wevent_events, ubiquiti_wired_client_events, ubiquiti_earlyoom_events, ubiquiti_dpi_flow_stats_events, ubiquiti_coredns_events
     | project TimeGenerated
             , EventVendor
             , EventTime
+            , Hostname
             , EventCategory
             , DvcType
             , DvcMacAddr
@@ -181,3 +340,60 @@ FunctionQuery: |
             , EventResult
             , EventResultDetails
             , Message
+            , WifiClientAlias
+            , WifiClientHostname
+            , WifiClientIp
+            , WifiClientMac
+            , WifiChannel
+            , WifiChannelWidth
+            , WifiName
+            , WifiBand
+            , WifiAuthMethod
+            , WifiRssi
+            , WifiLastDeviceName
+            , WifiLastDeviceIp
+            , WifiLastDeviceMac
+            , WifiLastDeviceModel
+            , WifiConnectedDeviceName
+            , WifiConnectedDeviceIp
+            , WifiConnectedDeviceMac
+            , WifiConnectedDeviceModel
+            , WifiDuration
+            , WifiUsageDown
+            , WifiUsageUp
+            , WifiNetworkName
+            , WifiNetworkSubnet
+            , WifiNetworkVlan
+            , WifiUtcTime
+            , WifiLastConnectedToWiFiChannel
+            , WifiLastConnectedToWiFiChannelWidth
+            , WifiLastConnectedToWiFiBand
+            , WifiLastConnectedToWiFiRssi
+            , WiredClientAlias
+            , WiredClientHostname
+            , WiredClientIp
+            , WiredClientMac
+            , WiredConnectedDeviceName
+            , WiredConnectedDevicePort
+            , WiredConnectedDeviceIp
+            , WiredConnectedDeviceMac
+            , WiredLinkSpeed
+            , WiredDuration
+            , WiredUsageDown
+            , WiredUsageUp
+            , WiredNetworkName
+            , WiredNetworkSubnet
+            , WiredNetworkVlan
+            , WiredUtcTime
+            , VpnUser
+            , VpnClientIp
+            , VpnSourceIp
+            , VpnName
+            , VpnType
+            , VpnServerAddress
+            , VpnSubnet
+            , VpnWan
+            , VpnUtcTime
+            , VpnDuration
+            , VpnUsageDown
+            , VpnUsageUp
