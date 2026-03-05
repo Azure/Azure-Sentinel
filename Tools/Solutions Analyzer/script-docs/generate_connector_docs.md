@@ -28,6 +28,8 @@ The script generates the **Microsoft Sentinel Data Connector Reference** documen
    - All tables ingested by connectors
    - All tables referenced by content items
    - **All tables from Azure Monitor reference** (`tables_reference.csv`), even if not used by any solution.
+   - "Discovered Via" column showing discovery sources (Connector, Content, Azure Monitor, Defender XDR, Sentinel API, Schema)
+   - 📖 icon for tables with schema information
 - **[Content Index](../connector-docs/content/content-index.md)** - All content items organized by type
 - **[Parsers Index](../connector-docs/parsers/parsers-index.md)** - All non-ASIM parsers organized by solution
 - **[ASIM Index](../connector-docs/asim/asim-index.md)** - All ASIM parsers organized by schema
@@ -106,6 +108,8 @@ The script automatically calls `map_solutions_connectors_tables.py` and `collect
 | `--overrides-csv` | `solution_analyzer_overrides.csv` | Path to overrides CSV file for additional_information and other doc-only fields |
 | `--asim-parsers-csv` | `asim_parsers.csv` | Path to ASIM parsers CSV file |
 | `--parsers-csv` | `parsers.csv` | Path to parsers CSV file |
+| `--solution-dependencies-csv` | `solution_dependencies.csv` | Path to solution dependencies CSV file |
+| `--table-schemas-csv` | `table_schemas.csv` | Path to table schemas CSV file with column definitions |
 | `--skip-input-generation` | `False` | Skip running input CSV generation scripts |
 
 ## Output Structure
@@ -170,9 +174,10 @@ connector-docs/
 - **Rich description** extracted from `createUiDefinition.json`
 - **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, dependencies)
 - **Additional Information** section (from overrides, if configured)
+- **Dependencies** section listing explicit (required) and ASIM-based (optional) dependency solutions (from `solution_dependencies.csv`)
 - **Supported Products** section for solutions using ASIM parsers
-- **Data Connectors** section with connector details, setup instructions, permissions, and tables ingested
-- **Tables Used** section showing tables from content items (with ASIM parsers separated)
+- **Data Connectors** section with connector details, plus dependency connectors marked with "(dependency on solution X)"
+- **Tables Used** section showing tables from content items and dependency connectors (with ASIM parsers separated, dependency connectors marked with "(dependency)")
 - **Content Items** section organized by type (analytics rules, hunting queries, workbooks, playbooks, parsers, watchlists, summary rules) with ⚠️ indicators for items not in Solution JSON
 - **Additional Documentation** from README.md files in the solution directory
 - **Release Notes** from `ReleaseNotes.md` (if present in solution directory)
@@ -191,6 +196,7 @@ connector-docs/
 **Table Pages** include:
 - **Table description** from Azure Monitor documentation
 - **Metadata table** with category, basic logs eligibility, transformation support, ingestion API, lake-only ingestion, search job support, plan, and documentation links
+- **Schema** section with column definitions (name, type, description, source) from `table_schemas.csv`. Columns are deduplicated across sources; Description and Source columns are shown only when relevant data exists. Source attribution with links is shown at the top of the section
 - **Additional Information** section (from overrides, if configured)
 - **Solutions** section listing all solutions using this table
 - **Connectors** section listing connectors ingesting this table with selection criteria
@@ -241,6 +247,7 @@ connector-docs/
 - **Content Items** section with statistics by type and source classification
 - **ASIM Parsers** section with statistics by schema and type
 - **Non-ASIM Parsers** section with statistics by location
+- **Dependencies** section with dependency counts by type (explicit/ASIM), ASIM dependencies per schema, and most depended-upon solutions
 
 **Index Pages** provide:
 - "Browse by" navigation between all index pages (solutions, connectors, tables, content, parsers, ASIM, collection methods, statistics)
