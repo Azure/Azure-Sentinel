@@ -8,13 +8,21 @@ LOG_FORMAT = "{}(method = {}) : {} : {}"
 
 
 # *Sentinel related constants
-WORKSPACE_KEY = os.environ.get("WorkspaceKey", "")
-WORKSPACE_ID = os.environ.get("WorkspaceID", "")
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID", "")
 FUNCTION_APP_TIMEOUT_SECONDS = 570
+SCOPE = os.environ["SCOPE"]
+AZURE_DATA_COLLECTION_ENDPOINT = os.environ["AZURE_DATA_COLLECTION_ENDPOINT"]
+DCR_RULE_ID = os.environ["AZURE_DATA_COLLECTION_RULE_ID_MAIN_TABLES"]
 
 # *Mimecast related constants
 MIMECAST_CLIENT_ID = os.environ.get("MimecastClientID", "")
 MIMECAST_CLIENT_SECRET = os.environ.get("MimecastClientSecret", "")
+Mimecast_Awareness_Performance_Details_Table_Name = os.environ.get("Mimecast_Awareness_Performance_Details_Table_Name", "Awareness_Performance_Details")
+Mimecast_Awareness_User_Data_Table_Name = os.environ.get("Mimecast_Awareness_User_Data_Table_Name", "Awareness_User_Data")
+Mimecast_Awareness_Watchlist_Details_Table_Name = os.environ.get("Mimecast_Awareness_Watchlist_Details_Table_Name", "Awareness_Watchlist_Details")
+Mimecast_Awareness_SafeScore_Details_Table_Name = os.environ.get("Mimecast_Awareness_SafeScore_Details_Table_Name", "Awareness_SafeScore_Details")
 MAX_PAGE_SIZE = 500
 BASE_URL = os.environ.get("BaseURL", "https://api.services.mimecast.com")
 ENDPOINTS = {
@@ -27,10 +35,10 @@ ENDPOINTS = {
 }
 
 TABLE_NAME = {
-    "PERFORMANCE_DETAILS": "Awareness_Performance_Details",
-    "USER_DATA": "Awareness_User_Data",
-    "WATCHLIST_DETAILS": "Awareness_Watchlist_Details",
-    "SAFE_SCORE_DETAILS": "Awareness_SafeScore_Details",
+    "PERFORMANCE_DETAILS": Mimecast_Awareness_Performance_Details_Table_Name if Mimecast_Awareness_Performance_Details_Table_Name else "Awareness_Performance_Details",
+    "USER_DATA": Mimecast_Awareness_User_Data_Table_Name if Mimecast_Awareness_User_Data_Table_Name else "Awareness_User_Data",
+    "WATCHLIST_DETAILS": Mimecast_Awareness_Watchlist_Details_Table_Name if Mimecast_Awareness_Watchlist_Details_Table_Name else "Awareness_Watchlist_Details",
+    "SAFE_SCORE_DETAILS": Mimecast_Awareness_SafeScore_Details_Table_Name if Mimecast_Awareness_SafeScore_Details_Table_Name else "Awareness_SafeScore_Details"
 }
 AWARENESS_PERFORMANCE_FUNCTION_NAME = "Awareness Training Performance Details"
 AWARENESS_WATCHLIST_FUNCTION_NAME = "Awareness Training Watchlist Details"

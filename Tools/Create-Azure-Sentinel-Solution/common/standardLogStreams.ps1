@@ -35,7 +35,7 @@ $standardStreamMapping += @{ Key = 'SECURITY_CEF_BLOB'; Value = 'Microsoft-Commo
 $standardStreamMapping += @{ Key = 'COMPUTER_GROUP_BLOB'; Value = 'Microsoft-ComputerGroup'}
 $standardStreamMapping += @{ Key = 'SENTINEL_WATCHLIST'; Value = 'Microsoft-Watchlist'}
 $standardStreamMapping += @{ Key = 'OFFICEDATAVERSE_RESTAPI'; Value = 'Microsoft-DataverseActivity'}
-$standardStreamMapping += @{ Key = 'LLMACTIVITY_RESTAPI'; Value = 'Microsoft-LLMActivity'}
+$standardStreamMapping += @{ Key = 'LLMACTIVITY_RESTAPI'; Value = 'Microsoft-CopilotActivity'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEEVENTS'; Value = 'Microsoft-DeviceEvents'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEFILECERTIFICATEINFO'; Value = 'Microsoft-DeviceFileCertificateInfo'}
 $standardStreamMapping += @{ Key = 'TENANTMICROSOFTWINDOWSDEFENDERATP_ADVANCEDHUNTINGDEVICEFILEEVENTS'; Value = 'Microsoft-DeviceFileEvents'}
@@ -188,6 +188,8 @@ $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Micro
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLEWORKSPACEREPORTS'; Value = 'Microsoft-GoogleWorkspaceReports' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver' }
+$standardStreamMapping += @{ Key = 'SENTINEL_RAPID7INSIGHTVMCLOUDASSETS'; Value = 'Microsoft-SentinelRapid7InsightVMCloudAssets' }
+$standardStreamMapping += @{ Key = 'SENTINEL_RAPID7INSIGHTVMCLOUDVULNERABILITIES'; Value = 'Microsoft-SentinelRapid7InsightVMCloudVulnerabilities' }
 $standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEVULNERABILITIES'; Value = 'Microsoft-SentinelCrowdStrikeVulnerabilities' }
 $standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEALERTS'; Value = 'Microsoft-SentinelCrowdStrikeAlerts' }
 $standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEINCIDENTS'; Value = 'Microsoft-SentinelCrowdStrikeIncidents' }

@@ -1,0 +1,49 @@
+id: 7f9a0d5c-3b4c-6d7e-1f2a-e3f4a5b6c7d8
+name: Cyren Feed Outage Detection
+description: |
+  'Detects when the Cyren threat intelligence feed has not ingested any data for 6 or more hours.
+  This may indicate a connectivity issue with the data connector, API authentication problems, or upstream service disruption.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CyrenThreatIntel
+    dataTypes:
+      - Cyren_Indicators_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  Cyren_Indicators_CL
+  | where TimeGenerated >= ago(24h)
+  | summarize 
+      Total = count(), 
+      Latest = max(TimeGenerated)
+  | extend HoursAgo = datetime_diff('hour', now(), Latest)
+  | where isnotempty(Latest) and HoursAgo >= 6
+  | project 
+      LatestEventTime = Latest, 
+      HoursSinceLastEvent = HoursAgo, 
+      TotalEventsLast24h = Total,
+      AlertMessage = strcat("Cyren feed has not received data for ", HoursAgo, " hours")
+suppressionDuration: 1h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  LatestEventTime: LatestEventTime
+  HoursSinceLastEvent: HoursSinceLastEvent
+  TotalEventsLast24h: TotalEventsLast24h
+version: 1.0.0
+kind: Scheduled

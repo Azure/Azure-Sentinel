@@ -25,7 +25,7 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         start_time = time.time()
         account_entity_obj = AccountEntityCollector(
-            applogger,
+            start_time,
             consts.ACCOUNT_ENTITIES_NAME,
             consts.ACCOUNT_ENTITY_CLIENT_ID,
             consts.ACCOUNT_ENTITY_CLIENT_SECRET,

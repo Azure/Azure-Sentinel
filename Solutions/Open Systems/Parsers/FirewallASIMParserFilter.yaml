@@ -1,0 +1,135 @@
+id: f4075d72-8d1b-4a2c-91ad-9f701f4d827f
+Function:
+  Title: ASIM Parser for OpenSystems Firewall logs
+  Version: '1.0.0'
+  LastUpdated: May 12th 2025
+Category: OpenSystemsParser
+FunctionName: vimNetworkSessionOpenSystemsFirewall
+FunctionAlias: vimNetworkSessionOpenSystemsFirewall
+FunctionParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+FunctionQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstportnumber:int=int(null),
+    hostname_has_any:dynamic=dynamic([]),
+    dvcaction:dynamic=dynamic([]),
+    eventresult:string='*',
+    disabled:bool=false
+    )
+    {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    OpenSystemsFirewallLogs_CL
+      | extend DvcHostname = host_name
+      | extend EventResult = iff(action in ("DROP", "REJECT"), "Failure", "Success")
+      | extend DstPortNumber = iff(isnotempty(port_dst), toint(port_dst), int(null))
+      | where (isnull(starttime) or TimeGenerated>=starttime)
+        and (isnull(endtime) or TimeGenerated<=endtime)
+        and not(disabled)
+        and (array_length(hostname_has_any) == 0 or DvcHostname has_any (tostring(hostname_has_any)))
+        and (array_length(dvcaction) == 0)
+        and (eventresult == "*" or eventresult == EventResult)
+        and (array_length(ip_any)==0 or has_any_ipv4_prefix(ip_src,ip_any) or has_any_ipv4_prefix(ip_dst ,ip_any))
+        and (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+      | extend EventCount = toint(1)
+      | extend EventStartTime = timestamp
+      | extend EventEndTime = TimeGenerated
+      | extend EventType = "NetworkSession"
+      | extend EventProduct = "Firewall"
+      | extend EventVendor = "Open Systems"
+      | extend EventSchema = "NetworkSession"
+      | extend EventSchemaVersion = "0.2.6"
+      | extend EventResultDetails = "Unknown"
+      | extend EventSeverity = "Informational"
+      | extend Dvc = DvcHostname
+      | extend DstIpAddr = ip_dst
+      | extend DstZone = zone_dst
+      | extend Dst = DstIpAddr
+      | extend SrcIpAddr = ip_src
+      | extend SrcPortNumber = iff(isnotempty(port_src), toint(port_src), int(null))
+      | extend SrcZone = zone_src
+      | extend Src = SrcIpAddr
+      | extend IpAddr = SrcIpAddr
+      | extend
+        temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any),
+        temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
+      | extend ASimMatchingIpAddr = case(
+          array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-", // match not requested: probably most common case
+                            (temp_isSrcMatch and temp_isDstMatch), "Both", // has to be checked before the individual
+                            temp_isSrcMatch, "SrcIpAddr",
+                            temp_isDstMatch, "DstIpAddr",
+                            "No match")
+      | project-away temp*
+      | where ASimMatchingIpAddr != "No match"
+      | project
+        DvcHostname,
+        EventResult,
+        DstPortNumber,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        EventResultDetails,
+        EventSeverity,
+        Dvc,
+        DstIpAddr,
+        DstZone,
+        Dst,
+        SrcIpAddr,
+        SrcPortNumber,
+        SrcZone,
+        Src,
+        IpAddr,
+        ASimMatchingIpAddr
+    };
+    parser (
+    starttime=starttime, 
+    endtime=endtime, 
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+    dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
+    ipaddr_has_any_prefix=ipaddr_has_any_prefix, 
+    dstportnumber=dstportnumber, 
+    hostname_has_any=hostname_has_any, 
+    dvcaction=dvcaction,
+    eventresult=eventresult,
+    disabled=disabled
+    )
