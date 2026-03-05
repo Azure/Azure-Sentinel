@@ -4,7 +4,7 @@ A production-ready Microsoft Sentinel data connector that integrates Rubrik Secu
 
 ## 🎯 Overview
 
-The **Rubrik Security Cloud Backup Status connector** is built using **Microsoft's Codeless Connector Platform (CCP) framework** and collects comprehensive backup and compliance data for Azure VMs from RSC's GraphQL API, ingesting 49 attributes per VM including compliance status, snapshot counts, storage metrics, SLA assignments, and data reduction statistics into the `RubrikProtectionStatus_CL` table in Microsoft Sentinel. This enables security teams to correlate backup health with Sentinel security alerts and incidents through correlation queries that join security events with backup status based on asset identifiers, allowing them to identify potential ransomware indicators through backup anomalies such as sudden compliance failures, missing snapshots, unusual storage consumption patterns, or failed backup jobs that coincide with suspicious security events. By automatically correlating backup telemetry with security data, analysts can quickly determine if a compromised asset has recent, clean backups available for recovery, assess the blast radius of an attack, and detect sophisticated attack patterns that specifically target backup infrastructure to prevent recovery.
+The **Rubrik Security Cloud Backup Status connector** is built using **Microsoft's Codeless Connector Framework (CCF)** and collects comprehensive backup and compliance data for Azure VMs from RSC's GraphQL API, ingesting 49 attributes per VM including compliance status, snapshot counts, storage metrics, SLA assignments, and data reduction statistics into the `RubrikProtectionStatus_CL` table in Microsoft Sentinel. This enables security teams to correlate backup health with Sentinel security alerts and incidents through correlation queries that join security events with backup status based on asset identifiers, allowing them to identify potential ransomware indicators through backup anomalies such as sudden compliance failures, missing snapshots, unusual storage consumption patterns, or failed backup jobs that coincide with suspicious security events. By automatically correlating backup telemetry with security data, analysts can quickly determine if a compromised asset has recent, clean backups available for recovery, assess the blast radius of an attack, and detect sophisticated attack patterns that specifically target backup infrastructure to prevent recovery.
 
 ## ✨ Key Features
 
@@ -22,7 +22,7 @@ The **Rubrik Security Cloud Backup Status connector** is built using **Microsoft
 - **Recovery Readiness**: Quickly assess if clean backups exist for compromised assets
 - **Attack Pattern Detection**: Identify attacks targeting backup infrastructure
 
-### Built on Microsoft CCP
+### Built on Microsoft CCF
 - **Native Sentinel Integration**: Appears as a standard data connector in Sentinel UI
 - **OAuth2 Authentication**: Secure service account authentication with RSC
 - **Automated Deployment**: ARM template-based infrastructure provisioning
@@ -318,7 +318,7 @@ Generate audit reports combining security and backup data:
 
 - **Rubrik Security Cloud**: [docs.rubrik.com](https://docs.rubrik.com/)
 - **Microsoft Sentinel**: [Data Connectors Guide](https://docs.microsoft.com/azure/sentinel/connect-data-sources)
-- **Codeless Connector Platform**: [CCP Documentation](https://docs.microsoft.com/azure/sentinel/create-codeless-connector)
+- **Codeless Connector Framework**: [CCF Documentation](https://docs.microsoft.com/azure/sentinel/create-codeless-connector)
 - **KQL Reference**: [Kusto Query Language](https://docs.microsoft.com/azure/data-explorer/kusto/query/)
 
 ## 🤝 Contributing
@@ -351,4 +351,4 @@ This is a community-supported connector. For assistance:
 
 ---
 
-**Built with Microsoft's Codeless Connector Platform (CCP) for seamless Sentinel integration**
+**Built with Microsoft's Codeless Connector Framework (CCF) for seamless Sentinel integration**
