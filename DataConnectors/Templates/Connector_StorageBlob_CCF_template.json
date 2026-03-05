@@ -1,0 +1,684 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "minLength": 1,
+            "type": "String",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "subscription": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "String",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is setup"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "String",
+            "metadata": {
+                "description": "resource group name where Microsoft Sentinel is setup"
+            }
+        },
+        "workspace": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutionName": "Azure Storage Blob Connector // Modify to your solution name",
+        "_solutionVersion": "1.0.0",
+        "_solutionAuthor": "Microsoft // Modify to your user/company name",
+        "_packageIcon": "icon icon icon icon",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-azure-storage",
+        "dataConnectorVersionConnectorDefinition": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_solutionTier": "Community",
+        "_dataConnectorContentIdConnectorDefinition": "teastdelayBlobTemplateConnectorDefinition // Modify to your connector definition", 
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_dataConnectorContentIdConnections": "BlobTemplateConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_logAnalyticsTableId1": "BlobExampleTable_CL // Modify to your table name"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId1')]",
+                            "apiVersion": "2021-03-01-privatepreview",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('_logAnalyticsTableId1')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "datetime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "Data // Modify with your table columns",
+                                            "type": "string",
+                                            "description": "The data payload."
+                                        }
+                                    ]
+                                }
+                            },
+                            "dependsOn": null
+                        },
+                        {
+                            "name": "StorageBlob",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": null,
+                            "properties": {
+                                "streamDeclarations": {
+                                    "Custom-StorageBlob // Modify your stream name": {
+                                        "columns": [
+                                            {
+                                                "name": "TimeGenerated",
+                                                "type": "datetime",
+                                                "isDefaultDisplay": true,
+                                                "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                            },
+                                            {
+                                                "name": "Data",
+                                                "type": "string",
+                                                "description": "The data payload."
+                                            }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "clv2ws1"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "Custom-StorageBlob // Modify your stream name (same as 143)"
+                                        ],
+                                        "destinations": [
+                                            "clv2ws1"
+                                        ],
+                                        "transformKql": "source | extend TimeGenerated = now()",
+                                        "outputStream": "[concat('Custom-',variables('_logAnalyticsTableId1'))]"
+                                    }
+                                ],
+                                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+                            },
+                            "dependsOn": null
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "AzureStorageBlobConnector",
+                    "title": "AzureStorageBlobConnector // modify to your title",
+                    "publisher": "Microsoft // Modify to your user / company name",
+                    "descriptionMarkdown": "AzureStorageBlobConnector // Modify to your description",
+                    "graphQueriesTableName": "[variables('_logAnalyticsTableId1')]",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total logs received",
+                            "legend": "Azure Storage Blob Logs",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Get Sample of Azure Storage Blob Logs",
+                            "query": "{{graphQueriesTableName}}\n | take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max(TimeGenerated)\n|where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors",
+                            "value": null
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "tenant": null,
+                        "licenses": null,
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": true,
+                                    "write": true,
+                                    "delete": true,
+                                    "action": false
+                                }
+                            },
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                                "providerDisplayName": "Keys",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": false,
+                                    "write": false,
+                                    "delete": false,
+                                    "action": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Subscription permissions",
+                                "description": "You need permissions to create the data flow resources: \n- storage queues (notification queue and dead-letter queue) \n- event grid topic and subscription (to send 'blob created event' notifications to the notification queue) \n- role assignments (to grant access for sentinel app to the blob container and the storage queues.)"
+                            },
+                            {
+                                "name": "Collecting data from __ to your blob container",
+                                "description": "Follow the steps in the [documentation](https://some-guide.net) for collecting data from __ to your blob container."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Azure Storage Blob Logs to Microsoft Sentinel",
+                            "description": "To enable the Azure Storage Blob Logs for Microsoft Sentinel, provide the required information below and click on Connect.\n>",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "tenantId": "[subscription().tenantId]",
+                                        "name": "principalId",
+                                        "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f // Modify to match the appId specific to the codeless connector environment"
+                                    },
+                                    "type": "ServicePrincipalIDTextBox_test"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "The blob container URL you want to collect data from",
+                                        "type": "text",
+                                        "name": "blobContainerUri"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "The blobs folder name in the container. Optional",
+                                        "type": "text",
+                                        "name": "blobFolderName"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "The blob container's storage account location",
+                                        "type": "text",
+                                        "name": "StorageAccountLocation"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "The blob container's storage account resource group name",
+                                        "type": "text",
+                                        "name": "StorageAccountResourceGroupName"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "The blob container's storage account subscription id",
+                                        "type": "text",
+                                        "name": "StorageAccountSubscription"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "The event grid topic name of the blob container's storage account if exist. else keep empty.",
+                                        "description": "The data flow using event grid to send 'blob-created event' notifications. There could be only one event grid topic for each storage account.\nGo to your blob container's storage account and look in the 'Events' section. If you already have a topic, please provide it's name. Else, keep the text box empty.",
+                                        "placeholder": "",
+                                        "type": "text",
+                                        "name": "EGSystemTopicName"
+                                    },
+                                    "type": "Textbox"
+                                },
+                                {
+                                    "parameters": {
+                                        "label": "toggle",
+                                        "name": "toggle"
+                                    },
+                                    "type": "ConnectionToggleButton"
+                                }
+                            ],
+                            "innerSteps": null
+                        }
+                    ],
+                    "isConnectivityCriteriasMatchSome": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2022-01-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "connectorDefinitionName": {
+                            "defaultValue": "connectorDefinitionName",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspaceName": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            },
+                            "type": "object"
+                        },
+                        "principalId": {
+                            "defaultValue": "principalId",
+                            "type": "string"
+                        },
+                        "blobContainerUri": {
+                            "defaultValue": "blobContainerUri",
+                            "type": "string"
+                        },
+                        "blobFolderName": {
+                            "defaultValue": "",
+                            "type": "string"
+                        },
+                        "StorageAccountLocation": {
+                            "defaultValue": "StorageAccountLocation",
+                            "type": "string"
+                        },
+                        "StorageAccountResourceGroupName": {
+                            "defaultValue": "StorageAccountResourceGroupName",
+                            "type": "string"
+                        },
+                        "StorageAccountSubscription": {
+                            "defaultValue": "StorageAccountSubscription",
+                            "type": "string"
+                        },
+                        "EGSystemTopicName": {
+                            "defaultValue": "",
+                            "type": "string"
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]",
+                        "connectorName": "storageblob",
+                        "storageAccountName": "[[split(split(parameters('blobContainerUri'), 'https://')[1], '.blob.core.windows.net')[0]]",
+                        "blobContainerName": "[[split(split(parameters('blobContainerUri'), '.blob.core.windows.net/')[1], '/')[0]]",
+                        "queueName": "[[concat(variables('connectorName'), '-notification')]",
+                        "dlqName": "[[concat(variables('connectorName'), '-dlq')]",
+                        "ResourcesIdPrefix": "[[format('/subscriptions/{0}/resourceGroups/{1}/providers', parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'))]",
+                        "storageAccountId": "[[format('{0}/Microsoft.Storage/storageAccounts/{1}', variables('ResourcesIdPrefix'), variables('storageAccountName'))]",
+                        "notificationQueueResourceId": "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices//default/queues/{2}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('queueName'))]",
+                        "dlqResourceId": "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices//default/queues/{2}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('dlqName'))]",
+                        "EGSystemTopicDefaultName": "[[format('eg-system-topic-{0}-{1}', variables('connectorName'), parameters('workspaceName'))]",
+                        "EGSystemTopicName": "[[if(empty(parameters('EGSystemTopicName')), variables('EGSystemTopicDefaultName'), parameters('EGSystemTopicName'))]",
+                        "EGTopicResourceId": "[[format('{0}/Microsoft.EventGrid/systemTopics/{1}', variables('ResourcesIdPrefix'), variables('EGSystemTopicName'))]",
+                        "EgSubscriptionName": "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]",
+                        "EgSubscriptionResourceId": "[[format('{0}/Microsoft.EventGrid/systemTopics/{1}/eventSubscriptions/{2}', variables('ResourcesIdPrefix'), variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
+                        "storageBlobContributorRoleId": "[[format('/subscriptions/{0}/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe', parameters('StorageAccountSubscription'))]",
+                        "storageQueueContributorRoleId": "[[format('/subscriptions/{0}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88', parameters('StorageAccountSubscription'))]",
+                        "blobRaGuid": "[[guid(variables('storageAccountName'), variables('blobContainerName'))]",
+                        "notificationQueueRaGuid": "[[guid(variables('storageAccountName'), variables('queueName'))]",
+                        "dlqRaGuid": "[[guid(variables('storageAccountName'), variables('dlqName'))]",
+                        "blobRoleAssignmentResourceId": "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/blobServices/default/containers/{2}/providers/Microsoft.Authorization/roleAssignments/{3}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('blobContainerName'),variables('blobRaGuid'))]",
+                        "notificationQueueRoleAssignmentResourceId": "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices/default/queues/{2}/providers/Microsoft.Authorization/roleAssignments/{3}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('queueName'),variables('notificationQueueRaGuid'))]",
+                        "dlqRoleAssignmentResourceId": "[[format('{0}/Microsoft.Storage/storageAccounts/{1}/queueServices/default/queues/{2}/providers/Microsoft.Authorization/roleAssignments/{3}', variables('ResourcesIdPrefix'), variables('storageAccountName'), variables('dlqName'),variables('dlqRaGuid'))]",
+                        "nestedDeploymentName": "CreateDataFlowResources",
+                        "nestedDeploymentId": "[[format('{0}/Microsoft.Resources/deployments/{1}', variables('ResourcesIdPrefix'), variables('nestedDeploymentName'))]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Resources/deployments",
+                            "apiVersion": "2021-04-01",
+                            "name": "[[variables('nestedDeploymentName')]",
+                            "properties": {
+                                "mode": "Incremental",
+                                "template": {
+                                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                    "contentVersion": "1.0.0.0",
+                                    "resources": [
+                                        {
+                                            "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+                                            "apiVersion": "2021-04-01",
+                                            "name": "[[concat(variables('storageAccountName'), '/default/', variables('queueName'))]",
+                                            "dependsOn": [],
+                                            "properties": {}
+                                        },
+                                        {
+                                            "type": "Microsoft.Storage/storageAccounts/queueServices/queues",
+                                            "apiVersion": "2021-04-01",
+                                            "name": "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'))]",
+                                            "dependsOn": [],
+                                            "properties": {}
+                                        },
+                                        {
+                                            "type": "Microsoft.EventGrid/systemTopics",
+                                            "apiVersion": "2022-06-15",
+                                            "name": "[[variables('EGSystemTopicName')]",
+                                            "location": "[[parameters('StorageAccountLocation')]",
+                                            "properties": {
+                                                "provisioningState": "Succeeded",
+                                                "source": "[[variables('storageAccountId')]",
+                                                "topicType": "microsoft.storage.storageaccounts",
+                                                "metricResourceId": "0cefe8d9-3269-4f68-a44e-46a4fc26e4a9"
+                                            },
+                                            "condition": "[[empty(parameters('EGSystemTopicName'))]"
+                                        },
+                                        {
+                                            "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
+                                            "apiVersion": "2023-12-15-preview",
+                                            "name": "[[format('{0}/{1}', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]",
+                                            "dependsOn": [
+                                                "[[variables('EGTopicResourceId')]",
+                                                "[[variables('notificationQueueResourceId')]"
+                                            ],
+                                            "properties": {
+                                                "destination": {
+                                                    "endpointType": "StorageQueue",
+                                                    "properties": {
+                                                        "queueName": "[[variables('queueName')]",
+                                                        "resourceId": "[[variables('storageAccountId')]"
+                                                    }
+                                                },
+                                                "filter": {
+                                                    "includedEventTypes": [
+                                                        "Microsoft.Storage.BlobCreated"
+                                                    ],
+                                                    "subjectBeginsWith": "[[format('{0}/{1}/blobs/{2}', '/blobServices/default/containers', variables('blobContainerName'), if(empty(parameters('blobFolderName')), '', concat(parameters('blobFolderName'),'/')))]"
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "type": "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments",
+                                            "apiVersion": "2018-01-01-preview",
+                                            "name": "[[concat(variables('storageAccountName'), '/default/', variables('blobContainerName'), '/Microsoft.Authorization/', variables('blobRaGuid'))]",
+                                            "properties": {
+                                                "roleDefinitionId": "[[variables('storageBlobContributorRoleId')]",
+                                                "principalId": "[[parameters('principalId')]"
+                                            }
+                                        },
+                                        {
+                                            "type": "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments",
+                                            "apiVersion": "2018-01-01-preview",
+                                            "name": "[[concat(variables('storageAccountName'), '/default/', variables('queueName'), '/Microsoft.Authorization/',  variables('notificationQueueRaGuid'))]",
+                                            "dependsOn": [
+                                                "[[variables('notificationQueueResourceId')]"
+                                            ],
+                                            "properties": {
+                                                "roleDefinitionId": "[[variables('storageQueueContributorRoleId')]",
+                                                "principalId": "[[parameters('principalId')]"
+                                            }
+                                        },
+                                        {
+                                            "type": "Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments",
+                                            "apiVersion": "2018-01-01-preview",
+                                            "name": "[[concat(variables('storageAccountName'), '/default/', variables('dlqName'), '/Microsoft.Authorization/', variables('dlqRaGuid'))]",
+                                            "dependsOn": [
+                                                "[[variables('dlqResourceId')]"
+                                            ],
+                                            "properties": {
+                                                "roleDefinitionId": "[[variables('storageQueueContributorRoleId')]",
+                                                "principalId": "[[parameters('principalId')]"
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "subscriptionId": "[[parameters('StorageAccountSubscription')]",
+                            "resourceGroup": "[[parameters('StorageAccountResourceGroupName')]"
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CustomAzureStorageBlob')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "StorageAccountBlobContainer",
+                            "properties": {
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dcrConfig": {
+                                    "streamName": "Custom-StorageBlob // Modify your stream name (same as 143)",
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                                },
+                                "auth": {
+                                    "type": "ServicePrincipal"
+                                },
+                                "request": {
+                                    "QueueUri": "[[concat('https://', variables('storageAccountName'), '.queue.core.windows.net/', variables('queueName'))]",
+                                    "DlqUri": "[[concat('https://', variables('storageAccountName'), '.queue.core.windows.net/', variables('dlqName'))]"
+                                },
+                                "response": {
+                                    "eventsJsonPaths": [
+                                        "$"
+                                    ],
+                                    "format": "json",
+                                    "isGzipCompressed": false
+                                }
+                            },
+                            "dependsOn": []
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2022-06-24",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[variables('_solutionId')]",
+                "descriptionHtml": "AzureStorageBlobConnector",
+                "icon": "[variables('_packageIcon')]"
+            }
+        }
+    ]
+}

@@ -786,6 +786,101 @@ def fetch_table_details(table_name: str, verbose: bool = False) -> Dict:
     return details
 
 
+def fetch_table_columns(table_name: str, doc_url: str, verbose: bool = False) -> List[Dict[str, str]]:
+    """
+    Fetch column schema for a table from its rendered documentation page.
+    
+    The rendered learn.microsoft.com pages contain a table with columns:
+    - Azure Monitor tables: Column, Type, Description
+    - Defender XDR tables: Column name, Data type, Description
+    
+    Args:
+        table_name: Name of the table
+        doc_url: URL to the table's documentation page (learn.microsoft.com)
+        verbose: Whether to print verbose output
+        
+    Returns:
+        List of dicts with keys: column_name, column_type, description
+    """
+    columns: List[Dict[str, str]] = []
+    
+    try:
+        content = fetch_content(doc_url, verbose=False)
+    except Exception as e:
+        if verbose:
+            print(f"    Could not fetch columns for {table_name}: {e}")
+        return columns
+    
+    if not HAS_BS4:
+        # Fall back to regex-based parsing of HTML
+        # Look for table rows with column/type/description pattern
+        row_pattern = re.compile(
+            r'<tr>\s*<td[^>]*>([^<]+)</td>\s*<td[^>]*>([^<]+)</td>\s*<td[^>]*>(.*?)</td>\s*</tr>',
+            re.DOTALL | re.IGNORECASE
+        )
+        for match in row_pattern.finditer(content):
+            col_name = match.group(1).strip()
+            col_type = match.group(2).strip()
+            desc = match.group(3).strip()
+            # Skip header rows
+            if col_name.lower() in ('column', 'column name', 'name', ''):
+                continue
+            columns.append({
+                'column_name': col_name,
+                'column_type': col_type,
+                'description': desc,
+            })
+        return columns
+    
+    soup = BeautifulSoup(content, 'html.parser')
+    
+    # Find the table with column schema info
+    for html_table in soup.find_all('table'):
+        headers = [th.get_text(strip=True).lower() for th in html_table.find_all('th')]
+        
+        # Match Azure Monitor format: Column, Type, Description
+        # or Defender XDR format: Column name, Data type, Description
+        col_idx = -1
+        type_idx = -1
+        desc_idx = -1
+        
+        for i, h in enumerate(headers):
+            if h in ('column', 'column name', 'name'):
+                col_idx = i
+            elif h in ('type', 'data type'):
+                type_idx = i
+            elif h == 'description':
+                desc_idx = i
+        
+        if col_idx < 0 or type_idx < 0:
+            continue
+        
+        # Extract rows
+        for row in html_table.find_all('tr'):
+            cells = row.find_all('td')
+            if len(cells) <= max(col_idx, type_idx):
+                continue
+            
+            col_name = cells[col_idx].get_text(strip=True)
+            col_type = cells[type_idx].get_text(strip=True)
+            desc = cells[desc_idx].get_text(strip=True) if desc_idx >= 0 and desc_idx < len(cells) else ''
+            
+            if not col_name or col_name.lower() in ('column', 'column name', 'name'):
+                continue
+            
+            columns.append({
+                'column_name': col_name,
+                'column_type': col_type,
+                'description': desc,
+            })
+        
+        # Found and parsed the columns table - no need to check other tables
+        if columns:
+            break
+    
+    return columns
+
+
 def merge_table_info(tables: Dict[str, TableInfo], 
                       defender_tables: Dict[str, TableInfo],
                       feature_info: Dict[str, Dict],
@@ -882,6 +977,15 @@ def merge_table_info(tables: Dict[str, TableInfo],
                     lake_only_supported=info_dict.get('lake_only_supported', '')
                 )
     
+    # Apply rules for custom log tables (_CL suffix):
+    # - All _CL tables support Ingestion API (they are custom tables created via DCR/ingestion)
+    # - _CL tables that support lake-only also support transformations
+    for table_name, info in merged.items():
+        if table_name.endswith('_CL'):
+            info.ingestion_api_supported = True
+            if info.lake_only_supported == 'Yes' and not info.supports_transformations:
+                info.supports_transformations = 'Yes'
+    
     return merged
 
 
@@ -940,6 +1044,43 @@ def write_tables_csv(tables: Dict[str, TableInfo], output_path: Path) -> None:
             })
     
     print(f"Wrote {len(tables)} tables to {output_path}")
+
+
+def write_la_table_schemas_csv(
+    all_columns: Dict[str, List[Dict[str, str]]],
+    output_path: Path
+) -> None:
+    """Write table column schemas to CSV.
+    
+    Args:
+        all_columns: Dictionary mapping table_name -> list of column dicts
+            Each column dict has: column_name, column_type, description
+        output_path: Path for the output CSV file
+    """
+    fieldnames = [
+        'table_name',
+        'column_name',
+        'column_type',
+        'description',
+    ]
+    
+    total_rows = 0
+    with open(output_path, 'w', encoding='utf-8', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        
+        for table_name in sorted(all_columns.keys()):
+            for col in all_columns[table_name]:
+                writer.writerow({
+                    'table_name': table_name,
+                    'column_name': col['column_name'],
+                    'column_type': col['column_type'],
+                    'description': col.get('description', ''),
+                })
+                total_rows += 1
+    
+    unique_tables = len(all_columns)
+    print(f"Wrote {total_rows} column schemas across {unique_tables} tables to {output_path}")
 
 
 def main():
@@ -1108,20 +1249,29 @@ Examples:
     if verbose:
         print(f"   Total unique tables: {len(tables)}")
     
-    # Fetch detailed info for each table (unless --skip-details)
+    # Fetch detailed info and column schemas for each table (unless --skip-details)
+    all_table_columns: Dict[str, List[Dict[str, str]]] = {}  # table_name -> columns
     if not args.skip_details:
-        # Filter to only Azure Monitor tables
+        # Collect all tables that have doc links (Azure Monitor + XDR)
+        tables_to_fetch = [(name, info) for name, info in tables.items()
+                           if info.azure_monitor_doc_link or info.defender_xdr_doc_link]
+        
+        # Filter to only Azure Monitor tables for detail fetching (existing behavior)
         azure_tables = [(name, info) for name, info in tables.items() if info.source_azure_monitor]
         total = len(azure_tables)
         
         # Apply limit if specified
         if args.max_details > 0:
             azure_tables = azure_tables[:args.max_details]
+            tables_to_fetch = [(n, i) for n, i in tables_to_fetch
+                               if any(n == an for an, _ in azure_tables) or i.defender_xdr_doc_link]
+            if args.max_details > 0:
+                tables_to_fetch = tables_to_fetch[:args.max_details]
             if verbose:
-                print(f"\n7. Fetching detailed info for {len(azure_tables)} of {total} Azure Monitor tables...")
+                print(f"\n7. Fetching detailed info and column schemas for {len(azure_tables)} of {total} Azure Monitor tables...")
         else:
             if verbose:
-                print(f"\n7. Fetching detailed info for {total} Azure Monitor tables (this may take a while)...")
+                print(f"\n7. Fetching detailed info and column schemas for {total} Azure Monitor tables + {len(tables_to_fetch) - total} XDR tables (this may take a while)...")
         
         fetched_count = 0
         for i, (table_name, info) in enumerate(azure_tables):
@@ -1173,6 +1323,33 @@ Examples:
         
         if verbose:
             print(f"   Successfully fetched details for {fetched_count} tables")
+        
+        # Fetch column schemas from rendered documentation pages
+        if verbose:
+            print(f"\n8. Fetching column schemas from rendered documentation pages for {len(tables_to_fetch)} tables...")
+        
+        columns_fetched = 0
+        for i, (table_name, info) in enumerate(tables_to_fetch):
+            # Use Azure Monitor doc URL if available, fall back to XDR
+            doc_url = info.azure_monitor_doc_link or info.defender_xdr_doc_link
+            if not doc_url:
+                continue
+            
+            try:
+                cols = fetch_table_columns(table_name, doc_url, verbose=False)
+                if cols:
+                    all_table_columns[table_name] = cols
+                    columns_fetched += 1
+            except Exception as e:
+                if verbose:
+                    print(f"   Error fetching columns for {table_name}: {e}")
+            
+            if verbose and (i + 1) % 50 == 0:
+                print(f"   [{i + 1}/{len(tables_to_fetch)}] Fetched columns for {columns_fetched} tables so far...")
+        
+        if verbose:
+            total_cols = sum(len(cols) for cols in all_table_columns.values())
+            print(f"   Successfully fetched {total_cols} columns across {columns_fetched} tables")
     
     # Apply overrides
     overrides = load_overrides(args.overrides_csv)
@@ -1220,6 +1397,13 @@ Examples:
     
     csv_path = args.output / 'tables_reference.csv'
     write_tables_csv(tables, csv_path)
+    
+    # Write column schemas CSV
+    if all_table_columns:
+        schemas_path = args.output / 'la_table_schemas.csv'
+        write_la_table_schemas_csv(all_table_columns, schemas_path)
+    elif verbose:
+        print("No column schemas collected (use --fetch-details or remove --skip-details to collect them)")
     
     # Write transformation support mismatch report if there are any
     if dcr_mismatches:

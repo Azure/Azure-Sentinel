@@ -25,16 +25,16 @@ parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASim
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
     {"SchemaName": "AlertEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Alert Event Schema", "SchemaLink": "https://aka.ms/ASimAlertEventDoc"},
-    {"SchemaName": "AuditEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
-    {"SchemaName": "Authentication", "SchemaVersion": "0.1.3","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
+    {"SchemaName": "AuditEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
+    {"SchemaName": "Authentication", "SchemaVersion": "0.1.4","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
     {"SchemaName": "Dns", "SchemaVersion": "0.1.7", "SchemaTitle":"ASIM Dns Schema","SchemaLink": "https://aka.ms/ASimDnsDoc"},
-    {"SchemaName": "DhcpEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink": "https://aka.ms/ASimDhcpEventDoc"},
-    {"SchemaName": "FileEvent", "SchemaVersion": "0.2.1", "SchemaTitle":"ASIM File Schema","SchemaLink": "https://aka.ms/ASimFileEventDoc"},
-    {"SchemaName": "NetworkSession", "SchemaVersion": "0.2.6", "SchemaTitle":"ASIM Network Session Schema","SchemaLink": "https://aka.ms/ASimNetworkSessionDoc"},
+    {"SchemaName": "DhcpEvent", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM Dhcp Schema","SchemaLink": "https://aka.ms/ASimDhcpEventDoc"},
+    {"SchemaName": "FileEvent", "SchemaVersion": "0.2.2", "SchemaTitle":"ASIM File Schema","SchemaLink": "https://aka.ms/ASimFileEventDoc"},
+    {"SchemaName": "NetworkSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Network Session Schema","SchemaLink": "https://aka.ms/ASimNetworkSessionDoc"},
     {"SchemaName": "ProcessEvent", "SchemaVersion": "0.1.4", "SchemaTitle":"ASIM Process Schema","SchemaLink": "https://aka.ms/ASimProcessEventDoc"},
-    {"SchemaName": "RegistryEvent", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM Registry Schema","SchemaLink": "https://aka.ms/ASimRegistryEventDoc"},
-    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
-    {"SchemaName": "WebSession", "SchemaVersion": "0.2.6", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
+    {"SchemaName": "RegistryEvent", "SchemaVersion": "0.1.3", "SchemaTitle":"ASIM Registry Schema","SchemaLink": "https://aka.ms/ASimRegistryEventDoc"},
+    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.2", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
+    {"SchemaName": "WebSession", "SchemaVersion": "0.2.7", "SchemaTitle":"ASIM Web Session Schema","SchemaLink": "https://aka.ms/ASimWebSessionDoc"}
     # Add more schemas as needed
 ]
 
