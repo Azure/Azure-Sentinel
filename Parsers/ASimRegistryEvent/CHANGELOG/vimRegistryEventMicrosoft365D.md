@@ -1,5 +1,9 @@
 # Changelog for vimRegistryEventMicrosoft365D.yaml
 
+## Version 0.1.3
+
+- (2026-02-26) Added mandatory columns - EventSchema, EventResult
+
 ## Version 0.1.2
 
 - (2023-11-09) Applying Filters for Registry Parsers - [PR #9187](https://github.com/Azure/Azure-Sentinel/pull/9187)
