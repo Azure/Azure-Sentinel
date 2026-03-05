@@ -6,10 +6,10 @@
   "kind": "Customizable",
   "properties": {
     "connectorUiConfig": {
-      "id": "AWSEKSConnector",
-      "title": "AWS EKS Data Connector (via Codeless Connector Framework)",
+      "id": "AWSEKSCCP",
+      "title": "AWS EKS",
       "publisher": "Amazon Web Services",
-      "descriptionMarkdown": "The AWS EKS data connector provides the capability to ingest logs from [Amazon Elastic Kubernetes Service](https://aws.amazon.com/eks/) into Microsoft Sentinel. This connector allows you to receive and process messages from your SQS queues, making them available for security monitoring and analysis. The connector supports both standard and FIFO queues and provides comprehensive message metadata including attributes, timestamps, and sender information.",
+      "descriptionMarkdown": "The AWS EKS data connector provides the capability to ingest audit logs from [Amazon Elastic Kubernetes Service](https://aws.amazon.com/eks/) into Microsoft Sentinel. This connector focuses on EKS audit logs (JSON format) which contain detailed information about API server requests, authentication decisions, and cluster activities. The connector uses AWS SQS to receive notifications when new audit log files are exported to S3, ensuring real-time security monitoring and compliance tracking for your Kubernetes clusters.",
       "graphQueriesTableName": "AWSEKSLogs_CL",
       "graphQueries": [
         {
@@ -28,8 +28,8 @@
           "query": "{{graphQueriesTableName}}\n| take 10"
         },
         {
-          "description": "Summary by cluster name",
-          "query": "{{graphQueriesTableName}}\n| summarize count() by ClusterName"
+          "description": "Summary by queue name",
+          "query": "{{graphQueriesTableName}}\n| summarize count() by QueueName"
         }
       ],
       "dataTypes": [
@@ -65,73 +65,48 @@
       },
       "instructionSteps": [
         {
-          "title": "1. Configuration",
-          "description": "Configure the AWS EKS connector with your queue details and credentials.",
+          "title": "1. AWS CloudFormation Deployment",
+          "description": "Use the provided CloudFormation templates to configure the AWS environment for sending logs from AWS EKS to your Log Analytics Workspace.",
           "instructions": [
             {
               "type": "Markdown",
               "parameters": {
-                "content": "> [!NOTE]\n> This data connector requires AWS credentials with appropriate SQS permissions to receive messages from your queues."
+                "content": "#### Deploy CloudFormation Templates in AWS: \n1. Navigate to the [AWS CloudFormation Stacks](https://aka.ms/awsCloudFormationLink#/stacks/create).\n2. Click **Create stack** and select **With new resources**.\n3. Choose **Upload a template file**, then click **Choose file** to upload the appropriate CloudFormation template(Template 1 and 2 below) provided.\n4. Follow the prompts and click **Next** to complete the stack creation.\n5. After the stacks are created, navigation to the **Outputs** section. Run the scripts in step 1 and 2 from the output section, it stream log from eks to sqs.\n6. In the same outputs section, Note down the **Role ARN** and **SQS Queue URL** which are going to be used in connect connector.\n"
               }
             },
             {
-              "type": "Markdown",
+              "type": "CopyableLabel",
               "parameters": {
-                "content": "> [!IMPORTANT]\n> Ensure your AWS credentials have the following SQS permissions:\n> - `sqs:ReceiveMessage`\n> - `sqs:DeleteMessage` (if deleteMessageAfterReceive is enabled)\n> - `sqs:GetQueueAttributes`"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Queue URL",
-                "placeholder": "The full AWS EKS queue URL (e.g., https://sqs.region.amazonaws.com/account-id/queue-name)",
-                "type": "text",
-                "name": "queueUrl"
-              }
-            },
-            {
-              "type": "Textbox",
-              "parameters": {
-                "label": "Role ARN",
-                "placeholder": "The AWS IAM Role ARN for cross-account access (e.g., arn:aws:iam::123456789012:role/SentinelRole)",
-                "type": "text",
-                "name": "roleArn"
+                "fillWith": [],
+                "label": "Template 1: OpenID Connect authentication provider deployment",
+                "value": "{\r\n  \"AWSTemplateFormatVersion\": \"2010-09-09\",\r\n  \"Description\": \"This Stack creates an Open ID Connect (OIDC) web identity provider and an AWS assumed role.\",\r\n  \"Resources\": {\r\n    \"OIDCIdentityProvider\": {\r\n      \"Type\": \"AWS::IAM::OIDCProvider\",\r\n      \"DeletionPolicy\": \"Retain\",\r\n      \"Properties\": {\r\n        \"ClientIdList\": [\r\n          \"api://1462b192-27f7-4cb9-8523-0f4ecb54b47e\"\r\n        ],\r\n        \"ThumbprintList\": [\r\n          \"626d44e704d1ceabe3bf0d53397464ac8080142c\"\r\n        ],\r\n        \"Url\": \"https://sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/\"\r\n      }\r\n    }\r\n  }\r\n}\r\n",
+                "rows": 15,
+                "wideLabel": true,
+                "isMultiLine": true
               }
             }
           ]
         },
         {
-          "title": "2. Advanced Configuration (Optional)",
-          "description": "Configure advanced SQS polling settings.",
+          "title": "2. Connect new collectors",
+          "description": "To enable AWS Security Hub Connector for Microsoft Sentinel, click the Add new collector button, fill the required information in the context pane and click on Connect.",
           "instructions": [
             {
-              "type": "Markdown",
+              "type": "Textbox",
               "parameters": {
-                "content": "**Optional Settings:**"
+                "label": "SentinelRoleArn",
+                "placeholder": "The AWS IAM Role ARN for cross-account access (e.g., arn:aws:iam::123456789012:role/SentinelRole)",
+                "type": "text",
+                "name": "roleArn"
               }
             },
             {
-              "type": "Markdown",
+              "type": "Textbox",
               "parameters": {
-                "content": "- **Max Messages**: Number of messages to retrieve per polling operation (1-10, default: 10)"
-              }
-            },
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "- **Visibility Timeout**: Duration (in seconds) that messages are hidden from other consumers (0-43200, default: 30)"
-              }
-            },
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "- **Wait Time**: Long polling wait time in seconds (0-20, default: 20)"
-              }
-            },
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "- **Delete After Receive**: Whether to automatically delete messages after processing (default: true)"
+                "label": "SentinelSQSQueueURL",
+                "placeholder": "The full AWS EKS queue URL (e.g., https://sqs.region.amazonaws.com/account-id/queue-name)",
+                "type": "text",
+                "name": "queueUrl"
               }
             }
           ]
