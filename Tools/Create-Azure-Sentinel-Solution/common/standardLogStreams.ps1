@@ -188,6 +188,8 @@ $standardStreamMapping += @{ Key = 'SECURITY_WEF_EVENT_BLOB_OBO'; Value = 'Micro
 $standardStreamMapping += @{ Key = 'SENTINEL_GOOGLEWORKSPACEREPORTS'; Value = 'Microsoft-GoogleWorkspaceReports' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSSECHUB'; Value = 'Microsoft-AWSSecurityHubFindings' }
 $standardStreamMapping += @{ Key = 'SENTINEL_AWSROUTE53RESOLVER'; Value = 'Microsoft-AWSRoute53Resolver' }
+$standardStreamMapping += @{ Key = 'SENTINEL_RAPID7INSIGHTVMCLOUDASSETS'; Value = 'Microsoft-SentinelRapid7InsightVMCloudAssets' }
+$standardStreamMapping += @{ Key = 'SENTINEL_RAPID7INSIGHTVMCLOUDVULNERABILITIES'; Value = 'Microsoft-SentinelRapid7InsightVMCloudVulnerabilities' }
 $standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEVULNERABILITIES'; Value = 'Microsoft-SentinelCrowdStrikeVulnerabilities' }
 $standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEALERTS'; Value = 'Microsoft-SentinelCrowdStrikeAlerts' }
 $standardStreamMapping += @{ Key = 'SENTINEL_CROWDSTRIKEINCIDENTS'; Value = 'Microsoft-SentinelCrowdStrikeIncidents' }
