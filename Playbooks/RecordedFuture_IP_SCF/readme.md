@@ -8,7 +8,7 @@
 > Microsoft has deprecated the **Microsoft Graph Security tiIndicators API** (beta) that these playbooks rely on. The `submitTiIndicators` endpoint is no longer available.
 >
 > ### Migration Options
-> - Contact Recorded Future support for updated integration options
+> - We have provided a mitigation path, [more info here](https://support.recordedfuture.com/hc/en-us/articles/49681978317971-Action-Required-for-Microsoft-Defender-For-Endpoint-Integration) (requires Recorded Future login)
 >
 > ### Microsoft Deprecation Reference
 > - [Microsoft Graph Security tiIndicator deprecation](https://learn.microsoft.com/en-us/graph/api/resources/tiindicator?view=graph-rest-beta)
@@ -17,6 +17,10 @@
 
 Author: Recorded Future\
 Link to [Recorded Future main readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future/readme.md)
+
+## Overview (DEPRECATED)
+
+**This integration is no longer functional due to Microsoft API deprecation.**
 
 These playbooks leverage the Recorded Future API to automate the ingestion of Recorded Future IP [Command and Control - Security Control Feed](https://support.recordedfuture.com/hc/en-us/articles/360024113434-Security-Control-Feed-Command-and-Control), into the ThreatIntelligenceIndicator table, for prevention (block) actions in Microsoft Defender ATP. For additional information please visit [Recorded Future](https://www.recordedfuture.com/integrations/azure/).
 

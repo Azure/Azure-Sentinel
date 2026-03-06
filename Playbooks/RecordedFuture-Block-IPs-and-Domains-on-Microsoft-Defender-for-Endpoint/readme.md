@@ -8,7 +8,7 @@
 > Microsoft has deprecated the **Microsoft Graph Security tiIndicators API** (beta) that these playbooks rely on. The `submitTiIndicators` endpoint is no longer available.
 >
 > ### Migration Options
-> - Contact Recorded Future support for updated integration options
+> - We have provided a mitigation path, [more info here](https://support.recordedfuture.com/hc/en-us/articles/49681978317971-Action-Required-for-Microsoft-Defender-For-Endpoint-Integration) (requires Recorded Future login)
 >
 > ### Microsoft Deprecation Reference
 > - [Microsoft Graph Security tiIndicator deprecation](https://learn.microsoft.com/en-us/graph/api/resources/tiindicator?view=graph-rest-beta)
@@ -20,7 +20,7 @@ Link to [Recorded Future main readme](https://github.com/Azure/Azure-Sentinel/bl
 
 ## Overview (DEPRECATED)
 
-**⚠️ This integration is no longer functional due to Microsoft API deprecation.**
+**This integration is no longer functional due to Microsoft API deprecation.**
 
 This playbook delivered active [C&C Server IPs](https://support.recordedfuture.com/hc/en-us/articles/360024113434-Security-Control-Feed-Command-and-Control "Recorded Future Support Page for Command and Control feeds") and [Recent C&C DNS Name](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules "Recorded Future Support Page for Weaponized Domains and URLs") to your Microsoft Defender for Endpoint for blocking and alerting.  These indicators come from a broad collection of sources (e.g., open source, dark web, technical sources, Insikt Group research), analyzed by Recorded Future's proprietary security graph, and delivered daily to Microsoft Defender via two interdependent Microsoft Azure Logic App playbooks.  For more information, see Recorded Future's webpage about the [Microsoft Defender for Endpoint integration](https://www.recordedfuture.com/integrations/defender/ "Recorded Future integration with Microsoft Defender for Endpoint").
 
