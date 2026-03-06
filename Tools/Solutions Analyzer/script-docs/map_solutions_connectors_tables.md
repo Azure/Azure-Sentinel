@@ -302,7 +302,8 @@ Contains one row per unique connector with all connector-specific fields and col
 | `filter_fields` | Filter fields extracted from queries (see [Filter Fields Detection](#filter-fields-detection)) | [KQL query analysis](#filter-fields-detection) with operator extraction |
 | `not_in_solution_json` | `true` if connector was found by file scanning but not listed in the Solution JSON | Comparison: file scan vs Solution JSON content lists |
 | `solution_name` | Name of the parent solution | Parent solution folder name |
-| `is_deprecated` | `true` if connector title contains "[DEPRECATED]" or "[Deprecated]" | Pattern match on connector title |
+| `is_deprecated` | `true` if connector title contains "[DEPRECATED]"/"[Deprecated]", connector JSON has `availability.status` of 0, or parent solution is deprecated | Pattern match on connector title + connector JSON `availability.status` field + solution-level deprecation inheritance |
+| `deprecation_date` | Date string extracted from connector description (e.g., "Aug 31, 2024") when deprecated; empty if not found | Regex extraction from `descriptionMarkdown` near deprecation keywords; overridable |
 | `is_published` | `true` if parent solution is published on Azure Marketplace | Azure Marketplace API query |
 | `ccf_config_file` | GitHub URL to the CCF configuration file (for CCF and CCF Push connectors) | File system scan for polling/poller config files |
 | `ccf_capabilities` | Semicolon-separated CCF capabilities (auth type, paging, POST, etc.) | Parsed from CCF config JSON |
@@ -334,6 +335,8 @@ Contains one row per solution with all solution-specific metadata. Metadata is s
 | `solution_description` | Full solution description with HTML/markdown formatting from Solution JSON | Solution JSON `Description` field |
 | `solution_dependencies` | Semicolon-separated list of dependent solution IDs from `dependentDomainSolutionIds` | Solution JSON `dependentDomainSolutionIds` |
 | `has_connectors` | `true` if solution has data connectors, `false` otherwise | Computed: checks for Data Connectors folder |
+| `is_deprecated` | `true` if solution description contains deprecation language (e.g., "this integration is considered deprecated") | Regex match on Solution JSON `Description` field; overridable |
+| `deprecation_date` | Date string extracted from solution description when deprecated; empty if not found | Regex extraction from `Description` near deprecation keywords; overridable |
 | `is_published` | `true` if solution is published on Azure Marketplace | Azure Marketplace API query |
 | `marketplace_url` | URL to the solution's Azure Marketplace listing | Azure Marketplace API response |
 
@@ -984,7 +987,7 @@ This mapping can be extended for other Azure resource types as needed.
 #### Exclusions
 
 The algorithm excludes:
-- **Deprecated connectors**: Connectors with `[DEPRECATED]` in title
+- **Deprecated connectors**: Connectors with `[DEPRECATED]` in title or `availability.status` of 0 in connector JSON
 - **Content-only connectors**: Connectors that use data from other connectors (don't ingest data themselves)
 - **Excluded tables**: Tables that appear in connector documentation but aren't actually ingested
 

@@ -5174,6 +5174,88 @@ def extract_log_analytics_tables(data: Any) -> Set[str]:
     return tables
 
 
+# ===================== DEPRECATION DETECTION =====================
+
+# Patterns for detecting solution-level deprecation from Solution JSON Description field.
+# These patterns are deliberately narrow to avoid false positives on solutions that merely
+# mention deprecated connectors (e.g., MMA retirement notes) without the solution itself
+# being deprecated.
+SOLUTION_DEPRECATED_PATTERNS = [
+    re.compile(r'this (?:integration|solution) is (?:considered )?deprecated', re.IGNORECASE),
+    re.compile(r'this (?:integration|solution) has been deprecated', re.IGNORECASE),
+]
+
+# Patterns for extracting deprecation dates from description text.
+# Matches dates like "Aug 31, 2024", "August 31, 2024", "2024-08-31" appearing near
+# deprecation-related keywords. Also handles markdown bold (**date**) wrapping.
+DEPRECATION_DATE_PATTERNS = [
+    # "deprecated ... <date>" or "retirement ... <date>" with optional markdown bold
+    re.compile(
+        r'(?:deprecated|retirement|retire[ds]?|removed|sunset|end.of.life)'
+        r'.{0,120}?'
+        r'\*{0,2}(\b(?:January|February|March|April|May|June|July|August|September|October|November|December|'
+        r'Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4})\*{0,2}',
+        re.IGNORECASE
+    ),
+    # ISO date near deprecation text
+    re.compile(
+        r'(?:deprecated|retirement|retire[ds]?|removed|sunset|end.of.life)'
+        r'.{0,120}?'
+        r'(\d{4}-\d{2}-\d{2})',
+        re.IGNORECASE
+    ),
+]
+
+
+def is_solution_deprecated(description: str) -> bool:
+    """Check if a solution description indicates the solution itself is deprecated.
+
+    Args:
+        description: The Solution JSON 'Description' field text.
+
+    Returns:
+        True if the description contains solution-level deprecation language.
+    """
+    for pattern in SOLUTION_DEPRECATED_PATTERNS:
+        if pattern.search(description):
+            return True
+    return False
+
+
+def extract_deprecation_date(text: str) -> str:
+    """Extract a deprecation/retirement date from free-text description.
+
+    Returns the first date string found near deprecation keywords, or empty
+    string if none is found.
+    """
+    for pattern in DEPRECATION_DATE_PATTERNS:
+        m = pattern.search(text)
+        if m:
+            return m.group(1).strip()
+    return ''
+
+
+def is_connector_deprecated_from_json(entry: Dict[str, Any]) -> bool:
+    """Check if a connector entry's availability.status indicates deprecated.
+
+    In the connector JSON schema, ``availability.status`` of 1 means available
+    and 2 means GA.  A value of 0 (or the field being absent) is treated as
+    potentially deprecated only when the field is explicitly present and zero.
+
+    Args:
+        entry: Parsed connector JSON entry from ``find_connector_objects``.
+
+    Returns:
+        True if ``availability.status`` is explicitly ``0``.
+    """
+    availability = entry.get('availability')
+    if isinstance(availability, dict):
+        status = availability.get('status')
+        if status == 0:
+            return True
+    return False
+
+
 # ===================== INGESTION API DETECTION =====================
 # Patterns for detecting Log Ingestion API vs HTTP Data Collector API
 
@@ -7960,6 +8042,7 @@ def main() -> None:
     connector_vendor_product_by_table: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {'vendor': set, 'product': set}}
     connector_filter_fields: Dict[str, Dict[str, Dict[str, Set[str]]]] = {}  # connector_id -> {table_name -> {field_name -> set of values}}
     connector_ccf_config: Dict[str, Tuple[str, Path]] = {}  # connector_id -> (github_url, local_path)
+    connector_availability_deprecated: Dict[str, bool] = {}  # connector_id -> True if availability.status == 0
     
     log_print(f"\nAnalyzing connector collection methods and filter fields...")
     for solution_dir in sorted([p for p in solutions_dir.iterdir() if p.is_dir() and p.name.lower() not in EXCLUDED_SOLUTION_FOLDERS], key=lambda p: p.name.lower()):
@@ -7983,6 +8066,10 @@ def main() -> None:
                         if conn_id:
                             if conn_id not in connector_json_content:
                                 connector_json_content[conn_id] = (content, json_path.name)
+                            # Check availability.status for deprecation
+                            if conn_id not in connector_availability_deprecated:
+                                if is_connector_deprecated_from_json(entry):
+                                    connector_availability_deprecated[conn_id] = True
                             # Extract vendor/product from connector queries (aggregated) - legacy
                             vp = get_connector_vendor_product(data)
                             if vp['vendor'] or vp['product']:
@@ -8026,6 +8113,13 @@ def main() -> None:
                 except Exception:
                     continue
     
+    # Build set of deprecated solutions (for inheriting deprecation to connectors)
+    deprecated_solutions: Set[str] = set()
+    for solution_name, sol_info in all_solutions_info.items():
+        sol_description = sol_info.get('solution_description', '')
+        if is_solution_deprecated(sol_description):
+            deprecated_solutions.add(solution_name)
+
     # Build connectors with collection method info
     connectors_data: List[Dict[str, str]] = []
     
@@ -8073,9 +8167,20 @@ def main() -> None:
             if readme_rel_path:
                 connector_readme_file = f"Solutions/{quote(solution_folder)}/{readme_rel_path}"
         
-        # Determine if connector is deprecated based on title
+        # Determine if connector is deprecated based on title, availability.status, or solution deprecation
         connector_title = info['connector_title']
-        is_deprecated = '[DEPRECATED]' in connector_title.upper() or connector_title.startswith('[Deprecated]')
+        solution_name = info.get('solution_name', '')
+        is_deprecated = (
+            '[DEPRECATED]' in connector_title.upper()
+            or connector_title.startswith('[Deprecated]')
+            or connector_availability_deprecated.get(connector_id, False)
+            or solution_name in deprecated_solutions
+        )
+        
+        # Extract deprecation date from connector description
+        connector_deprecation_date = ''
+        if is_deprecated:
+            connector_deprecation_date = extract_deprecation_date(info['connector_description'])
         
         # Get CCF config file and extract capabilities
         ccf_config_url = ''
@@ -8112,6 +8217,7 @@ def main() -> None:
             'not_in_solution_json': info.get('not_in_solution_json', 'false'),
             'solution_name': info.get('solution_name', ''),
             'is_deprecated': 'true' if is_deprecated else 'false',
+            'deprecation_date': connector_deprecation_date,
             'ccf_config_file': ccf_config_url,
             'ccf_capabilities': ccf_capabilities_str,
         })
@@ -8375,6 +8481,11 @@ def main() -> None:
         if marketplace_status:
             is_published, marketplace_url = marketplace_status.get(solution_name, (True, ""))
         
+        # Detect solution-level deprecation from description
+        sol_description = info.get('solution_description', '')
+        sol_is_deprecated = is_solution_deprecated(sol_description)
+        sol_deprecation_date = extract_deprecation_date(sol_description) if sol_is_deprecated else ''
+        
         solutions_data.append({
             'solution_name': info['solution_name'],
             'solution_folder': info['solution_folder'],
@@ -8391,9 +8502,11 @@ def main() -> None:
             'solution_categories': info['solution_categories'],
             'solution_readme_file': readme_full_path,
             'solution_logo_url': info.get('solution_logo_url', ''),
-            'solution_description': info.get('solution_description', ''),
+            'solution_description': sol_description,
             'solution_dependencies': info.get('solution_dependencies', ''),
             'has_connectors': 'true' if solution_name not in solutions_without_connectors else 'false',
+            'is_deprecated': 'true' if sol_is_deprecated else 'false',
+            'deprecation_date': sol_deprecation_date,
             'is_published': 'true' if is_published else 'false',
             'marketplace_url': marketplace_url,
         })
@@ -8929,6 +9042,7 @@ def main() -> None:
         'not_in_solution_json',
         'solution_name',
         'is_deprecated',
+        'deprecation_date',
         'is_published',
         'ccf_config_file',
         'ccf_capabilities',
@@ -8962,6 +9076,8 @@ def main() -> None:
         'solution_description',
         'solution_dependencies',
         'has_connectors',
+        'is_deprecated',
+        'deprecation_date',
         'is_published',
         'marketplace_url',
     ]

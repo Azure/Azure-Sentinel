@@ -66,11 +66,12 @@ DEPRECATED_ICON = "🚫"   # Deprecated/no-entry icon for deprecated connectors
 DISCOVERED_ICON = "🔍"   # Magnifying glass for discovered items not in solution JSON
 ADDITIONAL_INFO_ICON = "➕"  # Plus icon for items with additional documentation/info
 SCHEMA_ICON = "📖"  # Book icon for tables with schema information
-CLV1_ICON = "📜"  # Scroll for Custom Log V1 (legacy) tables
+CLV1_ICON = "🔶"  # 🔶 Orange diamond for Custom Log V1 (legacy) tables
 
 # Footnotes for icons
 UNPUBLISHED_FOOTNOTE = f"> {UNPUBLISHED_ICON} **Unpublished:** This item is from a solution that is not yet published on Azure Marketplace or not installed in Content Hub."
 DEPRECATED_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This connector has been deprecated and may be removed in future versions."
+DEPRECATED_SOLUTION_FOOTNOTE = f"> {DEPRECATED_ICON} **Deprecated:** This solution has been deprecated and replaced by a newer integration."
 DISCOVERED_FOOTNOTE = f"> {DISCOVERED_ICON} **Discovered:** This item was discovered by scanning the solution folder but is not listed in the Solution JSON file."
 ADDITIONAL_INFO_FOOTNOTE = f"> {ADDITIONAL_INFO_ICON} **Additional Info:** This item has extra documentation, setup guides, or troubleshooting resources."
 SCHEMA_FOOTNOTE = f"> {SCHEMA_ICON} **Schema:** Column schema information is available for this table."
@@ -2627,6 +2628,7 @@ def get_content_item_link(item: Dict[str, str], relative_path: str = "../content
     
     Returns:
         Markdown formatted link like [Content Name](../content/filename.md)
+        For parsers, links to the dedicated parser page in parsers/ instead.
     """
     content_id = item.get('content_id', '')
     content_name = item.get('content_name', 'Unknown')
@@ -2634,6 +2636,20 @@ def get_content_item_link(item: Dict[str, str], relative_path: str = "../content
     content_file = item.get('content_file', '')
     content_type = item.get('content_type', '')
     not_in_solution_json = item.get('not_in_solution_json', 'false')
+    
+    # Parsers have dedicated pages in parsers/ directory (not in content/)
+    if content_type == 'parser':
+        parser_filename = sanitize_anchor(content_name)
+        # Compute path to parsers/ relative to the calling page's directory
+        if "content/" in relative_path:
+            parser_path = relative_path.replace("content/", "parsers/")
+        else:
+            # Caller is in content/ dir (relative_path="") or unknown location
+            parser_path = "../parsers/"
+        link = f"[{content_name}]({parser_path}{parser_filename}.md)"
+        if show_not_in_json and not_in_solution_json == 'true':
+            return f"{link} ⚠️"
+        return link
     
     filename = get_content_item_filename(content_id, content_name, solution_name, content_file, content_type)
     
@@ -3357,6 +3373,12 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 unpublished_solutions.add(sol_name)
         published_solutions_count = len(solutions) - len(unpublished_solutions)
         
+        # Build a set of deprecated solutions
+        deprecated_solutions: Set[str] = set()
+        for sol_name, connectors in solutions.items():
+            if connectors and connectors[0].get('solution_is_deprecated', 'false') == 'true':
+                deprecated_solutions.add(sol_name)
+        
         # Count solutions with content
         solutions_with_content = sum(1 for sol in solutions.keys() if sol in content_items_by_solution)
         solutions_with_content_published = sum(1 for sol in solutions.keys() if sol in content_items_by_solution and sol not in unpublished_solutions)
@@ -3426,10 +3448,14 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                     solutions_using_asim.add(sol_name)
                     break  # No need to check more items for this solution
         
-        # Add footnotes for unpublished solutions and ASIM icon
+        # Add footnotes for unpublished solutions, deprecated solutions, and ASIM icon
         has_unpublished = len(unpublished_solutions) > 0
+        has_deprecated = len(deprecated_solutions) > 0
         if has_unpublished:
             f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
+        
+        if has_deprecated:
+            f.write(DEPRECATED_SOLUTION_FOOTNOTE + "\n\n")
         
         if solutions_using_asim:
             f.write(f"> {ASIM_ICON_ROOT} **Uses ASIM:** This icon indicates the solution uses ASIM parsers for normalized data.\n\n")
@@ -3465,6 +3491,8 @@ def generate_index_page(solutions: Dict[str, List[Dict[str, str]]], output_dir: 
                 
                 # Add status suffix icons
                 status_suffix = ""
+                if solution_name in deprecated_solutions:
+                    status_suffix += f" {DEPRECATED_ICON}"
                 if solution_name in unpublished_solutions:
                     status_suffix += f" {UNPUBLISHED_ICON}"
                 # Check for additional_information override
@@ -5344,6 +5372,11 @@ def generate_connector_pages(solutions: Dict[str, List[Dict[str, str]]], output_
             if is_clv1:
                 f.write(f"| **Custom Log V1 Tables** | Yes {CLV1_ICON} — ingests into tables with type-suffixed columns |\n")
             
+            # Deprecation date
+            connector_deprecation_date = connector_ref.get('deprecation_date', '')
+            if connector_deprecation_date:
+                f.write(f"| **Deprecated** | {connector_deprecation_date} |\n")
+            
             f.write("\n")
             
             # Description
@@ -5511,18 +5544,26 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
     # Check if solution is published
     is_published = metadata.get('is_published', 'true') == 'true'
     
+    # Check if solution is deprecated
+    is_deprecated = metadata.get('solution_is_deprecated', 'false') == 'true'
+    deprecation_date = metadata.get('solution_deprecation_date', '')
+    
     with solution_path.open("w", encoding="utf-8") as f:
         # Build title with appropriate icons
         title_icons = []
         if solution_uses_asim:
             title_icons.append(ASIM_BADGE_LARGE)
+        if is_deprecated:
+            title_icons.append(DEPRECATED_ICON)
         if not is_published:
             title_icons.append(UNPUBLISHED_ICON)
         
         title_prefix = " ".join(title_icons) + " " if title_icons else ""
         f.write(f"# {title_prefix}{solution_name}\n\n")
         
-        # Add unpublished footnote if applicable
+        # Add status footnotes
+        if is_deprecated:
+            f.write(DEPRECATED_SOLUTION_FOOTNOTE + "\n\n")
         if not is_published:
             f.write(UNPUBLISHED_FOOTNOTE + "\n\n")
         
@@ -5564,6 +5605,9 @@ def generate_solution_page(solution_name: str, connectors: List[Dict[str, str]],
         last_publish = metadata.get('solution_last_publish_date', '')
         if last_publish:
             f.write(f"| **Last Updated** | {last_publish} |\n")
+        
+        if deprecation_date:
+            f.write(f"| **Deprecated** | {deprecation_date} |\n")
         
         solution_folder = metadata.get('solution_folder', '')
         solution_github_url = metadata.get('solution_github_url', '')
@@ -8853,6 +8897,7 @@ def main() -> None:
             row['filter_fields'] = connectors_reference[connector_id].get('filter_fields', '')
             row['not_in_solution_json'] = connectors_reference[connector_id].get('not_in_solution_json', 'false')
             row['is_deprecated'] = connectors_reference[connector_id].get('is_deprecated', 'false')
+            row['deprecation_date'] = connectors_reference[connector_id].get('deprecation_date', '')
             row['ccf_capabilities'] = connectors_reference[connector_id].get('ccf_capabilities', '')
             row['ccf_config_file'] = connectors_reference[connector_id].get('ccf_config_file', '')
             row['ingestion_api'] = connectors_reference[connector_id].get('ingestion_api', '')
@@ -8869,6 +8914,8 @@ def main() -> None:
             row['solution_author_name'] = sol_info.get('solution_author_name', '')
             row['solution_version'] = sol_info.get('solution_version', '')
             row['solution_dependencies'] = sol_info.get('solution_dependencies', '')
+            row['solution_is_deprecated'] = sol_info.get('is_deprecated', 'false')
+            row['solution_deprecation_date'] = sol_info.get('deprecation_date', '')
     
     print(f"Loaded {len(rows)} rows")
     

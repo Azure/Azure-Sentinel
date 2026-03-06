@@ -154,6 +154,25 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.3 - Solution Deprecation & Deprecation Dates
+
+**Solution-Level Deprecation Detection:**
+- New `is_deprecated` column in `solutions.csv` detecting solution-level deprecation from the Solution JSON `Description` field
+- Detection patterns: "this integration/solution is (considered) deprecated", "this integration/solution has been deprecated"
+- Deprecated solutions shown with 🚫 icon on solution pages and solutions index, with deprecation footnote
+- Currently detects 4 deprecated Mimecast legacy solutions (MimecastAudit, MimecastSEG, MimecastTIRegional, MimecastTTP), all replaced by the unified Mimecast solution
+
+**Deprecation Dates:**
+- New `deprecation_date` column in both `connectors.csv` and `solutions.csv`
+- Dates extracted from artifact descriptions near deprecation/retirement keywords (supports "Aug 31, 2024", "2024-08-31", markdown bold `**date**` formats)
+- Deprecation date shown in connector and solution property tables in generated docs
+- Both fields are overridable via the override CSV for artifacts without publicly-extractable dates
+
+**Enhanced Connector Deprecation Detection:**
+- Connector `is_deprecated` now also checks `availability.status` in the connector JSON definition (status 0 = deprecated), in addition to the existing `[DEPRECATED]` title check
+- Connectors belonging to deprecated solutions now inherit the solution's deprecated status
+
+
 ### v9.2 - Ingestion API & Custom Log V1 Detection
 
 **Ingestion API Detection:**

@@ -174,9 +174,10 @@ connector-docs/
 ### Generated Content
 
 **Solution Pages** include:
+- Solution title with ASIM badge, deprecated icon (🚫), and/or unpublished icon (⚠️)
 - **Solution logo** from Solution JSON (displayed at top of page)
 - **Rich description** extracted from `createUiDefinition.json`
-- **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, dependencies)
+- **Solution Information** section with metadata (publisher, support tier, categories, version, author, first/last published dates, deprecation date if applicable, dependencies)
 - **Additional Information** section (from overrides, if configured)
 - **Dependencies** section listing explicit (required) and ASIM-based (optional) dependency solutions (from `solution_dependencies.csv`)
 - **Supported Products** section for solutions using ASIM parsers
@@ -189,7 +190,7 @@ connector-docs/
 **Connector Pages** include:
 - Connector title with status icons (deprecated, unpublished, discovered)
 - **Solution logo** from Solution JSON (displayed at top of page)
-- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), and Custom Log V1 (CLv1) indicator
+- **Metadata table** with connector ID, publisher, solutions, collection method, connector definition files, CCF configuration link and capabilities (for CCF/CCF Push connectors), ingestion API (for API-based connectors), Custom Log V1 (CLv1) indicator, and deprecation date (for deprecated connectors)
 - **Description** from connector definition
 - **Additional Information** section (from overrides, if configured)
 - **Tables Ingested** section with transformation, ingestion API, lake-only support, and selection criteria
@@ -266,6 +267,7 @@ connector-docs/
 - Alphabetical navigation with letter sub-pages for large indexes
 - Quick statistics (counts, percentages)
 - Deprecated connectors section (in connectors index)
+- Deprecated solutions marked with 🚫 icon (in solutions index)
 - Cross-references between solutions, connectors, tables, content, and parsers
 
 ## AI-Rendered Setup Instructions and Permissions
