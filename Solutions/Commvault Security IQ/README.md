@@ -64,7 +64,7 @@ Installation
     - Azure Function App with System-Assigned Managed Identity
     - Data Collection Endpoint (DCE)
     - Data Collection Rule (DCR)
-    - Custom Log Analytics Table (`CvltIntLogsTable_CL`)
+    - Custom Log Analytics Table (`CommvaultAlerts_CL`)
     - Storage Account for Function App
     - Application Insights for monitoring
     - Role assignment for Managed Identity on DCR

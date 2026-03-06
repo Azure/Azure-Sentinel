@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -40,7 +41,7 @@ data_collection_rule_id = os.environ.get("AZURE_DATA_COLLECTION_RULE_ID")
 if data_collection_rule_id is None:
     raise ValueError("AZURE_DATA_COLLECTION_RULE_ID environment variable is not set.")
 
-sentinel_table_name = os.environ.get("SENTINEL_TABLE_NAME", "CvltIntLogsTable")
+sentinel_table_name = os.environ.get("SENTINEL_TABLE_NAME", "CommvaultAlerts")
 stream_name = f"Custom-{sentinel_table_name}"
 
 key_vault_name = os.environ.get("KeyVaultName")
@@ -261,13 +262,62 @@ def read_blob(connection_string, container_name, blob_name):
         raise
 
 
+def extract_client_from_description(description: str) -> str | None:
+    """Extract computer/client name from description using regex patterns."""
+    patterns = [
+        r"on the machine \[([^\]]+)\]",
+        r"on client \[([^\]]+)\]",
+        r"for client \[([^\]]+)\]",
+        r"client \[([^\]]+)\]",
+        r"machine \[([^\]]+)\]",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, description)
+        if match:
+            return match.group(1)
+    return None
+
+
+def extract_hidden_info_from_description(description: str) -> dict[str, str | None]:
+    """Extract hidden information from description within <span style="display: none"> tags."""
+    hidden_info: dict[str, str | None] = {}
+
+    # Find content inside <span style="display: none">...</span>
+    span_pattern = r'<span\s+style\s*=\s*["\']display:\s*none["\']>\s*([^<]+)\s*</span>'
+    span_match = re.search(span_pattern, description, re.IGNORECASE)
+
+    if not span_match:
+        return hidden_info
+
+    span_content = span_match.group(1)
+
+    # Extract clientId and clientName from within the hidden span
+    patterns = {
+        "clientId": r"clientId:\[([^\]]+)\]",
+        "hostName": r"clientName:\[([^\]]+)\]",
+    }
+    for key, pattern in patterns.items():
+        match = re.search(pattern, span_content)
+        if match:
+            hidden_info[key] = str(match.group(1))
+
+    return hidden_info
+
+
 def normalize_event(event: dict[str, Any]) -> dict[str, Any]:
     client_entity = event.get("clientEntity") or {}
+    client_name = extract_client_from_description(
+        event.get("description", "")
+    ) or client_entity.get("clientName", "")
+    hidden_info = extract_hidden_info_from_description(event.get("description", ""))
+
     return {
         "EventId": str(event.get("id", "")),
         "OccurrenceTime": str(event.get("timeSource", "")),
         "Severity": str(event.get("severity", "")),
-        "Computer": client_entity.get("clientName") or "",
+        "ClientId": hidden_info.get("clientId", ""),
+        "ClientName": client_name,
+        "HostName": hidden_info.get("hostName", client_name),
         "Program": event.get("subsystem") or "",
         "EventCode": event.get("eventCodeString") or "",
         "Description": event.get("description") or "",
