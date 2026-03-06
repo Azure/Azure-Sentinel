@@ -1,13 +1,11 @@
-# Deploy the ASIM tester
-
-These templates deploy the ASIM testers.
+# ASIM testers
 
 ## ASIM schema tester
 
 This test validates your parser schema whether column names and types are correct, unnormalized columns are present, and whether mandatory, recommended, or optional fields are missing. To run the test against your parser, run the following query on your Microsoft Sentinel workspace after installing the tester:
 
 ```kusto
-<parser> | invoke ASimSchemaTester('<schema>')
+<parser> | getschema | invoke ASimSchemaTester('<schema>')
 ```
 
 Refer to this [link](https://learn.microsoft.com/en-us/azure/sentinel/normalization-about-schemas) for supported schema name values.
