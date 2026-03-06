@@ -1,0 +1,230 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for Microsoft Entra ID audit logs
+  Version: '0.1.0'
+  LastUpdated: Feb 11, 2026
+Product:
+  Name: Microsoft Entra ID
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.2'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft Entra ID audit logs in the AuditLogs table to the ASIM Audit Event schema.
+ParserName: vimAuditEventMicrosoftEntraIDAuditLogs
+EquivalentBuiltInParser: _Im_AuditEvent_MicrosoftEntraIDAuditLogs
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+
+ParserQuery: |
+  let parser=(
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+    eventresult:string='*',
+    actorusername_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool = false
+  ){
+    let EntraIDOperationLookup = datatable (AADOperationType:string, EventType:string)
+    [
+      'Add', 'Create',
+      'Update', 'Set',
+      'Delete', 'Delete',
+      'Other', 'Other',
+      'Assign', 'Set',
+      'Unassign', 'Delete',
+      '', 'Other'
+    ];
+    AuditLogs
+    | where not(disabled)
+    | where
+        (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    // Pre-filtering on native columns
+    | where
+        (array_length(actorusername_has_any) == 0 or Identity has_any (actorusername_has_any))
+        and (array_length(operation_has_any) == 0 or ActivityDisplayName has_any (operation_has_any))
+        and (array_length(object_has_any) == 0 or TargetResources has_any (object_has_any))
+    // EventResult filtering
+    | extend EventResult = iff(Result == "success", "Success", iff(Result == "failure", "Failure", "NA"))
+    | where eventresult == "*" or (EventResult == eventresult)
+    // EventType lookup
+    | lookup EntraIDOperationLookup on AADOperationType
+    | extend EventType = iff(isempty(EventType), "Other", EventType)
+    | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+    // Parse InitiatedBy to extract actor information
+    | extend
+        InitiatedByUser = tostring(InitiatedBy.user),
+        InitiatedByApp = tostring(InitiatedBy.app)
+    | extend
+        ActorUsername = coalesce(
+            tostring(InitiatedBy.user.userPrincipalName),
+            tostring(InitiatedBy.app.displayName)
+        ),
+        ActorUserId = coalesce(
+            tostring(InitiatedBy.user.id),
+            tostring(InitiatedBy.app.servicePrincipalId)
+        ),
+        ActorUserType = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)), "Member", 
+                        iff(isnotempty(tostring(InitiatedBy.app.displayName)), "Application", ""))
+    | where array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any)
+    // SrcIpAddr extraction and filtering
+    | extend SrcIpAddr = tostring(InitiatedBy.user.ipAddress)
+    | where
+        (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+    // Parse TargetResources for Object
+    | extend TargetResource = iff(array_length(TargetResources) > 0, TargetResources[0], dynamic(null))
+    | extend
+        Object = tostring(TargetResource.displayName),
+        ObjectId = tostring(TargetResource.id),
+        ObjectType = case(
+            tostring(TargetResource.type) == "User", "Directory Service Object",
+            tostring(TargetResource.type) == "Group", "Directory Service Object",
+            tostring(TargetResource.type) == "Application", "Cloud Resource",
+            tostring(TargetResource.type) == "ServicePrincipal", "Cloud Resource",
+            tostring(TargetResource.type) == "Policy", "Policy Rule",
+            tostring(TargetResource.type) == "Role", "Configuration Atom",
+            tostring(TargetResource.type) == "Device", "Directory Service Object",
+            "Other"
+        ),
+        OriginalObjectType = tostring(TargetResource.type)
+    | where array_length(object_has_any) == 0 or Object has_any (object_has_any)
+    // Parse NewValue and OldValue from modified properties
+    | extend ModifiedProperties = iff(array_length(TargetResource.modifiedProperties) > 0, TargetResource.modifiedProperties, dynamic(null))
+    | extend
+        NewValue = tostring(ModifiedProperties[0].newValue),
+        OldValue = tostring(ModifiedProperties[0].oldValue)
+    | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+    // Standard field mappings
+    | extend
+        EventCount = int(1),
+        EventStartTime = ActivityDateTime,
+        EventEndTime = ActivityDateTime,
+        EventProduct = 'Microsoft Entra ID',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.2',
+        EventSchema = 'AuditEvent',
+        EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+    | project-rename
+        Operation = ActivityDisplayName,
+        EventOriginalUid = Id,
+        ActorSessionId = CorrelationId,
+        EventOriginalType = OperationName,
+        EventOriginalResultDetails = ResultReason,
+        TargetAppName = LoggedByService
+    // Actor fields
+    | extend
+        ActorUsernameType = iff(ActorUsername has "@", "UPN", iff(isnotempty(ActorUsername), "Simple", "")),
+        ActorUserIdType = iff(isnotempty(ActorUserId), "AADID", ""),
+        ActorScopeId = AADTenantId,
+        ActorScope = "Microsoft Entra ID"
+    // Target App fields
+    | extend
+        TargetAppType = "SaaS application"
+    // AdditionalFields
+    | extend AdditionalFields = bag_pack("Category", Category, "AdditionalDetails", AdditionalDetails)
+    // Aliases
+    | extend
+        IpAddr = SrcIpAddr,
+        User = ActorUsername,
+        Application = TargetAppName,
+        Dst = TargetAppName,
+        Src = SrcIpAddr,
+        ActorUserUpn = iff(ActorUsernameType == "UPN", ActorUsername, ""),
+        ActorUserAadId = ActorUserId,
+        Value = NewValue,
+        Dvc = EventProduct
+    | project
+        TimeGenerated,
+        Type,
+        Operation,
+        Object,
+        ObjectId,
+        ObjectType,
+        OriginalObjectType,
+        OldValue,
+        NewValue,
+        Value,
+        EventOriginalUid,
+        EventOriginalType,
+        EventOriginalResultDetails,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventProduct,
+        EventVendor,
+        EventSchemaVersion,
+        EventSchema,
+        EventResult,
+        EventSeverity,
+        EventType,
+        ActorUsername,
+        ActorUsernameType,
+        ActorUserId,
+        ActorUserIdType,
+        ActorUserType,
+        ActorScopeId,
+        ActorScope,
+        ActorSessionId,
+        ActorUserUpn,
+        ActorUserAadId,
+        SrcIpAddr,
+        TargetAppName,
+        TargetAppType,
+        AdditionalFields,
+        IpAddr,
+        User,
+        Application,
+        Dst,
+        Src,
+        Dvc
+  };
+  parser
+  (
+    starttime = starttime,
+    endtime = endtime,
+    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+    actorusername_has_any = actorusername_has_any,
+    eventtype_in = eventtype_in,
+    eventresult = eventresult,
+    operation_has_any = operation_has_any,
+    object_has_any=object_has_any,
+    newvalue_has_any=newvalue_has_any,
+    disabled=disabled
+  )
